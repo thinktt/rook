@@ -33,7 +33,15 @@ the output and [frozen baseline](evidence/quiescence-v1/README.md).
 `rook2-dev first-iteration` visits the complete natural root list once, using
 the specified second-ranked-score window and shared pawn-cache lifetime across
 actual tactical children. Its diagnostic steps expose the returned windows,
-ranking and PV; later ordinary iterations and evaluation terms remain pending.
+ranking and PV. This mode stops at that first pass; missing evaluation terms
+remain explicit.
+
+`rook2-dev ordinary --depth 4 --max-nodes 1000000` runs the newer iterative
+ordinary/tactical pipeline with remembered results, learned ordering, pruning,
+extensions and internal ordering passes. Its default TT budget is64 MiB;
+`--tts-bytes` supports explicit development collision experiments. Evaluation,
+timing and protocol omissions are reported in every result. See the
+[ordinary baseline](evidence/ordinary-v1/README.md).
 
 See [STATUS.md](STATUS.md) for the current milestones and
 [AGENTS.md](AGENTS.md) for contribution and clean-room boundaries.

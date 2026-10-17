@@ -243,7 +243,7 @@ fn preference(
 
 /// ORDER-PRIORITY-SEQUENCE: stable descending within modulo-six classes,
 /// restored to those positions, then stable descending over the resulting list.
-fn priority_sequence(moves: &mut [Move], priorities: &mut [u32]) {
+pub fn priority_sequence(moves: &mut [Move], priorities: &mut [u32]) {
     for gap in [6, 1] {
         for index in gap..moves.len() {
             let movement = moves[index];
@@ -305,12 +305,22 @@ pub fn order_with_scratch(
     list: &mut MoveList,
     workspace: &mut OrderingScratch,
 ) {
+    order_by(list, workspace, |movement| {
+        preference(position, context, history, movement)
+    });
+}
+
+pub fn order_by(
+    list: &mut MoveList,
+    workspace: &mut OrderingScratch,
+    mut priority_for: impl FnMut(Move) -> u32,
+) {
     let scratch = &mut workspace.moves;
     let priorities = &mut workspace.priorities;
     let mut low = 0;
     let mut first = MOVE_CAPACITY;
     for &movement in list.as_slice() {
-        let priority = preference(position, context, history, movement);
+        let priority = priority_for(movement);
         if priority > 1 {
             first -= 1;
             scratch[first] = movement;

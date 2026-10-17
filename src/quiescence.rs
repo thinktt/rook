@@ -5,12 +5,15 @@
 //! Host polling and timed interruption are not connected yet; the explicit
 //! node budget returns an error and never publishes an incomplete score.
 
-use crate::evaluator::{EvalStats, Evaluator, Node};
+pub use crate::engine::Search as Quiescence;
+use crate::evaluator::{EvalStats, Node};
 use crate::history::{repetition_draw, SearchHistory};
-use crate::movegen::{self, MoveList};
+use crate::movegen;
+#[cfg(test)]
+use crate::movegen::MoveList;
 use crate::position::Position;
 use crate::quiescence_policy::{self as policy, CaptureContext};
-use crate::tactical::{self, OrderingScratch};
+use crate::tactical;
 use crate::types::{Move, MoveKind, PieceKind};
 
 const PLIES: usize = 64;
@@ -51,6 +54,23 @@ pub struct Stats {
     pub unsafe_rejections: u64,
     pub cutoffs: u64,
     pub late_endgame_evaluations: u64,
+    pub ordinary_nodes: u64,
+    pub table_probes: u64,
+    pub table_hits: u64,
+    pub table_stores: u64,
+    pub fast_cutoffs: u64,
+    pub shallow_cutoffs: u64,
+    pub null_trials: u64,
+    pub mate_probes: u64,
+    pub iio_passes: u64,
+    pub iio_children: u64,
+    pub iio_initial_phases: u64,
+    pub iio_tail_phases: u64,
+    pub accumulated_extension_uses: u64,
+    pub scout_retries: u64,
+    pub refreshed_scout_retries: u64,
+    pub frontier_skips: u64,
+    pub material_threats: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -73,39 +93,22 @@ pub struct Outcome {
     pub evaluations: EvalStats,
 }
 
-pub struct Quiescence<const DIAGNOSTICS: bool = true> {
-    pub evaluator: Evaluator<DIAGNOSTICS>,
-    candidates: Box<[MoveList]>,
-    ordering: OrderingScratch,
-    learned: [[[u32; 64]; 6]; 2],
-    killers: [[Move; 2]; PLIES + 1],
-    pv: [[Move; PLIES]; PLIES],
-    pv_len: [usize; PLIES],
-    stats: Stats,
-    limits: Limits,
-}
-
 impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
-    pub fn new(root: &Position) -> Self {
-        Self {
-            evaluator: Evaluator::new(root),
-            candidates: (0..PLIES).map(|_| MoveList::new()).collect(),
-            ordering: OrderingScratch::new(),
-            learned: [[[0; 64]; 6]; 2],
-            killers: [[Move::NONE; 2]; PLIES + 1],
-            pv: [[Move::NONE; PLIES]; PLIES],
-            pv_len: [0; PLIES],
-            stats: Stats::default(),
-            limits: Limits::default(),
-        }
-    }
-
     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
     /// This preparation's relation work is excluded by `search_subtree`.
     pub fn prepare_root(&mut self, position: Position) -> Node {
+        self.prepare_root_with_influence(position).0
+    }
+
+    pub(crate) fn prepare_root_with_influence(
+        &mut self,
+        position: Position,
+    ) -> (Node, crate::influence::Influence) {
         self.evaluator.begin_search(&position);
-        self.learned.fill([[0; 64]; 6]);
-        self.killers.fill([Move::NONE; 2]);
+        self.learning.clear();
+        if let Some(table) = &mut self.remembered {
+            table.clear();
+        }
         let mut root = Node::root(position, &self.evaluator.root);
         let mut scratch = None;
         let influence = self.evaluator.ensure_influence(&position, &mut scratch);
@@ -114,7 +117,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
             influence,
             movegen::in_check(&position, position.side),
         );
-        root
+        (root, scratch.unwrap())
     }
 
     /// Search one selected node, preserving shared pawn effects and the caller's
@@ -149,20 +152,11 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
         assert_eq!(entry.ply, history.search_ply());
         assert!(entry.iteration_depth >= 1 && entry.target >= 0);
         assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
-        let score = self.visit(node, history, entry, None, false)?;
-        Ok(Outcome {
-            score,
-            pv: self.pv[entry.ply][..self.pv_len[entry.ply]].to_vec(),
-            work: Work {
-                charged_search_units: self.stats.nodes,
-                charged_relation_queries: self.evaluator.stats.relation_queries,
-            },
-            stats: self.stats,
-            evaluations: self.evaluator.stats,
-        })
+        let score = self.visit_q(node, history, entry, None, false)?;
+        Ok(self.outcome(entry.ply, score))
     }
 
-    fn visit(
+    pub(crate) fn visit_q(
         &mut self,
         node: &mut Node,
         history: &mut SearchHistory,
@@ -170,12 +164,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
         checked: Option<bool>,
         replies_available: bool,
     ) -> Result<i32, Stopped> {
-        if let Some(limit) = self.limits.nodes {
-            if self.stats.nodes >= limit {
-                return Err(Stopped::NodeLimit(limit));
-            }
-        }
-        self.stats.nodes += 1;
+        self.charge_node()?;
         let ply = entry.ply;
         self.pv_len[ply] = 0;
         let position = node.position;
@@ -183,7 +172,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
         if repetition_draw(history.repetition_count(checked), ply, entry.analysis) {
             return Ok(0);
         }
-        self.killers[ply + 1] = [Move::NONE; 2];
+        self.learning.clear_next(ply);
         if entry.upper <= 0 && history.short_reversal() {
             return Ok(0);
         }
@@ -250,7 +239,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
         tactical::order_with_scratch(
             &position,
             &self.evaluator.root,
-            &self.learned,
+            &self.learning.history,
             &mut self.candidates[ply],
             &mut self.ordering,
         );
@@ -376,7 +365,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
             if DIAGNOSTICS {
                 self.stats.children += 1;
             }
-            let returned = self.visit(
+            let returned = self.visit_q(
                 &mut child,
                 history,
                 Entry {
@@ -576,7 +565,7 @@ mod tests {
         for _ in 0..63 {
             history.push(&position, None);
         }
-        search.killers[64] = [movement("a1", "a2"), Move::NONE];
+        search.learning.killers[64] = [movement("a1", "a2"), Move::NONE];
         let out = search
             .search_subtree(
                 &mut node,
@@ -610,7 +599,7 @@ mod tests {
             (1, 0, 0)
         );
         assert_eq!(node.retained, saved);
-        assert_eq!(search.killers[64], [Move::NONE; 2]);
+        assert_eq!(search.learning.killers[64], [Move::NONE; 2]);
     }
 
     #[test]
@@ -620,7 +609,7 @@ mod tests {
         let mut node = search.prepare_root(position);
         let mut history = SearchHistory::new(&position);
         history.push(&position, None);
-        search.killers[2] = [movement("a1", "a2"), Move::NONE];
+        search.learning.killers[2] = [movement("a1", "a2"), Move::NONE];
         let entry = Entry {
             ply: 1,
             target: 1,
@@ -642,6 +631,6 @@ mod tests {
             ),
             (0, 1, 0, 0)
         );
-        assert_eq!(search.killers[2][0], movement("a1", "a2"));
+        assert_eq!(search.learning.killers[2][0], movement("a1", "a2"));
     }
 }

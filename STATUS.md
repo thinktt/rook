@@ -6,20 +6,26 @@ Initial architecture critically reviewed by `imp2-lead`; Imp2 selected the
 provisional baseline and recorded [decision0001](docs/decisions/0001-initial-architecture.md).
 The compact position/move kernel, material/square terms, influence, activity,
 shelter, remembered-result table and pawn structural/piece terms are implemented.
-Concrete quiescence now composes full/fast retained evaluation, shared pawn
-retention, history admission, tactical ranking, capture estimates, geometric
-safety and recursive PV consumption. The composed evaluator remains partial;
-later ordinary iterations, TT integration and timing are not connected to this slice.
-The first unrestricted root iteration now uses actual quiescence children,
-second-place windows, strict best/PV updates and one shared search lifetime.
+One concrete search-state owner now supports ordinary and tactical recursion,
+full/fast retained evaluation, pawn retention, history admission, TT behavior,
+ordering, shallow/null cutoffs, extensions, mate probes, scout retry and
+initial/tail internal ordering. Iterations carry stable ranked root order and
+shared learned/cache effects; child retry preserves its own refreshed terms.
+The composed evaluator remains partial, and timed scheduling, host polling,
+personality/session/protocol integration are still missing.
 The earlier generic alpha-beta development baseline stays separately frozen.
 No conformance or performance qualification is claimed.
 
 Current evidence:
 
-- 102 library tests and two CLI tests pass, including start depth4 legal trees,
+- 112 library tests and two CLI tests pass, including start depth4 legal trees,
   influence exhaustiveness, chronology, retained identities/TT, full/fast
   restoration, bounded reply probes, quiescence stopping and terminal returns.
+- 884 external native policy cases pass, including11,136 selective-depth
+  queries, full candidate-order observations, material threats, move extensions
+  and learned-memory sequences. Expected data lives only in an external test
+  crate. This does not qualify DIAG validation or complete search. See
+  [policy check scope](evidence/ordinary-policy-check-20261017-final/README.md).
 - 12,621 external inspections passed selected released expected projections
   across two separate schedules. The first schedule's 285 unsupported source
   cases and all omitted fields remain explicit. The added 8,727 inspections
@@ -44,13 +50,21 @@ Current evidence:
   records 5,000 complete preparations/iterations per process, with diagnostics
   off CPU medians0.128500/0.349432/0.413148 seconds. See
   [first-root evidence](evidence/first-iteration-v1/README.md).
+- The frozen ordinary pipeline now measures full/fast/pawn/TT traffic together.
+  Four workloads exercise4189/5588/1484/50766 charged visits; the last uses a
+  deliberately tiny TT to stress collisions and internal ordering. All repeated
+  results agree, and diagnostics on/off preserve every iteration's score, PV,
+  order and work. CPU15 recorded three non-idle ticks during collection, retained
+  as interference evidence. See [ordinary evidence](evidence/ordinary-v1/README.md).
 - Instructions/cycles remain unavailable to the unprivileged account; a request
   for a scoped observer has been sent to the owner through the conversation.
 
-Next: connect ordinary recursive search and remembered results, then extend
-the evaluator and work-clock consumers. Do not choose a production position
-representation until full/fast/pawn/TT traffic is measured together. The present
-quiescence measurements add evidence but do not complete that experiment.
+Next: complete neutral evaluation so whole-search scores/work become comparable
+with the released expectations, then extend work-clock/root timing and public
+integration. Full/fast/pawn/TT traffic is now present, but permanent layout
+selection still needs controlled representation/restoration comparisons and
+fidelity appropriate to production. Earlier partial timings are not speedup
+denominators for the new pipeline.
 
 Latest owner update: `/fast off`; normal speed for lead and subagents. This
 supersedes the temporary fast-subagent request and restores the goal's original

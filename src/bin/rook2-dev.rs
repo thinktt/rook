@@ -13,7 +13,7 @@ const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let mode = args.next().ok_or("usage: rook2-dev inspect|perft|search|quiescence|first-iteration [--fen FEN] [--moves 'e2e4 ...'] [--root-move MOVE] [--depth N] [--repeat N]")?;
+    let mode = args.next().ok_or("usage: rook2-dev inspect|perft|search|quiescence|first-iteration|ordinary [--fen FEN] [--moves 'e2e4 ...'] [--root-move MOVE] [--depth N] [--repeat N]")?;
     let mut fen = START.to_owned();
     let mut root_fen = None;
     let mut moves = String::new();
@@ -23,6 +23,7 @@ fn run() -> Result<(), String> {
     let mut iteration_depth = 1i32;
     let mut max_nodes = 4095u64;
     let mut diagnostics = true;
+    let mut tts_bytes = 67_108_864usize;
     let mut activity_weights = [1024i32; 2];
     let mut activity_material = None;
     let mut position_weights = [1024i32; 2];
@@ -39,6 +40,7 @@ fn run() -> Result<(), String> {
             "--depth" => depth = value.parse().map_err(|_| "invalid depth")?,
             "--repeat" => repeat = value.parse().map_err(|_| "invalid repeat")?,
             "--root-move" => root_move = Some(value),
+            "--tts-bytes" => tts_bytes = value.parse().map_err(|_| "invalid TT capacity")?,
             "--iteration-depth" => {
                 iteration_depth = value.parse().map_err(|_| "invalid iteration depth")?
             }
@@ -80,8 +82,11 @@ fn run() -> Result<(), String> {
     if !(1..=99).contains(&iteration_depth) || !(1..=100_000_000).contains(&max_nodes) {
         return Err("iteration depth must be 1..99 and max nodes 1..100000000".into());
     }
+    if !(96..=1_073_741_824).contains(&tts_bytes) {
+        return Err("TT capacity must be 96..1073741824 bytes".into());
+    }
     let mut position = Position::from_fen(&fen)?;
-    if matches!(mode.as_str(), "quiescence" | "first-iteration")
+    if matches!(mode.as_str(), "quiescence" | "first-iteration" | "ordinary")
         && rook2::movegen::in_check(&position, position.side.opponent())
     {
         return Err("search setup's side not to move is already in check".into());
@@ -258,10 +263,126 @@ fn run() -> Result<(), String> {
                 run_first_iteration::<false>(position, &mut history, repeat, max_nodes)?;
             }
         }
+        "ordinary" => {
+            if depth == 0 || root_move.is_some() {
+                return Err("ordinary requires depth 1..8 and no selected root move".into());
+            }
+            if diagnostics {
+                run_ordinary::<true>(position, &mut history, depth, repeat, max_nodes, tts_bytes)?;
+            } else {
+                run_ordinary::<false>(position, &mut history, depth, repeat, max_nodes, tts_bytes)?;
+            }
+        }
         _ => {
-            return Err("mode must be inspect, perft, search, quiescence or first-iteration".into())
+            return Err(
+                "mode must be inspect, perft, search, quiescence, first-iteration or ordinary"
+                    .into(),
+            )
         }
     }
+    Ok(())
+}
+
+fn step_json(s: &rook2::first_iteration::Step) -> String {
+    format!(concat!("{{\"move\":\"{}\",\"window\":[{},10000],\"score\":{},\"bestScore\":{},\"secondScore\":{},",
+        "\"childPv\":{},\"pv\":{},\"nodes\":{},\"relationQueries\":{}}}"),
+        s.movement, s.lower, s.score, s.best, s.second, move_strings(&s.child_pv),
+        move_strings(&s.root_pv), s.work.charged_search_units, s.work.charged_relation_queries)
+}
+
+fn run_ordinary<const D: bool>(
+    position: Position,
+    history: &mut SearchHistory,
+    depth: u8,
+    repeat: u32,
+    max_nodes: u64,
+    tts_bytes: usize,
+) -> Result<(), String> {
+    use rook2::engine::Search;
+    use rook2::ordinary::{Outcome, FIDELITY};
+    use rook2::quiescence::Limits;
+    let mut engine = Search::<D>::new(&position);
+    engine.config.tts_bytes = tts_bytes;
+    let mut last: Option<Outcome> = None;
+    let mut witness = 0u64;
+    for _ in 0..repeat {
+        let out = engine
+            .run_iterations(
+                position,
+                history,
+                depth,
+                Limits {
+                    nodes: Some(max_nodes),
+                },
+            )
+            .map_err(|e| format!("ordinary iterations incomplete: {e:?}"))?;
+        if let Some(previous) = &last {
+            if (previous.score, &previous.pv, previous.work) != (out.score, &out.pv, out.work)
+                || previous
+                    .iterations
+                    .iter()
+                    .zip(&out.iterations)
+                    .any(|(a, b)| {
+                        (a.score, &a.pv, &a.candidates, &a.steps, a.work)
+                            != (b.score, &b.pv, &b.candidates, &b.steps, b.work)
+                    })
+            {
+                return Err(
+                    "fresh repeated ordinary search changed its result, ranking or work".into(),
+                );
+            }
+        }
+        witness = witness
+            .wrapping_mul(0x100000001b3)
+            .wrapping_add(out.score as i64 as u64)
+            .wrapping_add(out.work.charged_search_units)
+            .wrapping_add(out.work.charged_relation_queries);
+        last = Some(out);
+    }
+    let out = last.unwrap();
+    let iterations: Vec<String> = out
+        .iterations
+        .iter()
+        .map(|i| {
+            let steps: Vec<String> = i.steps.iter().map(step_json).collect();
+            format!(
+                concat!(
+                    "{{\"depth\":{},\"candidates\":{},\"steps\":[{}],\"score\":{},\"pv\":{},",
+                    "\"nodes\":{},\"relationQueries\":{}}}"
+                ),
+                i.depth,
+                move_strings(&i.candidates),
+                steps.join(","),
+                i.score,
+                move_strings(&i.pv),
+                i.work.charged_search_units,
+                i.work.charged_relation_queries
+            )
+        })
+        .collect();
+    let s = out.stats;
+    let e = out.evaluations;
+    let counts = if D {
+        format!(concat!("{{\"ordinaryNodes\":{},\"tableProbes\":{},\"tableHits\":{},\"tableStores\":{},",
+        "\"full\":{},\"fast\":{},\"influenceBuilds\":{},\"pawnReuses\":{},\"pawnReplacements\":{},",
+        "\"fastCutoffs\":{},\"shallowCutoffs\":{},\"nullTrials\":{},\"mateProbes\":{},",
+        "\"iioPasses\":{},\"iioChildren\":{},\"scoutRetries\":{},\"frontierSkips\":{},\"materialThreats\":{},",
+        "\"iioInitialPhases\":{},\"iioTailPhases\":{},\"accumulatedExtensionUses\":{},\"refreshedScoutRetries\":{}}}"),
+        s.ordinary_nodes, s.table_probes, s.table_hits, s.table_stores, e.full, e.fast, e.influence_builds,
+        e.pawn_reuses, e.pawn_replacements, s.fast_cutoffs, s.shallow_cutoffs, s.null_trials,
+        s.mate_probes, s.iio_passes, s.iio_children, s.scout_retries, s.frontier_skips, s.material_threats,
+        s.iio_initial_phases, s.iio_tail_phases, s.accumulated_extension_uses, s.refreshed_scout_retries)
+    } else {
+        "null".to_owned()
+    };
+    println!(concat!("{{\"schema\":\"rook2-development-ordinary-iterations-v1\",\"fidelity\":\"{}\",",
+        "\"omissions\":\"{}; timed/work-clock root scheduling; host polling; personality/protocol integration\",",
+        "\"diagnostics\":{},\"depth\":{},\"repeat\":{},\"ttsBytes\":{},\"score\":{},\"pv\":{},",
+        "\"initialCandidates\":{},\"iterations\":[{}],\"nodesPerSearch\":{},\"chargedRelationQueriesPerSearch\":{},",
+        "\"diagnosticCounts\":{},\"consumptionWitness\":{},\"conformanceClaim\":false}}"),
+        FIDELITY, rook2::evaluator::OMITTED_TERMS, D, depth, repeat, tts_bytes, out.score,
+        move_strings(&out.pv), move_strings(&out.initial_candidates), iterations.join(","),
+        out.work.charged_search_units, out.work.charged_relation_queries, counts, witness);
     Ok(())
 }
 
