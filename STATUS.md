@@ -16,13 +16,16 @@ endings, race/fortress bounds and late-endgame finishing. Effective root-bound
 personality settings are available through the native API. Native work-timed
 search now applies adaptive limits, seeded root variation, natural 4096 polls,
 root/iteration stopping and separate completed-result capture. Public host
-command servicing and personality/session/protocol integration are missing.
+command servicing and the live protocol adapter are missing. Native persistent
+sessions now join ordered parameter commands, normalized setup/history/rewind,
+game adjudication, schedule allocation, clock/seed lifetime, actual timed search
+and complete semantic post/move output.
 The earlier generic alpha-beta development baseline stays separately frozen.
 No conformance or performance qualification is claimed.
 
 Current evidence:
 
-- 115 library tests and two CLI tests pass, including start depth4 legal trees,
+- 122 library tests and two CLI tests pass, including start depth4 legal trees,
   influence exhaustiveness, chronology, retained identities/TT, full/fast
   restoration, bounded reply probes, quiescence stopping and terminal returns.
 - 884 external native policy cases pass, including11,136 selective-depth
@@ -44,6 +47,14 @@ Current evidence:
   outside that check. All 1,352 evaluator/root regression cases pass on the
   same frozen timed source. See
   [timing scope](evidence/timing-check-20261017-frozen/README.md).
+- The newer 193-case native session/output check passes with release optimization
+  settings. It adds parameter/clock commands, exact schedule allocation, King
+  notation, full timed-search event trails, four fresh joined projections,
+  persistent clock-seeded sessions and every snapshot/root step of the
+  three-search inherited-settings sequence. All 1,352 evaluator/root cases also
+  pass with the same release test settings. Test harnesses unwind panics;
+  production abort remains separately recorded. See
+  [session/output scope](evidence/session-output-check-20261017-frozen/README.md).
 - 12,621 external inspections passed selected released expected projections
   across two separate schedules. The first schedule's 285 unsupported source
   cases and all omitted fields remain explicit. The added 8,727 inspections
@@ -91,9 +102,11 @@ Current evidence:
 - Instructions/cycles remain unavailable to the unprivileged account; a request
   for a scoped observer has been sent to the owner through the conversation.
 
-Next: public ingress, clock allocation, seed/session lifecycle and literal
-post/PV output, followed by host command servicing and broader joined-search
-checks. Selected fixed-root and timed native observations match the released
+Next: the live byte-stream adapter, immediate publication, bounded input and
+one-command-per-poll servicing, then broader joined/gameplay checks and measured
+whole-production paths. Native session/clock/output composition is present;
+complete ingress response/DIAG validation and live timing remain unqualified.
+Selected fixed-root and timed native observations match the released
 expectations. Full/fast/pawn/TT traffic is present, but permanent layout
 selection still needs controlled representation/restoration comparisons and
 fidelity appropriate to production. Earlier partial timings are not speedup

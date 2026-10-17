@@ -13,7 +13,7 @@ const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let mode = args.next().ok_or("usage: rook2-dev inspect|perft|search|quiescence|first-iteration|ordinary [--fen FEN] [--moves 'e2e4 ...'] [--root-move MOVE] [--depth N] [--repeat N]")?;
+    let mode = args.next().ok_or("usage: rook2-dev inspect|perft|search|quiescence|first-iteration|ordinary|work-timed [--fen FEN] [--moves 'e2e4 ...'] [--root-move MOVE] [--depth N] [--repeat N]")?;
     let mut fen = START.to_owned();
     let mut root_fen = None;
     let mut moves = String::new();

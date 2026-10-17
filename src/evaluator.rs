@@ -167,11 +167,13 @@ struct Weights {
 }
 impl Parameters {
     fn bind(&self, position: &Position) -> (RootContext, Weights, i32, u32) {
+        assert!(self.own.iter().all(|v| (0..=1000).contains(v)));
         assert!(self
-            .own
+            .opponent
             .iter()
-            .chain(&self.opponent)
-            .all(|v| (0..=1000).contains(v)));
+            .enumerate()
+            .filter(|&(i, _)| i != 5)
+            .all(|(_, v)| (0..=1000).contains(v)));
         assert!((-10000..=10000).contains(&self.draw));
         assert!((0..=100).contains(&self.opponent_selectivity));
         let percentages = if position.side == Color::White {
@@ -194,11 +196,7 @@ impl Parameters {
             progress: pair(9),
             structure: pair(10),
         };
-        let p = root.phase;
-        let draw = (((4 * p.opening as i64 + 2 * p.middlegame as i64 + p.endgame as i64)
-            * self.draw as i64
-            + 512)
-            .div_euclid(1024)) as i32;
+        let draw = crate::evaluation::draw_preference(root.phase, self.draw);
         let d = 100 - self.opponent_selectivity;
         let range = d * d * d / 200 + 3 * d;
         (root, weights, draw, range as u32)

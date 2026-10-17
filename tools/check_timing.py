@@ -7,7 +7,12 @@ import check_policies as runner
 
 FILES = ['work-clock-v1.json', 'adaptive-time-v1.json', 'iteration-terminal-stop-v1.json',
          'root-randomization-v1.json', 'root-aspiration-v1.json',
-         'seeded-timed-search-v1.json', 'generic-timed-search-v1.json']
+         'seeded-timed-search-v1.json', 'generic-timed-search-v1.json',
+         'output-score-v1.json', 'pv-line-v1.json', 'time-schedule-v1.json',
+         'time-allowance-v1.json','personality-configuration-v1.json',
+         'clock-session-setup-v1.json','root-go-outcome-v1.json','ordinary-joined-search-v1.json',
+         'clock-seeded-sessions-v1.json','persistent-ordinary-session-public-v1.json',
+         'persistent-ordinary-session-v1.json']
 CASES = []
 
 def generate(case):

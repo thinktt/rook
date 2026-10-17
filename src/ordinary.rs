@@ -1,5 +1,5 @@
 //! Ordinary recursive policy with shared tactical, retained and learned state.
-//! The evaluator and untimed caller are still explicitly development subsets.
+//! Fixed-iteration and work-timed callers share this native recursive kernel.
 use crate::engine::Search;
 use crate::evaluator::{EvalStats, Node};
 use crate::first_iteration::Step;

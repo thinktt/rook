@@ -1,5 +1,5 @@
 //! First unrestricted root pass with actual tactical children.
-//! The root policy is specified, while its evaluator remains explicitly partial.
+//! The composed evaluator and ordinary state owner are shared with later iterations.
 
 use crate::evaluator::EvalStats;
 use crate::history::SearchHistory;

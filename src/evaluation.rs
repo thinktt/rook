@@ -1,7 +1,4 @@
-//! Root-fixed material/square terms. This is an intentionally partial evaluator.
-//!
-//! Pawn, activity, shelter, final/endgame finishing and search evaluation
-//! selection are not supplied by this module yet. Its score is development-only.
+//! Root-fixed material/square context consumed by composed evaluation.
 
 use crate::eval_basis::SQUARE_BASIS;
 use crate::position::{Phase, Position};
@@ -12,6 +9,12 @@ const MATERIAL_BASE: [[i32; 5]; 3] = [
     [80, 295, 310, 485, 900],
     [100, 300, 300, 500, 890],
 ];
+
+pub fn draw_preference(phase: Phase, cfd: i32) -> i32 {
+    (((4 * phase.opening as i64 + 2 * phase.middlegame as i64 + phase.endgame as i64) * cfd as i64
+        + 512)
+        .div_euclid(1024)) as i32
+}
 
 /// Mathematical floor division, including negative values.
 #[inline]

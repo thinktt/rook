@@ -52,13 +52,21 @@ root steps, native component results and charged work observations.
 `check_timing.py` uses the same external data-driven approach for the work
 ledger, adaptive limits, iteration terminal stop, root randomness/aspiration
 and selected actual recursive timed-search observations. It compares native
-root/time/stop/capture state; public events and transport remain separate.
+root/time/stop/capture state and complete semantic post/move trails. It also
+checks schedule allocation, parameter commands, idle clock setup, fresh joined
+search projections and persistent clock-seeded sessions. Literal wire I/O,
+live command handling and strict diagnostic validation remain separate.
 
 These require a fresh output directory and use housekeeping CPUs. Their receipts
 bind input fixtures, generated source/data, native source and raw results.
 These are native seam checks, not DIAG validation, gameplay or whole-engine
 performance qualification. Their correctness collection includes compilation;
 it is not an engine timing sample.
+
+`--release` copies the engine's release optimization settings to the external
+test crate. Its harness uses panic unwinding; production retains panic abort.
+The recorded manifest/profile and build environment distinguish these checks
+from both debug tests and production executable measurements.
 
 ## CPU/wall development recording
 

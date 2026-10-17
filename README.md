@@ -10,8 +10,10 @@ The released behavioral and performance contracts are in
 
 This repository contains an integrated development engine: compact position
 state, legal generation, composed retained evaluation and recursive ordinary/
-tactical search, with a native work-timed root controller. Public
-session/protocol integration remains incomplete. It does not yet implement the
+tactical search, with a native work-timed root controller and persistent
+session model. The model joins parameter/clock commands, history/reset/rewind,
+allocated search and semantic post/move output. Live byte-stream integration
+remains incomplete. It does not yet implement the
 complete ordinary KingRE engine or claim
 conformance or performance qualification.
 
@@ -55,6 +57,11 @@ interruption and retained captures. `--average-cs`, `--maximum-cs`,
 acquisition, host commands, persistent sessions and post/PV rendering remain
 separate. See [native timing evidence](evidence/timing-check-20261017-frozen/README.md)
 and the [timed CPU baseline](evidence/work-timed-v1/README.md).
+
+Native [session/output checks](evidence/session-output-check-20261017-frozen/README.md)
+cover persistent work-clock/seed lifetime, complete semantic post trails and
+the inherited-settings three-search sequence. These run the actual session
+model; they do not establish live protocol timing or command polling.
 
 See [STATUS.md](STATUS.md) for the current milestones and
 [AGENTS.md](AGENTS.md) for contribution and clean-room boundaries.

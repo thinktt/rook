@@ -154,6 +154,7 @@ def main(files=None, generator=None, header=None, checker_path=None, prepare=Non
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--spec", type=Path, default=Path("/home/legolas/king-spec/conformance/fixtures"))
+    parser.add_argument("--release", action="store_true", help="use root release optimization settings with test-harness unwinding")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     output = args.output.resolve()
@@ -176,6 +177,15 @@ def main(files=None, generator=None, header=None, checker_path=None, prepare=Non
         prepare(output)
     (output / "src/lib.rs").write_text("\n".join(generated) + "\n")
     (output / "Cargo.toml").write_text('[package]\nname="rook2-policy-check"\nversion="0.0.0"\nedition="2021"\n[dependencies]\nrook2={path=' + lit(str(root)) + '}\n')
+    if args.release:
+        import tomllib
+        profile = tomllib.loads((root / "Cargo.toml").read_text())["profile"]["release"]
+        with (output / "Cargo.toml").open("a") as manifest:
+            manifest.write('\n[profile.release]\n')
+            for key, value in profile.items():
+                if key != "panic":
+                    manifest.write(f'{key}={json.dumps(value)}\n')
+            manifest.write('panic="unwind"\n')
     before = {str(p.relative_to(root)): sha(p) for p in sorted((root / "src").rglob("*.rs"))}
     receipt = {"schema": "rook2-external-native-policy-check-v1", "conformance_claim": False,
                "scope": "native computation seams; excludes DIAG validation and whole-search qualification",
@@ -187,6 +197,8 @@ def main(files=None, generator=None, header=None, checker_path=None, prepare=Non
     receipt["engine_manifest_sha256"] = sha(root / "Cargo.toml")
     receipt["engine_lock_sha256"] = sha(root / "Cargo.lock")
     receipt["toolchain"] = subprocess.check_output(["rustc", "-vV"], text=True)
+    receipt["build_profile"] = "release-optimization-test-unwind" if args.release else "dev-test"
+    receipt["build_environment"] = {key: os.environ.get(key) for key in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER")}
     data_paths = sorted((output / "cases").glob("*.json"))
     receipt["test_data_sha256"] = {str(p.relative_to(output)): sha(p) for p in data_paths}
     affinity = os.sched_getaffinity(0)
@@ -195,6 +207,8 @@ def main(files=None, generator=None, header=None, checker_path=None, prepare=Non
         os.sched_setaffinity(0, HELPERS)
         argv = ["cargo", "test", "--offline", "--manifest-path", str(output / "Cargo.toml"),
                 "--target-dir", str(root / "target/policy-check"), "--jobs", "4"]
+        if args.release:
+            argv.insert(2,"--release")
         if test_threads is not None:
             argv += ["--", "--test-threads", str(test_threads)]
         with (output / "stdout.raw").open("xb") as stdout, (output / "stderr.raw").open("xb") as stderr:

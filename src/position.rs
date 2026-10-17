@@ -239,6 +239,23 @@ impl Position {
         child
     }
 
+    /// Cold ingress primitive, used only for the specified constructed king-victim continuation.
+    pub(crate) fn exceptional_en_passant(&self, movement: Move) -> Self {
+        assert_eq!(movement.kind(), MoveKind::EnPassant);
+        let behind = Square(if self.side == Color::White {
+            movement.to().0 - 8
+        } else {
+            movement.to().0 + 8
+        });
+        let victim = self.board[behind.0 as usize];
+        assert_eq!(victim, Piece::new(self.side.opponent(), PieceKind::King));
+        let mut next = *self;
+        next.remove_ordered(victim, behind);
+        next.set_square(behind, Piece::EMPTY);
+        next.apply_unchecked(movement);
+        next
+    }
+
     /// Caller guarantees geometry, king safety and promotion/castling admission.
     pub fn apply_unchecked(&mut self, movement: Move) {
         let from = movement.from();
