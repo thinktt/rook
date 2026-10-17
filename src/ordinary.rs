@@ -14,7 +14,7 @@ use crate::remembered::{Bound, Query, Store};
 use crate::tactical;
 use crate::types::{Move, MoveKind, PieceKind};
 
-pub const FIDELITY: &str = "partial-evaluation-ordinary-iterations-v1";
+pub const FIDELITY: &str = "neutral-evaluation-ordinary-iterations-v2";
 
 #[derive(Debug)]
 pub enum Error {
@@ -553,7 +553,7 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
         let map = self.evaluator.ensure_influence(&position, &mut scratch);
         let evaluation = self.evaluator.full(node, map, checked);
         if DIAGNOSTICS {
-            self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_pending);
+            self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
         }
         let (effective_lower, effective_upper) = if p as i32 <= target / 2 {
             (-10000, 10000)

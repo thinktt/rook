@@ -23,9 +23,8 @@ separate `target/dev-generic` and `target/dev-native` directories and remain
 different artifact modes. Neither mode enables PGO. `--jobs N` changes the
 default; `--crate PATH` selects another crate.
 
-The current scaffold is a library and has no engine/development binary. Once
-a binary target exists, `--bin NAME` selects it and records the resulting
-executable's SHA256. The helper never runs the compiled binary or tests.
+`--bin rook2-dev` builds the current native development executable and records
+its SHA256. The helper never runs the compiled binary or tests.
 
 Every actual build requires a fresh receipt directory. It retains
 `receipt.json`, `build.stdout` and `build.stderr`, including failures. The receipt
@@ -36,6 +35,25 @@ timestamps, outcome and optional executable hash. An unborn git HEAD is
 recorded as unavailable, not invented. Source changes during compilation make
 the result unsuitable for an exact input-identity claim even if Cargo succeeds.
 External/path-dependency/generated-input closure is not automatically attested.
+
+The helper also preserves pre-Cargo source/tool bytes, verified against the
+recorded hashes. Frozen evidence may include a verified compressed copy of that
+tree; exact binaries and uncompressed working copies stay local.
+
+## External native correctness checks
+
+`check_policies.py --output evidence/new-policy-check` builds a separate Rust
+test crate from selected released policy expectations. `check_evaluation.py`
+uses a data-driven test crate to cover the larger evaluator and composed root
+sequences without expanding every query into compiler input. Expected records
+remain outside the engine. The latter preserves actual move kinds, complete
+root steps, native component results and charged work observations.
+
+Both require a fresh output directory and use housekeeping CPUs. Their receipts
+bind input fixtures, generated source/data, native source and raw results.
+These are native seam checks, not DIAG validation, gameplay or whole-engine
+performance qualification. Their correctness collection includes compilation;
+it is not an engine timing sample.
 
 ## CPU/wall development recording
 

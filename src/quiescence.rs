@@ -17,7 +17,7 @@ use crate::tactical;
 use crate::types::{Move, MoveKind, PieceKind};
 
 const PLIES: usize = 64;
-pub const FIDELITY: &str = "retained-partial-evaluation-quiescence-v1";
+pub const FIDELITY: &str = "retained-neutral-evaluation-quiescence-v2";
 
 #[derive(Clone, Copy, Debug)]
 pub struct Entry {
@@ -179,7 +179,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
         if ply == PLIES - 1 {
             let value = self.evaluator.fast(node, checked);
             if DIAGNOSTICS {
-                self.stats.late_endgame_evaluations += u64::from(value.late_endgame_pending);
+                self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
             }
             return Ok(value.score);
         }
@@ -200,7 +200,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
                 )
                 .evaluation;
             if DIAGNOSTICS {
-                self.stats.late_endgame_evaluations += u64::from(value.late_endgame_pending);
+                self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
             }
             if value.lower >= entry.upper {
                 return Ok(value.lower);

@@ -146,7 +146,11 @@ fn permutation(mut values:Vec<u32>)->Vec<usize> {let mut moves:Vec<Move>=(1..=va
 '''
 
 
-def main():
+def main(files=None, generator=None, header=None, checker_path=None, prepare=None, test_threads=None):
+    files = FILES if files is None else files
+    generator = generate if generator is None else generator
+    header = HEADER if header is None else header
+    checker_path = Path(__file__) if checker_path is None else Path(checker_path)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--spec", type=Path, default=Path("/home/legolas/king-spec/conformance/fixtures"))
@@ -155,10 +159,10 @@ def main():
     output = args.output.resolve()
     if output.exists() or not output.parent.is_dir():
         parser.error("output must be absent and its parent must exist")
-    generated, mapping, unsupported, counts = [HEADER], [], [], collections.Counter()
-    for name in FILES:
+    generated, mapping, unsupported, counts = [header], [], [], collections.Counter()
+    for name in files:
         for case in json.loads((args.spec / name).read_text())["cases"]:
-            body = generate(case)
+            body = generator(case)
             if body is None:
                 unsupported.append({"fixture": name, "id": case["id"], "operation": case["request"]["operation"]})
                 continue
@@ -168,24 +172,30 @@ def main():
             counts[case["request"]["operation"]] += 1
     output.mkdir()
     (output / "src").mkdir()
+    if prepare is not None:
+        prepare(output)
     (output / "src/lib.rs").write_text("\n".join(generated) + "\n")
     (output / "Cargo.toml").write_text('[package]\nname="rook2-policy-check"\nversion="0.0.0"\nedition="2021"\n[dependencies]\nrook2={path=' + lit(str(root)) + '}\n')
     before = {str(p.relative_to(root)): sha(p) for p in sorted((root / "src").rglob("*.rs"))}
     receipt = {"schema": "rook2-external-native-policy-check-v1", "conformance_claim": False,
                "scope": "native computation seams; excludes DIAG validation and whole-search qualification",
                "unsupported": unsupported, "case_mapping": mapping, "cases_by_operation": counts,
-               "fixture_sha256": {name: sha(args.spec / name) for name in FILES},
-               "engine_sources_before": before, "checker_sha256": sha(Path(__file__)),
+               "fixture_sha256": {name: sha(args.spec / name) for name in files},
+               "engine_sources_before": before, "checker_sha256": sha(checker_path), "runner_sha256": sha(Path(__file__)),
                "generated_test_sha256": sha(output / "src/lib.rs")}
     receipt["engine_manifest_sha256"] = sha(root / "Cargo.toml")
     receipt["engine_lock_sha256"] = sha(root / "Cargo.lock")
     receipt["toolchain"] = subprocess.check_output(["rustc", "-vV"], text=True)
+    data_paths = sorted((output / "cases").glob("*.json"))
+    receipt["test_data_sha256"] = {str(p.relative_to(output)): sha(p) for p in data_paths}
     affinity = os.sched_getaffinity(0)
     started = time.monotonic()
     try:
         os.sched_setaffinity(0, HELPERS)
         argv = ["cargo", "test", "--offline", "--manifest-path", str(output / "Cargo.toml"),
                 "--target-dir", str(root / "target/policy-check"), "--jobs", "4"]
+        if test_threads is not None:
+            argv += ["--", "--test-threads", str(test_threads)]
         with (output / "stdout.raw").open("xb") as stdout, (output / "stderr.raw").open("xb") as stderr:
             result = subprocess.run(argv, cwd=root, stdout=stdout, stderr=stderr, timeout=120)
         receipt.update({"argv": argv, "exit_code": result.returncode, "elapsed_s": time.monotonic() - started,
@@ -193,11 +203,13 @@ def main():
     finally:
         os.sched_setaffinity(0, affinity)
     receipt["engine_sources_unchanged"] = before == {str(p.relative_to(root)): sha(p) for p in sorted((root / "src").rglob("*.rs"))}
+    receipt["test_data_identity_unchanged"] = receipt["test_data_sha256"] == {str(p.relative_to(output)): sha(p) for p in sorted((output / "cases").glob("*.json"))}
     receipt["stdout_sha256"] = sha(output / "stdout.raw")
     receipt["stderr_sha256"] = sha(output / "stderr.raw")
     archive_path = output / "verified-test-source.tar.gz"
     with tarfile.open(archive_path, "w:gz") as archive:
-        for name in ("Cargo.toml", "Cargo.lock", "src/lib.rs"):
+        names = ["Cargo.toml", "Cargo.lock"] + [str(p.relative_to(output)) for p in sorted((output / "src").glob("*.rs"))] + [str(p.relative_to(output)) for p in data_paths]
+        for name in names:
             data = (output / name).read_bytes()
             member = tarfile.TarInfo(name)
             member.size = len(data)
@@ -212,7 +224,7 @@ def main():
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps({"output": str(output), "cases": len(mapping), "exit_code": result.returncode,
                       "engine_sources_unchanged": receipt["engine_sources_unchanged"]}))
-    return result.returncode or int(not receipt["engine_sources_unchanged"])
+    return result.returncode or int(not (receipt["engine_sources_unchanged"] and receipt["test_data_identity_unchanged"] and receipt["generated_test_source_unchanged"]))
 
 
 if __name__ == "__main__":

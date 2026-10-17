@@ -3,11 +3,12 @@
 The active mission retains full behavioral, gameplay and performance scope.
 Current native/component evidence and partial pipeline timings do not close it.
 
-- Complete root-bound personality/evaluation composition, especially pawn
-  progress/races/endings, central/pattern terms and late-endgame bounds/finishing.
-- Compare complete produced search scores, PVs, call placement and N/R work
-  against released expectations. Verify full IIO/tail/extension accumulation
-  beyond the bounded native and controlled-entry coverage.
+- Complete public personality binding and accepted command domains. Native
+  root-bound evaluation now includes all formula families and passes selected
+  neutral/nonneutral composed checks; that does not establish public lifecycle.
+- Extend exact composed-search comparisons beyond the ten first-root and nine
+  ordinary fixture cases. Complete evaluation-stage and quiescence traces and
+  verify IIO/tail/extension behavior beyond bounded native coverage.
 - Audit learned-memory consumption of uncertified/colliding cache hints. The
   current empty-source guard avoids indexing an absent piece; behavior in that
   broader completed-node combination remains unqualified.

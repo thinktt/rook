@@ -46,7 +46,7 @@ def source_snapshot(root: Path) -> dict:
 def tool_snapshot(root: Path) -> dict:
     paths = sorted(path for path in (root / "tools").rglob("*")
                    if path.is_file() and "__pycache__" not in path.parts
-                   and path.suffix in (".py", ".c", ".md", ".sh", ".mjs"))
+                   and path.suffix in (".py", ".c", ".rs", ".md", ".sh", ".mjs"))
     return {str(path.relative_to(root)): digest(path) for path in paths}
 
 

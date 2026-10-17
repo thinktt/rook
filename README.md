@@ -9,8 +9,9 @@ The released behavioral and performance contracts are in
 [king-spec](../king-spec/README.md), currently v2.5.0.
 
 This repository contains an integrated development engine: compact position
-state, legal generation, partial evaluation and explicitly partial recursive
-search. It does not yet implement the complete ordinary KingRE engine or claim
+state, legal generation, composed retained evaluation and recursive ordinary/
+tactical search. Timed scheduling and public session/protocol integration remain
+incomplete. It does not yet implement the complete ordinary KingRE engine or claim
 conformance or performance qualification.
 
 Build the development executable with retained settings and identity:
@@ -27,21 +28,23 @@ scope. It is a native development seam, not the XBoard or DIAG-TRANSPORT interfa
 retained evaluator and tactical recursion. `--diagnostics off` selects its
 specialization without development counters while preserving charged work. Each repeat starts
 a fresh search lifetime; output excludes the preparatory root from subtree
-counters. A node-budget stop is an error. Evaluation omissions are explicit in
-the output and [frozen baseline](evidence/quiescence-v1/README.md).
+counters. A node-budget stop is an error. The older
+[frozen baseline](evidence/quiescence-v1/README.md) identifies its partial
+evaluation scope; it is not a timing denominator for the current evaluator.
 
 `rook2-dev first-iteration` visits the complete natural root list once, using
 the specified second-ranked-score window and shared pawn-cache lifetime across
 actual tactical children. Its diagnostic steps expose the returned windows,
-ranking and PV. This mode stops at that first pass; missing evaluation terms
-remain explicit.
+ranking and PV. This mode stops at that first pass.
 
 `rook2-dev ordinary --depth 4 --max-nodes 1000000` runs the newer iterative
 ordinary/tactical pipeline with remembered results, learned ordering, pruning,
 extensions and internal ordering passes. Its default TT budget is64 MiB;
-`--tts-bytes` supports explicit development collision experiments. Evaluation,
-timing and protocol omissions are reported in every result. See the
-[ordinary baseline](evidence/ordinary-v1/README.md).
+`--tts-bytes` supports explicit development collision experiments. Timing and
+public personality/protocol omissions are reported in every result. Selected
+complete fixed-iteration observations match the released expectations; see
+[native evaluation/root checks](evidence/evaluation-check-20261017-roots/README.md)
+and the [current CPU baseline](evidence/neutral-evaluation-v2/README.md).
 
 See [STATUS.md](STATUS.md) for the current milestones and
 [AGENTS.md](AGENTS.md) for contribution and clean-room boundaries.

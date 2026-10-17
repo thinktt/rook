@@ -9,7 +9,7 @@ use crate::quiescence::{Entry, Limits, Quiescence, Stats, Stopped, Work};
 use crate::quiescence_policy;
 use crate::types::Move;
 
-pub const FIDELITY: &str = "partial-evaluation-first-root-iteration-v1";
+pub const FIDELITY: &str = "neutral-evaluation-first-root-iteration-v2";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {

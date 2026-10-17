@@ -335,13 +335,21 @@ pub fn structure_terms(
 }
 
 pub fn compute(position: &Position, influence: &Influence, retained: &PawnStructure) -> PawnTerms {
+    compute_with_phase(position, influence, retained, position.phase())
+}
+
+pub fn compute_with_phase(
+    position: &Position,
+    influence: &Influence,
+    retained: &PawnStructure,
+    phase: crate::position::Phase,
+) -> PawnTerms {
     let (structure, relation_queries) = structure_terms(position, influence, retained);
     let mut result = PawnTerms {
         structure,
         relation_queries,
         ..PawnTerms::default()
     };
-    let phase = position.phase();
     let weight = (phase.opening + phase.middlegame) as i32;
     if weight > 16 {
         let (raw, queries) = raw_piece_terms(position, influence, retained);

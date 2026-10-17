@@ -11,8 +11,10 @@ full/fast retained evaluation, pawn retention, history admission, TT behavior,
 ordering, shallow/null cutoffs, extensions, mate probes, scout retry and
 initial/tail internal ordering. Iterations carry stable ranked root order and
 shared learned/cache effects; child retry preserves its own refreshed terms.
-The composed evaluator remains partial, and timed scheduling, host polling,
-personality/session/protocol integration are still missing.
+The composed evaluator now includes central/pattern terms, pawn progress and
+endings, race/fortress bounds and late-endgame finishing. Effective root-bound
+personality settings are available through the native API. Timed scheduling,
+host polling and public personality/session/protocol integration are missing.
 The earlier generic alpha-beta development baseline stays separately frozen.
 No conformance or performance qualification is claimed.
 
@@ -26,6 +28,13 @@ Current evidence:
   and learned-memory sequences. Expected data lives only in an external test
   crate. This does not qualify DIAG validation or complete search. See
   [policy check scope](evidence/ordinary-policy-check-20261017-final/README.md).
+- 1,352 external native evaluation/root cases pass, with201,374 evaluator
+  queries. Every observed root field matches for ten first iterations, six
+  neutral ordinary searches and three selected-personality searches, including
+  windows, move kinds, score-ranked carryover, PV and cumulative N/R work.
+  These are native computation checks, not full diagnostic transport or
+  completed gameplay qualification. See
+  [evaluation check scope](evidence/evaluation-check-20261017-roots/README.md).
 - 12,621 external inspections passed selected released expected projections
   across two separate schedules. The first schedule's 285 unsupported source
   cases and all omitted fields remain explicit. The added 8,727 inspections
@@ -56,12 +65,19 @@ Current evidence:
   results agree, and diagnostics on/off preserve every iteration's score, PV,
   order and work. CPU15 recorded three non-idle ticks during collection, retained
   as interference evidence. See [ordinary evidence](evidence/ordinary-v1/README.md).
+- The newer composed-evaluation baseline matches four released fixed-root
+  expectations, including all emitted windows/ranking/PVs/work with diagnostics
+  on and iteration/final parity with diagnostics off. Eight schedules each use
+  one excluded warmup and three measured fresh processes. CPU medians off are
+  0.418455/0.837676/0.416842/0.287501 seconds for512/256/256/128 searches.
+  CPU15 recorded one user tick during collection. See
+  [current baseline](evidence/neutral-evaluation-v2/README.md).
 - Instructions/cycles remain unavailable to the unprivileged account; a request
   for a scoped observer has been sent to the owner through the conversation.
 
-Next: complete neutral evaluation so whole-search scores/work become comparable
-with the released expectations, then extend work-clock/root timing and public
-integration. Full/fast/pawn/TT traffic is now present, but permanent layout
+Next: connect the exact work clock, natural host polls and root timing, then
+public integration. Selected fixed-root scores/work now match the released
+expectations. Full/fast/pawn/TT traffic is present, but permanent layout
 selection still needs controlled representation/restoration comparisons and
 fidelity appropriate to production. Earlier partial timings are not speedup
 denominators for the new pipeline.

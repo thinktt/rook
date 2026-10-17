@@ -1,17 +1,14 @@
-//! Partial composed evaluator with the production state lifetimes.
-//!
-//! Implemented components are real spec formulas. Progress/races, central and
-//! board patterns, personality configuration and late-endgame adjustment remain
-//! absent; this module must not be presented as complete KingRE evaluation.
+//! Composed root-bound evaluation with retained full/fast state.
+//! Component correctness and complete engine qualification remain separate.
 
 use crate::evaluation::RootContext;
 use crate::influence::Influence;
-use crate::pawn_structure::PawnCache;
+use crate::pawn_structure::{self, PawnCache};
 use crate::position::Position;
 use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
-use crate::{activity, pawn_terms, shelter};
+use crate::{activity, endgame, pawn_progress, pawn_terms, positional_terms, shelter};
 
-pub const OMITTED_TERMS: &str = "pawn progress/races/endings; central influence; bishop coordination/opening patterns; nonneutral personality; late-endgame adjustment/bounds";
+pub const OMITTED_TERMS: &str = "production personality/session/protocol binding";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Retained {
@@ -113,8 +110,8 @@ pub struct Evaluation {
     pub lower: i32,
     pub upper: i32,
     pub relation_queries: u64,
-    /// Bounds below the late threshold are specified. Later geometry is pending.
-    pub late_endgame_pending: bool,
+    /// True when the specialized late-endgame stage was selected.
+    pub late_endgame_applied: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -135,23 +132,137 @@ pub struct Selection {
     pub refreshed: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct Parameters {
+    /// Pawn, knight, bishop, rook, queen, king, center, mobility, shelter,
+    /// pawn progress, pawn structure; ownership follows the root side.
+    pub own: [i32; 11],
+    pub opponent: [i32; 11],
+    pub average_depth: i32,
+    pub draw: i32,
+    pub opponent_selectivity: i32,
+}
+impl Default for Parameters {
+    fn default() -> Self {
+        Self {
+            own: [100; 11],
+            opponent: [100; 11],
+            average_depth: 0,
+            draw: 0,
+            opponent_selectivity: 100,
+        }
+    }
+}
+pub fn coefficient(percentage: i32) -> i32 {
+    percentage.wrapping_mul(1024).wrapping_add(50) / 100
+}
+
+#[derive(Clone, Copy)]
+struct Weights {
+    structure: [i32; 2],
+    progress: [i32; 2],
+    central: [i32; 2],
+    mobility: [i32; 2],
+    shelter: [i32; 2],
+}
+impl Parameters {
+    fn bind(&self, position: &Position) -> (RootContext, Weights, i32, u32) {
+        assert!(self
+            .own
+            .iter()
+            .chain(&self.opponent)
+            .all(|v| (0..=1000).contains(v)));
+        assert!((-10000..=10000).contains(&self.draw));
+        assert!((0..=100).contains(&self.opponent_selectivity));
+        let percentages = if position.side == Color::White {
+            [self.own, self.opponent]
+        } else {
+            [self.opponent, self.own]
+        };
+        let material = std::array::from_fn(|c| std::array::from_fn(|k| percentages[c][k] as u16));
+        let root = RootContext::new(position, material, self.average_depth);
+        let pair = |index| {
+            [
+                coefficient(percentages[0][index]),
+                coefficient(percentages[1][index]),
+            ]
+        };
+        let weights = Weights {
+            central: pair(6),
+            mobility: pair(7),
+            shelter: pair(8),
+            progress: pair(9),
+            structure: pair(10),
+        };
+        let p = root.phase;
+        let draw = (((4 * p.opening as i64 + 2 * p.middlegame as i64 + p.endgame as i64)
+            * self.draw as i64
+            + 512)
+            .div_euclid(1024)) as i32;
+        let d = 100 - self.opponent_selectivity;
+        let range = d * d * d / 200 + 3 * d;
+        (root, weights, draw, range as u32)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Components {
+    pub material: i32,
+    pub squares: i32,
+    pub pawn_structure: i32,
+    pub pawn_progress: i32,
+    pub activity: i32,
+    pub central: i32,
+    pub shelter: i32,
+    pub bishops: i32,
+    pub patterns: i32,
+    pub tempo: i32,
+}
+impl Components {
+    pub fn positional(self) -> i32 {
+        self.pawn_structure
+            + self.activity
+            + self.central
+            + self.shelter
+            + self.bishops
+            + self.patterns
+    }
+    pub fn base(self) -> i32 {
+        self.positional() + self.material + self.squares + self.pawn_progress + self.tempo
+    }
+}
+
 pub struct Evaluator<const DIAGNOSTICS: bool = true> {
     pub root: RootContext,
+    pub parameters: Parameters,
+    pub draw_preference: i32,
+    pub variation_range: u32,
+    weights: Weights,
     pawns: PawnCache,
     pub stats: EvalStats,
 }
 
 impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
     pub fn new(position: &Position) -> Self {
+        let parameters = Parameters::default();
+        let (root, weights, draw_preference, variation_range) = parameters.bind(position);
         Self {
-            root: RootContext::neutral(position),
+            root,
+            parameters,
+            weights,
+            draw_preference,
+            variation_range,
             pawns: PawnCache::new(),
             stats: EvalStats::default(),
         }
     }
-
     pub fn begin_search(&mut self, position: &Position) {
-        self.root = RootContext::neutral(position);
+        (
+            self.root,
+            self.weights,
+            self.draw_preference,
+            self.variation_range,
+        ) = self.parameters.bind(position);
         self.pawns.clear();
         self.stats = EvalStats::default();
     }
@@ -171,25 +282,77 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
     }
 
     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+        self.full_impl::<false, _>(node, influence, in_check, |_| {})
+    }
+    /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+    pub fn full_observed<F: FnOnce(Components)>(
+        &mut self,
+        node: &mut Node,
+        influence: &Influence,
+        in_check: bool,
+        observer: F,
+    ) -> Evaluation {
+        self.full_impl::<false, _>(node, influence, in_check, observer)
+    }
+    pub fn fresh_observed<F: FnOnce(Components)>(
+        &mut self,
+        node: &mut Node,
+        influence: &Influence,
+        in_check: bool,
+        observer: F,
+    ) -> Evaluation {
+        self.full_impl::<true, _>(node, influence, in_check, observer)
+    }
+    fn full_impl<const FRESH: bool, F: FnOnce(Components)>(
+        &mut self,
+        node: &mut Node,
+        influence: &Influence,
+        in_check: bool,
+        observer: F,
+    ) -> Evaluation {
         let position = &node.position;
         let phase = position.phase();
         let material = self.root.material(position);
-        let selected = self.pawns.select(position, influence);
+        let selected = if FRESH {
+            pawn_structure::Selection {
+                structure: pawn_structure::fresh(position, influence, [1024; 2]),
+                reused: false,
+            }
+        } else {
+            self.pawns.select(position, influence)
+        };
         let pawn = pawn_terms::compute(position, influence, &selected.structure);
-        let activity = activity::compute(position, influence, material, [1024; 2]);
-        let shelter = shelter::compute(position, influence, activity.pressure, material, [1024; 2]);
-        // Neutral structure weights are both1024; keep the two separate rounds.
-        let structural = ((pawn.structure[0] - pawn.piece[1]) as i64 * 1024
-            - (pawn.structure[1] - pawn.piece[0]) as i64 * 1024
-            + 512)
-            .div_euclid(1024);
-        let structure = (structural
-            * (13 * phase.opening as i64
-                + 14 * phase.middlegame as i64
-                + 19 * phase.endgame as i64)
-            + 2048)
-            .div_euclid(4096) as i32;
-        let positional = structure + activity.weighted + shelter.weighted;
+        let activity = activity::compute(position, influence, material, self.weights.mobility);
+        let shelter = shelter::compute(
+            position,
+            influence,
+            activity.pressure,
+            material,
+            self.weights.shelter,
+        );
+        let structure = pawn_progress::structure_weighted(
+            phase,
+            pawn.structure,
+            pawn.piece,
+            self.weights.structure,
+        );
+        // This producer has no state or charged relation work. At a zero final
+        // phase factor, its weighted result is identically zero.
+        let progress = if phase.middlegame == 0 && phase.endgame == 0 {
+            0
+        } else {
+            pawn_progress::selected(
+                position,
+                influence,
+                &selected.structure,
+                phase,
+                material,
+                self.weights.progress,
+            )
+            .weighted
+        };
+        let central = positional_terms::central(influence, phase, self.weights.central);
+        let patterns = positional_terms::patterns(position);
         let tempo = if in_check {
             0
         } else {
@@ -205,15 +368,23 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
                 -magnitude
             }
         };
-        node.retained.positional = positional;
-        node.retained.pawn_progress = 0; // Explicit missing progress producer.
-        node.retained.age = 0;
-        let base = material
-            + self
+        let components = Components {
+            material,
+            squares: self
                 .root
-                .square_balance_from(position, node.retained.nonking_squares)
-            + positional
-            + tempo;
+                .square_balance_from(position, node.retained.nonking_squares),
+            pawn_structure: structure,
+            pawn_progress: progress,
+            activity: activity.weighted,
+            central: central.weighted,
+            shelter: shelter.weighted,
+            bishops: patterns.bishop_coordination,
+            patterns: patterns.opening,
+            tempo,
+        };
+        node.retained.positional = components.positional();
+        node.retained.pawn_progress = progress;
+        node.retained.age = 0;
         let queries = pawn.relation_queries + activity.relation_queries;
         if DIAGNOSTICS {
             self.stats.full += 1;
@@ -224,9 +395,36 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             }
         }
         self.stats.relation_queries += queries;
-        finish_partial(position, base, queries)
+        observer(components);
+        self.finish(position, components.base(), in_check, progress, queries)
     }
-
+    fn finish(
+        &self,
+        position: &Position,
+        base: i32,
+        checked: bool,
+        progress: i32,
+        queries: u64,
+    ) -> Evaluation {
+        let value = endgame::finish(
+            position,
+            base,
+            self.draw_preference,
+            self.root.side,
+            self.variation_range,
+            position.primary ^ position.secondary,
+            position.phase().endgame,
+            checked,
+            progress,
+        );
+        Evaluation {
+            score: value.score,
+            lower: value.lower,
+            upper: value.upper,
+            relation_queries: queries,
+            late_endgame_applied: position.phase().endgame >= 192,
+        }
+    }
     pub fn fast(&mut self, node: &Node, in_check: bool) -> Evaluation {
         if DIAGNOSTICS {
             self.stats.fast += 1;
@@ -246,11 +444,10 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             + node.retained.positional
             + node.retained.pawn_progress
             + tempo;
-        finish_partial(position, base, 0)
+        self.finish(position, base, in_check, node.retained.pawn_progress, 0)
     }
 
-    /// The specified selection predicates applied to this explicitly partial
-    /// score producer. Missing terms can change F and therefore the chosen tree.
+    /// Select and refresh from the finished current-side score.
     pub fn select_noncheck(
         &mut self,
         node: &mut Node,
@@ -291,28 +488,6 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             fast_score: Some(fast.score),
             refreshed: refresh,
         }
-    }
-}
-
-/// Ordinary finishing is real; late endgame geometry is explicitly pending.
-fn finish_partial(position: &Position, base: i32, queries: u64) -> Evaluation {
-    let clipped = base.clamp(-7900, 7900);
-    let h = position.halfmove as i64;
-    let white = if h <= 11 {
-        clipped
-    } else {
-        ((23 * (100 - h)).max(0) * clipped as i64 + 1024).div_euclid(2048) as i32
-    };
-    Evaluation {
-        score: if position.side == Color::White {
-            white
-        } else {
-            -white
-        },
-        lower: -10000,
-        upper: 10000,
-        relation_queries: queries,
-        late_endgame_pending: position.phase().endgame >= 192,
     }
 }
 
@@ -404,7 +579,7 @@ mod tests {
         let mut node = Node::root(sparse, &evaluator.root);
         let selected = evaluator.select_noncheck(&mut node, -1, 1, false, &mut None);
         assert!(selected.initially_full && selected.fast_score.is_none());
-        assert!(selected.evaluation.late_endgame_pending);
+        assert!(selected.evaluation.late_endgame_applied);
     }
 
     #[test]
