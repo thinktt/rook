@@ -10,8 +10,9 @@ The released behavioral and performance contracts are in
 
 This repository contains an integrated development engine: compact position
 state, legal generation, composed retained evaluation and recursive ordinary/
-tactical search. Timed scheduling and public session/protocol integration remain
-incomplete. It does not yet implement the complete ordinary KingRE engine or claim
+tactical search, with a native work-timed root controller. Public
+session/protocol integration remains incomplete. It does not yet implement the
+complete ordinary KingRE engine or claim
 conformance or performance qualification.
 
 Build the development executable with retained settings and identity:
@@ -45,6 +46,15 @@ public personality/protocol omissions are reported in every result. Selected
 complete fixed-iteration observations match the released expectations; see
 [native evaluation/root checks](evidence/evaluation-check-20261017-roots/README.md)
 and the [current CPU baseline](evidence/neutral-evaluation-v2/README.md).
+
+`rook2-dev work-timed --seed 0 --max-nodes 8192` runs neutral work-timed search
+with explicit seed, randomness 50 and 1cs average/maximum allowances. The native
+controller applies seeded root windows, adaptive checks, 4096-work polls,
+interruption and retained captures. `--average-cs`, `--maximum-cs`,
+`--randomness` and `--iteration-cap` expose development controls. Public seed
+acquisition, host commands, persistent sessions and post/PV rendering remain
+separate. See [native timing evidence](evidence/timing-check-20261017-frozen/README.md)
+and the [timed CPU baseline](evidence/work-timed-v1/README.md).
 
 See [STATUS.md](STATUS.md) for the current milestones and
 [AGENTS.md](AGENTS.md) for contribution and clean-room boundaries.

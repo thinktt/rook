@@ -21,7 +21,16 @@ fn run() -> Result<(), String> {
     let mut repeat = 1u32;
     let mut root_move = None;
     let mut iteration_depth = 1i32;
-    let mut max_nodes = 4095u64;
+    let mut max_nodes = if mode == "work-timed" {
+        100_000_000u64
+    } else {
+        4095u64
+    };
+    let mut seed = 0u32;
+    let mut randomness = 50u32;
+    let mut average_cs = 1u32;
+    let mut maximum_cs = 1u32;
+    let mut iteration_cap = 62u8;
     let mut diagnostics = true;
     let mut tts_bytes = 67_108_864usize;
     let mut activity_weights = [1024i32; 2];
@@ -40,6 +49,13 @@ fn run() -> Result<(), String> {
             "--depth" => depth = value.parse().map_err(|_| "invalid depth")?,
             "--repeat" => repeat = value.parse().map_err(|_| "invalid repeat")?,
             "--root-move" => root_move = Some(value),
+            "--seed" => seed = value.parse().map_err(|_| "invalid seed")?,
+            "--randomness" => randomness = value.parse().map_err(|_| "invalid randomness")?,
+            "--average-cs" => average_cs = value.parse().map_err(|_| "invalid average")?,
+            "--maximum-cs" => maximum_cs = value.parse().map_err(|_| "invalid maximum")?,
+            "--iteration-cap" => {
+                iteration_cap = value.parse().map_err(|_| "invalid iteration cap")?
+            }
             "--tts-bytes" => tts_bytes = value.parse().map_err(|_| "invalid TT capacity")?,
             "--iteration-depth" => {
                 iteration_depth = value.parse().map_err(|_| "invalid iteration depth")?
@@ -85,9 +101,14 @@ fn run() -> Result<(), String> {
     if !(96..=1_073_741_824).contains(&tts_bytes) {
         return Err("TT capacity must be 96..1073741824 bytes".into());
     }
+    if randomness > i32::MAX as u32 || !(1..=62).contains(&iteration_cap) {
+        return Err("randomness must be 0..2147483647 and iteration cap 1..62".into());
+    }
     let mut position = Position::from_fen(&fen)?;
-    if matches!(mode.as_str(), "quiescence" | "first-iteration" | "ordinary")
-        && rook2::movegen::in_check(&position, position.side.opponent())
+    if matches!(
+        mode.as_str(),
+        "quiescence" | "first-iteration" | "ordinary" | "work-timed"
+    ) && rook2::movegen::in_check(&position, position.side.opponent())
     {
         return Err("search setup's side not to move is already in check".into());
     }
@@ -107,6 +128,35 @@ fn run() -> Result<(), String> {
     history.mark_root();
     position.validate()?;
     match mode.as_str() {
+        "work-timed" => {
+            let controls = rook2::timed::Controls {
+                average_cs,
+                maximum_cs,
+                origin: 0,
+                seed,
+                randomness,
+                maximum_entered_iterations: iteration_cap,
+            };
+            if diagnostics {
+                run_work_timed::<true>(
+                    position,
+                    &mut history,
+                    repeat,
+                    max_nodes,
+                    tts_bytes,
+                    controls,
+                )?;
+            } else {
+                run_work_timed::<false>(
+                    position,
+                    &mut history,
+                    repeat,
+                    max_nodes,
+                    tts_bytes,
+                    controls,
+                )?;
+            }
+        }
         "inspect" => {
             if repeat != 1 {
                 return Err("inspect requires repeat=1".into());
@@ -280,6 +330,111 @@ fn run() -> Result<(), String> {
             )
         }
     }
+    Ok(())
+}
+
+fn run_work_timed<const D: bool>(
+    position: Position,
+    history: &mut SearchHistory,
+    repeat: u32,
+    max_nodes: u64,
+    tts_bytes: usize,
+    controls: rook2::timed::Controls,
+) -> Result<(), String> {
+    use rook2::{
+        engine::Search,
+        quiescence::Limits,
+        timed::{Outcome, Point},
+    };
+    let mut search = Search::<D>::new(&position);
+    search.config.tts_bytes = tts_bytes;
+    let mut last: Option<Outcome> = None;
+    let mut witness = 0u64;
+    for _ in 0..repeat {
+        let out = search
+            .run_work_timed(
+                position,
+                history,
+                controls,
+                Limits {
+                    nodes: Some(max_nodes),
+                },
+            )
+            .map_err(|e| format!("timed search incomplete: {e:?}"))?;
+        if let Some(previous) = &last {
+            if (
+                &previous.result,
+                &previous.stop,
+                &previous.iterations,
+                &previous.checks,
+                &previous.publications,
+                previous.ledger,
+            ) != (
+                &out.result,
+                &out.stop,
+                &out.iterations,
+                &out.checks,
+                &out.publications,
+                out.ledger,
+            ) {
+                return Err("fresh timed search changed its capture, stop, work or trace".into());
+            }
+        }
+        witness = witness
+            .wrapping_mul(0x100000001b3)
+            .wrapping_add(out.result.as_ref().map_or(0, |r| r.score) as i64 as u64)
+            .wrapping_add(out.stop.work.charged_search_units)
+            .wrapping_add(out.stop.work.charged_relation_queries);
+        last = Some(out);
+    }
+    let out = last.unwrap();
+    let point = |p| match p {
+        Point::Root => "root",
+        Point::Iteration => "iteration",
+        Point::Poll => "poll",
+    };
+    let index = |i: Option<usize>| i.map_or_else(|| "null".to_owned(), |v| v.to_string());
+    let result = out.result.as_ref().map_or_else(
+        || "null".to_owned(),
+        |r| {
+            format!(
+        "{{\"depth\":{},\"rootIndex\":{},\"score\":{},\"pv\":{},\"searchId\":{},\"elapsedCs\":{}}}",
+        r.depth,r.root_index,r.score,move_strings(&r.pv),r.search_id,r.elapsed_cs)
+        },
+    );
+    let pending = out.stop.pending.map_or_else(
+        || "null".to_owned(),
+        |p| {
+            format!(
+                "{{\"move\":\"{}\",\"window\":{:?},\"adjustment\":{}}}",
+                p.movement, p.window, p.adjustment
+            )
+        },
+    );
+    let checks:Vec<String> = out.checks.iter().map(|c|format!(
+        "{{\"point\":\"{}\",\"depth\":{},\"rootIndex\":{},\"nodes\":{},\"relationQueries\":{},\"elapsedCs\":{},\"limitSeconds\":{:?},\"stop\":{}}}",
+        point(c.point),c.depth,index(c.root_index),c.work.charged_search_units,c.work.charged_relation_queries,
+        c.elapsed_cs,c.limit_seconds,c.stop)).collect();
+    let e = out.evaluations;
+    let s = out.stats;
+    let counts = if D {
+        format!(
+        "{{\"full\":{},\"fast\":{},\"pawnReuses\":{},\"pawnReplacements\":{},\"tableHits\":{},\"tableStores\":{},\"iioInitialPhases\":{},\"iioTailPhases\":{}}}",
+        e.full,e.fast,e.pawn_reuses,e.pawn_replacements,s.table_hits,s.table_stores,s.iio_initial_phases,s.iio_tail_phases)
+    } else {
+        "null".to_owned()
+    };
+    println!(concat!("{{\"schema\":\"rook2-development-work-timed-v1\",",
+        "\"omissions\":\"public ingress/seed acquisition, host command servicing, session lifecycle, post/PV formatting\",",
+        "\"diagnostics\":{},\"repeat\":{},\"seed\":{},\"randomness\":{},\"averageCs\":{},\"maximumCs\":{},",
+        "\"result\":{},\"stop\":{{\"point\":\"{}\",\"reason\":\"{}\",\"depth\":{},\"rootIndex\":{},",
+        "\"nodes\":{},\"relationQueries\":{},\"elapsedCs\":{},\"pendingRoot\":{}}},",
+        "\"initialCandidates\":{},\"timeChecks\":[{}],\"publicationCapturesPerSearch\":{},",
+        "\"diagnosticCounts\":{},\"consumptionWitness\":{},\"conformanceClaim\":false}}"),
+        D,repeat,controls.seed,controls.randomness,controls.average_cs,controls.maximum_cs,
+        result,point(out.stop.point),out.stop.reason,out.stop.depth,index(out.stop.root_index),
+        out.stop.work.charged_search_units,out.stop.work.charged_relation_queries,out.stop.elapsed_cs,pending,
+        move_strings(&out.initial_candidates),checks.join(","),out.publications.len(),counts,witness);
     Ok(())
 }
 

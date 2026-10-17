@@ -183,6 +183,7 @@ def main(files=None, generator=None, header=None, checker_path=None, prepare=Non
                "fixture_sha256": {name: sha(args.spec / name) for name in files},
                "engine_sources_before": before, "checker_sha256": sha(checker_path), "runner_sha256": sha(Path(__file__)),
                "generated_test_sha256": sha(output / "src/lib.rs")}
+    receipt["generated_sources_before"] = {str(p.relative_to(output)): sha(p) for p in sorted((output / "src").glob("*.rs"))}
     receipt["engine_manifest_sha256"] = sha(root / "Cargo.toml")
     receipt["engine_lock_sha256"] = sha(root / "Cargo.lock")
     receipt["toolchain"] = subprocess.check_output(["rustc", "-vV"], text=True)
@@ -220,11 +221,12 @@ def main(files=None, generator=None, header=None, checker_path=None, prepare=Non
             if archive.extractfile(member).read() != (output / member.name).read_bytes():
                 raise ValueError("generated test archive changed bytes")
     receipt["test_source_archive_sha256"] = sha(archive_path)
-    receipt["generated_test_source_unchanged"] = sha(output / "src/lib.rs") == receipt["generated_test_sha256"]
+    receipt["generated_test_source_unchanged"] = receipt["generated_sources_before"] == {str(p.relative_to(output)): sha(p) for p in sorted((output / "src").glob("*.rs"))}
+    receipt["engine_manifest_lock_unchanged"] = (sha(root / "Cargo.toml") == receipt["engine_manifest_sha256"] and sha(root / "Cargo.lock") == receipt["engine_lock_sha256"])
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps({"output": str(output), "cases": len(mapping), "exit_code": result.returncode,
                       "engine_sources_unchanged": receipt["engine_sources_unchanged"]}))
-    return result.returncode or int(not (receipt["engine_sources_unchanged"] and receipt["test_data_identity_unchanged"] and receipt["generated_test_source_unchanged"]))
+    return result.returncode or int(not (receipt["engine_sources_unchanged"] and receipt["test_data_identity_unchanged"] and receipt["generated_test_source_unchanged"] and receipt["engine_manifest_lock_unchanged"]))
 
 
 if __name__ == "__main__":

@@ -13,14 +13,16 @@ initial/tail internal ordering. Iterations carry stable ranked root order and
 shared learned/cache effects; child retry preserves its own refreshed terms.
 The composed evaluator now includes central/pattern terms, pawn progress and
 endings, race/fortress bounds and late-endgame finishing. Effective root-bound
-personality settings are available through the native API. Timed scheduling,
-host polling and public personality/session/protocol integration are missing.
+personality settings are available through the native API. Native work-timed
+search now applies adaptive limits, seeded root variation, natural 4096 polls,
+root/iteration stopping and separate completed-result capture. Public host
+command servicing and personality/session/protocol integration are missing.
 The earlier generic alpha-beta development baseline stays separately frozen.
 No conformance or performance qualification is claimed.
 
 Current evidence:
 
-- 112 library tests and two CLI tests pass, including start depth4 legal trees,
+- 115 library tests and two CLI tests pass, including start depth4 legal trees,
   influence exhaustiveness, chronology, retained identities/TT, full/fast
   restoration, bounded reply probes, quiescence stopping and terminal returns.
 - 884 external native policy cases pass, including11,136 selective-depth
@@ -35,6 +37,13 @@ Current evidence:
   These are native computation checks, not full diagnostic transport or
   completed gameplay qualification. See
   [evaluation check scope](evidence/evaluation-check-20261017-roots/README.md).
+- 70 external native clock/timing/search cases pass: ledger/reset boundaries,
+  adaptive limits, terminal iteration decisions, 22,530 root random/aspiration
+  queries and six actual timed-search traces. The latter compare every native
+  root step, time check, interruption and retained capture; public events are
+  outside that check. All 1,352 evaluator/root regression cases pass on the
+  same frozen timed source. See
+  [timing scope](evidence/timing-check-20261017-frozen/README.md).
 - 12,621 external inspections passed selected released expected projections
   across two separate schedules. The first schedule's 285 unsupported source
   cases and all omitted fields remain explicit. The added 8,727 inspections
@@ -72,11 +81,19 @@ Current evidence:
   0.418455/0.837676/0.416842/0.287501 seconds for512/256/256/128 searches.
   CPU15 recorded one user tick during collection. See
   [current baseline](evidence/neutral-evaluation-v2/README.md).
+- The work-timed native path has separate CPU14 measurements for seed 0 poll
+  interruption and seed 2147483648 completed-root stopping. With 128 searches
+  per fresh process, diagnostics-off CPU medians are 0.890844/0.908052 seconds.
+  Repetitions and diagnostic modes preserve selected captures and total work.
+  CLI md99 differs from the fixture's md20; measured output projections agree,
+  while the native checker binds the complete vectors. CPU15 recorded two user
+  ticks. See [timed baseline](evidence/work-timed-v1/README.md).
 - Instructions/cycles remain unavailable to the unprivileged account; a request
   for a scoped observer has been sent to the owner through the conversation.
 
-Next: connect the exact work clock, natural host polls and root timing, then
-public integration. Selected fixed-root scores/work now match the released
+Next: public ingress, clock allocation, seed/session lifecycle and literal
+post/PV output, followed by host command servicing and broader joined-search
+checks. Selected fixed-root and timed native observations match the released
 expectations. Full/fast/pawn/TT traffic is present, but permanent layout
 selection still needs controlled representation/restoration comparisons and
 fidelity appropriate to production. Earlier partial timings are not speedup

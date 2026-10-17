@@ -12,8 +12,11 @@ Current native/component evidence and partial pipeline timings do not close it.
 - Audit learned-memory consumption of uncertified/colliding cache hints. The
   current empty-source guard avoids indexing an absent piece; behavior in that
   broader completed-node combination remains unqualified.
-- Connect exact work-clock observations, natural4096 polls, adaptive/root
-  scheduling, terminal stopping and interrupted-result ownership/publication.
+- Connect native work-timed search to public clock/session lifetime, seed
+  acquisition, command servicing and report publication. Native work polls,
+  adaptive checks and retained-result ownership now match six bounded recursive
+  traces. Extend coverage to actual restricted iterations, first-root fallback
+  and interruptions during IIO; those are not closed by the current six cases.
 - Implement strict diagnostic/ordinary transport and command parsing, complete
   profile binding, public history/result/reset lifecycle, exceptional EP
   king-victim ingress, PV/report formatting and persistent gameplay.

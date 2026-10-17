@@ -39,6 +39,7 @@ pub struct Limits {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stopped {
     NodeLimit(u64),
+    WorkPoll,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -136,6 +137,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
     /// Start the measured/search-work segment without clearing shared pawns.
     /// Root candidates then use `continue_subtree` in actual visit order.
     pub fn begin_sequence(&mut self, limits: Limits) {
+        self.timing = None;
         self.stats = Stats::default();
         self.evaluator.stats = EvalStats::default();
         self.pv_len.fill(0);

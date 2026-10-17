@@ -42,6 +42,7 @@ pub struct Search<const DIAGNOSTICS: bool = true> {
     pub(crate) pv_len: [usize; PLIES],
     pub(crate) stats: Stats,
     pub(crate) limits: Limits,
+    pub(crate) timing: Option<crate::timed::Clock>,
 }
 
 impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
@@ -59,6 +60,7 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
             pv_len: [0; PLIES],
             stats: Stats::default(),
             limits: Limits::default(),
+            timing: None,
         }
     }
 
@@ -84,6 +86,14 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
             }
         }
         self.stats.nodes += 1;
+        if self.stats.nodes & 4095 == 0 {
+            let work = self.work();
+            if let Some(clock) = &mut self.timing {
+                if clock.check::<DIAGNOSTICS>(crate::timing::Stage::Poll, 0, 0, work) {
+                    return Err(Stopped::WorkPoll);
+                }
+            }
+        }
         Ok(())
     }
 

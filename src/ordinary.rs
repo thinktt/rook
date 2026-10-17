@@ -22,6 +22,7 @@ pub enum Error {
     InvalidDepth,
     Table(String),
     Stopped(Stopped),
+    IterationCapacity,
 }
 
 #[cfg(test)]
@@ -295,22 +296,22 @@ pub struct Outcome {
 }
 
 #[derive(Clone, Copy)]
-struct Request {
-    ply: usize,
-    depth: i32,
-    lower: i32,
-    upper: i32,
-    previous_extension: u8,
-    iteration: i32,
-    checked: Option<bool>,
+pub(crate) struct Request {
+    pub(crate) ply: usize,
+    pub(crate) depth: i32,
+    pub(crate) lower: i32,
+    pub(crate) upper: i32,
+    pub(crate) previous_extension: u8,
+    pub(crate) iteration: i32,
+    pub(crate) checked: Option<bool>,
 }
 
 #[derive(Clone, Copy)]
-struct Predecessor<'a> {
-    position: &'a Position,
-    influence: &'a Influence,
-    checked: bool,
-    movement: Option<Move>,
+pub(crate) struct Predecessor<'a> {
+    pub(crate) position: &'a Position,
+    pub(crate) influence: &'a Influence,
+    pub(crate) checked: bool,
+    pub(crate) movement: Option<Move>,
 }
 
 impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
@@ -446,7 +447,7 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
         threat.value
     }
 
-    fn visit_ordinary(
+    pub(crate) fn visit_ordinary(
         &mut self,
         node: &mut Node,
         history: &mut SearchHistory,

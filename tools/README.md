@@ -49,7 +49,12 @@ sequences without expanding every query into compiler input. Expected records
 remain outside the engine. The latter preserves actual move kinds, complete
 root steps, native component results and charged work observations.
 
-Both require a fresh output directory and use housekeeping CPUs. Their receipts
+`check_timing.py` uses the same external data-driven approach for the work
+ledger, adaptive limits, iteration terminal stop, root randomness/aspiration
+and selected actual recursive timed-search observations. It compares native
+root/time/stop/capture state; public events and transport remain separate.
+
+These require a fresh output directory and use housekeeping CPUs. Their receipts
 bind input fixtures, generated source/data, native source and raw results.
 These are native seam checks, not DIAG validation, gameplay or whole-engine
 performance qualification. Their correctness collection includes compilation;
