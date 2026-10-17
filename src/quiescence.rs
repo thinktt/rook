@@ -126,14 +126,29 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
         entry: Entry,
         limits: Limits,
     ) -> Result<Outcome, Stopped> {
-        assert!((1..PLIES).contains(&entry.ply));
-        assert_eq!(entry.ply, history.search_ply());
-        assert!(entry.iteration_depth >= 1 && entry.target >= 0);
-        assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
+        self.begin_sequence(limits);
+        self.continue_subtree(node, history, entry)
+    }
+
+    /// Start the measured/search-work segment without clearing shared pawns.
+    /// Root candidates then use `continue_subtree` in actual visit order.
+    pub fn begin_sequence(&mut self, limits: Limits) {
         self.stats = Stats::default();
         self.evaluator.stats = EvalStats::default();
         self.pv_len.fill(0);
         self.limits = limits;
+    }
+
+    pub fn continue_subtree(
+        &mut self,
+        node: &mut Node,
+        history: &mut SearchHistory,
+        entry: Entry,
+    ) -> Result<Outcome, Stopped> {
+        assert!((1..PLIES).contains(&entry.ply));
+        assert_eq!(entry.ply, history.search_ply());
+        assert!(entry.iteration_depth >= 1 && entry.target >= 0);
+        assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
         let score = self.visit(node, history, entry, None, false)?;
         Ok(Outcome {
             score,

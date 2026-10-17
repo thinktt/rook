@@ -25,10 +25,15 @@ scope. It is a native development seam, not the XBoard or DIAG-TRANSPORT interfa
 
 `rook2-dev quiescence --moves 'e2e4 d7d5' --root-move e4d5` exercises the newer
 retained evaluator and tactical recursion. `--diagnostics off` selects its
-counter-free specialization while preserving charged work. Each repeat starts
+specialization without development counters while preserving charged work. Each repeat starts
 a fresh search lifetime; output excludes the preparatory root from subtree
 counters. A node-budget stop is an error. Evaluation omissions are explicit in
 the output and [frozen baseline](evidence/quiescence-v1/README.md).
+
+`rook2-dev first-iteration` visits the complete natural root list once, using
+the specified second-ranked-score window and shared pawn-cache lifetime across
+actual tactical children. Its diagnostic steps expose the returned windows,
+ranking and PV; later ordinary iterations and evaluation terms remain pending.
 
 See [STATUS.md](STATUS.md) for the current milestones and
 [AGENTS.md](AGENTS.md) for contribution and clean-room boundaries.

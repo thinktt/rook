@@ -9,13 +9,15 @@ shelter, remembered-result table and pawn structural/piece terms are implemented
 Concrete quiescence now composes full/fast retained evaluation, shared pawn
 retention, history admission, tactical ranking, capture estimates, geometric
 safety and recursive PV consumption. The composed evaluator remains partial;
-ordinary search, TT integration and timing are not connected to this slice.
+later ordinary iterations, TT integration and timing are not connected to this slice.
+The first unrestricted root iteration now uses actual quiescence children,
+second-place windows, strict best/PV updates and one shared search lifetime.
 The earlier generic alpha-beta development baseline stays separately frozen.
 No conformance or performance qualification is claimed.
 
 Current evidence:
 
-- 98 library tests and two CLI tests pass, including start depth4 legal trees,
+- 102 library tests and two CLI tests pass, including start depth4 legal trees,
   influence exhaustiveness, chronology, retained identities/TT, full/fast
   restoration, bounded reply probes, quiescence stopping and terminal returns.
 - 12,621 external inspections passed selected released expected projections
@@ -34,6 +36,14 @@ Current evidence:
   CPU15 recorded only idle time during this collection. See
   [quiescence evidence](evidence/quiescence-v1/README.md). Missing evaluation
   terms still affect scores and one of ten explored fixture trees.
+- The first root iteration reproduces all ten explored fixture candidate
+  sequences. Independent consumption checks and diagnostics on/off agree;
+  all ten earlier quiescence outputs remain unchanged after the sequence API
+  refactor. Missing evaluation changes several root choices, so these are
+  explicit development observations. A separate measured first-root corpus
+  records 5,000 complete preparations/iterations per process, with diagnostics
+  off CPU medians0.128500/0.349432/0.413148 seconds. See
+  [first-root evidence](evidence/first-iteration-v1/README.md).
 - Instructions/cycles remain unavailable to the unprivileged account; a request
   for a scoped observer has been sent to the owner through the conversation.
 

@@ -13,7 +13,7 @@ const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let mode = args.next().ok_or("usage: rook2-dev inspect|perft|search|quiescence [--fen FEN] [--moves 'e2e4 ...'] [--root-move MOVE] [--depth N] [--repeat N]")?;
+    let mode = args.next().ok_or("usage: rook2-dev inspect|perft|search|quiescence|first-iteration [--fen FEN] [--moves 'e2e4 ...'] [--root-move MOVE] [--depth N] [--repeat N]")?;
     let mut fen = START.to_owned();
     let mut root_fen = None;
     let mut moves = String::new();
@@ -81,8 +81,10 @@ fn run() -> Result<(), String> {
         return Err("iteration depth must be 1..99 and max nodes 1..100000000".into());
     }
     let mut position = Position::from_fen(&fen)?;
-    if mode == "quiescence" && rook2::movegen::in_check(&position, position.side.opponent()) {
-        return Err("quiescence setup's side not to move is already in check".into());
+    if matches!(mode.as_str(), "quiescence" | "first-iteration")
+        && rook2::movegen::in_check(&position, position.side.opponent())
+    {
+        return Err("search setup's side not to move is already in check".into());
     }
     let mut history = SearchHistory::new(&position);
     for token in moves.split_ascii_whitespace() {
@@ -244,8 +246,95 @@ fn run() -> Result<(), String> {
                 )?;
             }
         }
-        _ => return Err("mode must be inspect, perft, search or quiescence".into()),
+        "first-iteration" => {
+            if iteration_depth != 1 || root_move.is_some() {
+                return Err(
+                    "first-iteration requires iteration depth 1 and no root move selection".into(),
+                );
+            }
+            if diagnostics {
+                run_first_iteration::<true>(position, &mut history, repeat, max_nodes)?;
+            } else {
+                run_first_iteration::<false>(position, &mut history, repeat, max_nodes)?;
+            }
+        }
+        _ => {
+            return Err("mode must be inspect, perft, search, quiescence or first-iteration".into())
+        }
     }
+    Ok(())
+}
+
+fn run_first_iteration<const DIAGNOSTICS: bool>(
+    position: Position,
+    history: &mut SearchHistory,
+    repeat: u32,
+    max_nodes: u64,
+) -> Result<(), String> {
+    use rook2::first_iteration::{self, Outcome, FIDELITY};
+    use rook2::quiescence::{Limits, Quiescence};
+    let mut search = Quiescence::<DIAGNOSTICS>::new(&position);
+    let mut last: Option<Outcome> = None;
+    let mut witness = 0u64;
+    for _ in 0..repeat {
+        let result = first_iteration::run(
+            &mut search,
+            position,
+            history,
+            Limits {
+                nodes: Some(max_nodes),
+            },
+        )
+        .map_err(|e| format!("first iteration incomplete: {e:?}"))?;
+        if let Some(previous) = &last {
+            if (previous.score, &previous.pv, previous.work, &previous.steps)
+                != (result.score, &result.pv, result.work, &result.steps)
+            {
+                return Err(
+                    "fresh repeated root iteration changed its result, steps or work".into(),
+                );
+            }
+        }
+        witness = witness
+            .wrapping_mul(0x100000001b3)
+            .wrapping_add(result.score as i64 as u64)
+            .wrapping_add(result.work.charged_search_units)
+            .wrapping_add(result.work.charged_relation_queries);
+        last = Some(result);
+    }
+    let out = last.unwrap();
+    let steps: Vec<String> = out
+        .steps
+        .iter()
+        .map(|s| {
+            format!(
+                concat!(
+        "{{\"move\":\"{}\",\"window\":[{},10000],\"score\":{},\"bestScore\":{},\"secondScore\":{},",
+        "\"childPv\":{},\"pv\":{},\"nodes\":{},\"relationQueries\":{}}}"),
+                s.movement,
+                s.lower,
+                s.score,
+                s.best,
+                s.second,
+                move_strings(&s.child_pv),
+                move_strings(&s.root_pv),
+                s.work.charged_search_units,
+                s.work.charged_relation_queries
+            )
+        })
+        .collect();
+    let e = out.evaluations;
+    println!(concat!("{{\"schema\":\"rook2-development-first-iteration-v1\",\"fidelity\":\"{}\",",
+        "\"omissions\":\"{}; later ordinary iterations/TT; host polling/timing; production protocol\",",
+        "\"diagnostics\":{},\"repeat\":{},\"score\":{},\"pv\":{},\"candidates\":{},\"steps\":[{}],",
+        "\"nodesPerSearch\":{},\"chargedRelationQueriesPerSearch\":{},\"fullEvaluationsPerSearch\":{},",
+        "\"fastEvaluationsPerSearch\":{},\"influenceBuildsPerSearch\":{},",
+        "\"pawnReusesPerSearch\":{},\"pawnReplacementsPerSearch\":{},",
+        "\"consumptionWitness\":{},\"conformanceClaim\":false}}"),
+        FIDELITY, rook2::evaluator::OMITTED_TERMS, DIAGNOSTICS, repeat, out.score,
+        move_strings(&out.pv), move_strings(&out.candidates), steps.join(","),
+        out.work.charged_search_units, out.work.charged_relation_queries, e.full, e.fast,
+        e.influence_builds, e.pawn_reuses, e.pawn_replacements, witness);
     Ok(())
 }
 
