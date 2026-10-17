@@ -1,0 +1,560 @@
+//! Pure evaluation influence. This is deliberately not a legal attack map.
+//!
+//! The five mixed-radix digits fit exactly in one byte. Contributions accumulate
+//! with wrapping addition; adjusted relation exclusion instead saturates.
+//! Consumers own semantic relation charges, including any cache-hit charges.
+
+use crate::position::Position;
+use crate::types::{Color, Piece, PieceKind, Square};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Contribution {
+    Weak = 1,
+    Queen = 2,
+    Rook = 4,
+    Minor = 16,
+    Pawn = 64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Relation {
+    Unfavorable = 0,
+    Contested = 1,
+    Favorable = 2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Influence {
+    pub profiles: [[u8; 64]; 2],
+}
+
+const ORTHOGONAL: [(i8, i8); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+const DIAGONAL: [(i8, i8); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
+const KNIGHT: [(i8, i8); 8] = [
+    (1, 2),
+    (2, 1),
+    (2, -1),
+    (1, -2),
+    (-1, -2),
+    (-2, -1),
+    (-2, 1),
+    (-1, 2),
+];
+
+impl Influence {
+    pub fn build(position: &Position) -> Self {
+        Self::build_board(&position.board)
+    }
+
+    #[inline]
+    pub fn code(&self, side: Color, square: Square) -> u8 {
+        self.profiles[side.index()][square.0 as usize]
+    }
+
+    fn build_board(board: &[Piece; 64]) -> Self {
+        let mut influence = Self {
+            profiles: [[0; 64]; 2],
+        };
+        // Chronology is immaterial to these commutative placement-only sums.
+        for (index, &piece) in board.iter().enumerate() {
+            if piece.is_empty() {
+                continue;
+            }
+            let side = piece.color();
+            let square = Square(index as u8);
+            match piece.kind() {
+                PieceKind::Pawn => {
+                    let forward = if side == Color::White { 1 } else { -1 };
+                    for file in [-1, 1] {
+                        if let Some(target) = square.offset(file, forward) {
+                            influence.add(side, target, Contribution::Pawn as u8);
+                        }
+                    }
+                }
+                PieceKind::Knight => {
+                    for (file, rank) in KNIGHT {
+                        if let Some(target) = square.offset(file, rank) {
+                            influence.add(side, target, Contribution::Minor as u8);
+                        }
+                    }
+                }
+                PieceKind::King => {
+                    for (file, rank) in ORTHOGONAL.into_iter().chain(DIAGONAL) {
+                        if let Some(target) = square.offset(file, rank) {
+                            influence.add(side, target, Contribution::Weak as u8);
+                        }
+                    }
+                }
+                PieceKind::Rook => {
+                    for step in ORTHOGONAL {
+                        influence.ray(board, side, square, step, Contribution::Rook);
+                    }
+                }
+                PieceKind::Bishop => {
+                    for step in DIAGONAL {
+                        influence.ray(board, side, square, step, Contribution::Minor);
+                    }
+                }
+                PieceKind::Queen => {
+                    for step in ORTHOGONAL.into_iter().chain(DIAGONAL) {
+                        influence.ray(board, side, square, step, Contribution::Queen);
+                    }
+                }
+            }
+        }
+        influence
+    }
+
+    #[inline]
+    fn add(&mut self, side: Color, target: Square, weight: u8) {
+        let code = &mut self.profiles[side.index()][target.0 as usize];
+        *code = code.wrapping_add(weight);
+    }
+
+    fn ray(
+        &mut self,
+        board: &[Piece; 64],
+        side: Color,
+        source: Square,
+        step: (i8, i8),
+        contribution: Contribution,
+    ) {
+        let diagonal = step.0 != 0 && step.1 != 0;
+        let forward = if side == Color::White { 1 } else { -1 };
+        let mut weight = contribution as u8;
+        let mut cursor = source;
+        while let Some(target) = cursor.offset(step.0, step.1) {
+            // The occupied square gets the old contribution before transparency
+            // or weakening is considered.
+            self.add(side, target, weight);
+            cursor = target;
+            let piece = board[target.0 as usize];
+            if piece.is_empty() {
+                continue;
+            }
+            if piece.color() != side {
+                if piece.kind() == PieceKind::King {
+                    continue;
+                }
+                break;
+            }
+            match piece.kind() {
+                PieceKind::Queen => weight = Contribution::Weak as u8,
+                PieceKind::Rook if !diagonal => {}
+                PieceKind::Bishop if diagonal => {}
+                PieceKind::Pawn if diagonal && step.1 == forward => {
+                    if let Some(extra) = target.offset(step.0, step.1) {
+                        self.add(side, extra, weight);
+                    }
+                    break;
+                }
+                _ => break,
+            }
+        }
+    }
+}
+
+/// Sum normalized digit counts without the relation multiplicity cap of four.
+#[inline]
+pub const fn profile_sum(code: u8) -> u8 {
+    (code & 1) + ((code >> 1) & 1) + ((code >> 2) & 3) + ((code >> 4) & 3) + (code >> 6)
+}
+
+#[inline]
+fn least_tier(code: u8) -> u8 {
+    if code >= 64 {
+        1
+    } else if code >= 16 {
+        3
+    } else if code >= 4 {
+        5
+    } else if code >= 2 {
+        9
+    } else {
+        99
+    } // Empty profiles are handled before a tier is used.
+}
+
+/// Classify a pawn, minor (knight/bishop), rook or queen; kings have no query tier.
+/// This function does not charge a relation unit.
+#[inline]
+pub fn relation(own: u8, opponent: u8, kind: PieceKind) -> Relation {
+    let tested = match kind {
+        PieceKind::Pawn => 1,
+        PieceKind::Knight | PieceKind::Bishop => 3,
+        PieceKind::Rook => 5,
+        PieceKind::Queen => 9,
+        PieceKind::King => panic!("king has no tested-piece relation tier"),
+    };
+    if opponent == 0 {
+        return Relation::Favorable;
+    }
+    let attack_tier = least_tier(opponent);
+    if own == 0 || attack_tier < tested {
+        return Relation::Unfavorable;
+    }
+    let attacks = profile_sum(opponent).min(4);
+    let defenses = profile_sum(own).min(4);
+    if attack_tier == tested {
+        if attacks <= defenses {
+            Relation::Contested
+        } else {
+            Relation::Unfavorable
+        }
+    } else if attacks <= defenses || attack_tier > tested + least_tier(own) {
+        Relation::Favorable
+    } else {
+        Relation::Unfavorable
+    }
+}
+
+/// Exclude from normalized own support, preserving the base map and opponent.
+/// Borrowing is intentional; underflow empties support rather than wrapping.
+#[inline]
+pub fn adjusted_relation(own: u8, opponent: u8, remove: Contribution, kind: PieceKind) -> Relation {
+    relation(own.saturating_sub(remove as u8), opponent, kind)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(text: &str) -> Square {
+        Square::parse(text).unwrap()
+    }
+
+    fn board(pieces: &[(&str, Color, PieceKind)]) -> [Piece; 64] {
+        let mut board = [Piece::EMPTY; 64];
+        for &(at, side, kind) in pieces {
+            let index = square(at).0 as usize;
+            assert!(board[index].is_empty());
+            board[index] = Piece::new(side, kind);
+        }
+        board
+    }
+
+    // Independent digit model: division/remainders, explicit category borrowing
+    // and the Boolean characterization, rather than packed-byte subtraction.
+    fn digits(mut code: u16) -> [u16; 5] {
+        let mut result = [0; 5];
+        for (index, radix) in [2, 2, 4, 4, 4].into_iter().enumerate() {
+            result[index] = code % radix;
+            code /= radix;
+        }
+        result
+    }
+
+    fn exclude(mut own: [u16; 5], category: usize) -> [u16; 5] {
+        let radices = [2, 2, 4, 4, 4];
+        let Some(borrow) = (category..5).find(|&index| own[index] != 0) else {
+            return [0; 5];
+        };
+        own[borrow] -= 1;
+        for index in category..borrow {
+            own[index] = radices[index] - 1;
+        }
+        own
+    }
+
+    fn reference_relation(own: [u16; 5], opponent: [u16; 5], tested: u16) -> Relation {
+        let d = own.iter().sum::<u16>().min(4);
+        let a = opponent.iter().sum::<u16>().min(4);
+        let tier = |profile: [u16; 5]| {
+            [99, 9, 5, 3, 1]
+                .into_iter()
+                .zip(profile)
+                .filter_map(|(value, count)| (count > 0).then_some(value))
+                .min()
+                .unwrap_or(0)
+        };
+        let (u, v) = (tier(own), tier(opponent));
+        if a == 0 || (d != 0 && v > tested && (a <= d || v > tested + u)) {
+            Relation::Favorable
+        } else if a != 0 && d != 0 && v == tested && a <= d {
+            Relation::Contested
+        } else {
+            Relation::Unfavorable
+        }
+    }
+
+    #[test]
+    fn all_byte_pairs_and_exclusions_match_independent_digit_reference() {
+        let removals = [
+            Contribution::Weak,
+            Contribution::Queen,
+            Contribution::Rook,
+            Contribution::Minor,
+            Contribution::Pawn,
+        ];
+        for own in 0..=255u16 {
+            assert_eq!(
+                profile_sum(own as u8) as u16,
+                digits(own).iter().sum::<u16>()
+            );
+            for opponent in 0..=255u16 {
+                for (kind, tested) in [
+                    (PieceKind::Pawn, 1),
+                    (PieceKind::Knight, 3),
+                    (PieceKind::Rook, 5),
+                    (PieceKind::Queen, 9),
+                ] {
+                    let expected = reference_relation(digits(own), digits(opponent), tested);
+                    assert_eq!(relation(own as u8, opponent as u8, kind), expected);
+                    if kind == PieceKind::Knight {
+                        assert_eq!(
+                            relation(own as u8, opponent as u8, PieceKind::Bishop),
+                            expected
+                        );
+                    }
+                    for (category, remove) in removals.into_iter().enumerate() {
+                        let expected = reference_relation(
+                            exclude(digits(own), category),
+                            digits(opponent),
+                            tested,
+                        );
+                        assert_eq!(
+                            adjusted_relation(own as u8, opponent as u8, remove, kind),
+                            expected
+                        );
+                    }
+                }
+            }
+        }
+        assert_eq!(std::mem::size_of::<Influence>(), 128);
+        assert_eq!(profile_sum(255), 11);
+        assert_eq!(Contribution::Pawn as u8, 64);
+        assert_eq!(Relation::Unfavorable as u8, 0);
+        assert_eq!(Relation::Contested as u8, 1);
+        assert_eq!(Relation::Favorable as u8, 2);
+    }
+
+    #[test]
+    fn occupied_targets_and_opposing_king_transparency_differ_from_own_king() {
+        use Color::*;
+        use PieceKind::*;
+        let opposing = Influence::build_board(&board(&[("a1", White, Rook), ("a3", Black, King)]));
+        assert_eq!(opposing.code(White, square("a3")), 4);
+        assert_eq!(opposing.code(White, square("a5")), 4);
+        let own = Influence::build_board(&board(&[("a1", White, Rook), ("a3", White, King)]));
+        assert_eq!(own.code(White, square("a3")), 4);
+        assert_eq!(own.code(White, square("a4")), 1); // Only the king's neighbor influence.
+        assert_eq!(own.code(White, square("a5")), 0);
+        let enemy = Influence::build_board(&board(&[("a1", White, Rook), ("a3", Black, Rook)]));
+        assert_eq!(enemy.code(White, square("a3")), 4);
+        assert_eq!(enemy.code(White, square("a4")), 0);
+    }
+
+    #[test]
+    fn slider_transparency_uses_ray_direction_including_queen_sources() {
+        use Color::White as W;
+        use PieceKind::*;
+        for (pieces, target, expected) in [
+            (vec![("a1", W, Rook), ("a3", W, Rook)], "a4", 8),
+            (vec![("c1", W, Bishop), ("e3", W, Bishop)], "f4", 32),
+            (vec![("a1", W, Queen), ("a3", W, Rook)], "a4", 6),
+            (vec![("c1", W, Queen), ("e3", W, Bishop)], "f4", 18),
+            (vec![("a1", W, Rook), ("a3", W, Bishop)], "a4", 0),
+            (vec![("c1", W, Bishop), ("e3", W, Rook)], "f4", 0),
+        ] {
+            assert_eq!(
+                Influence::build_board(&board(&pieces)).code(W, square(target)),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn queen_weakens_only_beyond_it_and_later_transparency_does_not_restore() {
+        use Color::White as W;
+        use PieceKind::*;
+        let influence = Influence::build_board(&board(&[
+            ("a1", W, Rook),
+            ("a3", W, Queen),
+            ("a5", W, Rook),
+        ]));
+        assert_eq!(influence.code(W, square("a3")), 8); // Both rooks, before weakening.
+        assert_eq!(influence.code(W, square("a4")), 7); // Weak + queen + rook.
+        assert_eq!(influence.code(W, square("a6")), 7); // Still weak from a1 beyond a5.
+    }
+
+    #[test]
+    fn forward_pawn_extends_exactly_once_even_onto_occupied_square() {
+        use Color::*;
+        use PieceKind::*;
+        let white = Influence::build_board(&board(&[
+            ("c1", White, Bishop),
+            ("e3", White, Pawn),
+            ("f4", Black, Rook),
+        ]));
+        assert_eq!(white.code(White, square("f4")), 80); // Bishop + pawn.
+        assert_eq!(white.code(White, square("g5")), 0);
+        let black = Influence::build_board(&board(&[("f8", Black, Bishop), ("d6", Black, Pawn)]));
+        assert_eq!(black.code(Black, square("c5")), 80);
+        assert_eq!(black.code(Black, square("b4")), 0);
+        let backward =
+            Influence::build_board(&board(&[("f6", White, Bishop), ("d4", White, Pawn)]));
+        assert_eq!(backward.code(White, square("c3")), 0);
+        let orthogonal =
+            Influence::build_board(&board(&[("e1", White, Rook), ("e3", White, Pawn)]));
+        assert_eq!(orthogonal.code(White, square("e4")), 0);
+        let weakened = Influence::build_board(&board(&[
+            ("a1", White, Bishop),
+            ("b2", White, Queen),
+            ("d4", White, Pawn),
+        ]));
+        assert_eq!(weakened.code(White, square("e5")), 67); // Weak + queen + pawn.
+        assert_eq!(weakened.code(White, square("f6")), 0);
+    }
+
+    #[test]
+    fn crowded_contributions_wrap_and_adjusted_exclusion_never_resurrects_them() {
+        let mut pieces = vec![
+            ("d3", Color::White, PieceKind::Pawn),
+            ("f3", Color::White, PieceKind::Pawn),
+        ];
+        for at in ["c3", "c5", "d2", "d6", "f2", "f6", "g3", "g5"] {
+            pieces.push((at, Color::White, PieceKind::Knight));
+        }
+        let influence = Influence::build_board(&board(&pieces));
+        assert_eq!(influence.code(Color::White, square("e4")), 0);
+        assert_eq!(
+            adjusted_relation(0, 64, Contribution::Pawn, PieceKind::Pawn),
+            Relation::Unfavorable
+        );
+        assert_eq!(
+            adjusted_relation(64, 16, Contribution::Minor, PieceKind::Knight),
+            Relation::Contested
+        );
+    }
+
+    // Target-centric reference: consider each source independently, accumulating
+    // full category counts then carrying digits. It does not walk and add rays.
+    fn reference_map(board: &[Piece; 64]) -> [[u8; 64]; 2] {
+        let mut result = [[0; 64]; 2];
+        for target in 0..64 {
+            let target_square = Square(target as u8);
+            let mut counts = [[0u16; 5]; 2];
+            for (index, &piece) in board.iter().enumerate() {
+                if piece.is_empty() || index == target {
+                    continue;
+                }
+                let source = Square(index as u8);
+                let dx = target_square.file() as i8 - source.file() as i8;
+                let dy = target_square.rank() as i8 - source.rank() as i8;
+                let side = piece.color();
+                let forward = if side == Color::White { 1 } else { -1 };
+                let simple = match piece.kind() {
+                    PieceKind::Pawn => (dx.abs() == 1 && dy == forward).then_some(4),
+                    PieceKind::Knight => (dx.abs() * dy.abs() == 2).then_some(3),
+                    PieceKind::King => (dx.abs().max(dy.abs()) == 1).then_some(0),
+                    _ => None,
+                };
+                if let Some(category) = simple {
+                    counts[side.index()][category] += 1;
+                    continue;
+                }
+                let diagonal = dx.abs() == dy.abs();
+                let orthogonal = dx == 0 || dy == 0;
+                let mut category = match piece.kind() {
+                    PieceKind::Bishop if diagonal => 3,
+                    PieceKind::Rook if orthogonal => 2,
+                    PieceKind::Queen if diagonal || orthogonal => 1,
+                    _ => continue,
+                };
+                let step = (dx.signum(), dy.signum());
+                let mut cursor = source.offset(step.0, step.1).unwrap();
+                let reaches = loop {
+                    if cursor == target_square {
+                        break true;
+                    }
+                    let blocker = board[cursor.0 as usize];
+                    if !blocker.is_empty() {
+                        let friendly = blocker.color() == side;
+                        let kind = blocker.kind();
+                        if friendly && kind == PieceKind::Queen {
+                            category = 0;
+                        } else if (!friendly && kind == PieceKind::King)
+                            || (friendly && orthogonal && kind == PieceKind::Rook)
+                            || (friendly && diagonal && kind == PieceKind::Bishop)
+                        {
+                            // Transparent; retain current category.
+                        } else {
+                            break friendly
+                                && kind == PieceKind::Pawn
+                                && diagonal
+                                && step.1 == forward
+                                && cursor.offset(step.0, step.1) == Some(target_square);
+                        }
+                    }
+                    cursor = cursor.offset(step.0, step.1).unwrap();
+                };
+                if reaches {
+                    counts[side.index()][category] += 1;
+                }
+            }
+            for side in [Color::White, Color::Black] {
+                let raw = &mut counts[side.index()];
+                for (index, radix) in [2, 2, 4, 4].into_iter().enumerate() {
+                    raw[index + 1] += raw[index] / radix;
+                    raw[index] %= radix;
+                }
+                raw[4] %= 4;
+                result[side.index()][target] =
+                    (raw[0] + 2 * raw[1] + 4 * raw[2] + 16 * raw[3] + 64 * raw[4]) as u8;
+            }
+        }
+        result
+    }
+
+    #[test]
+    fn whole_maps_match_target_centric_count_reference_and_color_reflection() {
+        let mut random = 0xa62f_913d_2b8c_6701u64;
+        for _ in 0..32 {
+            let mut board = board(&[
+                ("a1", Color::White, PieceKind::King),
+                ("h8", Color::Black, PieceKind::King),
+            ]);
+            for n in 0..22 {
+                loop {
+                    random ^= random << 13;
+                    random ^= random >> 7;
+                    random ^= random << 17;
+                    let index = (random & 63) as usize;
+                    if !board[index].is_empty() {
+                        continue;
+                    }
+                    let side = if n % 2 == 0 {
+                        Color::White
+                    } else {
+                        Color::Black
+                    };
+                    let mut kind = PieceKind::ALL[(n / 2) % 5];
+                    if kind == PieceKind::Pawn && (index < 8 || index >= 56) {
+                        kind = PieceKind::Knight;
+                    }
+                    board[index] = Piece::new(side, kind);
+                    break;
+                }
+            }
+            let actual = Influence::build_board(&board);
+            assert_eq!(actual.profiles, reference_map(&board));
+            let mut reflected = [Piece::EMPTY; 64];
+            for (index, piece) in board.into_iter().enumerate() {
+                if !piece.is_empty() {
+                    reflected[index ^ 56] = Piece::new(piece.color().opponent(), piece.kind());
+                }
+            }
+            let mirror = Influence::build_board(&reflected);
+            for side in [Color::White, Color::Black] {
+                for index in 0..64 {
+                    assert_eq!(
+                        actual.profiles[side.index()][index],
+                        mirror.profiles[side.opponent().index()][index ^ 56]
+                    );
+                }
+            }
+        }
+    }
+}
