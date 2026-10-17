@@ -33,6 +33,14 @@ pub struct RootContext {
 impl RootContext {
     /// Percentages are already bound to White/Black ownership, not moving side.
     pub fn new(root: &Position, percentages: [[u16; 5]; 2], average_depth: i32) -> Self {
+        assert!(
+            percentages.iter().flatten().all(|&value| value <= 1000),
+            "material percentages must be in 0..1000"
+        );
+        assert!(
+            (-100..=100).contains(&average_depth),
+            "average depth must be in -100..100"
+        );
         let phase = root.phase();
         let mut values = [[0; 5]; 2];
         let mut squares = [[[0; 64]; 5]; 2];
@@ -98,7 +106,7 @@ impl RootContext {
             }
         }
         let d = floor_div(
-            ((root_count - remaining) * self.average_depth + 1) as i64,
+            (root_count - remaining) as i64 * self.average_depth as i64 + 1,
             2,
         ) as i32;
         let mut balance = heavy[0] + pawns[0]
@@ -121,32 +129,45 @@ impl RootContext {
     }
 
     pub fn square_balance(&self, position: &Position) -> i32 {
-        let mut result = 0i32;
-        let mut king_differences = [0i32; 3];
-        let mut any_heavy = false;
+        self.square_balance_from(position, self.nonking_square_balance(position))
+    }
+
+    /// Root-valued non-king sum, maintained incrementally by searched children.
+    pub fn nonking_square_balance(&self, position: &Position) -> i32 {
+        let mut result = 0;
         for color in [Color::White, Color::Black] {
-            let c = color.index();
             let sign = if color == Color::White { 1 } else { -1 };
-            for kind in PieceKind::ALL {
-                for &sq in position.piece_squares(color, kind) {
-                    if kind == PieceKind::King {
-                        let oriented = if color == Color::White {
-                            sq.0 as usize
-                        } else {
-                            sq.0 as usize ^ 56
-                        };
-                        for p in 0..3 {
-                            king_differences[p] += sign * SQUARE_BASIS[p][5][oriented] as i32;
-                        }
-                    } else {
-                        result += sign * self.squares[c][kind.index()][sq.0 as usize] as i32;
-                        any_heavy |= kind != PieceKind::Pawn;
-                    }
+            for kind in &PieceKind::ALL[..5] {
+                for square in position.piece_squares(color, *kind) {
+                    result +=
+                        sign * self.squares[color.index()][kind.index()][square.0 as usize] as i32;
                 }
             }
         }
-        result += blend(position.phase(), king_differences);
-        if !any_heavy {
+        result
+    }
+
+    /// Current-phase kings round once; a pawn-only position doubles both terms.
+    pub fn square_balance_from(&self, position: &Position, nonking_sum: i32) -> i32 {
+        let mut king_differences = [0i32; 3];
+        for color in [Color::White, Color::Black] {
+            let sign = if color == Color::White { 1 } else { -1 };
+            let square = position.piece_squares(color, PieceKind::King)[0].0 as usize;
+            let oriented = if color == Color::White {
+                square
+            } else {
+                square ^ 56
+            };
+            for phase in 0..3 {
+                king_differences[phase] += sign * SQUARE_BASIS[phase][5][oriented] as i32;
+            }
+        }
+        let mut result = nonking_sum + blend(position.phase(), king_differences);
+        if position
+            .counts
+            .iter()
+            .all(|counts| counts[1..5].iter().all(|&n| n == 0))
+        {
             result *= 2;
         }
         result

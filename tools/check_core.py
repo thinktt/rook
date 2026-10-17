@@ -14,11 +14,17 @@ import time
 
 
 HELPERS = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13}
-FIXTURES = [
+CORE_FIXTURES = [
     "position-setup-v1.json", "setup-move-sequence-v1.json",
     "identity-retention-v1.json", "evaluation-influence-v1.json",
     "square-relations-v1.json", "root-material-context-v1.json",
     "activity-v1.json", "positional-values-v1.json", "material-balance-v1.json",
+]
+PAWN_SHELTER_FIXTURES = [
+    "pawn-structure-v1.json", "pawn-structure-boundaries-v1.json",
+    "pawn-structure-score-v1.json", "pawn-structure-score-boundaries-v1.json",
+    "pawn-piece-v1.json", "pawn-piece-boundaries-v1.json",
+    "king-shelter-v1.json", "activity-v1.json",
 ]
 KINDS = ("pawn", "knight", "bishop", "rook", "queen")
 
@@ -41,9 +47,11 @@ def phase_key(phase):
     return tuple(phase[key] for key in ("opening", "middlegame", "endgame"))
 
 
-def build_plan(spec):
-    loaded = {name: json.loads((spec / name).read_text()) for name in FIXTURES}
-    phase_cases = [case for case in loaded["root-material-context-v1.json"]["cases"]
+def build_plan(spec, scope):
+    fixtures = (CORE_FIXTURES if scope == "core" else PAWN_SHELTER_FIXTURES
+                if scope == "pawn-shelter" else list(dict.fromkeys(CORE_FIXTURES + PAWN_SHELTER_FIXTURES)))
+    loaded = {name: json.loads((spec / name).read_text()) for name in fixtures}
+    phase_cases = [case for case in loaded.get("root-material-context-v1.json", {"cases": []})["cases"]
                    if case["request"]["operation"] == "evaluation.phase"]
     known_phase = {case["request"]["input"]["placement"]: case["expected"]
                    for case in phase_cases}
@@ -66,11 +74,13 @@ def build_plan(spec):
         unsupported.append({"fixture": name, "case_id": case["id"],
                             "operation": case["request"]["operation"], "reason": reason})
 
-    for name in FIXTURES:
+    for name in fixtures:
         for case in loaded[name]["cases"]:
             op, query, expected = (case["request"]["operation"],
                                    case["request"]["input"], case["expected"])
-            if op in ("position.setup", "position.identity", "evaluation.activity"):
+            if op in ("position.setup", "position.identity", "evaluation.activity",
+                      "evaluation.pawnStructure", "evaluation.pawnStructureScore",
+                      "evaluation.pawnPiece", "evaluation.kingShelter"):
                 queries, answers = query["queries"], expected["results"]
                 if len(queries) != len(answers):
                     raise ValueError(f"query/answer length mismatch: {case['id']}")
@@ -80,10 +90,23 @@ def build_plan(spec):
                     if op == "evaluation.activity":
                         weights = item["activityWeights"]
                         argv += ["--activity-weights", f"{weights['white']},{weights['black']}",
+                                 "--activity-material", str(item["materialScore"]),
+                                 "--position-weights", f"{item['positionWeights']['white']},{item['positionWeights']['black']}"]
+                    elif op in ("evaluation.pawnStructure", "evaluation.pawnStructureScore"):
+                        weights = item["doubledWeight"]
+                        argv += ["--pawn-doubled", f"{weights['white']},{weights['black']}"]
+                    elif op == "evaluation.kingShelter":
+                        pressure, weights = item["activityPressure"], item["weights"]
+                        argv += ["--shelter-pressure", f"{pressure['white']},{pressure['black']}",
+                                 "--position-weights", f"{weights['white']},{weights['black']}",
                                  "--activity-material", str(item["materialScore"])]
-                        fields = ("phase", "pieces", "activityPressure", "weightedActivity", "relationQueries")
-                        answer = {key: answer[key] for key in fields}
-                        omitted = ["expected.positionTerms", "input.positionWeights (only omitted positionTerms)"]
+                        answer = {"phase": answer["phase"],
+                                  "white": {"term": answer["white"]["term"]},
+                                  "black": {"term": answer["black"]["term"]},
+                                  "weighted": answer["weighted"]}
+                        omitted = [f"expected.{side}.{field} (not exposed by native Shelter result)"
+                                   for side in ("white", "black")
+                                   for field in ("ring", "files", "screen", "shelter")]
                     add(name, case, index, item, answer, op, argv, omitted)
             elif op == "position.setupMoveSequence":
                 if len(expected["results"]) != len(query["moves"]) + 1:
@@ -125,11 +148,14 @@ def build_plan(spec):
             else:
                 omit(name, case, "operation not exposed by inspect; no relation/score algorithm emulated in checker")
     return {"jobs": jobs, "unsupported_cases": unsupported,
-            "fixture_sha256": {name: digest(spec / name) for name in FIXTURES},
+            "fixture_sha256": {name: digest(spec / name) for name in fixtures},
+            "selected_scope": scope,
             "scope": "selected exact projections only; no DIAG transport or mandatory conformance claim",
             "phase_bridge_policy": "current placement phase must be independently supplied by a selected evaluation.phase fixture; rootPhase selects a placement from those fixtures; all selected phase assertions are run",
             "scope_limits": ["no relation/adjusted-relation classifier output",
-                             "no activity positionTerms", "no supplied material value tables",
+                             "kingShelter primitive ring/files/screen/shelter fields unavailable",
+                             "fresh pawn component checks do not exercise retained cache/session lifetimes",
+                             "no supplied material value tables",
                              "no arbitrary externally supplied phase",
                              "no legalMoves oracle (inventory is produced but not compared)",
                              "query receipt and correctness timings are not engine performance measurements"]}
@@ -165,6 +191,10 @@ def project(job, actual):
         return {"profiles": profiles}
     if op == "evaluation.activity":
         return {"phase": actual["phase"], **actual["activity"]}
+    if op in ("evaluation.pawnStructure", "evaluation.pawnStructureScore", "evaluation.pawnPiece"):
+        return actual[op.split('.')[1]]
+    if op == "evaluation.kingShelter":
+        return {"phase": actual["phase"], **actual["kingShelter"]}
     if op == "evaluation.rootMaterial":
         return {"phase": actual["phase"], "score": actual["material"]}
     if op == "evaluation.squareBalance":
@@ -196,6 +226,7 @@ def main():
     parser.add_argument("--fixtures", type=Path,
                         default=Path('/home/legolas/king-spec/conformance/fixtures'))
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--scope", choices=("core", "pawn-shelter", "all"), default="core")
     args = parser.parse_args()
     if args.output.exists() or args.output.is_symlink() or not args.output.parent.is_dir():
         parser.error("output must be a fresh directory with existing parent")
@@ -204,7 +235,7 @@ def main():
     engine_hash = digest(args.engine)
     if engine_hash != args.expect_sha256:
         parser.error("source executable hash does not match requested artifact")
-    plan = build_plan(args.fixtures)
+    plan = build_plan(args.fixtures, args.scope)
     plan.update({"source_engine": str(args.engine.resolve()), "source_engine_sha256": engine_hash,
                  "checker_sha256": digest(Path(__file__).resolve()),
                  "per_process_timeout_s": 2, "aggregate_timeout_s": 30,

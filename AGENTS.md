@@ -36,9 +36,10 @@ Subagents must use their supplied collaboration tools and must not use Herdr
 for identity or communication.
 
 The lead uses GPT-6.1 Sol xhigh at normal speed. Implementation subagents use
-GPT-6.1 Sol at an appropriate reasoning level, with fast speed requested by the
-owner. The current collaboration controls expose model/effort but no speed
-setting: do not claim that updating this policy switches a live runtime.
+GPT-6.1 Sol at an appropriate reasoning level and normal speed. The owner's
+latest `/fast off` supersedes the temporary fast-subagent request. The current
+collaboration controls expose model/effort but no speed setting: do not claim
+that updating this policy switches or verifies a live runtime.
 Assign disjoint write ownership and integrate/review contributions centrally.
 
 ## Measurement environment

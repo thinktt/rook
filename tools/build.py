@@ -43,6 +43,36 @@ def source_snapshot(root: Path) -> dict:
     return {str(path.relative_to(root)): digest(path) for path in paths}
 
 
+def tool_snapshot(root: Path) -> dict:
+    paths = sorted(path for path in (root / "tools").rglob("*")
+                   if path.is_file() and "__pycache__" not in path.parts
+                   and path.suffix in (".py", ".c", ".md", ".sh", ".mjs"))
+    return {str(path.relative_to(root)): digest(path) for path in paths}
+
+
+def archive_sources(root: Path, output: Path, expected: dict) -> dict:
+    """Capture exact pre-build bytes, reject races against the bound snapshot."""
+    archive = output / "source-before"
+    archive.mkdir()
+    total_bytes = 0
+    for name, expected_hash in expected.items():
+        data = (root / name).read_bytes()
+        if hashlib.sha256(data).hexdigest() != expected_hash:
+            raise ValueError(f"source changed before archive capture: {name}")
+        destination = archive / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("xb") as stream:
+            stream.write(data)
+        if digest(destination) != expected_hash:
+            raise ValueError(f"archived bytes do not match pre-build hash: {name}")
+        total_bytes += len(data)
+    if source_snapshot(root) | tool_snapshot(root) != expected:
+        raise ValueError("source tree changed during pre-build archive capture")
+    return {"path": "source-before", "file_count": len(expected),
+            "total_bytes": total_bytes, "verified_against_before_hashes": True,
+            "source_rechecked_before_build": True}
+
+
 def cargo_configs(root: Path) -> dict:
     paths = set()
     for parent in [root, *root.parents]:
@@ -139,6 +169,7 @@ def main() -> int:
             "inherited_build_environment": {key: os.environ.get(key) for key in sorted(inherited_keys)},
             "build_effective_environment": {key: env.get(key) for key in sorted(inherited_keys | set(overrides))},
             "source_sha256_before": source_snapshot(root),
+            "tool_sha256_before": tool_snapshot(root),
             "cargo_config_sha256_before": cargo_configs(root),
             "git_before": git_snapshot(root, env),
             "toolchain": {"rustc": command_record([rustc, "-vV"], root, env),
@@ -150,15 +181,18 @@ def main() -> int:
             "build_affinity": sorted(os.sched_getaffinity(0)),
             "uname": list(os.uname()),
             "engine_runs": 0, "pgo": "no PGO automation; explicit rustflags contain no PGO flags",
-            "identity_limit": "manifest/lock/src plus optional build.rs/toolchain files; not a full external/path-dependency or generated-input closure",
+            "identity_limit": "manifest/lock/src, tools source files, optional build.rs/toolchain files; not a full external/path-dependency or generated-input closure",
             "binary_name": args.binary_name, "binary_output": None,
             "binary_note": "no binary target requested for hashing; no executable identity asserted" if args.binary_name is None else None,
+            "source_archive_planned": "source-before (captured before Cargo, verified against source_sha256_before)",
         }
         if args.dry_run:
             receipt["outcome"] = "plan-only; no Cargo build or receipt writes"
             print(json.dumps(receipt, indent=2, allow_nan=False))
             return 0
         output.mkdir()
+        receipt["source_archive"] = archive_sources(
+            root, output, receipt["source_sha256_before"] | receipt["tool_sha256_before"])
         write_receipt(output / "receipt.json", {**receipt, "outcome": "build-started"})
         began = time.monotonic()
         with (output / "build.stdout").open("xb") as stdout, (output / "build.stderr").open("xb") as stderr:
@@ -166,14 +200,17 @@ def main() -> int:
         receipt["build_elapsed_s"] = time.monotonic() - began
         receipt["cargo_exit_code"] = result.returncode
         receipt["source_sha256_after"] = source_snapshot(root)
+        receipt["tool_sha256_after"] = tool_snapshot(root)
         receipt["cargo_config_sha256_after"] = cargo_configs(root)
         receipt["git_after"] = git_snapshot(root, env)
         receipt["source_identity_unchanged"] = receipt["source_sha256_before"] == receipt["source_sha256_after"]
+        receipt["tool_identity_unchanged"] = receipt["tool_sha256_before"] == receipt["tool_sha256_after"]
         receipt["cargo_config_unchanged"] = receipt["cargo_config_sha256_before"] == receipt["cargo_config_sha256_after"]
         if args.binary_name is not None and result.returncode == 0:
             binary = target_dir / TARGET / "release" / args.binary_name
             receipt["binary_output"] = {"path": str(binary), "sha256": digest(binary)}
         succeeded = (result.returncode == 0 and receipt["source_identity_unchanged"]
+                     and receipt["tool_identity_unchanged"]
                      and receipt["cargo_config_unchanged"])
         receipt["outcome"] = "build-succeeded-with-stable-input-snapshot" if succeeded else "failed-or-inputs-changed"
         exit_code = 0 if succeeded else 1

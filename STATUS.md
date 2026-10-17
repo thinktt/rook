@@ -5,33 +5,53 @@
 Initial architecture critically reviewed by `imp2-lead`; Imp2 selected the
 provisional baseline and recorded [decision0001](docs/decisions/0001-initial-architecture.md).
 The compact position/move kernel, material/square terms, influence, activity,
-shelter, remembered-result table and pawn structural cache are implemented.
-The development executable runs a declared partial search with material/square,
-influence/activity and tempo. Shelter/pawn/TT are tested components awaiting
-search composition. No conformance or performance qualification is claimed.
+shelter, remembered-result table and pawn structural/piece terms are implemented.
+Concrete quiescence now composes full/fast retained evaluation, shared pawn
+retention, history admission, tactical ranking, capture estimates, geometric
+safety and recursive PV consumption. The composed evaluator remains partial;
+ordinary search, TT integration and timing are not connected to this slice.
+The earlier generic alpha-beta development baseline stays separately frozen.
+No conformance or performance qualification is claimed.
 
 Current evidence:
 
-- 59 native tests pass, including legal-tree counts through start depth4,
-  normalized-influence exhaustiveness, chronology, retained identities and TT.
-- 3,894 external inspections passed selected released expected projections;
-  285 unsupported source cases and all omitted fields are explicit.
+- 98 library tests and two CLI tests pass, including start depth4 legal trees,
+  influence exhaustiveness, chronology, retained identities/TT, full/fast
+  restoration, bounded reply probes, quiescence stopping and terminal returns.
+- 12,621 external inspections passed selected released expected projections
+  across two separate schedules. The first schedule's 285 unsupported source
+  cases and all omitted fields remain explicit. The added 8,727 inspections
+  cover fresh pawn, shelter and activity terms, not retained search parity.
 - Three frozen partial-search cases have CPU/wall baselines on CPU14 with
   one excluded warmup and three measured fresh processes each. Each process
   performs eight identical completed searches; all repeated outputs agree.
   See [baseline results](evidence/development-baseline-v1/results.json).
+- A second frozen baseline exercises the composed evaluator/quiescence mix,
+  including pawn hits/replacements and reused replies. Diagnostics on/off
+  preserve score, PV and charged work. Three cases, 20,000 fresh preparations
+  per process, one excluded warmup and three measured processes each: CPU
+  medians with diagnostics on are 0.097003/0.117309/0.353494 seconds. Guest
+  CPU15 recorded only idle time during this collection. See
+  [quiescence evidence](evidence/quiescence-v1/README.md). Missing evaluation
+  terms still affect scores and one of ten explored fixture trees.
 - Instructions/cycles remain unavailable to the unprivileged account; a request
   for a scoped observer has been sent to the owner through the conversation.
 
-Next: finish current pawn terms and tactical generation/ordering; compose real
-full/fast retained evaluation and quiescence with explicit omissions, then
-revisit architecture costs. Do not choose a production representation from the
-first partial-search baseline. Extend focused checks for newly integrated terms.
+Next: connect ordinary recursive search and remembered results, then extend
+the evaluator and work-clock consumers. Do not choose a production position
+representation until full/fast/pawn/TT traffic is measured together. The present
+quiescence measurements add evidence but do not complete that experiment.
 
-Owner update: implementation subagents should use fast speed (lead remains
-normal). This supersedes the original goal's normal-subagent-speed clause.
-The current collaboration tool cannot select or verify subagent service speed.
-A mentioned impending reset is a usage quota reset; work continues normally.
+Latest owner update: `/fast off`; normal speed for lead and subagents. This
+supersedes the temporary fast-subagent request and restores the goal's original
+speed policy. The collaboration tool cannot select or verify service speed.
+All three implementation subagents are completed and remain stopped. The gate
+verified this lead's Normal footer. Child runtime tiers have no exposed read/set
+control and their saved metadata does not establish a tier; no conversion is
+claimed. Continue on the verified Normal lead until a delegation route can
+verify Normal. The operational-only status was relayed to Vic's system agent;
+cleanroom-gate is not registered locally and Bee SSH host-key verification
+failed without bypass. A usage quota reset does not alter the engine objective.
 
 ## Milestones
 

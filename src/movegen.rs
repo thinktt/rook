@@ -158,7 +158,7 @@ pub fn in_check(position: &Position, side: Color) -> bool {
 /// Project just the fields needed for geometric king safety, not a semantic
 /// Position transition. The caller has checked destination and special geometry.
 #[inline]
-fn legal_after(position: &Position, mv: Move, king: Square) -> bool {
+pub(crate) fn projected_board(position: &Position, mv: Move) -> [Piece; 64] {
     let mut board = position.board;
     let from = mv.from();
     let to = mv.to();
@@ -189,12 +189,34 @@ fn legal_after(position: &Position, mv: Move, king: Square) -> bool {
             board[rook_from as usize] = Piece::EMPTY;
         }
     }
-    let king = if mover.kind() == PieceKind::King {
-        to
+    board
+}
+
+#[inline]
+fn legal_after(position: &Position, mv: Move, king: Square) -> bool {
+    let board = projected_board(position, mv);
+    let king = if position.board[mv.from().0 as usize].kind() == PieceKind::King {
+        mv.to()
     } else {
         king
     };
     !attacked(&board, king, position.side.opponent())
+}
+
+/// The tactical caller supplies a projected board from an initially legal
+/// position. A normal move can expose one route as well as its direct route.
+/// EP may expose two other routes, which does not count as direct+discovered.
+pub(crate) fn check_routes(
+    board: &[Piece; 64],
+    king: Square,
+    by: Color,
+    moved_to: Square,
+) -> (bool, bool) {
+    let routes = find_attackers::<2>(board, king, by);
+    (
+        routes.len != 0,
+        routes.len == 2 && routes.squares.contains(&moved_to),
+    )
 }
 
 #[inline]
@@ -204,7 +226,7 @@ fn add_if_legal(position: &Position, list: &mut MoveList, king: Square, mv: Move
     }
 }
 
-fn en_passant_prefix(position: &Position, list: &mut MoveList, king: Square) {
+fn en_passant_prefix<const LIMIT: usize>(position: &Position, list: &mut MoveList, king: Square) {
     if position.ep >= 64 {
         return;
     }
@@ -231,12 +253,20 @@ fn en_passant_prefix(position: &Position, list: &mut MoveList, king: Square) {
                     king,
                     Move::new(from, target, MoveKind::EnPassant),
                 );
+                if list.len >= LIMIT {
+                    return;
+                }
             }
         }
     }
 }
 
-fn castles(position: &Position, list: &mut MoveList, king: Square, checked: bool) {
+fn castles<const LIMIT: usize>(
+    position: &Position,
+    list: &mut MoveList,
+    king: Square,
+    checked: bool,
+) {
     if checked {
         return;
     }
@@ -291,10 +321,13 @@ fn castles(position: &Position, list: &mut MoveList, king: Square, checked: bool
             king,
             Move::new(home, Square(target), MoveKind::Castle),
         );
+        if list.len >= LIMIT {
+            return;
+        }
     }
 }
 
-fn pawn_destination(
+fn pawn_destination<const LIMIT: usize>(
     position: &Position,
     list: &mut MoveList,
     king: Square,
@@ -311,6 +344,9 @@ fn pawn_destination(
         ) {
             for kind in PROMOTIONS {
                 list.push(Move::new(from, to, MoveKind::Promotion(kind)));
+                if list.len >= LIMIT {
+                    return;
+                }
             }
         }
     } else {
@@ -323,7 +359,7 @@ fn pawn_destination(
     }
 }
 
-fn pawns(position: &Position, list: &mut MoveList, king: Square) {
+fn pawns<const LIMIT: usize>(position: &Position, list: &mut MoveList, king: Square) {
     let step = if position.side == Color::White { 1 } else { -1 };
     let files = if position.side == Color::White {
         [1, -1]
@@ -339,13 +375,19 @@ fn pawns(position: &Position, list: &mut MoveList, king: Square) {
                     && victim.color() != position.side
                     && victim.kind() != PieceKind::King
                 {
-                    pawn_destination(position, list, king, from, to);
+                    pawn_destination::<LIMIT>(position, list, king, from, to);
+                    if list.len >= LIMIT {
+                        return;
+                    }
                 }
             }
         }
         if let Some(to) = from.offset(0, step) {
             if position.board[to.0 as usize].is_empty() {
-                pawn_destination(position, list, king, from, to);
+                pawn_destination::<LIMIT>(position, list, king, from, to);
+                if list.len >= LIMIT {
+                    return;
+                }
                 if from.rank() == initial_rank {
                     let twice = from.offset(0, 2 * step).unwrap();
                     if position.board[twice.0 as usize].is_empty() {
@@ -355,6 +397,9 @@ fn pawns(position: &Position, list: &mut MoveList, king: Square) {
                             king,
                             Move::new(from, twice, MoveKind::Ordinary),
                         );
+                        if list.len >= LIMIT {
+                            return;
+                        }
                     }
                 }
             }
@@ -362,7 +407,12 @@ fn pawns(position: &Position, list: &mut MoveList, king: Square) {
     }
 }
 
-fn pieces(position: &Position, list: &mut MoveList, king: Square, kind: PieceKind) {
+fn pieces<const LIMIT: usize>(
+    position: &Position,
+    list: &mut MoveList,
+    king: Square,
+    kind: PieceKind,
+) {
     let directions: &[(i8, i8)] = match kind {
         PieceKind::Knight => &KNIGHT,
         PieceKind::Bishop => &DIRECTIONS[..4],
@@ -387,6 +437,9 @@ fn pieces(position: &Position, list: &mut MoveList, king: Square, kind: PieceKin
                     king,
                     Move::new(from, to, MoveKind::Ordinary),
                 );
+                if list.len >= LIMIT {
+                    return;
+                }
                 if !sliding || !victim.is_empty() {
                     break;
                 }
@@ -450,13 +503,33 @@ fn single_check_pawn_prefix(
 /// Complete legal root/non-root base order, including search-specific prefixes.
 /// This does not apply ordinary learned/hash/capture ranking.
 pub fn generate_legal(position: &Position, list: &mut MoveList) {
+    generate_bounded::<MOVE_CAPACITY>(position, list);
+}
+
+/// Return min(2, legal reply count), stopping as soon as the predicate is known.
+/// A result below two also leaves the complete reply list available to reuse.
+pub(crate) fn legal_replies_up_to_two(position: &Position, list: &mut MoveList) -> usize {
+    generate_bounded::<2>(position, list);
+    list.len
+}
+
+fn generate_bounded<const LIMIT: usize>(position: &Position, list: &mut MoveList) {
     list.clear();
     let king = position.piece_squares(position.side, PieceKind::King)[0];
     let checkers = find_attackers::<2>(&position.board, king, position.side.opponent());
-    en_passant_prefix(position, list, king);
-    castles(position, list, king, checkers.len != 0);
+    en_passant_prefix::<LIMIT>(position, list, king);
+    if list.len >= LIMIT {
+        return;
+    }
+    castles::<LIMIT>(position, list, king, checkers.len != 0);
+    if list.len >= LIMIT {
+        return;
+    }
     let pawn_start = list.len;
-    pawns(position, list, king);
+    pawns::<LIMIT>(position, list, king);
+    if list.len >= LIMIT {
+        return;
+    }
     if checkers.len == 1 {
         let pawn_end = list.len;
         single_check_pawn_prefix(
@@ -477,7 +550,10 @@ pub fn generate_legal(position: &Position, list: &mut MoveList) {
         PieceKind::Queen,
         PieceKind::King,
     ] {
-        pieces(position, list, king, kind);
+        pieces::<LIMIT>(position, list, king, kind);
+        if list.len >= LIMIT {
+            return;
+        }
     }
 }
 
@@ -508,6 +584,61 @@ mod tests {
             .iter()
             .map(|&mv| perft(&position.played_unchecked(mv), depth - 1))
             .sum()
+    }
+
+    #[test]
+    fn capped_reply_predicate_matches_complete_inventories_and_reuses_small_sets() {
+        fn walk(position: &Position, depth: usize) {
+            let mut full = MoveList::new();
+            let mut capped = MoveList::new();
+            generate_legal(position, &mut full);
+            assert_eq!(
+                legal_replies_up_to_two(position, &mut capped),
+                full.len.min(2)
+            );
+            if full.len < 2 {
+                assert_eq!(capped.as_slice(), full.as_slice());
+            }
+            if depth > 0 {
+                for &mv in full.as_slice() {
+                    walk(&position.played_unchecked(mv), depth - 1);
+                }
+            }
+        }
+        for fen in [
+            START,
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            "7k/P7/8/8/8/8/7p/K7 w - - 0 1",
+            "7k/8/8/3pP3/8/8/8/K7 w - d6 0 1",
+            "7k/6Q1/5K2/8/8/8/8/8 b - - 0 1",
+            "1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1",
+        ] {
+            walk(&Position::from_fen(fen).unwrap(), 2);
+        }
+    }
+
+    #[test]
+    fn check_route_classification_separates_discovered_and_simultaneous_checks() {
+        for (fen, from, to, expected) in [
+            (
+                "4k3/8/8/8/4B3/8/8/K3R3 w - - 0 1",
+                "e4",
+                "f5",
+                (true, false),
+            ),
+            ("4k3/8/8/8/4B3/8/8/K3R3 w - - 0 1", "e4", "b5", (true, true)),
+            ("4k3/8/8/8/4B3/8/8/K7 w - - 0 1", "e4", "b5", (true, false)),
+            ("4k3/8/8/8/4B3/8/8/K7 w - - 0 1", "e4", "f5", (false, false)),
+        ] {
+            let position = Position::from_fen(fen).unwrap();
+            let to = Square::parse(to).unwrap();
+            let mv = Move::new(Square::parse(from).unwrap(), to, MoveKind::Ordinary);
+            let board = projected_board(&position, mv);
+            assert_eq!(
+                check_routes(&board, Square::parse("e8").unwrap(), Color::White, to),
+                expected
+            );
+        }
     }
 
     #[test]
