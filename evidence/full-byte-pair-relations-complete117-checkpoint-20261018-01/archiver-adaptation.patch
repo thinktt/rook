@@ -1,0 +1,105 @@
+--- /home/legolas/rook2/evidence/activity-value-inputs-complete117-checkpoint-20261018/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-checkpoint-20261018-01/archive_checkpoint.py
+@@ -3,10 +3,12 @@
+ import gzip,hashlib,json,os,stat,tarfile,time,traceback
+ HERE=Path(__file__).resolve().parent
+ REPO=Path('/home/legolas/rook2')
+-FIRST=REPO/'evidence/activity-value-inputs-complete117-preparation-20261018-01'
+-SECOND=REPO/'evidence/activity-value-inputs-complete117-continuation02-20261018'
+-PROMOTION=REPO/'evidence/activity-value-inputs-integration-20261018/source-promotion.json'
+-ARCHIVE=HERE/'closed-activity-complete117.tar.gz'
++FIRST=REPO/'evidence/full-byte-pair-relations-complete117-preparation-20261018-01'
++ACCEPTANCE=REPO/'evidence/full-byte-pair-relations-complete117-parent-acceptance-20261018-01'
++INTEGRATION=REPO/'evidence/full-byte-pair-relations-integration-20261018-01'
++ROOTS=[FIRST,ACCEPTANCE,INTEGRATION]
++PROMOTION=INTEGRATION/'source-promotion.json'
++ARCHIVE=HERE/'closed-full-byte-pair-relations-complete117.tar.gz'
+ def sha(path):
+  h=hashlib.sha256()
+  with path.open('rb') as f:
+@@ -17,7 +19,7 @@
+  with (HERE/name).open('x') as f:json.dump(value,f,separators=(',',':'));f.write('\n')
+ def inventory():
+  files=[];directories=[];unsupported=[]
+- for root in [FIRST,SECOND]:
++ for root in ROOTS:
+   assert root.is_dir() and not root.is_symlink()
+   for current,dirs,names in os.walk(root,followlinks=False,onerror=lambda error:(_ for _ in ()).throw(error)):
+    directories.append(str(Path(current)))
+@@ -29,7 +31,8 @@
+     if stat.S_ISREG(path.lstat().st_mode):files.append(path)
+     else:unsupported.append(str(path))
+  assert not unsupported,dict(unsupported_entries=unsupported,no_silent_exclusion=True)
+- assert stat.S_ISREG(PROMOTION.lstat().st_mode);files.append(PROMOTION)
++ assert len(files)==len(set(files))
++ assert all(a==b or not(a in b.parents or b in a.parents) for a in ROOTS for b in ROOTS)
+  rows=[]
+  for path in sorted(files,key=lambda path:path.relative_to(REPO).as_posix()):
+   member=path.relative_to(REPO).as_posix();assert not Path(member).is_absolute() and '..' not in Path(member).parts
+@@ -44,39 +47,45 @@
+   chunk=self.file.read(size);self.hash.update(chunk);self.bytes+=len(chunk);return chunk
+ 
+ def coverage(rows):
+- by_path={row['source_path']:row for row in rows}
+- old=load(FIRST/'diagnostic/verification.json');oldterminal=load(FIRST/'diagnostic/tool-terminal.json')
+- assert old['complete'] is False and oldterminal['exit_code']==1 and oldterminal['terminal_chunk_id']=='588af9'
+- assert len(old['stages'])==4 and all(row['exit_code']==0 and row['actual_child_return_observed'] for row in old['stages'])
+- assert old['units']['rook2-diag']['passed']==209
+- assert not (FIRST/'diagnostic/raw-cases').exists() and not (FIRST/'diagnostic/conformance.stdout').exists()
++ by_path={row['source_path']:row for row in rows};plan=load(FIRST/'validation-plan.json')
++ graph='917723673dccacb354ebea485be7e37e20d293bd168bbd7e21e3aa599dbcd895'
++ assert plan['source_graph_sha256']==graph and len(plan['source_sha256'])==112
++ diag=load(FIRST/'diagnostic/verification.json');assert diag['complete'] and diag['failure'] is None
++ assert diag['units']['rook2-diag']['passed']==209 and all(row['exit_code']==0 and row['actual_child_return_observed'] for row in diag['stages'])
+  adapter=FIRST/'diagnostic-build/rook2-diag-exact';unit=FIRST/'diagnostic/unit-bin/rook2-diag/unit-exact'
+- assert by_path[str(adapter)]['sha256']=='0e5eb3e074e81835ae791f00b0f98c838cbd9c5cdf01ef7f5b74965a355a9e80'
+- assert by_path[str(unit)]['sha256']=='e9a720a631c572d327bca9df95f07a0aac90757cecc8685fa316d89d66296aae'
+- raw=SECOND/'corpus/raw-cases';expected={f'{ordinal:06d}{ext}' for ordinal in range(7673) for ext in ['.stdin','.stdout','.stderr','.json']}|{'cursor'}
++ ind=load(FIRST/'reconciliation/independent-verification.json');summary=load(FIRST/'validation-summary.json')
++ assert ind['status']=='pass' and ind['diagnostic_cases']==7673 and ind['diagnostic_operations']==117 and ind['whole_fixture_files']==115
++ assert summary['status']=='FULL_BYTE_PAIR_RELATIONS_COMPLETE117_FUNCTIONAL_PASS' and summary['source_graph_sha256']==graph
++ assert by_path[str(adapter)]['sha256']==ind['diagnostic_artifact_sha256']==summary['adapter_sha256']==diag['artifact_sha256']
++ assert by_path[str(unit)]['sha256']==diag['units']['rook2-diag']['binary_sha256']
++ assert by_path[str(FIRST/'validation-summary.json')]['sha256']=='2a698956b76d34b857c39eab41f1c79f615aa8f433dd97c462fbc6bcbe21c550'
++ assert by_path[str(FIRST/'reconciliation/independent-verification.json')]['sha256']=='589abaa6e53f92d30e3b5711918058162dff7dc6465cea81a2aca4a7fdfa16ad'
++ raw=FIRST/'diagnostic/raw-cases';expected={f'{ordinal:06d}{ext}' for ordinal in range(7673) for ext in ['.stdin','.stdout','.stderr','.json']}|{'cursor'}
+  assert {p.name for p in raw.iterdir()}==expected and (raw/'cursor').read_text()=='7673'
+- ind=load(SECOND/'reconciliation/independent-verification.json');assert ind['status']=='pass' and ind['diagnostic_cases']==7673
+- raw_manifest=SECOND/'reconciliation/raw-case-sha256.json';assert sha(raw_manifest)==ind['raw_case_manifest_sha256']
++ raw_manifest=FIRST/'reconciliation/raw-case-sha256.json';assert by_path[str(raw_manifest)]['sha256']==ind['raw_case_manifest_sha256']
+  hashes=load(raw_manifest);assert len(hashes)==7673*4
+- for name,h in hashes.items():assert by_path[str(SECOND/'corpus'/name)]['sha256']==h
++ for name,h in hashes.items():assert by_path[str(FIRST/'diagnostic'/name)]['sha256']==h
+  actual={}
+- for key,path in [('corpus',SECOND/'corpus/tool-terminal.json'),('independent',SECOND/'reconciliation/tool-terminal.json'),('finalizer',SECOND/'finalizer-tool-terminal.json')]:
++ for key,path in [('freeze',FIRST/'execution-freeze/tool-terminal.json'),('diag',FIRST/'diagnostic/tool-terminal.json'),('independent',FIRST/'reconciliation/tool-terminal.json'),('finalizer',FIRST/'finalizer-tool-terminal.json')]:
+   actual[key]=load(path);assert actual[key]['actual_tool_terminal_observed'] and actual[key]['exit_code']==0
+- p=load(PROMOTION)
+- assert p['source_graph_sha256']=='d49e7e3fb4b2af77da9ab5e9ee801ba3e9d6673d00be8e73e0389afba9260b03'
+- assert p['functional_summary_sha256']==by_path[str(SECOND/'validation-summary.json')]['sha256']
+- assert p['independent_corpus_sha256']==by_path[str(SECOND/'reconciliation/independent-verification.json')]['sha256']
+- for path in [FIRST/'source-112.tar.gz',FIRST/'official-inputs-115.tar.gz',FIRST/'execution-freeze/source-frozen.tar.gz',FIRST/'diagnostic-build/verified-source-before.tar.gz',FIRST/'reuse-unit-bin/lib/unit-exact',FIRST/'reuse-unit-bin/dev/unit-exact']:
++ acceptance=load(ACCEPTANCE/'acceptance.json');assert acceptance['accepted_for_complete117_diagnostic'] and acceptance['source_graph_sha256']==graph
++ promotion=load(PROMOTION)
++ assert by_path[str(PROMOTION)]['sha256']=='8d512b2ca8ca8ab173d5a509519d60a3f51e9e65745d48ca0b43d21195534935'
++ assert promotion['source_promoted'] and promotion['root_source112_graph']==graph and promotion['source_sha256']==plan['source_sha256']
++ assert promotion['functional_summary_sha256']==by_path[str(FIRST/'validation-summary.json')]['sha256']
++ assert promotion['independent_verification_sha256']==by_path[str(FIRST/'reconciliation/independent-verification.json')]['sha256']
++ assert promotion['changed_native']==['src/influence.rs','src/relation_table.rs'] and promotion['offline_maintenance_generator']['outside_build112']
++ for path in [FIRST/'source-112.tar.gz',FIRST/'official-inputs-115.tar.gz',FIRST/'execution-freeze/source-frozen.tar.gz',FIRST/'diagnostic-build/verified-source-before.tar.gz']:
+   assert str(path) in by_path
+- return dict(failed01_outer=oldterminal,green01_children=4,unit209_sha256=by_path[str(unit)]['sha256'],adapter_sha256=by_path[str(adapter)]['sha256'],raw_case_files=7673*4,raw_cursor_included=True,all_raw_hashes_equal_original_independent_manifest=True,actual_success_terminals=actual,promotion_receipt_sha256=by_path[str(PROMOTION)]['sha256'],source_graph_sha256=p['source_graph_sha256'])
++ return dict(source_graph_sha256=graph,unit209_sha256=by_path[str(unit)]['sha256'],adapter_sha256=by_path[str(adapter)]['sha256'],raw_case_files=7673*4,raw_cursor_included=True,all_raw_hashes_equal_original_independent_manifest=True,actual_success_terminals=actual,acceptance_sha256=by_path[str(ACCEPTANCE/'acceptance.json')]['sha256'],promotion_receipt_sha256=by_path[str(PROMOTION)]['sha256'],only_three_whole_trees=True,ordinary_native178_strict54_wire24_reused_by_source69_equality=True,new_engine_or_build_runs=0)
+ 
+ def main():
+  result=dict(complete=False,failure=None,affinity=sorted(os.sched_getaffinity(0)),no_native_compiler_profiler_timing_git_subprocesses=True)
+  try:
+-  assert result['affinity']==[0,1,2,3,4,5,8,9,10,11,12,13]
++  assert result['affinity']==[0,1,2,3,4,5,8,9,10,11,12,13] and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+   assert not ARCHIVE.exists() and not (HERE/'member-manifest.json').exists()
+   rows,dirs=inventory();proof=coverage(rows);total=sum(row['bytes'] for row in rows)
+-  manifest=dict(scope={'complete_trees':[str(FIRST),str(SECOND)],'additional_single_file':str(PROMOTION),'no_hidden_or_ignored_file_filter':True,'regular_file_members_only':True,'directories_omitted_as_tar_entries_but_enumerated':dirs,'unsupported_nonregular_entries':[],'exclusions':[]},file_count=len(rows),source_bytes=total,members=rows)
++  manifest=dict(scope={'complete_trees':[str(root) for root in ROOTS],'additional_files':[],'no_hidden_or_ignored_file_filter':True,'regular_file_members_only':True,'directories_omitted_as_tar_entries_but_enumerated':dirs,'unsupported_nonregular_entries':[],'exclusions':[]},file_count=len(rows),source_bytes=total,members=rows)
+   write('member-manifest.json',manifest)
+   print(json.dumps(dict(stage='original_inventory_closed',files=len(rows),bytes=total)),flush=True)
+   # Deterministic ordering, canonical header ownership/time and gzip header.

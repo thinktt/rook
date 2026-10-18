@@ -208,7 +208,7 @@ pub const fn profile_sum(code: u8) -> u8 {
     (code & 1) + ((code >> 1) & 1) + ((code >> 2) & 3) + ((code >> 4) & 3) + (code >> 6)
 }
 
-/// Classify the same four tested-piece tiers using capped count/tier states.
+/// Classify the same four tested-piece tiers directly from normalized bytes.
 /// Pure lookup; consumers retain all semantic charge decisions.
 #[inline]
 pub fn relation(own: u8, opponent: u8, kind: PieceKind) -> Relation {
@@ -222,9 +222,7 @@ pub fn relation(own: u8, opponent: u8, kind: PieceKind) -> Relation {
     if opponent == 0 {
         return Relation::Favorable;
     }
-    let own = (crate::relation_table::CLASS[own as usize] & 15) as usize;
-    let opponent = (crate::relation_table::CLASS[opponent as usize] & 15) as usize;
-    crate::relation_table::RELATIONS[tested][(own << 4) | opponent]
+    crate::relation_table::RELATIONS[tested][((own as usize) << 8) | opponent as usize]
 }
 
 /// Exclude from normalized own support, preserving the base map and opponent.

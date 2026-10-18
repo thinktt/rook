@@ -15,23 +15,24 @@ The `rook2` executable serves the live King XBoard byte stream, including
 search-time controls/status, natural seed acquisition, gate seed commands and
 fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implements
 117 mandatory operations with7673 cases across115 original whole fixture files.
-The current activity-value source has178 native and209 diagnostic tests,
+The current full-byte relation source has178 native and209 diagnostic tests,
 54 strict replays and eight interruption fixtures/24 searches. Its own-PGO
-artifact d5ee1f3f has a separately reconciled seven-case development pilot,
-1.309570% lower in summed CPU medians than complete117 control6a5ce6e2.
-The control owns the latest full54/12 CPU collections and12-game pre-gate;
+artifact79d19ebe has a separately reconciled seven-case development pilot,
+0.702652% lower in summed CPU medians than activity controld5ee1f3f.
+Previous complete117 artifact6a5ce6e2 owns the latest full54/12 CPU collections and12-game pre-gate;
 those results do not transfer to the new artifact. Current-artifact gameplay,
 full performance qualification and the external3288-game gate remain open.
-See [decision0012](docs/decisions/0012-activity-destination-values.md).
+See [decision0013](docs/decisions/0013-full-byte-relation-table.md).
 See [STATUS.md](STATUS.md) for artifact-specific evidence and limitations.
 
 Placement now includes exact attack planes owned by Position160/Node176,
 retaining copied-child state and independent retained evaluation. The measured
 storage/kernel decision and its validation boundaries are recorded in
 [decision0004](docs/decisions/0004-persistent-attack-planes.md).
-Influence now uses the coherent typed piece lists and a compact immutable
-relation kernel; their combined decision is recorded in
+Influence uses the coherent typed piece lists adopted in
 [decision0006](docs/decisions/0006-typed-influence-enumeration.md).
+The immutable relation kernel now indexes original profile-byte pairs directly;
+its measured storage/dependency tradeoff is recorded in decision0013.
 Private activity specialization and its separate generic/own-PGO comparisons
 are recorded in [decision0007](docs/decisions/0007-static-activity-kinds.md).
 The offline [relation generator](scripts/generate_relation_table.py) reproduces

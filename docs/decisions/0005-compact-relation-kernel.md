@@ -1,5 +1,9 @@
 # Compact pure relation kernel
 
+The relation-table representation in this historical decision is superseded by
+[decision0013](0013-full-byte-relation-table.md). Its original measurements and
+selection remain recorded below.
+
 Status: adopted in canonical source with typed-list influence after the measured
 combined comparison in decision0006;134 native tests and49 diagnostic operations
 pass after integration. Canonical PGO/timing remain separate. Date:2026-10-18.

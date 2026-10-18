@@ -1,8 +1,16 @@
 # Remaining qualification work
 
-Current117 source has complete mandatory fixture success:117 operations,
-7673 unique cases/115 whole files,209 diagnostic units,177 native tests,
-54 strict replays and eight interruption fixtures/24 searches. Generic39cadc62
+Current full-byte relation source has complete mandatory fixture success:
+117 operations,7673 unique cases/115 whole files,209 diagnostic units and
+178 native tests,54 strict replays and eight interruption fixtures/24 searches.
+Fresh diagnostic/raw reconciliation binds source112 graph91772367; native,
+strict and wire evidence is reused only by exact source69 equality. Own-PGO79d19ebe
+has its own profile and strict/wire evidence plus a seven-case pilot; current
+full54/12 performance and12-game pre-gate remain open. See
+[decision0013](decisions/0013-full-byte-relation-table.md).
+
+The complete117 costs and gameplay evidence below belong to previous artifacts;
+they do not transfer to the current source. Generic39cadc62
 also passes the12-game pre-gate/632 searches, continuity8 and required seed
 controls. Source equality explicitly binds reused green native evidence after
 the cold test-only correction. Ordinary and diagnostic artifacts remain distinct.

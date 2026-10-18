@@ -1,9 +1,10 @@
 # Remaining performance investigations
 
-Current117 integrates activity destination values after178 native/209 diagnostic
-units and fresh7673-case/117-operation success. Own-PGOd5ee1f3f passes its own
-54/eight-wire and a matched seven-case pilot1.309570% lower in summed medians;
-final-artifact full54/12 costs and12-game pre-gate remain. The separate pawn
+Current117 integrates the full-byte relation table after178 native/209 diagnostic
+units and fresh7673-case/117-operation success. Own-PGO79d19ebe passes its own
+54/eight-wire and a matched seven-case pilot0.702652% lower than activityd5ee1f3f
+in summed medians; final-artifact full54/12 costs and12-game pre-gate remain.
+See [decision0013](../decisions/0013-full-byte-relation-table.md). The separate pawn
 fusion541d324c passes178/54/eight-wire with independent closure; its fixed
 seven-case generic pilot is0.210939% lower in summed medians, missing both
 predeclared advancement branches. It is parked without own-PGO or composition.

@@ -1,6 +1,37 @@
 # Implementation status
 
-## Current stage — activity destination values, 2026-10-18
+## Current stage — full-byte relation table, 2026-10-18
+
+The direct typed relation table is integrated after fresh209 diagnostic tests
+and all7673 original cases/117 operations/115 whole files. Independent raw
+request/expected/response/exit reconciliation passes. Root source112 graph is
+`917723673dccacb354ebea485be7e37e20d293bd168bbd7e21e3aa599dbcd895`.
+Only native influence.rs/relation_table.rs change from the activity checkpoint;
+the offline generator is separately updated and reproduces exact source bytes.
+Source69 equality binds the already verified178 native tests, generic948c336c
+and its strict54/eight-wire24. The fresh adapter is07905a33. This is source
+promotion, not a canonical-path rebuild.
+
+The262144-byte table removes two dependent CLASS reads from relation lookups;
+it replaces1280 bytes of compact tables without growing Position160/Node176.
+Generic and own-PGO pilots separately pass their predeclared advancement rules:
+0.748652% and0.702652% lower summed medians, respectively, with seven of seven
+case medians lower in each. Own-PGO79d19ebe has its own54 training/profile
+remerge, use54/eight-wire24 and independent closure. These finite custom
+seven-case pilots do not qualify full54/12 performance; measured improvements
+from different trials are not pooled or multiplied. See
+[decision0013](docs/decisions/0013-full-byte-relation-table.md),
+[source promotion](evidence/full-byte-pair-relations-integration-20261018-01/source-promotion.json)
+and [closed trial checkpoint](evidence/full-byte-pair-relations-trial-checkpoint-20261018-01/README.md).
+The [complete117 checkpoint](evidence/full-byte-pair-relations-complete117-checkpoint-20261018-01/README.md)
+preserves all original raw cases, images, helpers and promotion evidence.
+
+Latest full54/12 costs and12-game pre-gate still belong to previous6a5ce6e2.
+Final qualification and external full-game handoff remain. Pawn fusion stays
+parked; the separate reciprocal-modulus experiment and placement-reuse census
+are not production changes.
+
+## Previous activity destination checkpoint
 
 The exact validated activity destination-value source is now integrated. Root
 source112 (native46/tools23/cold43) equals graph
