@@ -1,27 +1,87 @@
 # Implementation status
 
-## Current stage
+## Current stage — 2026-10-18
 
-Initial architecture critically reviewed by `imp2-lead`; Imp2 selected the
-provisional baseline and recorded [decision0001](docs/decisions/0001-initial-architecture.md).
-The compact position/move kernel, material/square terms, influence, activity,
-shelter, remembered-result table and pawn structural/piece terms are implemented.
-One concrete search-state owner now supports ordinary and tactical recursion,
-full/fast retained evaluation, pawn retention, history admission, TT behavior,
-ordering, shallow/null cutoffs, extensions, mate probes, scout retry and
-initial/tail internal ordering. Iterations carry stable ranked root order and
-shared learned/cache effects; child retry preserves its own refreshed terms.
-The composed evaluator now includes central/pattern terms, pawn progress and
-endings, race/fortress bounds and late-endgame finishing. Effective root-bound
-personality settings are available through the native API. Native work-timed
-search now applies adaptive limits, seeded root variation, natural 4096 polls,
-root/iteration stopping and separate completed-result capture. Public host
-command servicing and the live protocol adapter are missing. Native persistent
-sessions now join ordered parameter commands, normalized setup/history/rewind,
-game adjudication, schedule allocation, clock/seed lifetime, actual timed search
-and complete semantic post/move output.
-The earlier generic alpha-beta development baseline stays separately frozen.
-No conformance or performance qualification is claimed.
+The independent native engine serves the live King XBoard stream, including
+work-timed recursive search, actual publication and one-command-per-poll input,
+persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT/
+learned state and specified root scheduling. Ordinary `Session<false>` excludes
+development tracing; cold JSON is a separate adapter package. Position/Node
+layout and copied-child ownership remain the provisional architecture.
+
+A generation-local pin summary and necessary check-evasion screen now avoid
+redundant full projection under explicit geometric conditions; king/EP/uncertain
+cases retain projection. The independent advisor's bounded critique was
+incorporated; Imp2 owns the decision. See
+[decision0002](docs/decisions/0002-geometric-legality.md).
+A reproducible generic x86-64 compiler-PGO build is available through the staged
+[build procedure](tools/README.md#staged-compiler-pgo).
+
+Current artifact-specific evidence:
+
+- Latest PGO ordinary artifact `3660fecfa0c4a681e6a7152009417199d91706fa9acf0508e073c76427e18438`
+  passes all54 strict profiling replays and all eight wire interruption fixtures
+  (24 searches). Its compiler profile was trained on54 unchanged ordinary
+  replays; raw process identities, source, merge and profile inputs are verified,
+  archived and bound to the build. No missing-function warnings were emitted.
+  See [PGO build](evidence/pgo-use-build-20261018/README.md).
+- The same native source's generic artifact
+  `670b965a29c063e1849eb0d790ba33dfb792fff2a13370b467f1235acf0d66a2`
+  passes all54 strict replays, the eight wire interruption fixtures and130 native
+  unit tests. New tests compare ordered inventories with the old full-projection
+  admission over10,000 constructed setups plus joined-domain witnesses.
+- Earlier frozen artifact
+  `da82041f29091ed8db54f2cd2ffd0c338da5ae5216cae3caea6130974573e648`
+  passes all12 focused games/632 searches, combined with its same-artifact
+  continuity control. The released collector reports complete focused replay,
+  with full gameplay qualification false. See
+  [focused replay](evidence/focused-games-20261018-first/README.md).
+  This observation is not transferred to the newer artifacts.
+- The separate external DIAG adapter passes246 cases across five complete
+  fixture files/six operations. Other mandatory operations remain explicitly
+  unsupported. See [diagnostic scope](diagnostic/README.md).
+- A balanced four-anchor pilot selected the generation-summary/evasion
+  algorithm: all80 lifetimes passed the strict oracle, and the sum of four
+  case medians was12.3% lower than its baseline. A separate40-lifetime
+  generic/PGO pilot on identical native source found an additional6.5% lower
+  sum of medians. All samples, placement and accounting boundaries are retained
+  in [generation pilot](evidence/generation-cpu-pilot-20261018/README.md) and
+  [PGO pilot](evidence/pgo-cpu-pilot-20261018/README.md). These are local pilots,
+  not complete performance collections or qualified cross-host ratios.
+- The optimized profile-01 Callgrind run passed the strict oracle and reports
+  13,607,144,696 simulated instructions. PGO changes inlining/attribution, so
+  source-line evidence is retained. Activity/influence remain prominent rows.
+  This is a simulated diagnostic, with no PMU instructions/cycles claim.
+  [Profile evidence](evidence/callgrind-pgo-20261018/README.md).
+
+Mandatory diagnostics, production review, the full3288-game gate, the newer
+artifact's full focused replay and complete54/12 performance collections remain
+open. The [production map](docs/production-map.md) is an initial ownership map,
+not a completed normative audit. The current PMU probe still returns EACCES with
+UID1000/zero effective capabilities/paranoid3/seccomp0; no security setting was
+changed. Clock sampling was unreliable and its percentages are unused.
+Calibration and final measurement/uncertainty conditions remain open, alongside
+substantial independent engine work. See
+[qualification gaps](docs/qualification-gaps.md).
+
+Next: use measured remaining pipeline costs to select further computational
+reuse/representation experiments, expand mandatory external diagnostics and
+production review, and complete artifact-specific gameplay/performance evidence.
+Earlier partial timings below are historical development checkpoints.
+
+## Runtime policy
+
+Lead and implementation subagents use Normal speed under the owner's latest
+`/fast off`. The gate verified the lead's Normal footer. All three native
+implementation subagents are completed and remain stopped; their runtime tiers
+have no exposed read/set control, so no conversion is claimed and no child is
+resumed without a route that can verify Normal. A quota reset does not change
+the engine objective. The guiding mission remains `/home/legolas/imp-perf-mission.md`.
+
+## Earlier native/development checkpoints
+
+These observations retain their original source/artifact scopes; they are not
+newer-artifact DIAG, gameplay or performance qualification.
 
 Current evidence:
 
@@ -101,27 +161,6 @@ Current evidence:
   ticks. See [timed baseline](evidence/work-timed-v1/README.md).
 - Instructions/cycles remain unavailable to the unprivileged account; a request
   for a scoped observer has been sent to the owner through the conversation.
-
-Next: the live byte-stream adapter, immediate publication, bounded input and
-one-command-per-poll servicing, then broader joined/gameplay checks and measured
-whole-production paths. Native session/clock/output composition is present;
-complete ingress response/DIAG validation and live timing remain unqualified.
-Selected fixed-root and timed native observations match the released
-expectations. Full/fast/pawn/TT traffic is present, but permanent layout
-selection still needs controlled representation/restoration comparisons and
-fidelity appropriate to production. Earlier partial timings are not speedup
-denominators for the new pipeline.
-
-Latest owner update: `/fast off`; normal speed for lead and subagents. This
-supersedes the temporary fast-subagent request and restores the goal's original
-speed policy. The collaboration tool cannot select or verify service speed.
-All three implementation subagents are completed and remain stopped. The gate
-verified this lead's Normal footer. Child runtime tiers have no exposed read/set
-control and their saved metadata does not establish a tier; no conversion is
-claimed. Continue on the verified Normal lead until a delegation route can
-verify Normal. The operational-only status was relayed to Vic's system agent;
-cleanroom-gate is not registered locally and Bee SSH host-key verification
-failed without bypass. A usage quota reset does not alter the engine objective.
 
 ## Milestones
 
