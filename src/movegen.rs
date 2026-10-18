@@ -3,6 +3,7 @@
 //! Legality projects only the mailbox. Chronology, fingerprints and evaluation
 //! state are updated only when a caller actually plays an admitted move.
 
+use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KNIGHT, KNIGHT_SOURCES};
 use crate::position::Position;
 use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
 
@@ -49,92 +50,6 @@ impl Default for MoveList {
     }
 }
 
-const KNIGHT: [(i8, i8); 8] = [
-    (1, 2),
-    (-1, -2),
-    (-1, 2),
-    (1, -2),
-    (2, 1),
-    (-2, -1),
-    (-2, 1),
-    (2, -1),
-];
-const DIRECTIONS: [(i8, i8); 8] = [
-    (1, 1),
-    (-1, -1),
-    (-1, 1),
-    (1, -1),
-    (0, 1),
-    (0, -1),
-    (1, 0),
-    (-1, 0),
-];
-
-#[derive(Clone, Copy)]
-#[repr(C)]
-struct Ray {
-    squares: [u8; 7],
-    len: u8,
-}
-
-#[repr(align(64))]
-struct RayTable([[Ray; 8]; 64]);
-
-const fn attack_rays() -> RayTable {
-    let empty = Ray {
-        squares: [0; 7],
-        len: 0,
-    };
-    let mut table = [[empty; 8]; 64];
-    let mut square = 0;
-    while square < 64 {
-        let mut direction = 0;
-        while direction < 8 {
-            let (df, dr) = DIRECTIONS[direction];
-            let mut cursor = Square(square as u8);
-            while let Some(next) = cursor.offset(df, dr) {
-                let ray = &mut table[square][direction];
-                ray.squares[ray.len as usize] = next.0;
-                ray.len += 1;
-                cursor = next;
-            }
-            direction += 1;
-        }
-        square += 1;
-    }
-    RayTable(table)
-}
-
-#[derive(Clone, Copy)]
-struct Leaps {
-    squares: [u8; 8],
-    len: u8,
-}
-
-const fn knight_sources() -> [Leaps; 64] {
-    let mut table = [Leaps {
-        squares: [0; 8],
-        len: 0,
-    }; 64];
-    let mut square = 0;
-    while square < 64 {
-        let mut direction = 0;
-        while direction < 8 {
-            let (df, dr) = KNIGHT[direction];
-            if let Some(from) = Square(square as u8).offset(df, dr) {
-                let leaps = &mut table[square];
-                leaps.squares[leaps.len as usize] = from.0;
-                leaps.len += 1;
-            }
-            direction += 1;
-        }
-        square += 1;
-    }
-    table
-}
-
-static ATTACK_RAYS: RayTable = attack_rays();
-static KNIGHT_SOURCES: [Leaps; 64] = knight_sources();
 const PROMOTIONS: [PieceKind; 4] = [
     PieceKind::Queen,
     PieceKind::Rook,

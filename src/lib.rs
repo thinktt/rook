@@ -13,6 +13,7 @@ mod eval_basis;
 pub mod evaluation;
 pub mod evaluator;
 pub mod first_iteration;
+mod geometry;
 pub mod history;
 pub mod host;
 pub mod identity;

@@ -1,4 +1,5 @@
 //! EVAL-ACTIVITY: mobility, fresh pressure marks and semantic relation work.
+use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KNIGHT, KNIGHT_SOURCES};
 use crate::influence::{
     adjusted_relation, profile_sum, relation, Contribution, Influence, Relation,
 };
@@ -13,18 +14,6 @@ pub struct Activity {
     pub relation_queries: u64,
 }
 
-const DIAGONAL: [(i8, i8); 4] = [(1, 1), (-1, -1), (-1, 1), (1, -1)];
-const ORTHOGONAL: [(i8, i8); 4] = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-const KNIGHT: [(i8, i8); 8] = [
-    (1, 2),
-    (-1, -2),
-    (-1, 2),
-    (1, -2),
-    (2, 1),
-    (-2, -1),
-    (-2, 1),
-    (2, -1),
-];
 const DESTINATION_VALUE: [[u8; 8]; 8] = [
     [6, 7, 8, 8, 8, 8, 7, 6],
     [6, 7, 8, 8, 8, 8, 7, 6],
@@ -200,10 +189,10 @@ fn destinations(
 ) -> Mobility {
     let mut result = Mobility::default();
     if kind == PieceKind::Knight {
-        for step in KNIGHT {
-            let Some(target) = source.offset(step.0, step.1) else {
-                continue;
-            };
+        let targets = &KNIGHT_SOURCES[source.0 as usize];
+        for &target in &targets.squares[..targets.len as usize] {
+            debug_assert!(target < 64);
+            let target = Square(target & 63);
             let victim = position.board[target.0 as usize];
             if !victim.is_empty() && victim.color() == color {
                 continue;
@@ -220,26 +209,19 @@ fn destinations(
     let king_rank = relative_rank(color, enemy_king);
     let rook_seventh =
         kind == PieceKind::Rook && (king_rank == 7 || (king_rank == 6 && enemy_king.file() >= 6));
-    let directions: &[(i8, i8)] = match kind {
-        PieceKind::Bishop => &DIAGONAL,
-        PieceKind::Rook => &ORTHOGONAL,
-        PieceKind::Queen => &[
-            (1, 1),
-            (-1, -1),
-            (-1, 1),
-            (1, -1),
-            (0, 1),
-            (0, -1),
-            (1, 0),
-            (-1, 0),
-        ],
+    let directions = match kind {
+        PieceKind::Bishop => 0..4,
+        PieceKind::Rook => 4..8,
+        PieceKind::Queen => 0..8,
         _ => unreachable!("non-activity piece"),
     };
-    for &step in directions {
-        let mut cursor = source;
+    for direction in directions {
+        let step = DIRECTIONS[direction];
         let mut additional = false;
-        while let Some(target) = cursor.offset(step.0, step.1) {
-            cursor = target;
+        let ray = &ATTACK_RAYS.0[source.0 as usize][direction];
+        for &target in &ray.squares[..ray.len as usize] {
+            debug_assert!(target < 64);
+            let target = Square(target & 63);
             let victim = position.board[target.0 as usize];
             let friendly = !victim.is_empty() && victim.color() == color;
             if !friendly {
@@ -341,12 +323,12 @@ fn king_pressure(position: &Position, defender: Color, marks: &Marks) -> i32 {
     let mut pressure = 0;
     for (directions, mask, admitted) in [
         (
-            &ORTHOGONAL,
+            &DIRECTIONS[4..],
             0xf0u8,
             counts[PieceKind::Rook.index()] != 0 || counts[PieceKind::Queen.index()] != 0,
         ),
         (
-            &DIAGONAL,
+            &DIRECTIONS[..4],
             0xccu8,
             counts[PieceKind::Bishop.index()] != 0 || counts[PieceKind::Queen.index()] != 0,
         ),

@@ -4,6 +4,7 @@
 //! with wrapping addition; adjusted relation exclusion instead saturates.
 //! Consumers own semantic relation charges, including any cache-hit charges.
 
+use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
 use crate::position::Position;
 use crate::types::{Color, Piece, PieceKind, Square};
 
@@ -30,19 +31,6 @@ pub struct Influence {
     pub profiles: [[u8; 64]; 2],
 }
 
-const ORTHOGONAL: [(i8, i8); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
-const DIAGONAL: [(i8, i8); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
-const KNIGHT: [(i8, i8); 8] = [
-    (1, 2),
-    (2, 1),
-    (2, -1),
-    (1, -2),
-    (-1, -2),
-    (-2, -1),
-    (-2, 1),
-    (-1, 2),
-];
-
 impl Influence {
     pub fn build(position: &Position) -> Self {
         Self::build_board(&position.board)
@@ -66,40 +54,39 @@ impl Influence {
             let square = Square(index as u8);
             match piece.kind() {
                 PieceKind::Pawn => {
-                    let forward = if side == Color::White { 1 } else { -1 };
-                    for file in [-1, 1] {
-                        if let Some(target) = square.offset(file, forward) {
-                            influence.add(side, target, Contribution::Pawn as u8);
-                        }
+                    let targets = &PAWN_TARGETS[side.index()][index];
+                    for &target in &targets.squares[..targets.len as usize] {
+                        debug_assert!(target < 64);
+                        influence.add(side, Square(target & 63), Contribution::Pawn as u8);
                     }
                 }
                 PieceKind::Knight => {
-                    for (file, rank) in KNIGHT {
-                        if let Some(target) = square.offset(file, rank) {
-                            influence.add(side, target, Contribution::Minor as u8);
-                        }
+                    let targets = &KNIGHT_SOURCES[index];
+                    for &target in &targets.squares[..targets.len as usize] {
+                        debug_assert!(target < 64);
+                        influence.add(side, Square(target & 63), Contribution::Minor as u8);
                     }
                 }
                 PieceKind::King => {
-                    for (file, rank) in ORTHOGONAL.into_iter().chain(DIAGONAL) {
-                        if let Some(target) = square.offset(file, rank) {
-                            influence.add(side, target, Contribution::Weak as u8);
-                        }
+                    let targets = &KING_TARGETS[index];
+                    for &target in &targets.squares[..targets.len as usize] {
+                        debug_assert!(target < 64);
+                        influence.add(side, Square(target & 63), Contribution::Weak as u8);
                     }
                 }
                 PieceKind::Rook => {
-                    for step in ORTHOGONAL {
-                        influence.ray(board, side, square, step, Contribution::Rook);
+                    for direction in 4..8 {
+                        influence.ray(board, side, square, direction, Contribution::Rook);
                     }
                 }
                 PieceKind::Bishop => {
-                    for step in DIAGONAL {
-                        influence.ray(board, side, square, step, Contribution::Minor);
+                    for direction in 0..4 {
+                        influence.ray(board, side, square, direction, Contribution::Minor);
                     }
                 }
                 PieceKind::Queen => {
-                    for step in ORTHOGONAL.into_iter().chain(DIAGONAL) {
-                        influence.ray(board, side, square, step, Contribution::Queen);
+                    for direction in 0..8 {
+                        influence.ray(board, side, square, direction, Contribution::Queen);
                     }
                 }
             }
@@ -118,18 +105,20 @@ impl Influence {
         board: &[Piece; 64],
         side: Color,
         source: Square,
-        step: (i8, i8),
+        direction: usize,
         contribution: Contribution,
     ) {
-        let diagonal = step.0 != 0 && step.1 != 0;
+        let step = DIRECTIONS[direction];
+        let diagonal = direction < 4;
         let forward = if side == Color::White { 1 } else { -1 };
         let mut weight = contribution as u8;
-        let mut cursor = source;
-        while let Some(target) = cursor.offset(step.0, step.1) {
-            // The occupied square gets the old contribution before transparency
-            // or weakening is considered.
+        let ray = &ATTACK_RAYS.0[source.0 as usize][direction];
+        let mut targets = ray.squares[..ray.len as usize].iter();
+        while let Some(&target) = targets.next() {
+            debug_assert!(target < 64);
+            let target = Square(target & 63);
+            // Add the old weight before transparency or weakening.
             self.add(side, target, weight);
-            cursor = target;
             let piece = board[target.0 as usize];
             if piece.is_empty() {
                 continue;
@@ -145,8 +134,9 @@ impl Influence {
                 PieceKind::Rook if !diagonal => {}
                 PieceKind::Bishop if diagonal => {}
                 PieceKind::Pawn if diagonal && step.1 == forward => {
-                    if let Some(extra) = target.offset(step.0, step.1) {
-                        self.add(side, extra, weight);
+                    if let Some(&extra) = targets.next() {
+                        debug_assert!(extra < 64);
+                        self.add(side, Square(extra & 63), weight);
                     }
                     break;
                 }
