@@ -241,3 +241,12 @@ The first1022-case attempt passed1010 and exposed12 missing candidate-order
 transport calls; it remains preserved with its original source/build/report.
 Native production source is unchanged. See
 [deferred verification](evidence/diagnostic-placement-preparation-20261018/README.md).
+
+Both matched bitplane variants pass133 native tests and54 strict replays. Their
+complete90-lifetime generic pilot favors persistent Position160/Node176 by2.13%
+in summed case medians, while this local Position128/Node144 strategy is0.48%
+higher. The independent raw reconciliation and all samples are retained in
+[matched trial](evidence/bitplanes-20261018/README.md). Persistent advances to a
+separate PGO training/build/regression and pilot; production keeps its current
+layout pending that evidence. No generic result is transferred to PGO or final
+54/12 performance qualification.
