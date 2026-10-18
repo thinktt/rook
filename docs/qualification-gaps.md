@@ -6,7 +6,7 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements95 operations,
+  The separate `diagnostic/` crate now implements105 operations,
   including placement/pawn terms, work ledger, learned/table sequences and
   supplied candidate/priority/capture order, root randomization/aspiration,
   quiescence capture policy/PV line length, material balance, capture exception/
@@ -18,11 +18,22 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   complete forced-fresh subtotal/score, controlled full/fast and actual move/null
   sequences, Q-entry/disposition observations, retained pawn subtotals and fixed
   root search pawn sequences and recursive Q trees, plus cached/controlled fast
-  admission, effective bounds, draw/reversal and bounded mate leaves:
-  7393 unique cases/89 complete fixture files and149 adapter units pass after151
-  native tests. Remaining mandatory inventory is22 operations/280 cases. Every other mandatory operation still needs
+  admission, effective bounds, draw/reversal and bounded mate leaves, shared
+  generation, fixed/seeded root iterations, adaptive/terminal clock boundaries
+  and two actual timed-session routes:
+  7519 unique cases/102 complete fixture files and182 adapter units pass after158
+  native tests. Remaining mandatory inventory is12 operations/154 cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
+- Close two remaining diagnostic admission reviews before claiming complete
+  domain coverage. The generic timed-search contract requires a dedicated
+  failure at unsupported IIO entry; a final counter rejection alone does not
+  establish that placement. Its native entry policy remains unimplemented.
+  The validated105 goOutcome parser uses a bounded canonical setup vocabulary;
+  the released contract does not expressly enumerate every harmless setup
+  command. Review wider equivalent setup sequences before treating that parser
+  as complete domain proof. See
+  [independent105 review](../evidence/actual-timed105-review-20261018/review-20261018T113351Z-a6874c.md).
 - Extend exact composed-search comparisons beyond the ten first-root and nine
   ordinary fixture cases. Extend actual evaluation-stage and quiescence trace
   evidence beyond the bounded ten-tree component contract and

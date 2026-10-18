@@ -12,14 +12,17 @@ use std::{
     process::ExitCode,
 };
 
+mod actual_timed;
 mod admission;
 mod boundary_admission;
 mod candidate_order;
 mod cached_entry;
+mod clock_boundaries;
 mod endgame_bounds;
 mod endings;
 mod evaluation_common;
 mod fresh_evaluation;
+mod generation;
 mod king_shelter;
 mod learned;
 mod ledger;
@@ -38,6 +41,7 @@ mod quiescence_tree;
 mod relations;
 mod retained_evaluation;
 mod root_context;
+mod root_iterations;
 mod score_context;
 mod scores;
 mod supplied;
@@ -117,6 +121,8 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "search.seededTimedSearch" | "session.goOutcome" => actual_timed::dispatch(operation, input),
+        "time.adaptiveSequence" | "search.iterationTerminalStop" | "session.timeSetup" => clock_boundaries::dispatch(operation,input),
         "evaluation.kingShelter" => king_shelter::run(input),
         "evaluation.materialValues"
         | "evaluation.rootMaterial"
@@ -128,6 +134,7 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         | "evaluation.fortressBounds"
         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
         "search.cachedAdmission" | "search.fastEntry" | "search.evaluationBounds" => cached_entry::dispatch(operation,input),
+        "search.firstIteration" | "search.ordinaryIterations" | "search.seededOrdinaryIterations" => root_iterations::dispatch(operation, input),
         "search.quiescenceTree" => quiescence_tree::dispatch(input),
         "evaluation.moveSequence" => move_evaluation::dispatch(input),
         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
@@ -170,6 +177,7 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         "ordering.prioritySequence" | "tactics.capturePreferenceOrder" => {
             ordering::dispatch(operation, input)
         }
+        "search.produceAndOrderCandidates" | "search.quiescenceCandidates" => generation::dispatch(operation,input),
         "search.orderCandidates" => candidate_order::dispatch(input),
         "clock.workSequence" => ledger::dispatch(input),
         "search.cutoffMemory" | "search.rememberedResults" => learned::dispatch(operation, input),

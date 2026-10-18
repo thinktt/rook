@@ -138,6 +138,19 @@ pub fn in_check(position: &Position, side: Color) -> bool {
     position.attack_view().attacked(king, side.opponent())
 }
 
+/// Semantic current-side classification, saturated at two checkers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckClassification { None, Single, Double }
+
+/// Read-only component observation using the retained native mailbox finder.
+/// Complete generation supplies equivalent ordered identities from tag planes.
+pub fn check_classification(position: &Position) -> CheckClassification {
+    let king=position.piece_squares(position.side,PieceKind::King)[0];
+    match find_attackers::<2>(&position.board,king,position.side.opponent()).len {
+        0=>CheckClassification::None, 1=>CheckClassification::Single, _=>CheckClassification::Double,
+    }
+}
+
 /// Project just the fields needed for geometric king safety, not a semantic
 /// Position transition. The caller has checked destination and special geometry.
 #[inline]
@@ -212,9 +225,30 @@ fn legal_after(position: &Position, mv: Move, king: Square) -> bool {
     legal_after_bits(position, mv, king, position.attack_view())
 }
 
+/// Q supplies its one projected tag-plane view. Preserve the mailbox owner's
+/// exact first-two order: a moved-to third route does not enable the bypass.
+pub(crate) fn check_routes_bits(
+    projected: &crate::attacks::AttackBits,
+    king: Square,
+    by: Color,
+    moved_to: Square,
+) -> (bool, bool) {
+    let (squares, len) = projected.ordered_attackers::<2>(king, by);
+    (len != 0, len == 2 && squares.contains(&moved_to))
+}
+
+#[cfg(test)]
+pub(crate) fn mailbox_ordered_attackers_for_test<const LIMIT: usize>(
+    board: &[Piece; 64], square: Square, by: Color,
+) -> ([Square; 2], usize) {
+    let result = find_attackers::<LIMIT>(board, square, by);
+    (result.squares, result.len)
+}
+
 /// The tactical caller supplies a projected board from an initially legal
 /// position. A normal move can expose one route as well as its direct route.
 /// EP may expose two other routes, which does not count as direct+discovered.
+#[cfg(test)]
 pub(crate) fn check_routes(
     board: &[Piece; 64],
     king: Square,
@@ -637,7 +671,10 @@ pub(crate) fn legal_replies_up_to_two(position: &Position, list: &mut MoveList) 
 fn generate_bounded<const LIMIT: usize>(position: &Position, list: &mut MoveList) {
     list.clear();
     let king = position.piece_squares(position.side, PieceKind::King)[0];
-    let checkers = find_attackers::<2>(&position.board, king, position.side.opponent());
+    let (squares, len) = position
+        .attack_view()
+        .ordered_attackers::<2>(king, position.side.opponent());
+    let checkers = Checkers { squares, len };
     en_passant_prefix::<LIMIT>(position, list, king);
     if list.len >= LIMIT {
         return;
@@ -732,6 +769,64 @@ mod tests {
                 old.as_slice(),
                 "bounded reuse: {context}"
             );
+        }
+    }
+
+    fn compare_ordered_checker_identities(position: &Position, context: &str) {
+        for target in 0..64 {
+            for side in [Color::White, Color::Black] {
+                let square = Square(target);
+                let one = find_attackers::<1>(&position.board, square, side);
+                let two = find_attackers::<2>(&position.board, square, side);
+                assert_eq!(
+                    position.attack_view().ordered_attackers::<1>(square, side),
+                    (one.squares, one.len),
+                    "one checker: {context}/{target}/{side:?}"
+                );
+                assert_eq!(
+                    position.attack_view().ordered_attackers::<2>(square, side),
+                    (two.squares, two.len),
+                    "two checkers: {context}/{target}/{side:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ordered_bit_checker_identities_keep_knight_ray_king_and_capped_order() {
+        for (fen, target, expected) in [
+            ("7k/8/8/8/8/3P1P2/8/K7 w - - 0 1", "e4", &["d3", "f3"][..]),
+            ("7k/8/5N2/8/8/8/3N4/K7 w - - 0 1", "e4", &["f6", "d2"][..]),
+            ("8/8/6B1/8/4k3/3K4/8/8 w - - 0 1", "e4", &["g6", "d3"][..]),
+            ("7k/8/6B1/5n2/8/8/8/K7 w - - 0 1", "e4", &[][..]),
+            // Pawn, knight and rook attack e8. The rook is third, and must
+            // remain absent from the exact first-two identity result.
+            (
+                "4k3/3P4/5N2/8/8/8/4R3/K7 w - - 0 1",
+                "e8",
+                &["d7", "f6"][..],
+            ),
+        ] {
+            let position = Position::from_fen(fen).unwrap();
+            compare_ordered_checker_identities(&position, fen);
+            let (squares, len) = position
+                .attack_view()
+                .ordered_attackers::<2>(Square::parse(target).unwrap(), Color::White);
+            let names: Vec<_> = squares[..len].iter().map(ToString::to_string).collect();
+            assert_eq!(names, expected);
+        }
+    }
+
+    #[test]
+    fn semantic_check_classification_reports_none_single_and_saturated_double() {
+        for (fen,expected) in [
+            ("7k/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::None),
+            ("r6k/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::Single),
+            ("r5kb/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::Double),
+        ] {
+            let position=Position::from_fen(fen).unwrap();
+            assert_eq!(check_classification(&position),expected);
+            assert_eq!(in_check(&position,position.side),expected!=CheckClassification::None);
         }
     }
 
@@ -836,7 +931,9 @@ mod tests {
             }
             let side = if sample % 2 == 0 { 'w' } else { 'b' };
             let fen = format!("{placement} {side} - - 0 1");
-            compare_projection(&Position::from_fen(&fen).unwrap(), &fen);
+            let position = Position::from_fen(&fen).unwrap();
+            compare_ordered_checker_identities(&position, &fen);
+            compare_projection(&position, &fen);
         }
     }
 

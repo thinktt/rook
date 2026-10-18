@@ -10,7 +10,7 @@ use rook2::{
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-fn consumer_position(fen: &str) -> Result<Position> {
+pub(super) fn consumer_position(fen: &str) -> Result<Position> {
     let position = positions::sequence_position(fen, true)?;
     if movegen::in_check(&position, position.side.opponent()) {
         return Err("nonmoving king is attacked at this consumer's setup boundary".into());

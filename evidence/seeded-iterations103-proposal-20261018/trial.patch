@@ -1,0 +1,396 @@
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -132,7 +132,7 @@
+         | "evaluation.fortressBounds"
+         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
+         "search.cachedAdmission" | "search.fastEntry" | "search.evaluationBounds" => cached_entry::dispatch(operation,input),
+-        "search.firstIteration" | "search.ordinaryIterations" => root_iterations::dispatch(operation, input),
++        "search.firstIteration" | "search.ordinaryIterations" | "search.seededOrdinaryIterations" => root_iterations::dispatch(operation, input),
+         "search.quiescenceTree" => quiescence_tree::dispatch(input),
+         "evaluation.moveSequence" => move_evaluation::dispatch(input),
+         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
+--- a/diagnostic/src/root_iterations.rs
++++ b/diagnostic/src/root_iterations.rs
+@@ -1,7 +1,7 @@
+ //! Cold fixed-completion transports over the native root controllers.
+-use super::{array, boolean, integer, moves, object, positions, text, Result};
++use super::{array, boolean, integer, moves, object, positions, text, unsigned32, Result};
+ use rook2::{engine::Search, first_iteration::{self, Step}, history::SearchHistory,
+-    movegen, parameters::{Parameters, NAMES}, position::{Position, NO_SQUARE},
++    movegen, timed, parameters::{Parameters, NAMES}, position::{Position, NO_SQUARE},
+     quiescence::{Limits, Stats, Work}, types::{Color, Move, Piece, PieceKind}};
+ use serde_json::{json, Value};
+ 
+@@ -14,10 +14,28 @@
+     [136, 136, 158, 158, 113, 113, 136, 136, 143, 143, 0, 0, 0, 0, 7, 7, 78, 78, 78, 78, 94, 94, -10, 24, 0, 6, 0, 99, 0, 16777216],
+ ];
+ 
+-struct Request { root: Position, history: SearchHistory, parameters: Parameters, completed: Option<u8> }
++// The default family differs from ordinaryIterations' neutral vector in md/tts.
++// Selected seeded vectors have the same fixed coefficients but these exact rnd.
++fn seeded_profile(values: [i32;30], completed: u8) -> bool {
++    let mut default = Parameters::default().values;
++    default[24] = values[24]; default[27] = values[27];
++    if (2..=4).contains(&values[27]) && (0..=1000).contains(&values[24])
++        && i32::from(completed) <= values[27] && values == default { return true; }
++    completed == 2 && [75,10,20].into_iter().enumerate().any(|(i,rnd)| {
++        let mut selected = PROFILES[i+1]; selected[24] = rnd; values == selected
++    })
++}
++struct Request { root: Position, history: SearchHistory, parameters: Parameters,
++    completed: Option<u8>, seed: Option<u32> }
+ impl Request {
+     fn parse(input: &Value, ordinary: bool) -> Result<Self> {
+-        if ordinary {
++        Self::parse_mode(input, ordinary, false)
++    }
++    fn parse_seeded(input: &Value) -> Result<Self> { Self::parse_mode(input, true, true) }
++    fn parse_mode(input: &Value, ordinary: bool, seeded: bool) -> Result<Self> {
++        if seeded {
++            object(input, &["fen", "moves", "personalityParameters", "completedIterations", "seed", "controls"])?;
++        } else if ordinary {
+             object(input, &["fen", "moves", "personalityParameters", "completedIterations", "controls"])?;
+         } else { object(input, &["fen", "moves", "personalityParameters", "controls"])?; }
+         let fen = text(&input["fen"])?;
+@@ -27,13 +45,19 @@
+             values[index] = integer(&input["personalityParameters"][*name], i32::MIN, i32::MAX)?;
+         }
+         let completed = if ordinary {
+-            let depth = integer(&input["completedIterations"], 2, 6)? as u8;
++            let depth = integer(&input["completedIterations"], 2, if seeded { 4 } else { 6 })? as u8;
+             Some(depth)
+         } else { None };
++        let seed = if seeded { Some(unsigned32(&input["seed"])?) } else { None };
+         let controls = &input["controls"];
+         let controls_supported;
+         if ordinary {
+-            object(controls, &["completion", "learnedState", "pondering", "workOrigin"])?;
++            if seeded {
++                object(controls, &["completion", "learnedState", "pondering", "workOrigin", "seedSource"])?;
++                if text(&controls["seedSource"])? != "explicit" {
++                    return Err("seed source must be explicit".into());
++                }
++            } else { object(controls, &["completion", "learnedState", "pondering", "workOrigin"])?; }
+             let completion = text(&controls["completion"])?;
+             let origin = text(&controls["workOrigin"])?;
+             controls_supported = completion == "fixed-iterations" && origin == "after-root-preparation";
+@@ -48,10 +72,16 @@
+         let supplied = array(&input["moves"], 0, 255)?.iter().map(|value| {
+             let spelling = text(value)?; positions::coordinate(spelling)?; Ok(spelling)
+         }).collect::<Result<Vec<_>>>()?;
+-        let profile = PROFILES.iter().position(|profile| *profile == values)
+-            .ok_or("personality must equal a complete released vector")?;
+-        if !ordinary && profile != 0 { return Err("first iteration requires neutral vector".into()); }
+-        if profile != 0 && completed != Some(2) { return Err("selected vectors require exactly two iterations".into()); }
++        if seeded {
++            if !seeded_profile(values, completed.unwrap()) {
++                return Err("personality/depth outside complete seeded vectors".into());
++            }
++        } else {
++            let profile = PROFILES.iter().position(|profile| *profile == values)
++                .ok_or("personality must equal a complete released vector")?;
++            if !ordinary && profile != 0 { return Err("first iteration requires neutral vector".into()); }
++            if profile != 0 && completed != Some(2) { return Err("selected vectors require exactly two iterations".into()); }
++        }
+         if !controls_supported || learned != "fresh-ordinary-search" || pondering {
+             return Err("unsupported fixed-completion controls".into());
+         }
+@@ -77,7 +107,7 @@
+             history.push(&root, Some(movement));
+         }
+         history.mark_root();
+-        Ok(Self { root, history, parameters: Parameters { values }, completed })
++        Ok(Self { root, history, parameters: Parameters { values }, completed, seed })
+     }
+ 
+     fn observe(mut self) -> Result<Value> {
+@@ -85,17 +115,35 @@
+         self.parameters.bind(&mut search).map_err(|error| format!("parameter binding: {error:?}"))?;
+         let limits = Limits { nodes: Some(4095) };
+         if let Some(completed) = self.completed {
+-            let outcome = search.run_iterations(self.root, &mut self.history, completed, limits)
+-                .map_err(|error| format!("fixed iterations did not complete: {error:?}"))?;
++            let mut raw_scores = Vec::new();
++            let result = if let Some(seed) = self.seed {
++                search.run_seeded_iterations(self.root, &mut self.history, completed, limits,
++                    seed, self.parameters.values[24] as u32, |raw| raw_scores.push(raw))
++            } else { search.run_iterations(self.root, &mut self.history, completed, limits) };
++            let outcome = result.map_err(|error| format!("fixed iterations did not complete: {error:?}"))?;
+             qualified_ordinary(&outcome.stats)?;
++            let mut raw_scores = raw_scores.into_iter();
+             let iterations = outcome.iterations.iter().map(|iteration| {
+                 validate_result(iteration.score, &iteration.pv, iteration.work, &iteration.steps)?;
++                let mut records = steps(&iteration.steps);
++                if let Some(seed) = self.seed {
++                    for (step, record) in iteration.steps.iter().zip(&mut records) {
++                        let raw = raw_scores.next().ok_or("missing raw root observation")?;
++                        let adjustment = timed::random_adjustment(seed, self.parameters.values[24] as u32, step.movement);
++                        record["randomization"] = json!({"adjustment":adjustment,
++                            "childWindow":{"lower":timed::score_add(step.lower,-adjustment),
++                                "upper":timed::score_add(10000,-adjustment)},"rawScore":raw});
++                    }
++                }
+                 Ok(json!({"depth":iteration.depth,"candidates":variation(&iteration.candidates),
+-                    "steps":steps(&iteration.steps),"score":iteration.score,
++                    "steps":records,"score":iteration.score,
+                     "principalVariation":variation(&iteration.pv),"work":work(iteration.work)}))
+             }).collect::<Result<Vec<_>>>()?;
+-            Ok(json!({"initialCandidates":variation(&outcome.initial_candidates),"iterations":iterations,
+-                "result":{"score":outcome.score,"principalVariation":variation(&outcome.pv),"work":work(outcome.work)}}))
++            if raw_scores.next().is_some() { return Err("extra raw root observation".into()); }
++            let mut output = json!({"initialCandidates":variation(&outcome.initial_candidates),"iterations":iterations,
++                "result":{"score":outcome.score,"principalVariation":variation(&outcome.pv),"work":work(outcome.work)}});
++            if let Some(seed) = self.seed { output["seed"] = json!(seed); }
++            Ok(output)
+         } else {
+             let outcome = first_iteration::run(&mut search, self.root, &mut self.history, limits)
+                 .map_err(|error| format!("first iteration did not complete: {error:?}"))?;
+@@ -144,6 +192,7 @@
+     match operation {
+         "search.firstIteration" => Request::parse(input, false)?.observe(),
+         "search.ordinaryIterations" => Request::parse(input, true)?.observe(),
++        "search.seededOrdinaryIterations" => Request::parse_seeded(input)?.observe(),
+         _ => Err("unknown fixed-iteration operation".into()),
+     }
+ }
+@@ -167,6 +216,94 @@
+         input
+     }
+ 
++    fn seeded_request(fen: &str, md: u8, completed: u8, rnd: u32, seed: u32) -> Value {
++        let mut input = request(fen,0,Some(completed));
++        let mut parameters = Parameters::default();
++        parameters.values[27] = i32::from(md); parameters.values[24] = rnd as i32;
++        input["personalityParameters"] = Value::Object(NAMES.iter().zip(parameters.values)
++            .map(|(name,value)| (name.to_string(),json!(value))).collect());
++        input["seed"] = json!(seed); input["controls"]["seedSource"] = json!("explicit"); input
++    }
++
++    #[test]
++    fn seeded_profiles_keep_exact_default_family_and_selected_vectors() {
++        for md in 2..=4 { for completed in 2..=4 { for rnd in [0,1,1000] {
++            let input = seeded_request(START,md,completed,rnd,0);
++            assert_eq!(Request::parse_seeded(&input).is_ok(),completed<=md);
++        } } }
++        for (profile,rnd) in [(1,75),(2,10),(3,20)] {
++            let mut input = request(START,profile,Some(2));
++            input["personalityParameters"]["rnd"] = json!(rnd);
++            input["seed"] = json!(u32::MAX); input["controls"]["seedSource"] = json!("explicit");
++            assert!(Request::parse_seeded(&input).is_ok());
++            for (name,value) in [("rnd",rnd+1),("md",3),("tts",75497472)] {
++                let mut changed=input.clone(); changed["personalityParameters"][name]=json!(value);
++                assert!(Request::parse_seeded(&changed).is_err());
++            }
++            input["completedIterations"]=json!(3); assert!(Request::parse_seeded(&input).is_err());
++        }
++        for (name,value) in [("md",1),("md",5),("rnd",-1),("rnd",1001),("tts",67108864)] {
++            let mut input=seeded_request(START,3,2,50,0); input["personalityParameters"][name]=json!(value);
++            assert!(Request::parse_seeded(&input).is_err());
++        }
++        for name in NAMES {
++            let mut input=seeded_request(START,3,2,50,0);
++            input["personalityParameters"].as_object_mut().unwrap().remove(name);
++            assert!(Request::parse_seeded(&input).is_err());
++        }
++    }
++
++    #[test]
++    fn seeded_schema_validates_explicit_zero_and_all_controls_before_replay() {
++        let valid=seeded_request(START,3,2,50,0);
++        assert_eq!(Request::parse_seeded(&valid).unwrap().seed,Some(0));
++        for seed in [json!(-1),json!(4294967296u64),json!(0.5),json!(false),json!("0")] {
++            let mut input=valid.clone(); input["seed"]=seed; assert!(Request::parse_seeded(&input).is_err());
++        }
++        let mut input=valid.clone(); input["controls"]["seedSource"]=json!("clock");
++        assert!(Request::parse_seeded(&input).is_err());
++        input=valid.clone(); input["controls"]["extra"]=Value::Null;
++        assert!(Request::parse_seeded(&input).is_err());
++        input=valid; input["moves"]=json!(["a1a8"]); input["seed"]=json!(false);
++        match Request::parse_seeded(&input) {
++            Err(error)=>assert_eq!(error,"expected unsigned integer"),
++            Ok(_)=>panic!("malformed seed must precede illegal replay"),
++        }
++    }
++
++    #[test]
++    fn seeded_reached_black_root_keeps_history_and_parameter_ownership() {
++        let mut input=seeded_request(START,3,2,51,2147483648);
++        input["moves"]=json!(["e2e4"]);
++        let parsed=Request::parse_seeded(&input).unwrap();
++        assert_eq!(parsed.root.side,Color::Black);
++        assert_eq!(parsed.history.pre_root_len(),1);
++        assert_eq!(parsed.history.search_ply(),0);
++        assert_eq!(parsed.seed,Some(2147483648));
++        assert_eq!(parsed.parameters.values[24],51);
++        assert_eq!(parsed.parameters.values[29],75497472);
++    }
++
++    #[test]
++    fn seeded_zero_randomness_projects_actual_completed_scores_without_extra_fields() {
++        let input=seeded_request(START,2,2,0,0);
++        let output=dispatch("search.seededOrdinaryIterations",&input).unwrap();
++        assert_eq!(output["seed"],json!(0));
++        assert_eq!(output.as_object().unwrap().len(),4);
++        for iteration in output["iterations"].as_array().unwrap() {
++            for step in iteration["steps"].as_array().unwrap() {
++                assert_eq!(step.as_object().unwrap().len(),9);
++                let random=&step["randomization"];
++                assert_eq!(random["adjustment"],json!(0));
++                assert_eq!(random["rawScore"],step["score"]);
++                assert_eq!(random["childWindow"],step["window"]);
++            }
++        }
++        assert_eq!(dispatch("search.seededOrdinaryIterations",&input).unwrap(),output);
++        let last=output["iterations"].as_array().unwrap().last().unwrap();
++        for name in ["score","principalVariation","work"] { assert_eq!(output["result"][name],last[name]); }
++    }
++
+     #[test]
+     fn complete_profiles_and_fixed_completion_are_exact_before_search() {
+         for depth in 2..=6 { assert!(Request::parse(&request(START,0,Some(depth)),true).is_ok()); }
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -35,6 +35,77 @@
+         let mut search = Search::new(position);
+         search.config.tts_bytes = 65536;
+         search
++    }
++
++    #[test]
++    fn zero_randomness_keeps_fixed_wrapper_records_and_work_exact() {
++        for fen in [START, "r3k3/8/8/8/2n5/8/8/RN2K3 w - - 0 1",
++            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"] {
++            let position = Position::from_fen(fen).unwrap();
++            let mut ordinary = engine::<true>(&position);
++            let mut seeded = engine::<true>(&position);
++            let mut history = SearchHistory::new(&position);
++            let expected = ordinary.run_iterations(position, &mut history, 2, Limits::default()).unwrap();
++            let mut raw = Vec::new();
++            let actual = seeded.run_seeded_iterations(position, &mut history, 2,
++                Limits::default(), u32::MAX, 0, |score| raw.push(score)).unwrap();
++            assert_eq!(history.search_ply(), 0);
++            assert_eq!((&actual.initial_candidates, actual.score, &actual.pv, actual.work),
++                (&expected.initial_candidates, expected.score, &expected.pv, expected.work));
++            for (a,b) in actual.iterations.iter().zip(&expected.iterations) {
++                assert_eq!((&a.candidates, &a.steps, a.score, &a.pv, a.work),
++                    (&b.candidates, &b.steps, b.score, &b.pv, b.work));
++            }
++            assert_eq!(raw, actual.iterations.iter().flat_map(|i| i.steps.iter().map(|s| s.score)).collect::<Vec<_>>());
++        }
++    }
++
++    #[test]
++    fn explicit_zero_seed_observes_actual_child_and_preserves_root_return_order() {
++        let position = Position::from_fen(START).unwrap();
++        let mut direct = engine::<true>(&position);
++        let (root, influence) = direct.prepare_root_with_influence(position);
++        let checked = movegen::in_check(&position, position.side);
++        let mut legal = MoveList::new(); movegen::generate_legal(&position, &mut legal);
++        let movement = legal.moves[0];
++        let mut child = root.child(&direct.evaluator.root, movement);
++        let mut history = SearchHistory::new(&position);
++        direct.begin_sequence(Limits::default());
++        history.push(&child.position, Some(movement));
++        let raw_first = -direct.visit_ordinary(&mut child, &mut history,
++            Request { ply:1, depth:0, lower:-10000, upper:10000,
++                previous_extension:0, iteration:1, checked:None },
++            Predecessor { position:&position, influence:&influence, checked,
++                movement:Some(movement) }).unwrap();
++        history.pop();
++        let child_pv = direct.pv[1][..direct.pv_len[1]].to_vec();
++        let first_work = direct.work();
++        let mut seeded = engine::<true>(&position);
++        let mut raw = Vec::new();
++        let actual = seeded.run_seeded_iterations(position, &mut history, 2,
++            Limits::default(), 0, 50, |score| raw.push(score)).unwrap();
++        assert_eq!(raw[0], raw_first);
++        let first = &actual.iterations[0].steps[0];
++        assert_eq!((&first.child_pv, first.work), (&child_pv, first_work));
++        let mut observed = raw.into_iter();
++        let mut nonzero = false;
++        for iteration in &actual.iterations {
++            for step in &iteration.steps {
++                let adjustment = crate::timed::random_adjustment(0, 50, step.movement);
++                nonzero |= adjustment != 0;
++                assert_eq!(step.score, crate::timed::score_add(observed.next().unwrap(), adjustment));
++            }
++            validate_pv(position, &iteration.pv);
++        }
++        assert!(nonzero && observed.next().is_none());
++        assert_eq!(history.search_ply(),0);
++        let mut stopped = engine::<true>(&position);
++        let mut interrupted_raw = Vec::new();
++        assert!(matches!(stopped.run_seeded_iterations(position, &mut history, 2,
++            Limits { nodes:Some(0) }, 0, 50, |score| interrupted_raw.push(score)),
++            Err(Error::Stopped(Stopped::NodeLimit(0)))));
++        assert!(interrupted_raw.is_empty());
++        assert_eq!(history.search_ply(),0);
+     }
+ 
+     fn validate_pv(mut position: Position, pv: &[Move]) {
+@@ -352,6 +423,33 @@
+         completed: u8,
+         limits: Limits,
+     ) -> Result<Outcome, Error> {
++        self.run_iterations_inner::<false, _>(position, history, completed, limits, 0, 0, |_| {})
++    }
++
++    /// Fixed completion with one immutable explicit root seed. The observer
++    /// receives each normally completed root's actual unadjusted return once,
++    /// before ordinary score addition; no Step or recursive state is enlarged.
++    /// `randomness` has the same domain as timed::random_adjustment.
++    pub fn run_seeded_iterations<F: FnMut(i32)>(
++        &mut self,
++        position: Position,
++        history: &mut SearchHistory,
++        completed: u8,
++        limits: Limits,
++        seed: u32,
++        randomness: u32,
++        observe_raw: F,
++    ) -> Result<Outcome, Error> {
++        assert!(randomness <= i32::MAX as u32);
++        self.run_iterations_inner::<true, F>(position, history, completed, limits,
++            seed, randomness, observe_raw)
++    }
++
++    fn run_iterations_inner<const SEEDED: bool, F: FnMut(i32)>(
++        &mut self, position: Position, history: &mut SearchHistory,
++        completed: u8, limits: Limits, seed: u32, randomness: u32,
++        mut observe_raw: F,
++    ) -> Result<Outcome, Error> {
+         if !(1..=8).contains(&completed) {
+             return Err(Error::InvalidDepth);
+         }
+@@ -375,6 +473,9 @@
+             let mut steps = Vec::with_capacity(if DIAGNOSTICS { roots.len } else { 0 });
+             for &movement in roots.as_slice() {
+                 let lower = ranked.get(1).map_or(-10000, |entry| entry.1);
++                let adjustment = if SEEDED {
++                    crate::timed::random_adjustment(seed, randomness, movement)
++                } else { 0 };
+                 let mut child = root.child(&self.evaluator.root, movement);
+                 history.push(&child.position, Some(movement));
+                 let returned = self.visit_ordinary(
+@@ -383,8 +484,8 @@
+                     Request {
+                         ply: 1,
+                         depth: depth as i32 - 1,
+-                        lower: -10000,
+-                        upper: -lower,
++                        lower: if SEEDED { -crate::timed::score_add(10000, -adjustment) } else { -10000 },
++                        upper: if SEEDED { -crate::timed::score_add(lower, -adjustment) } else { -lower },
+                         previous_extension: 0,
+                         iteration: depth as i32,
+                         checked: None,
+@@ -397,7 +498,9 @@
+                     },
+                 );
+                 history.pop();
+-                let score = -returned.map_err(Error::Stopped)?;
++                let raw_score = -returned.map_err(Error::Stopped)?;
++                if SEEDED { observe_raw(raw_score); }
++                let score = if SEEDED { crate::timed::score_add(raw_score, adjustment) } else { raw_score };
+                 if score > best {
+                     best = score;
+                     pv.clear();

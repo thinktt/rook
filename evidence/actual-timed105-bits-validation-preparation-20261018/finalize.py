@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Metadata closure and supplemental independent compiled-image binding; no engines."""
+from pathlib import Path
+import json,hashlib,sys
+sys.dont_write_bytecode=True
+from guard import HERE,load,sha,write,clearance,terminal,check_sources,check_dependencies
+plan=clearance();check_sources(plan);check_dependencies(plan)
+out=Path(plan['output']['diagnostic']);build=Path(plan['output']['diagnostic-build']);recon=Path(plan['output']['reconciliation']);proposal=Path(plan['proposal']);ref=Path(plan['native_reference']);native=Path(plan['native_generic_build'])
+terminal(out/'tool-terminal.json');terminal(recon/'tool-terminal.json');result=load(recon/'independent-verification.json');assert result['status']=='pass' and result['cases']==7519 and result['operations']==105 and result['whole_files']==102 and result['diagnostic_units']==182
+br=load(build/'receipt.json');ar=load(build/'archive-receipt.json');dv=load(out/'verification.json');adapter=build/'rook2-diag-exact'
+assert sha(adapter)==br['binary_output']['sha256']==ar['binary_sha256']==dv['artifact_sha256']==result['adapter_sha256']
+assert sha(out/'unit-bin/rook2-diag/unit-exact')==dv['units']['rook2-diag']['binary_sha256']
+proof=load(ref/'reuse-proof.json');assert sha(ref/'rook2-exact')==sha(native/'rook2-exact')==proof['generic_sha256']==result['native_sha256']
+assert br['toolchain']==proof['toolchain'] and br['rust_flags']==proof['rust_flags'] and br['pgo']['mode']=='none'
+assert dv['complete'] and dv['failure'] is None and all(s['actual_child_return_observed'] and s['exit_code']==0 for s in dv['stages'])
+check_sources(plan);check_dependencies(plan)
+summary=dict(status='EXACT105BITS_FRESH_DIAG_AND_NATIVE_REUSE_VALIDATION_PASS',source=plan['home_source'],frozen_source=plan['frozen_source'],source_file_count=103,source_graph_sha256=load(proposal/'source-manifest.json')['files_graph_sha256'],native43_exact_bits=True,tools23_exact_bits=True,cold37_exact_105=True,native_units_reused=158,native_generic_sha256=proof['generic_sha256'],strict_replays_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,no_native_build_unit_or_strict_repetition=True,diagnostic_units_fresh=182,cases_fresh=7519,operations=105,whole_files=102,partial_files=0,duplicate_ids=0,adapter_sha256=sha(adapter),unit_sha256=sha(out/'unit-bin/rook2-diag/unit-exact'),source_stable=True,all_raw_expected_actual_and_child_exits_independently_reconciled=True,raw_case_manifest_sha256=result['raw_case_manifest_sha256'],case_reconciliation_sha256=result['case_reconciliation_sha256'],native_reuse_proof_sha256=sha(ref/'reuse-proof.json'),independent_verification_sha256=sha(recon/'independent-verification.json'),supplemental_compiled_images_equal_all_driver_receipt_archive_and_independent_records=True,finalizer_source_sha256=sha(Path(__file__)),runtime_source_or_fixture_fix=False,preexecution_bookkeeping_failures_preserved=['52014/7009ce exit1 parent105 inventory omitted status header','9695aa exit1 missing invented receipt filename; actual immutable parent source-decision bound'],canonical_domain_limit=plan['canonical_domain_audit_limit'],all_owned_native_build_test_engine_probe_profiler_jobs_terminal=True,root_untouched=True,no_cpu_pgo_profiler_or_promotion_claim=True,diag_actual=load(out/'tool-terminal.json'),reconciliation_actual=load(recon/'tool-terminal.json'),native_reuse_actual=proof['actual_terminals'],concurrency='Sibling103bits DIAG/codegen and parentrootowner90001 may overlap untimed housekeeping; no host exclusivity/CPU14 or15 idle claim.')
+write(HERE/'validation-summary.json',summary)
+roots=[HERE,out,build,recon,ref,proposal];files={str(q):sha(q) for root in roots for q in sorted(root.rglob('*')) if q.is_file() and q.name!='validation-file-manifest.json'};write(HERE/'validation-file-manifest.json',files)
+print(json.dumps(dict(summary=str(HERE/'validation-summary.json'),summary_sha256=sha(HERE/'validation-summary.json'),manifest_sha256=sha(HERE/'validation-file-manifest.json'),native_sha256=summary['native_generic_sha256'],adapter_sha256=summary['adapter_sha256'],all_owned_native_jobs_terminal=True)))

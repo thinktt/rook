@@ -1,0 +1,42 @@
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -136,6 +136,19 @@
+ pub fn in_check(position: &Position, side: Color) -> bool {
+     let king = position.piece_squares(side, PieceKind::King)[0];
+     position.attack_view().attacked(king, side.opponent())
++}
++
++/// Semantic current-side classification, saturated at two checkers.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum CheckClassification { None, Single, Double }
++
++/// Read-only component observation using the same native checker finder as
++/// complete generation. Existing Boolean/default/hot callers stay unchanged.
++pub fn check_classification(position: &Position) -> CheckClassification {
++    let king=position.piece_squares(position.side,PieceKind::King)[0];
++    match find_attackers::<2>(&position.board,king,position.side.opponent()).len {
++        0=>CheckClassification::None, 1=>CheckClassification::Single, _=>CheckClassification::Double,
++    }
+ }
+ 
+ /// Project just the fields needed for geometric king safety, not a semantic
+@@ -732,6 +745,19 @@
+                 old.as_slice(),
+                 "bounded reuse: {context}"
+             );
++        }
++    }
++
++    #[test]
++    fn semantic_check_classification_reports_none_single_and_saturated_double() {
++        for (fen,expected) in [
++            ("7k/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::None),
++            ("r6k/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::Single),
++            ("r5kb/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::Double),
++        ] {
++            let position=Position::from_fen(fen).unwrap();
++            assert_eq!(check_classification(&position),expected);
++            assert_eq!(in_check(&position,position.side),expected!=CheckClassification::None);
+         }
+     }
+ 

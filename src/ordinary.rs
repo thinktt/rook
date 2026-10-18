@@ -37,6 +37,77 @@ mod tests {
         search
     }
 
+    #[test]
+    fn zero_randomness_keeps_fixed_wrapper_records_and_work_exact() {
+        for fen in [START, "r3k3/8/8/8/2n5/8/8/RN2K3 w - - 0 1",
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"] {
+            let position = Position::from_fen(fen).unwrap();
+            let mut ordinary = engine::<true>(&position);
+            let mut seeded = engine::<true>(&position);
+            let mut history = SearchHistory::new(&position);
+            let expected = ordinary.run_iterations(position, &mut history, 2, Limits::default()).unwrap();
+            let mut raw = Vec::new();
+            let actual = seeded.run_seeded_iterations(position, &mut history, 2,
+                Limits::default(), u32::MAX, 0, |score| raw.push(score)).unwrap();
+            assert_eq!(history.search_ply(), 0);
+            assert_eq!((&actual.initial_candidates, actual.score, &actual.pv, actual.work),
+                (&expected.initial_candidates, expected.score, &expected.pv, expected.work));
+            for (a,b) in actual.iterations.iter().zip(&expected.iterations) {
+                assert_eq!((&a.candidates, &a.steps, a.score, &a.pv, a.work),
+                    (&b.candidates, &b.steps, b.score, &b.pv, b.work));
+            }
+            assert_eq!(raw, actual.iterations.iter().flat_map(|i| i.steps.iter().map(|s| s.score)).collect::<Vec<_>>());
+        }
+    }
+
+    #[test]
+    fn explicit_zero_seed_observes_actual_child_and_preserves_root_return_order() {
+        let position = Position::from_fen(START).unwrap();
+        let mut direct = engine::<true>(&position);
+        let (root, influence) = direct.prepare_root_with_influence(position);
+        let checked = movegen::in_check(&position, position.side);
+        let mut legal = MoveList::new(); movegen::generate_legal(&position, &mut legal);
+        let movement = legal.moves[0];
+        let mut child = root.child(&direct.evaluator.root, movement);
+        let mut history = SearchHistory::new(&position);
+        direct.begin_sequence(Limits::default());
+        history.push(&child.position, Some(movement));
+        let raw_first = -direct.visit_ordinary(&mut child, &mut history,
+            Request { ply:1, depth:0, lower:-10000, upper:10000,
+                previous_extension:0, iteration:1, checked:None },
+            Predecessor { position:&position, influence:&influence, checked,
+                movement:Some(movement) }).unwrap();
+        history.pop();
+        let child_pv = direct.pv[1][..direct.pv_len[1]].to_vec();
+        let first_work = direct.work();
+        let mut seeded = engine::<true>(&position);
+        let mut raw = Vec::new();
+        let actual = seeded.run_seeded_iterations(position, &mut history, 2,
+            Limits::default(), 0, 50, |score| raw.push(score)).unwrap();
+        assert_eq!(raw[0], raw_first);
+        let first = &actual.iterations[0].steps[0];
+        assert_eq!((&first.child_pv, first.work), (&child_pv, first_work));
+        let mut observed = raw.into_iter();
+        let mut nonzero = false;
+        for iteration in &actual.iterations {
+            for step in &iteration.steps {
+                let adjustment = crate::timed::random_adjustment(0, 50, step.movement);
+                nonzero |= adjustment != 0;
+                assert_eq!(step.score, crate::timed::score_add(observed.next().unwrap(), adjustment));
+            }
+            validate_pv(position, &iteration.pv);
+        }
+        assert!(nonzero && observed.next().is_none());
+        assert_eq!(history.search_ply(),0);
+        let mut stopped = engine::<true>(&position);
+        let mut interrupted_raw = Vec::new();
+        assert!(matches!(stopped.run_seeded_iterations(position, &mut history, 2,
+            Limits { nodes:Some(0) }, 0, 50, |score| interrupted_raw.push(score)),
+            Err(Error::Stopped(Stopped::NodeLimit(0)))));
+        assert!(interrupted_raw.is_empty());
+        assert_eq!(history.search_ply(),0);
+    }
+
     fn validate_pv(mut position: Position, pv: &[Move]) {
         for &movement in pv {
             let mut legal = MoveList::new();
@@ -211,6 +282,34 @@ mod tests {
     }
 
     #[test]
+    fn qualified_initial_single_passes_have_zero_fresh_ordering_flags_and_diagnostic_parity() {
+        for fen in [
+            "1r5k/7p/6Q1/8/8/3B4/8/K7 b - - 0 1",
+            "1r5k/6pp/6Q1/8/8/3B4/8/K7 b - - 0 1",
+        ] {
+            let position = Position::from_fen(fen).unwrap();
+            let mut a = Search::<true>::new(&position);
+            let mut b = Search::<false>::new(&position);
+            let mut parameters = crate::parameters::Parameters::default();
+            parameters.values[27] = 99;
+            parameters.values[29] = 67_108_864;
+            parameters.bind(&mut a).unwrap();
+            parameters.bind(&mut b).unwrap();
+            let mut history = SearchHistory::new(&position);
+            let x = a.run_iterations(position, &mut history, 5, Limits { nodes: Some(4095) }).unwrap();
+            let y = b.run_iterations(position, &mut history, 5, Limits { nodes: Some(4095) }).unwrap();
+            assert!(x.stats.iio_initial_phases > 0);
+            assert_eq!(x.stats.iio_passes, x.stats.iio_initial_phases);
+            assert_eq!(x.stats.iio_tail_phases, 0);
+            assert_eq!(x.stats.iio_nonzero_fresh_extensions, 0);
+            assert_eq!(x.stats.accumulated_extension_uses, 0);
+            assert_eq!(y.stats.iio_nonzero_fresh_extensions, 0);
+            assert_eq!((x.score, x.pv, x.work), (y.score, y.pv, y.work));
+            assert_eq!(history.search_ply(), 0);
+        }
+    }
+
+    #[test]
     fn entry_lower_metadata_selects_tail_and_retains_its_extension_flags() {
         // Isolate a controlled remembered-entry state, rather than claim this
         // metadata necessarily arises in a fresh search of this exact root.
@@ -272,6 +371,7 @@ mod tests {
         // Two evasions become a one-item tail: its fresh flag2 combines with
         // the main move's flag1; it must not be overwritten by that later1.
         assert!(search.stats.accumulated_extension_uses > 0);
+        assert!(search.stats.iio_nonzero_fresh_extensions > 0);
         validate_pv(child.position, &search.pv[1][..search.pv_len[1]]);
         assert_eq!(history.search_ply(), 1);
     }
@@ -323,6 +423,33 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         completed: u8,
         limits: Limits,
     ) -> Result<Outcome, Error> {
+        self.run_iterations_inner::<false, _>(position, history, completed, limits, 0, 0, |_| {})
+    }
+
+    /// Fixed completion with one immutable explicit root seed. The observer
+    /// receives each normally completed root's actual unadjusted return once,
+    /// before ordinary score addition; no Step or recursive state is enlarged.
+    /// `randomness` has the same domain as timed::random_adjustment.
+    pub fn run_seeded_iterations<F: FnMut(i32)>(
+        &mut self,
+        position: Position,
+        history: &mut SearchHistory,
+        completed: u8,
+        limits: Limits,
+        seed: u32,
+        randomness: u32,
+        observe_raw: F,
+    ) -> Result<Outcome, Error> {
+        assert!(randomness <= i32::MAX as u32);
+        self.run_iterations_inner::<true, F>(position, history, completed, limits,
+            seed, randomness, observe_raw)
+    }
+
+    fn run_iterations_inner<const SEEDED: bool, F: FnMut(i32)>(
+        &mut self, position: Position, history: &mut SearchHistory,
+        completed: u8, limits: Limits, seed: u32, randomness: u32,
+        mut observe_raw: F,
+    ) -> Result<Outcome, Error> {
         if !(1..=8).contains(&completed) {
             return Err(Error::InvalidDepth);
         }
@@ -346,6 +473,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
             let mut steps = Vec::with_capacity(if DIAGNOSTICS { roots.len } else { 0 });
             for &movement in roots.as_slice() {
                 let lower = ranked.get(1).map_or(-10000, |entry| entry.1);
+                let adjustment = if SEEDED {
+                    crate::timed::random_adjustment(seed, randomness, movement)
+                } else { 0 };
                 let mut child = root.child(&self.evaluator.root, movement);
                 history.push(&child.position, Some(movement));
                 let returned = self.visit_ordinary(
@@ -354,8 +484,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                     Request {
                         ply: 1,
                         depth: depth as i32 - 1,
-                        lower: -10000,
-                        upper: -lower,
+                        lower: if SEEDED { -crate::timed::score_add(10000, -adjustment) } else { -10000 },
+                        upper: if SEEDED { -crate::timed::score_add(lower, -adjustment) } else { -lower },
                         previous_extension: 0,
                         iteration: depth as i32,
                         checked: None,
@@ -368,7 +498,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                     },
                 );
                 history.pop();
-                let score = -returned.map_err(Error::Stopped)?;
+                let raw_score = -returned.map_err(Error::Stopped)?;
+                if SEEDED { observe_raw(raw_score); }
+                let score = if SEEDED { crate::timed::score_add(raw_score, adjustment) } else { raw_score };
                 if score > best {
                     best = score;
                     pv.clear();
@@ -877,6 +1009,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
             for index in start..count {
                 let movement = self.candidates[p].moves[index];
                 let fresh = extensions.for_move(position, movement);
+                if DIAGNOSTICS && fresh != 0 {
+                    self.stats.iio_nonzero_fresh_extensions += 1;
+                }
                 let accumulated = self.extension_flags[p][index] | fresh;
                 if DIAGNOSTICS && accumulated != fresh {
                     self.stats.accumulated_extension_uses += 1;

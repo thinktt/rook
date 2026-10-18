@@ -1,0 +1,65 @@
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -208,6 +208,34 @@
+         );
+         assert_eq!((x.score, x.pv, x.work), (y.score, y.pv, y.work));
+         assert_eq!(history.search_ply(), 0);
++    }
++
++    #[test]
++    fn qualified_initial_single_passes_have_zero_fresh_ordering_flags_and_diagnostic_parity() {
++        for fen in [
++            "1r5k/7p/6Q1/8/8/3B4/8/K7 b - - 0 1",
++            "1r5k/6pp/6Q1/8/8/3B4/8/K7 b - - 0 1",
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            let mut a = Search::<true>::new(&position);
++            let mut b = Search::<false>::new(&position);
++            let mut parameters = crate::parameters::Parameters::default();
++            parameters.values[27] = 99;
++            parameters.values[29] = 67_108_864;
++            parameters.bind(&mut a).unwrap();
++            parameters.bind(&mut b).unwrap();
++            let mut history = SearchHistory::new(&position);
++            let x = a.run_iterations(position, &mut history, 5, Limits { nodes: Some(4095) }).unwrap();
++            let y = b.run_iterations(position, &mut history, 5, Limits { nodes: Some(4095) }).unwrap();
++            assert!(x.stats.iio_initial_phases > 0);
++            assert_eq!(x.stats.iio_passes, x.stats.iio_initial_phases);
++            assert_eq!(x.stats.iio_tail_phases, 0);
++            assert_eq!(x.stats.iio_nonzero_fresh_extensions, 0);
++            assert_eq!(x.stats.accumulated_extension_uses, 0);
++            assert_eq!(y.stats.iio_nonzero_fresh_extensions, 0);
++            assert_eq!((x.score, x.pv, x.work), (y.score, y.pv, y.work));
++            assert_eq!(history.search_ply(), 0);
++        }
+     }
+ 
+     #[test]
+@@ -272,6 +300,7 @@
+         // Two evasions become a one-item tail: its fresh flag2 combines with
+         // the main move's flag1; it must not be overwritten by that later1.
+         assert!(search.stats.accumulated_extension_uses > 0);
++        assert!(search.stats.iio_nonzero_fresh_extensions > 0);
+         validate_pv(child.position, &search.pv[1][..search.pv_len[1]]);
+         assert_eq!(history.search_ply(), 1);
+     }
+@@ -877,6 +906,9 @@
+             for index in start..count {
+                 let movement = self.candidates[p].moves[index];
+                 let fresh = extensions.for_move(position, movement);
++                if DIAGNOSTICS && fresh != 0 {
++                    self.stats.iio_nonzero_fresh_extensions += 1;
++                }
+                 let accumulated = self.extension_flags[p][index] | fresh;
+                 if DIAGNOSTICS && accumulated != fresh {
+                     self.stats.accumulated_extension_uses += 1;
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -67,6 +67,7 @@
+     pub mate_probes: u64,
+     pub iio_passes: u64,
+     pub iio_children: u64,
++    pub iio_nonzero_fresh_extensions: u64,
+     pub iio_initial_phases: u64,
+     pub iio_tail_phases: u64,
+     pub accumulated_extension_uses: u64,

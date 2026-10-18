@@ -19,6 +19,88 @@ fn pair(value: &Value) -> Result<[Move; 2]> {
     ])
 }
 
+/// Shared cold supplied context. Each caller validates its exact operation keys.
+pub(super) struct Context {
+    pub(super) root: RootContext,
+    pub(super) learning: Learning,
+    pub(super) hint: Option<Move>,
+    ply: usize,
+}
+impl Context {
+    pub(super) fn parse(input: &Value, position: &rook2::position::Position, ply: usize) -> Result<Self> {
+        let mut root = RootContext::neutral(position);
+        object(&input["values"], &moves::COLORS)?;
+        for (side, name) in moves::COLORS.iter().enumerate() {
+            let values = &input["values"][*name];
+            object(values, &moves::PIECES[..5])?;
+            for (kind, name) in moves::PIECES[..5].iter().enumerate() {
+                root.values[side][kind] = integer(&values[*name], 0, 10000)?;
+            }
+        }
+        root.squares = [[[0; 64]; 5]; 2];
+        let mut seen = HashSet::new();
+        for entry in array(&input["squareAdjustments"], 0, 768)? {
+            object(entry, &["side", "piece", "square", "value"])?;
+            let side = color(&entry["side"])?;
+            let kind = moves::piece(&entry["piece"])?;
+            if kind == PieceKind::King {
+                return Err("king has no supplied square adjustment".into());
+            }
+            let square = positions::square(&entry["square"])?;
+            let value = integer(&entry["value"], -128, 127)?;
+            if !seen.insert((side.index(), kind.index(), square.0)) {
+                return Err("duplicate square-adjustment key".into());
+            }
+            if !(-10000..=10000).contains(&(root.values[side.index()][kind.index()] + value)) {
+                return Err("material plus square adjustment outside component domain".into());
+            }
+            root.squares[side.index()][kind.index()][square.0 as usize] = value as i16;
+        }
+        let mut learning = Learning::default();
+        learning.history = ordering_history(&input["history"])?;
+        // Ordering consumes supplied synthetic entries without learning or summing
+        // them; unlike cutoffMemory, there is no10000 total restriction here.
+        let killers = &input["killers"];
+        object(killers, &["current", "twoPliesEarlier"])?;
+        learning.killers[ply] = pair(&killers["current"])?;
+        let earlier = pair(&killers["twoPliesEarlier"])?;
+        if ply <= 2 {
+            if earlier != [Move::NONE; 2] {
+                return Err("two-plies-earlier killers require ply at least3".into());
+            }
+        } else {
+            learning.killers[ply - 2] = earlier;
+        }
+        let hint = moves::movement(&input["hashMove"])?;
+        Ok(Self { root,learning,hint,ply })
+    }
+
+    pub(super) fn order(&self, position: &rook2::position::Position, list: &mut MoveList) {
+        let map = Influence::build(position);
+        tactical::order_by(list, &mut OrderingScratch::new(), |movement| {
+            ordinary_policy::priority(position, &self.root, &map, &self.learning,
+                self.ply, self.hint, movement)
+        });
+    }
+}
+
+pub(super) fn ordering_history(value: &Value) -> Result<[[[u32;64];6];2]> {
+    let mut history = [[[0;64];6];2];
+    let mut seen = HashSet::new();
+    for entry in array(value, 0, 768)? {
+        object(entry, &["side", "piece", "square", "value"])?;
+        let side = color(&entry["side"])?;
+        let kind = moves::piece(&entry["piece"])?;
+        let square = positions::square(&entry["square"])?;
+        if !seen.insert((side.index(), kind.index(), square.0)) {
+            return Err("duplicate history key".into());
+        }
+        history[side.index()][kind.index()][square.0 as usize] =
+            unsigned32(&entry["value"])?;
+    }
+    Ok(history)
+}
+
 pub(super) fn dispatch(input: &Value) -> Result<Value> {
     object(
         input,
@@ -37,61 +119,7 @@ pub(super) fn dispatch(input: &Value) -> Result<Value> {
     let mut position = positions::placement(&input["placement"], true)?;
     position.side = color(&input["side"])?;
     let ply = integer(&input["ply"], 1, 62)? as usize;
-    let mut root = RootContext::neutral(&position);
-    object(&input["values"], &moves::COLORS)?;
-    for (side, name) in moves::COLORS.iter().enumerate() {
-        let values = &input["values"][*name];
-        object(values, &moves::PIECES[..5])?;
-        for (kind, name) in moves::PIECES[..5].iter().enumerate() {
-            root.values[side][kind] = integer(&values[*name], 0, 10000)?;
-        }
-    }
-    root.squares = [[[0; 64]; 5]; 2];
-    let mut seen = HashSet::new();
-    for entry in array(&input["squareAdjustments"], 0, 768)? {
-        object(entry, &["side", "piece", "square", "value"])?;
-        let side = color(&entry["side"])?;
-        let kind = moves::piece(&entry["piece"])?;
-        if kind == PieceKind::King {
-            return Err("king has no supplied square adjustment".into());
-        }
-        let square = positions::square(&entry["square"])?;
-        let value = integer(&entry["value"], -128, 127)?;
-        if !seen.insert((side.index(), kind.index(), square.0)) {
-            return Err("duplicate square-adjustment key".into());
-        }
-        if !(-10000..=10000).contains(&(root.values[side.index()][kind.index()] + value)) {
-            return Err("material plus square adjustment outside component domain".into());
-        }
-        root.squares[side.index()][kind.index()][square.0 as usize] = value as i16;
-    }
-    let mut learning = Learning::default();
-    seen.clear();
-    for entry in array(&input["history"], 0, 768)? {
-        object(entry, &["side", "piece", "square", "value"])?;
-        let side = color(&entry["side"])?;
-        let kind = moves::piece(&entry["piece"])?;
-        let square = positions::square(&entry["square"])?;
-        if !seen.insert((side.index(), kind.index(), square.0)) {
-            return Err("duplicate history key".into());
-        }
-        learning.history[side.index()][kind.index()][square.0 as usize] =
-            unsigned32(&entry["value"])?;
-    }
-    // Ordering consumes supplied synthetic entries without learning or summing
-    // them; unlike cutoffMemory, there is no10000 total restriction here.
-    let killers = &input["killers"];
-    object(killers, &["current", "twoPliesEarlier"])?;
-    learning.killers[ply] = pair(&killers["current"])?;
-    let earlier = pair(&killers["twoPliesEarlier"])?;
-    if ply <= 2 {
-        if earlier != [Move::NONE; 2] {
-            return Err("two-plies-earlier killers require ply at least3".into());
-        }
-    } else {
-        learning.killers[ply - 2] = earlier;
-    }
-    let hint = moves::movement(&input["hashMove"])?;
+    let context = Context::parse(input, &position, ply)?;
     let mut list = MoveList::new();
     let mut descriptors = HashSet::new();
     for value in array(&input["candidates"], 0, 230)? {
@@ -103,10 +131,7 @@ pub(super) fn dispatch(input: &Value) -> Result<Value> {
         list.push(movement);
     }
     let original = list.as_slice().to_vec();
-    let map = Influence::build(&position);
-    tactical::order_by(&mut list, &mut OrderingScratch::new(), |movement| {
-        ordinary_policy::priority(&position, &root, &map, &learning, ply, hint, movement)
-    });
+    context.order(&position, &mut list);
     let indices: Vec<_> = list
         .as_slice()
         .iter()

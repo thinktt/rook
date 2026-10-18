@@ -8,14 +8,17 @@ persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT
 learned state and specified root scheduling. Ordinary `Session<false>` excludes
 development tracing; cold JSON is a separate adapter package. Position160/Node176
 now owns exact placement attack planes while retaining copied-child ownership.
-Current source implements95 mandatory diagnostic operations and passes7393
-unique cases/149 adapter units plus151 native tests. Source promotion exactly
-matches the tested99-file closure; frozen6e7b2935 passes54 strict replays and
-eight interruption fixtures/24 searches, and adapter9a968d54 owns the component
-result. The matched generic pilot is0.173772% higher in summed medians with
-all six ranges overlapping; it establishes no clear regression or neutrality.
+Current source implements105 mandatory diagnostic operations and passes7519
+unique cases/182 adapter units plus158 native tests. Source promotion exactly
+matches the tested103-file closure; frozen1befaa6d passes54 strict replays and
+eight interruption fixtures/24 searches, and adapter9809cb49 owns the component
+result. The direct matched generic comparison to95 is2.373051% lower in summed
+CPU medians, with all six observed ranges separated in favor of combined.
 Current source has no own-PGO/full54/12 cost/gameplay result. Remaining mandatory
-inventory is22 operations/280 cases.
+inventory is12 operations/154 cases. The goOutcome canonical command vocabulary
+retains a wider effect-domain audit obligation. See
+[decision0010](docs/decisions/0010-ordered-checkers-and-projected-q-view.md) and
+[105 integration](evidence/ordered-q-actual-timed105-integration-20261018/README.md).
 The earlier85-operation Q observer restored default evaluation call scope and stack size;
 its disposition extraction retains a small code difference. The original
 metadata-instability failure and stable replay retry remain preserved. See
@@ -32,7 +35,7 @@ The preceding source adopted checked-only capped king-first reply probing,
 after its generic and own-PGO trials and fresh composed147/54/eight-wire/6161
 regression. Full generated order is unchanged; exact0/1 reply lists remain
 complete. See [decision0008](docs/decisions/0008-checked-bounded-reply-order.md).
-Current95 source then shares ordered draw/clear/reversal, handoff, mate scalar
+Previous95 source then shared ordered draw/clear/reversal, handoff, mate scalar
 and evaluation-bound policies and adds seven cold transports. Its accepted
 codegen risk is ordinary+753text/+16local stack and Q+23text/unchanged stack;
 no query/layout/charge ownership change is introduced. DIAG compile ENOSPC01
@@ -76,12 +79,42 @@ through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
 
+The separate102-operation candidate passes153 native tests,171 adapter tests,
+54 strict replays/eight-wire24 and all7509 cases across98 whole files, with
+independent raw/source/archive/exit reconciliation. Genericc4df4474 and
+adapter7394f87a retain their own identities. Original failed codegen01 remains;
+accepted codegen02 shows Stats/outcomes+8 and moved Search fields despite its
+unchanged total size. It was not separately promoted; its changes are included
+in105 with distinct artifact/source closure and no neutrality claim. See
+[102 validation](evidence/iterations-clock102-regression-overlay-preparation-20261018/report.md).
+
+The isolated shared root scheduler prototype compiles and passes158 native
+tests,54 strict replays and eight interruption fixtures/24 searches. It owns
+actual timed-root scheduling/retry/ranking through opaque initial-table IDs;
+timing/publication/stop owners remain at their existing sites. Its controlled
+three-route transports and emitted-code costs remain pending. It is not
+integrated. See [prototype protocol check](evidence/root-scheduler-native-protocol-20261018/README.md).
+
+The isolated projected Q bit-view candidate passes 145 native tests, strict54
+and eight-wire/24 searches. Its independently reconciled generic pilot is
+1.410447% lower in summed medians than phase1, all six medians lower, with three
+separated and three overlapping ranges. Codegen confirms one shared projected
+view, with Q text +434 bytes/frame -16 and ordinary text +143 through outlining.
+Its own-source PGO training, independent byte-identical profile remerge and
+strict54/eight-wire regression also pass. The matched own-PGO60-lifetime pilot
+independently reconciles13.393119s phase1 versus13.1219665s phase2:2.024566%
+lower, with all six medians lower and all six observed ranges separated.
+Whole-suite CPU15 has15 nonidle ticks without pervariant attribution.
+This supported the completed105 composition; these timings remain trial-specific. See
+[generic Q bit-view pilot](evidence/ordered-q-bitview-phase2-cpu-pilot-20261018/README.md)
+and [own-PGO pilot](evidence/pgo-ordered-q-bitview-phase2-cpu-pilot-20261018/README.md).
+
 The isolated ordered-bit checker candidate now passes its own54-case compiler
 training, strict54/eight-wire regression and independent profile remerge. Its
 matched60-lifetime own-PGO pilot sums13.4018985s versus13.5684265s control:
 1.227320% lower, all six medians lower, four ranges separated and two overlapping.
-This supports composition testing; it is not integrated and does not transfer
-timing to current88 source. Whole-suite CPU15 has46 nonidle ticks without
+This supported the completed105 composition; these timings do not transfer
+to current105 source. Whole-suite CPU15 has46 nonidle ticks without
 pervariant attribution. See
 [own-PGO checker pilot](evidence/pgo-ordered-bit-checkers-phase1-cpu-pilot-20261018/README.md).
 

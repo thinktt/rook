@@ -1,0 +1,26 @@
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -299,12 +299,12 @@
+                     forced = decision.force_search;
+                 }
+ 
+-                let board = movegen::projected_board(&position, movement);
++                let projected = position.attack_view().projected(&position, movement);
+                 if DIAGNOSTICS {
+                     self.stats.projections += 1;
+                 }
+                 let (checking, double_check) =
+-                    movegen::check_routes(&board, enemy_king, position.side, movement.to());
++                    movegen::check_routes_bits(&projected, enemy_king, position.side, movement.to());
+                 child_checked = Some(checking);
+                 // Every quiet item from the non-check producer checks directly;
+                 // retain this screen explicitly for the composed policy.
+@@ -351,7 +351,7 @@
+                 } else {
+                     king
+                 };
+-                if movegen::attacked(&board, king_after, position.side.opponent()) {
++                if projected.attacked(king_after, position.side.opponent()) {
+                     if DIAGNOSTICS {
+                         self.stats.unsafe_rejections += 1;
+                     }

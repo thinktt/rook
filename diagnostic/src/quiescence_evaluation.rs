@@ -1,12 +1,12 @@
 //! Admitted non-check evaluation and immediate disposition, without a Q search.
-use super::{array, evaluation_common as common, integer, object, positions, text, Result};
+use super::{admission, array, evaluation_common as common, integer, object, positions, text, Result};
 use rook2::{
     evaluator::{Evaluation, Evaluator, FastDetails, FullDetails, Node, Parameters, Retained},
     influence::Influence,
     movegen,
     position::Position,
     quiescence_policy::{self as policy, EvaluationReturn},
-    types::Move,
+    types::{Color, Move, PieceKind},
 };
 use serde_json::{json, Value};
 use std::cell::Cell;
@@ -29,7 +29,7 @@ enum Details { Full(FullDetails), Fast(FastDetails) }
 
 struct Transition { movement: Option<Move>, kind: Kind }
 
-struct Request {
+pub(super) struct Request {
     root: Position,
     initial_placement: String,
     parameters: Parameters,
@@ -40,12 +40,19 @@ struct Request {
 }
 
 impl Request {
-    fn parse(input: &Value) -> Result<Self> {
-        object(input, &["fen", "percentages", "averageDepth", "cfd", "sop",
-            "history", "move", "alpha", "beta"])?;
+    fn parse(input: &Value) -> Result<Self> { Self::parse_inner(input,false) }
+
+    /// Caller parses orderingHistory before constructing this cold replay.
+    pub(super) fn parse_candidates(input: &Value) -> Result<Self> { Self::parse_inner(input,true) }
+
+    fn parse_inner(input: &Value, candidates: bool) -> Result<Self> {
+        let mut keys=vec!["fen", "percentages", "averageDepth", "cfd", "sop", "history", "move", "alpha", "beta"];
+        if candidates {keys.push("orderingHistory");}
+        object(input,&keys)?;
         let parameters = common::parameters(input, true)?;
         let fen = text(&input["fen"])?;
-        let root = positions::sequence_position(fen, true)?;
+        let root = if candidates {admission::consumer_position(fen)?}
+            else {positions::sequence_position(fen, true)?};
         let alpha = integer(&input["alpha"], -10000, 10000)?;
         let beta = integer(&input["beta"], -10000, 10000)?;
         if alpha >= beta { return Err("alpha must be strictly below beta".into()); }
@@ -80,11 +87,28 @@ impl Request {
         if movegen::in_check(&final_position, final_position.side) {
             return Err("final side to move must not be in check".into());
         }
+        // This is a local final-position diagnostic precondition, checked
+        // before evaluator/cache creation even if static disposition will return.
+        if candidates && final_position.counts[final_position.side.index()][PieceKind::Queen.index()] > 8 {
+            let penultimate=if final_position.side==Color::White {6} else {1};
+            if final_position.piece_squares(final_position.side,PieceKind::Pawn).iter()
+                .any(|square|square.rank()==penultimate) {
+                return Err("tactical diagnostic promotion context permits at most eight queens".into());
+            }
+        }
         Ok(Self { root, initial_placement:fen.split(' ').next().unwrap().into(),
             parameters, history, final_move, alpha, beta })
     }
 
     fn observe(self, disposition: bool) -> Value {
+        self.observe_with(disposition, |_,_,_| Ok(None))
+            .expect("the original evaluation-only callback cannot fail")
+    }
+
+    /// Cold continuation receives the actual evaluated node/root/cache context.
+    pub(super) fn observe_with<F>(self, disposition: bool, finish: F) -> Result<Value>
+    where F: FnOnce(&Evaluator<true>, &Node, Option<EvaluationReturn>) -> Result<Option<Value>>
+    {
         let mut evaluator = Evaluator::<true>::new(&self.root);
         evaluator.parameters = self.parameters;
         evaluator.begin_search(&self.root);
@@ -121,13 +145,15 @@ impl Request {
         final_record["selection"] = json!({
             "initialKind":if selected.initially_full { "full" } else { "fast" },
             "fastScore":selected.fast_score,"refreshed":selected.refreshed});
-        if disposition {
-            final_record["disposition"] = disposition_output(policy::evaluation_return(
-                selected.evaluation.lower, selected.evaluation.upper, selected.evaluation.score,
-                self.alpha, self.beta));
-        }
+        let returned=if disposition {policy::evaluation_return(
+            selected.evaluation.lower, selected.evaluation.upper, selected.evaluation.score,
+            self.alpha, self.beta)} else {None};
+        if disposition {final_record["disposition"] = disposition_output(returned);}
         results.push(final_record);
-        json!({"results":results})
+        let generation=finish(&evaluator,&node,returned)?;
+        let mut output=json!({"results":results});
+        if let Some(generation)=generation {output["tacticalGeneration"]=generation;}
+        Ok(output)
     }
 }
 
@@ -394,4 +420,20 @@ mod tests {
         assert_eq!(last(&output)["state"]["halfmoveClock"], 0);
         assert_eq!(last(&output)["inherited"]["evaluationAge"], 1);
     }
+    #[test]
+    fn candidate_local_initial_and_final_population_guards_do_not_narrow_old_entry() {
+        for (fen,movement) in [
+            ("7k/8/8/8/8/8/8/K6R w - - 0 1","h1g1"),
+            ("7k/8/8/3nP3/8/8/8/K7 w - d6 0 1","a1b1"),
+            // The Black rook interposes on c3-h8. The resulting White position
+            // has nine queens and a7 pawn: allowed by old evaluation, excluded
+            // by the new producer's provisional promotion-capacity domain.
+            ("7k/P7/6r1/8/QQQ5/QQQ5/QQQ5/K7 b - - 0 1","g6g7"),
+        ] {
+            let input=request(fen,movement);assert!(Request::parse(&input).is_ok());
+            let mut candidates=input;candidates["orderingHistory"]=json!([]);
+            assert!(Request::parse_candidates(&candidates).is_err());
+        }
+    }
+
 }

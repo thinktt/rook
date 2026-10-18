@@ -8,7 +8,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current95 operations cover time schedule/allowance, parameters and output
+The current105 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -27,7 +27,9 @@ forced-fresh subtotal/score, controlled retained full/fast sequences, actual
 move/null evaluation sequences, admitted Q entry/disposition, retained pawn
 subtotals, fixed-root search pawn sequences and actual recursive quiescence trees;
 cached admission/controlled fast entry, effective evaluation bounds,
-draw/reversal boundaries and bounded mate leaf/supplied-position leaf.
+draw/reversal boundaries and bounded mate leaf/supplied-position leaf;
+shared cold generation and fixed/seeded root iterations, adaptive/terminal clock
+boundaries, seeded actual timed search and canonical live-session go outcome.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -51,18 +53,23 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current7393-case external result comprises89 complete released fixture
-files with no partial selection or duplicate cases. All149 adapter unit tests
-pass after151 native tests. Frozen adapter SHA256 is
-`9a968d5473e9931d1c3ebad5174f8c7cae5ceaa206d668fb8a08f90438269d00`.
-See `evidence/diagnostic-admission-combined95-02-20261018/`; both the33-file frontend
-and43-file native closure are stable and independently reconciled. Integration
-independently matches both source closures to the exact tested proposal in
-`evidence/admission-combined95-integration-20261018/`. This is source promotion
+The current7519-case external result comprises102 complete released fixture
+files with no partial selection or duplicate cases. All182 adapter unit tests
+pass after158 native tests. Frozen adapter SHA256 is
+`9809cb49d567a2304233023244a1d9932c206f45488600586fa98e3ab10e3b43`.
+See `evidence/actual-timed105-bits-validation-preparation-20261018/`; both the37-file
+frontend and43-file native closure are stable and independently reconciled.
+Integration independently matches both source closures to the exact tested proposal in
+`evidence/ordered-q-actual-timed105-integration-20261018/`. This is source promotion
 with named frozen artifacts, without a canonical-path rebuild claim. Native
 observation helpers share production arithmetic and retain state/layout/charge
 ownership. This does not transfer timing or gameplay from prior8d artifacts.
 Earlier selected-case provenance remains retained with its original attempts.
+
+The goOutcome setup parser currently admits the bounded canonical command
+vocabulary. Wider effect-equivalent setup sequences remain a domain audit
+obligation. The generic timed-search IIO-entry failure policy and12 remaining
+mandatory operations are not qualified by the two actual timed-session routes.
 
 Controlled fastEntry/fastCutoff share the existing cold threatened-material
 subtraction and final comparison, alongside actual native selective/admission/

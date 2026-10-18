@@ -1,0 +1,33 @@
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -212,9 +212,30 @@
+     legal_after_bits(position, mv, king, position.attack_view())
+ }
+ 
++/// Q supplies its one projected tag-plane view. Preserve the mailbox owner's
++/// exact first-two order: a moved-to third route does not enable the bypass.
++pub(crate) fn check_routes_bits(
++    projected: &crate::attacks::AttackBits,
++    king: Square,
++    by: Color,
++    moved_to: Square,
++) -> (bool, bool) {
++    let (squares, len) = projected.ordered_attackers::<2>(king, by);
++    (len != 0, len == 2 && squares.contains(&moved_to))
++}
++
++#[cfg(test)]
++pub(crate) fn mailbox_ordered_attackers_for_test<const LIMIT: usize>(
++    board: &[Piece; 64], square: Square, by: Color,
++) -> ([Square; 2], usize) {
++    let result = find_attackers::<LIMIT>(board, square, by);
++    (result.squares, result.len)
++}
++
+ /// The tactical caller supplies a projected board from an initially legal
+ /// position. A normal move can expose one route as well as its direct route.
+ /// EP may expose two other routes, which does not count as direct+discovered.
++#[cfg(test)]
+ pub(crate) fn check_routes(
+     board: &[Piece; 64],
+     king: Square,

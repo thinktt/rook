@@ -67,6 +67,7 @@ pub struct Stats {
     pub mate_probes: u64,
     pub iio_passes: u64,
     pub iio_children: u64,
+    pub iio_nonzero_fresh_extensions: u64,
     pub iio_initial_phases: u64,
     pub iio_tail_phases: u64,
     pub accumulated_extension_uses: u64,
@@ -361,12 +362,12 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                         forced = decision.force_search;
                     }
 
-                    let board = movegen::projected_board(&position, movement);
+                    let projected = position.attack_view().projected(&position, movement);
                     if DIAGNOSTICS {
                         self.stats.projections += 1;
                     }
                     let (checking, double_check) =
-                        movegen::check_routes(&board, enemy_king, position.side, movement.to());
+                        movegen::check_routes_bits(&projected, enemy_king, position.side, movement.to());
                     child_checked = Some(checking);
                     // Every quiet item from the non-check producer checks directly;
                     // retain this screen explicitly for the composed policy.
@@ -413,7 +414,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                     } else {
                         king
                     };
-                    if movegen::attacked(&board, king_after, position.side.opponent()) {
+                    if projected.attacked(king_after, position.side.opponent()) {
                         if DIAGNOSTICS {
                             self.stats.unsafe_rejections += 1;
                         }

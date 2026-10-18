@@ -1,0 +1,9 @@
+# Authorized102 strict/DIAG overlay
+
+New sidecar plan/drivers point to successful codegen02 and its actual40272/e5480c terminal/capture7cd975f7. Original plan, drivers, dependencies and failed01 remain unchanged. Parent accepted material Stats/outcome growth and moved fields without neutrality; own-PGO CPU20011/2675cf and independentedfe61 ACTUALLY exited0, followed by explicit regression clearance. Those original actual receipts and judgment are copied as exact metadata, and the new authorization is distinct from the earlier first-stage or text-only overlay.
+
+Only strict and diag are accepted by this stage driver's CLI. Native153 (151lib2dev) and genericc4df4474 are source-bound reuse, with no ordinary native rebuild/unit replay. Strict54/eightwire24 then DIAG171 and official7509/102/98wholefiles run on housekeeping0-5,8-13 with home TMPDIR. Full raw stdin/stdout/stderr/expected/actual/exits are independently reconciled. The generic/codegen/source/dependency identities are rechecked. DIAG-unit and adapter images freeze before subsequent target overwrite. Build outputs are absent until build.py creates them. No sourcefix or retry on failure without reporting.
+
+The inherited freeze source/input archives and original dependency snapshot remain authoritative for the passed earlier stages. This overlay's new scripts, plan, authorization and referenced input records are separately snapshotted/archived before regression; guard verifies BOTH old and new dependency maps before/after each stage. No original dependency is overwritten, and no missing actual tool handle is inferred. Stage result files supplement actual outer tool terminals, which are recorded externally after each observed exit.
+
+No CPU/PGO/profiler/root mutation is provided. Parent schedules no measurement until all owned regression engines/helpers/builds and reconciliation/finalizer are actually closed.

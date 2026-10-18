@@ -1,0 +1,1916 @@
+--- control102-generate_legal-0-normalized.txt
++++ combined103-generate_legal-0-normalized.txt
+@@ -4,11 +4,11 @@
+ push %r13
+ push %r12
+ push %rbx
+-sub $0x128,%rsp
++sub $0x108,%rsp
+ mov %rdi,%r8
+ movq $0x0,0x400(%rsi)
+-movzbl 0x78(%rdi),%r13d
+-lea 0x0(%r13,%r13,2),%r9
++movzbl 0x78(%rdi),%r15d
++lea (%r15,%r15,2),%r9
+ movzbl 0x60(%rdi,%r9,2),%ecx
+ movzbl 0x61(%rdi,%r9,2),%eax
+ mov %rcx,0x58(%rsp)
+@@ -22,53 +22,53 @@
+ movzbl 0x65(%rdi,%r9,2),%ecx
+ lea (%rax,%rcx,1),%rdi
+ cmp $0x11,%rdi
+-jae TARGET<rook2::movegen::generate_legal+0x6f0>
+-mov %r9,0xa8(%rsp)
+-mov %rsi,0x28(%rsp)
++jae TARGET<rook2::movegen::generate_legal+0x6b9>
++mov %r9,0xa0(%rsp)
++mov %rsi,0x20(%rsp)
+ test %cl,%cl
+-je TARGET<rook2::movegen::generate_legal+0x1510>
+-mov %r13d,%ebx
++je TARGET<rook2::movegen::generate_legal+0x14e8>
++mov %r15d,%ebx
+ shl $0x4,%ebx
+ lea (%r8,%rbx,1),%rcx
+ movzbl 0x40(%rax,%rcx,1),%edx
+-mov %r13d,%eax
++lea 0x80(%r8),%rsi
++mov %r15d,%eax
+ xor $0x1,%al
+ movzbl %al,%ecx
+-lea 0x100(%rsp),%rdi
+-mov %r8,%rsi
+-mov %rdx,0x18(%rsp)
+-mov %r8,0x8(%rsp)
+-call TARGET<rook2::movegen::find_attackers>
+-mov 0x8(%rsp),%rsi
++lea 0x60(%rsp),%rdi
++mov %rsi,0x40(%rsp)
++mov %rdx,0x8(%rsp)
++mov %r8,(%rsp)
++call TARGET<rook2::attacks::AttackBits::ordered_attackers>
++mov (%rsp),%rsi
++movzbl 0x60(%rsp),%r14d
++mov 0x68(%rsp),%r9
+ movzbl 0x7a(%rsi),%eax
+ cmp $0x3f,%rax
+-mov %r13,0x30(%rsp)
+-jbe TARGET<rook2::movegen::generate_legal+0xef>
++mov %r15,0x28(%rsp)
++mov %r9,0x30(%rsp)
++jbe TARGET<rook2::movegen::generate_legal+0xec>
+ movq $0x0,0x10(%rsp)
+-mov 0x18(%rsp),%rdx
+-mov 0x100(%rsp),%rcx
+-test %rcx,%rcx
+-mov %rcx,0x38(%rsp)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-jmp TARGET<rook2::movegen::generate_legal+0x173>
++mov 0x8(%rsp),%rdx
++jmp TARGET<rook2::movegen::generate_legal+0x319>
+ movq $0x0,0x10(%rsp)
+ cmpb $0x0,(%rsi,%rax,1)
+-mov 0x18(%rsp),%rdx
+-jne TARGET<rook2::movegen::generate_legal+0x15d>
+-cmp $0x1,%r13
++mov 0x8(%rsp),%rdx
++jne TARGET<rook2::movegen::generate_legal+0x319>
++cmp $0x1,%r15
+ mov $0x0,%ecx
+ sbb %ecx,%ecx
+ or $0x1,%cl
+-mov %eax,%r14d
+-shr $0x3,%r14b
+-add %cl,%r14b
+-cmp $0x7,%r14b
+-ja TARGET<rook2::movegen::generate_legal+0x15d>
+-mov %eax,%r15d
+-and $0x7,%r15b
+-lea 0x0(,%r14,8),%r12d
+-mov %r12d,%ecx
+-or %r15b,%cl
++mov %eax,%r12d
++shr $0x3,%r12b
++add %cl,%r12b
++cmp $0x7,%r12b
++ja TARGET<rook2::movegen::generate_legal+0x319>
++mov %eax,%r13d
++and $0x7,%r13b
++lea 0x0(,%r12,8),%ebp
++mov %ebp,%ecx
++or %r13b,%cl
+ movzbl %cl,%ecx
+ movzbl (%rsi,%rcx,1),%ecx
+ test %ecx,%ecx
+@@ -76,42 +76,140 @@
+ mov %ecx,%edi
+ shr $0x3,%dil
+ and $0x1,%dil
+-cmp %r13b,%dil
+-jne TARGET<rook2::movegen::generate_legal+0x382>
++cmp %r15b,%dil
++jne TARGET<rook2::movegen::generate_legal+0x162>
+ movq $0x0,0x10(%rsp)
+-mov 0x100(%rsp),%rcx
+-test %rcx,%rcx
+-mov %rcx,0x38(%rsp)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-xor %edi,%edi
++jmp TARGET<rook2::movegen::generate_legal+0x319>
++and $0x7,%ecx
++lea -0x1(%rcx),%edi
++cmp $0x5,%edi
++jae TARGET<rook2::movegen::generate_legal+0x228>
++lea 0x0(,%r15,8),%r15d
++inc %r15b
++movzwl %ax,%r8d
++shl $0x6,%r8d
++lea -0x1(%r13),%eax
++mov %eax,%ecx
++or %r12b,%cl
++cmp $0x7,%cl
++ja TARGET<rook2::movegen::generate_legal+0x20d>
++add %bpl,%al
++movzbl %al,%edi
++cmp $0x40,%dil
++jae TARGET<rook2::movegen::generate_legal+0x14f9>
++cmp %r15b,(%rsi,%rdi,1)
++mov 0x40(%rsp),%rax
++jne TARGET<rook2::movegen::generate_legal+0x21d>
++mov %r8d,0x18(%rsp)
++movzwl %r8w,%r8d
++or %edi,%r8d
++or $0x5000,%r8d
++movups (%rax),%xmm0
++movups 0x10(%rax),%xmm1
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
++lea 0x60(%rsp),%rcx
++mov %rsi,%rdi
++mov %r8d,0x38(%rsp)
++mov %r8d,%esi
++call TARGET<rook2::movegen::legal_after_bits>
++test %al,%al
++je TARGET<rook2::movegen::generate_legal+0x269>
++mov 0x20(%rsp),%rax
++mov 0x38(%rsp),%ecx
++mov %cx,(%rax)
++movq $0x1,0x400(%rax)
++mov $0x1,%eax
++mov %rax,0x10(%rsp)
++jmp TARGET<rook2::movegen::generate_legal+0x272>
++movq $0x0,0x10(%rsp)
++mov 0x40(%rsp),%rax
++jmp TARGET<rook2::movegen::generate_legal+0x28a>
++movq $0x0,0x10(%rsp)
++jmp TARGET<rook2::movegen::generate_legal+0x28a>
++cmp $0x6,%ecx
++je TARGET<rook2::movegen::generate_legal+0x154>
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.411>,%rax
++mov %rax,0x60(%rsp)
++movq $0x1,0x68(%rsp)
++movq $0x8,0x70(%rsp)
++xorps %xmm0,%xmm0
++movups %xmm0,0x78(%rsp)
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.412>,%rsi
++lea 0x60(%rsp),%rdi
++call *RIP<core::panicking::panic_fmt>
++movq $0x0,0x10(%rsp)
++mov (%rsp),%rsi
++mov 0x40(%rsp),%rax
++mov 0x8(%rsp),%rdx
++mov 0x30(%rsp),%r9
++mov 0x18(%rsp),%r8d
++inc %r13b
++or %r13b,%r12b
++cmp $0x7,%r12b
++ja TARGET<rook2::movegen::generate_legal+0x314>
++add %r13b,%bpl
++movzbl %bpl,%edi
++cmp $0x3f,%dil
++ja TARGET<rook2::movegen::generate_legal+0x14f9>
++cmp %r15b,(%rsi,%rdi,1)
++jne TARGET<rook2::movegen::generate_legal+0x314>
++mov %r9,%r12
++movzwl %r8w,%r15d
++or %edi,%r15d
++or $0x5000,%r15d
++movups (%rax),%xmm0
++movups 0x10(%rax),%xmm1
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
++lea 0x60(%rsp),%rcx
++mov %rsi,%rdi
++mov %r15d,%esi
++call TARGET<rook2::movegen::legal_after_bits>
++test %al,%al
++je TARGET<rook2::movegen::generate_legal+0x301>
++mov 0x20(%rsp),%rax
++mov 0x10(%rsp),%rcx
++mov %r15w,(%rax,%rcx,2)
++inc %rcx
++mov %rcx,0x10(%rsp)
++mov %rcx,0x400(%rax)
++mov (%rsp),%rsi
++mov 0x28(%rsp),%r15
++mov 0x8(%rsp),%rdx
++mov %r12,%r9
++jmp TARGET<rook2::movegen::generate_legal+0x319>
++mov 0x28(%rsp),%r15
++test %r9,%r9
++jne TARGET<rook2::movegen::generate_legal+0x6d9>
++xor %ecx,%ecx
+ xor %eax,%eax
+-test %r13,%r13
++test %r15,%r15
+ mov $0x38,%r12d
+-cmove %edi,%r12d
+-setne %r8b
++cmove %ecx,%r12d
++setne %cl
+ mov $0x2,%edi
+ mov $0x8,%ebp
+ cmove %edi,%ebp
+ lea 0x4(%r12),%edi
+ cmp %dl,%dil
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-lea 0x0(,%r13,8),%r15d
++jne TARGET<rook2::movegen::generate_legal+0x6d9>
++lea 0x0(,%r15,8),%r15d
+ lea 0x6(%r15),%edi
+ cmp %dil,(%rsi,%rdx,1)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-mov %r8b,%al
++jne TARGET<rook2::movegen::generate_legal+0x6d9>
++mov %cl,%al
+ lea (%rax,%rax,2),%eax
+ inc %eax
+ movzbl 0x79(%rsi),%r13d
+ or $0x4,%r15b
+-lea 0x80(%rsi),%r14
+ test %al,%r13b
+-je TARGET<rook2::movegen::generate_legal+0x559>
++je TARGET<rook2::movegen::generate_legal+0x528>
+ mov %rsi,%r8
+ mov %r12d,%eax
+ or $0x3,%al
+-mov %r12d,%r9d
+-or $0x2,%r9b
++mov %r12d,%ecx
++or $0x2,%cl
+ mov %r12d,%edi
+ or $0x1,%dil
+ movzbl %r12b,%esi
+@@ -120,272 +218,175 @@
+ mov %r10d,%eax
+ shl $0x10,%eax
+ or %esi,%eax
+-movzbl %r9b,%r9d
+-mov %r9d,%esi
++movzbl %cl,%ecx
++mov %ecx,%esi
+ shl $0x18,%esi
+ movzbl %dil,%edi
+ shl $0x20,%rdi
+ or %rsi,%rdi
+ or %rax,%rdi
+-mov %r10,%rax
+-shl $0x28,%r9
+-shl $0x30,%rax
+-or %r9,%rax
+-or %rdi,%rax
+-movzbl %ah,%edi
++shl $0x28,%rcx
++shl $0x30,%r10
++or %rcx,%r10
++mov %r10,%rcx
++or %rdi,%rcx
++movzbl %ch,%edi
+ cmp $0x3f,%edi
+-ja TARGET<rook2::movegen::generate_legal+0x1521>
++ja TARGET<rook2::movegen::generate_legal+0x14f9>
+ mov %r8,%rsi
+ cmp %r15b,(%r8,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x559>
+-mov %rax,%r8
++jne TARGET<rook2::movegen::generate_legal+0x528>
++mov %rcx,%rax
+ shr $0x20,%rax
+ movzbl %al,%edi
+ movabs $0xc000000000,%rax
+-test %rax,%r8
+-jne TARGET<rook2::movegen::generate_legal+0x1533>
++test %rax,%rcx
++jne TARGET<rook2::movegen::generate_legal+0x150b>
+ cmpb $0x0,(%rsi,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x559>
+-mov %r8,%rax
++jne TARGET<rook2::movegen::generate_legal+0x528>
++mov %rcx,%rax
+ shr $0x28,%rax
+ movzbl %al,%edi
+ movabs $0xc00000000000,%rax
+-test %rax,%r8
+-jne TARGET<rook2::movegen::generate_legal+0x1533>
++test %rax,%rcx
++jne TARGET<rook2::movegen::generate_legal+0x150b>
+ cmpb $0x0,(%rsi,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x559>
+-mov %r8,%rax
++jne TARGET<rook2::movegen::generate_legal+0x528>
++mov %rcx,%rax
+ shr $0x30,%rax
+ cmpb $0x0,(%rsi,%rax,1)
+-jne TARGET<rook2::movegen::generate_legal+0x559>
++jne TARGET<rook2::movegen::generate_legal+0x528>
+ mov %rsi,%rdi
+-mov %r8,0x20(%rsp)
+-mov %r8d,%esi
++mov %ecx,%esi
+ shr $0xa,%esi
+ and $0x3fc0,%esi
+ movzwl %dx,%eax
+-mov %eax,0x40(%rsp)
++mov %eax,0x38(%rsp)
+ or %eax,%esi
+-movups (%r14),%xmm0
+-movups 0x10(%r14),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
+-lea 0x70(%rsp),%rcx
++mov 0x40(%rsp),%rax
++movups (%rax),%xmm0
++movups 0x10(%rax),%xmm1
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
++mov %rcx,0x18(%rsp)
++lea 0x60(%rsp),%rcx
+ call TARGET<rook2::movegen::legal_after_bits>
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0x54a>
+-mov 0x20(%rsp),%rsi
++je TARGET<rook2::movegen::generate_legal+0x51a>
++mov 0x18(%rsp),%rsi
+ shr $0x12,%esi
+ and $0x1fc0,%esi
+-or 0x40(%rsp),%esi
++or 0x38(%rsp),%esi
+ or $0x6000,%esi
+-movups (%r14),%xmm0
+-movups 0x10(%r14),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
+-lea 0x70(%rsp),%rcx
+-mov 0x8(%rsp),%rdi
+-mov %rsi,0x20(%rsp)
+-mov 0x18(%rsp),%rdx
++mov 0x40(%rsp),%rax
++movups (%rax),%xmm0
++movups 0x10(%rax),%xmm1
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
++lea 0x60(%rsp),%rcx
++mov (%rsp),%rdi
++mov %rsi,0x18(%rsp)
++mov 0x8(%rsp),%rdx
+ call TARGET<rook2::movegen::legal_after_bits>
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0x54a>
+-mov 0x28(%rsp),%rax
++je TARGET<rook2::movegen::generate_legal+0x51a>
++mov 0x20(%rsp),%rax
+ mov 0x10(%rsp),%rcx
+-mov 0x20(%rsp),%rdx
++mov 0x18(%rsp),%rdx
+ mov %dx,(%rax,%rcx,2)
+ mov 0x400(%rax),%rcx
+ inc %rcx
+ mov %rcx,0x400(%rax)
+ mov %rcx,0x10(%rsp)
+ cmp $0x1ff,%rcx
+-mov 0x8(%rsp),%rsi
+-mov 0x18(%rsp),%rdx
+-mov 0x38(%rsp),%rcx
+-jbe TARGET<rook2::movegen::generate_legal+0x559>
+-jmp TARGET<rook2::movegen::generate_legal+0xa98>
+-and $0x7,%ecx
+-lea -0x1(%rcx),%edi
+-cmp $0x5,%edi
+-jae TARGET<rook2::movegen::generate_legal+0x438>
+-lea 0x0(,%r13,8),%r13d
+-inc %r13b
+-movzwl %ax,%r9d
+-shl $0x6,%r9d
+-lea 0x80(%rsi),%r8
+-lea -0x1(%r15),%eax
+-mov %eax,%ecx
+-or %r14b,%cl
+-cmp $0x7,%cl
+-ja TARGET<rook2::movegen::generate_legal+0x42d>
+-add %r12b,%al
+-movzbl %al,%edi
+-cmp $0x40,%dil
+-jae TARGET<rook2::movegen::generate_legal+0x1521>
+-cmp %r13b,(%rsi,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x42d>
+-mov %r9d,0x40(%rsp)
+-movzwl %r9w,%ebp
+-or %edi,%ebp
+-or $0x5000,%ebp
+-movups (%r8),%xmm0
+-mov %r8,0x20(%rsp)
+-movups 0x10(%r8),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
+-lea 0x70(%rsp),%rcx
+-mov %rsi,%rdi
+-mov %ebp,%esi
+-call TARGET<rook2::movegen::legal_after_bits>
+-test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0x47f>
+-mov 0x28(%rsp),%rax
+-mov %bp,(%rax)
+-movq $0x1,0x400(%rax)
+-mov $0x1,%eax
+-mov %rax,0x10(%rsp)
+-jmp TARGET<rook2::movegen::generate_legal+0x488>
+-movq $0x0,0x10(%rsp)
+-jmp TARGET<rook2::movegen::generate_legal+0x49c>
+-cmp $0x6,%ecx
+-je TARGET<rook2::movegen::generate_legal+0x154>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.408>,%rax
+-mov %rax,0x70(%rsp)
+-movq $0x1,0x78(%rsp)
+-movq $0x8,0x80(%rsp)
+-xorps %xmm0,%xmm0
+-movups %xmm0,0x88(%rsp)
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.409>,%rsi
+-lea 0x70(%rsp),%rdi
+-call *RIP<core::panicking::panic_fmt>
+-movq $0x0,0x10(%rsp)
+-mov 0x8(%rsp),%rsi
+-mov 0x18(%rsp),%rdx
+-mov 0x20(%rsp),%r8
+-mov 0x40(%rsp),%r9d
+-inc %r15b
+-or %r15b,%r14b
+-cmp $0x7,%r14b
+-ja TARGET<rook2::movegen::generate_legal+0x520>
+-add %r15b,%r12b
+-movzbl %r12b,%edi
+-cmp $0x3f,%dil
+-ja TARGET<rook2::movegen::generate_legal+0x1521>
+-cmp %r13b,(%rsi,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x520>
+-movzwl %r9w,%ebp
+-or %edi,%ebp
+-or $0x5000,%ebp
+-movups (%r8),%xmm0
+-movups 0x10(%r8),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
+-lea 0x70(%rsp),%rcx
+-mov %rsi,%rdi
+-mov %ebp,%esi
+-call TARGET<rook2::movegen::legal_after_bits>
+-test %al,%al
+-mov 0x30(%rsp),%r13
+-je TARGET<rook2::movegen::generate_legal+0x540>
+-mov 0x28(%rsp),%rax
+-mov 0x10(%rsp),%rcx
+-mov %bp,(%rax,%rcx,2)
+-inc %rcx
+-mov %rcx,0x10(%rsp)
+-mov %rcx,0x400(%rax)
+-mov 0x8(%rsp),%rsi
+-jmp TARGET<rook2::movegen::generate_legal+0xcf>
+-mov 0x30(%rsp),%r13
+-mov 0x100(%rsp),%rcx
+-test %rcx,%rcx
+-mov %rcx,0x38(%rsp)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-jmp TARGET<rook2::movegen::generate_legal+0x173>
+-mov 0x8(%rsp),%rsi
+-jmp TARGET<rook2::movegen::generate_legal+0xcf>
+-mov 0x8(%rsp),%rsi
+-mov 0x18(%rsp),%rdx
+-mov 0x38(%rsp),%rcx
++mov (%rsp),%rsi
++mov 0x8(%rsp),%rdx
++mov 0x30(%rsp),%r9
++jbe TARGET<rook2::movegen::generate_legal+0x528>
++jmp TARGET<rook2::movegen::generate_legal+0xa58>
++mov (%rsp),%rsi
++mov 0x8(%rsp),%rdx
++mov 0x30(%rsp),%r9
+ test %bpl,%r13b
+-je TARGET<rook2::movegen::generate_legal+0x711>
++je TARGET<rook2::movegen::generate_legal+0x6d9>
+ mov %r12d,%eax
+ or $0x7,%al
+-mov %r12d,%edi
+-or $0x5,%dil
++mov %r12d,%ecx
++or $0x5,%cl
+ or $0x6,%r12b
+ movzbl %al,%eax
+ shl $0x8,%eax
+-movzbl %dil,%r8d
+-mov %r8d,%edi
++movzbl %cl,%ecx
++mov %ecx,%edi
+ shl $0x10,%edi
+ or %eax,%edi
+ movzbl %r12b,%eax
+-movabs $0x1010000000000,%r9
+-imul %rax,%r9
++movabs $0x1010000000000,%r8
++imul %rax,%r8
+ shl $0x18,%eax
+-shl $0x20,%r8
+-or %rax,%r8
+-mov %r9,%rax
+-or %rdi,%r8
+-or %r8,%rax
+-movzbl %ah,%edi
++shl $0x20,%rcx
++or %rax,%rcx
++or %rdi,%rcx
++or %rcx,%r8
++mov %r8,%rcx
++movzbl %ch,%edi
+ cmp $0x3f,%edi
+-ja TARGET<rook2::movegen::generate_legal+0x1521>
++ja TARGET<rook2::movegen::generate_legal+0x14f9>
+ cmp %r15b,(%rsi,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-mov %rax,%r8
++jne TARGET<rook2::movegen::generate_legal+0x6d9>
++mov %rcx,%rax
+ shr $0x20,%rax
+ movzbl %al,%edi
+ movabs $0xc000000000,%rax
+-test %rax,%r8
+-jne TARGET<rook2::movegen::generate_legal+0x1533>
++test %rax,%rcx
++jne TARGET<rook2::movegen::generate_legal+0x150b>
+ cmpb $0x0,(%rsi,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-mov %r8,%rax
++jne TARGET<rook2::movegen::generate_legal+0x6d9>
++mov %rcx,%rax
+ shr $0x28,%rax
+ movzbl %al,%edi
+ movabs $0xc00000000000,%rax
+-test %rax,%r8
+-jne TARGET<rook2::movegen::generate_legal+0x1533>
++test %rax,%rcx
++jne TARGET<rook2::movegen::generate_legal+0x150b>
+ cmpb $0x0,(%rsi,%rdi,1)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-mov %r8,%rax
++jne TARGET<rook2::movegen::generate_legal+0x6d9>
++mov %rcx,%rax
+ shr $0x30,%rax
+ cmpb $0x0,(%rsi,%rax,1)
+-jne TARGET<rook2::movegen::generate_legal+0x711>
+-mov %r8,%r13
++jne TARGET<rook2::movegen::generate_legal+0x6d9>
+ mov %rsi,%r15
+-mov %r13d,%esi
++mov %ecx,%esi
+ shr $0xa,%esi
+ and $0x3fc0,%esi
+ movzwl %dx,%ebp
+ or %ebp,%esi
+-movups (%r14),%xmm0
+-movups 0x10(%r14),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
+-lea 0x70(%rsp),%rcx
++mov 0x40(%rsp),%r12
++movups (%r12),%xmm0
++movups 0x10(%r12),%xmm1
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
++mov %rcx,%r13
++lea 0x60(%rsp),%rcx
+ mov %r15,%rdi
+-mov %rdx,%r12
+ call TARGET<rook2::movegen::legal_after_bits>
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0x6e8>
++je TARGET<rook2::movegen::generate_legal+0x6b4>
+ shr $0x12,%r13d
+ and $0x1fc0,%r13d
+ or %ebp,%r13d
+ or $0x6000,%r13d
+-movups (%r14),%xmm0
+-movups 0x10(%r14),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
+-lea 0x70(%rsp),%rcx
++movups (%r12),%xmm0
++movups 0x10(%r12),%xmm1
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
++lea 0x60(%rsp),%rcx
+ mov %r15,%rdi
+ mov %r13d,%esi
+-mov %r12d,%edx
++mov 0x8(%rsp),%rdx
+ call TARGET<rook2::movegen::legal_after_bits>
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0x702>
+-mov 0x28(%rsp),%rax
++je TARGET<rook2::movegen::generate_legal+0x6cb>
++mov 0x20(%rsp),%rax
+ mov 0x10(%rsp),%rcx
+ mov %r13w,(%rax,%rcx,2)
+ mov 0x400(%rax),%rcx
+@@ -393,219 +394,218 @@
+ mov %rcx,0x400(%rax)
+ mov %rcx,0x10(%rsp)
+ cmp $0x1ff,%rcx
+-mov 0x8(%rsp),%rsi
+-mov 0x18(%rsp),%rdx
+-mov 0x38(%rsp),%rcx
+-ja TARGET<rook2::movegen::generate_legal+0xa98>
+-jmp TARGET<rook2::movegen::generate_legal+0x711>
++mov (%rsp),%rsi
++mov 0x8(%rsp),%rdx
++mov 0x30(%rsp),%r9
++ja TARGET<rook2::movegen::generate_legal+0xa58>
++jmp TARGET<rook2::movegen::generate_legal+0x6d9>
+ mov %r15,%rsi
+-mov %r12,%rdx
+-jmp TARGET<rook2::movegen::generate_legal+0x70c>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.293>,%rdx
++jmp TARGET<rook2::movegen::generate_legal+0x6cf>
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.296>,%rdx
+ mov $0x10,%esi
+ call *RIP<core::slice::index::slice_end_index_len_fail>
+-mov 0x8(%rsp),%rsi
+-mov 0x18(%rsp),%rdx
+-mov 0x38(%rsp),%rcx
++mov (%rsp),%rsi
++mov 0x8(%rsp),%rdx
++mov 0x30(%rsp),%r9
+ lea (%rsi,%rbx,1),%rax
+ add $0x40,%rax
+-mov %rax,0xe8(%rsp)
+-movzbl 0x108(%rsp),%r8d
+-lea 0xd0(%rsp),%rdi
+-mov %r8d,0xb0(%rsp)
++mov %rax,0xd8(%rsp)
++movzbl %r14b,%r8d
++lea 0xc0(%rsp),%rdi
++mov %r9,%rcx
++mov %r8d,0xb8(%rsp)
+ call TARGET<rook2::movegen::GenerationSafety::new>
+-mov 0x8(%rsp),%r11
+-mov 0x28(%rsp),%rsi
++mov (%rsp),%r11
++mov 0x20(%rsp),%rsi
+ xor %eax,%eax
+-cmpq $0x0,0x30(%rsp)
++cmpq $0x0,0x28(%rsp)
+ setne %cl
+ mov 0x10(%rsp),%rdx
+ cmpq $0x0,0x58(%rsp)
+-je TARGET<rook2::movegen::generate_legal+0xaaa>
+-mov 0x30(%rsp),%rdx
++je TARGET<rook2::movegen::generate_legal+0xa6a>
++mov 0x28(%rsp),%rdx
+ mov %edx,%edi
+ neg %dil
+ or $0x1,%dil
+ mov %cl,%al
++lea (%rax,%rax,4),%ecx
++inc %ecx
+ test %rdx,%rdx
+-mov $0xff01,%ecx
++mov $0xff01,%eax
+ mov $0x1ff,%edx
+-cmove %ecx,%edx
+-lea 0x1(%rax,%rax,4),%ecx
+-mov %rdi,0x20(%rsp)
++cmove %eax,%edx
++mov %rdi,0x18(%rsp)
+ lea (%rdi,%rdi,1),%edi
+-movzbl 0xe0(%rsp),%eax
+-mov %al,0x48(%rsp)
+-movzbl 0xe1(%rsp),%eax
+-mov %al,0xc0(%rsp)
+-mov 0xd0(%rsp),%rax
+-mov %rax,0xf8(%rsp)
++movzbl 0xd0(%rsp),%eax
++mov %al,0x98(%rsp)
++movzbl 0xd1(%rsp),%eax
++mov %al,0xb0(%rsp)
++mov 0xc0(%rsp),%rax
++mov %rax,0xe8(%rsp)
++mov 0xc8(%rsp),%rax
++mov %rax,0xe0(%rsp)
++mov %rdx,0x38(%rsp)
++shr $0x8,%edx
++mov %rdx,0x50(%rsp)
++mov %ecx,0x4c(%rsp)
++add %cl,%dil
++mov %rdi,0xa8(%rsp)
++lea 0x0(,%rdi,8),%eax
++mov %eax,0x90(%rsp)
++decq 0x58(%rsp)
++xor %ebp,%ebp
++mov 0x10(%rsp),%rdx
++nopl 0x0(%rax,%rax,1)
+ mov 0xd8(%rsp),%rax
+-mov %rax,0xf0(%rsp)
+-lea 0x80(%r11),%rax
+-mov %rax,0xc8(%rsp)
+-mov %rdx,0x40(%rsp)
+-shr $0x8,%edx
+-mov %rdx,0x68(%rsp)
+-mov %ecx,0x50(%rsp)
+-add %cl,%dil
+-mov %rdi,0xb8(%rsp)
+-lea 0x0(,%rdi,8),%eax
+-mov %eax,0x64(%rsp)
+-decq 0x58(%rsp)
+-xor %r12d,%r12d
+-mov 0x10(%rsp),%rdx
+-nop
+-mov 0xe8(%rsp),%rax
+-movzbl (%rax,%r12,1),%r15d
+-mov %r15d,%r13d
+-and $0x7,%r13b
+-mov %r15d,%r14d
++movzbl (%rax,%rbp,1),%r12d
++mov %r12d,%r15d
++and $0x7,%r15b
++mov %r12d,%r14d
+ shr $0x3,%r14b
+-mov 0x20(%rsp),%rax
+-lea (%r14,%rax,1),%ebp
+-lea 0x0(,%rbp,8),%ebx
+-mov 0x40(%rsp),%rax
+-add %r13d,%eax
++mov 0x18(%rsp),%rax
++lea (%r14,%rax,1),%r13d
++lea 0x0(,%r13,8),%ebx
++mov 0x38(%rsp),%rax
++add %r15d,%eax
+ mov %eax,%ecx
+-or %bpl,%cl
++or %r13b,%cl
+ cmp $0x8,%cl
+-jae TARGET<rook2::movegen::generate_legal+0x8c0>
++jae TARGET<rook2::movegen::generate_legal+0x880>
+ add %bl,%al
+ movzbl %al,%r8d
+ cmp $0x40,%r8b
+-jae TARGET<rook2::movegen::generate_legal+0x14d5>
++jae TARGET<rook2::movegen::generate_legal+0x14ad>
+ movzbl (%r11,%r8,1),%eax
+ test %eax,%eax
+-je TARGET<rook2::movegen::generate_legal+0x8c0>
++je TARGET<rook2::movegen::generate_legal+0x880>
+ mov %eax,%ecx
+ shr $0x3,%cl
+ and $0x1,%cl
+-cmp 0x30(%rsp),%cl
+-je TARGET<rook2::movegen::generate_legal+0x8c0>
++cmp 0x28(%rsp),%cl
++je TARGET<rook2::movegen::generate_legal+0x880>
+ and $0x7,%eax
+ lea -0x1(%rax),%ecx
+ cmp $0x5,%ecx
+-jae TARGET<rook2::movegen::generate_legal+0x9f0>
++jae TARGET<rook2::movegen::generate_legal+0x9b5>
+ mov %r11,%rdi
+-lea 0xd0(%rsp),%rdx
+-mov %r15d,%ecx
++lea 0xc0(%rsp),%rdx
++mov %r12d,%ecx
+ call TARGET<rook2::movegen::pawn_destination>
+-mov 0x8(%rsp),%r11
+-mov 0x28(%rsp),%rsi
++mov (%rsp),%r11
++mov 0x20(%rsp),%rsi
+ mov 0x400(%rsi),%rdx
+ cmp $0x1ff,%rdx
+-ja TARGET<rook2::movegen::generate_legal+0xa98>
++ja TARGET<rook2::movegen::generate_legal+0xa58>
+ data16 data16 cs nopw 0x0(%rax,%rax,1)
+-movzwl %r15w,%r15d
+-mov 0x68(%rsp),%rax
+-add %r13d,%eax
++movzwl %r12w,%r12d
++mov 0x50(%rsp),%rax
++add %r15d,%eax
+ mov %eax,%ecx
+-or %bpl,%cl
++or %r13b,%cl
+ cmp $0x7,%cl
+-ja TARGET<rook2::movegen::generate_legal+0x940>
++ja TARGET<rook2::movegen::generate_legal+0x900>
+ add %bl,%al
+ movzbl %al,%r8d
+ cmp $0x3f,%r8b
+-ja TARGET<rook2::movegen::generate_legal+0x14d5>
++ja TARGET<rook2::movegen::generate_legal+0x14ad>
+ movzbl (%r11,%r8,1),%eax
+ test %eax,%eax
+-je TARGET<rook2::movegen::generate_legal+0x94a>
++je TARGET<rook2::movegen::generate_legal+0x90a>
+ mov %eax,%ecx
+ shr $0x3,%cl
+ and $0x1,%cl
+-cmp 0x30(%rsp),%cl
+-je TARGET<rook2::movegen::generate_legal+0x94a>
++cmp 0x28(%rsp),%cl
++je TARGET<rook2::movegen::generate_legal+0x90a>
+ and $0x7,%eax
+ lea -0x1(%rax),%ecx
+ cmp $0x5,%ecx
+-jae TARGET<rook2::movegen::generate_legal+0x9fe>
++jae TARGET<rook2::movegen::generate_legal+0x9c3>
+ mov %r11,%rdi
+-lea 0xd0(%rsp),%rdx
+-mov %r15d,%ecx
++lea 0xc0(%rsp),%rdx
++mov %r12d,%ecx
+ call TARGET<rook2::movegen::pawn_destination>
+-mov 0x8(%rsp),%r11
+-mov 0x28(%rsp),%rsi
++mov (%rsp),%r11
++mov 0x20(%rsp),%rsi
+ mov 0x400(%rsi),%rdx
+ cmp $0x1ff,%rdx
+-jbe TARGET<rook2::movegen::generate_legal+0x94a>
+-jmp TARGET<rook2::movegen::generate_legal+0xa98>
+-xchg %ax,%ax
+-cmp $0x8,%bpl
+-jae TARGET<rook2::movegen::generate_legal+0xa80>
+-or %r13b,%bl
++jbe TARGET<rook2::movegen::generate_legal+0x90a>
++jmp TARGET<rook2::movegen::generate_legal+0xa58>
++nopl (%rax)
++cmp $0x8,%r13b
++jae TARGET<rook2::movegen::generate_legal+0xa40>
++or %r15b,%bl
+ movzbl %bl,%r8d
+ cmpb $0x0,(%r11,%r8,1)
+-jne TARGET<rook2::movegen::generate_legal+0xa80>
++jne TARGET<rook2::movegen::generate_legal+0xa40>
+ mov %r11,%rdi
+-lea 0xd0(%rsp),%rdx
+-mov %r15d,%ecx
++lea 0xc0(%rsp),%rdx
++mov %r12d,%ecx
+ call TARGET<rook2::movegen::pawn_destination>
+-mov 0x8(%rsp),%r11
+-mov 0x28(%rsp),%rsi
++mov (%rsp),%r11
++mov 0x20(%rsp),%rsi
+ mov 0x400(%rsi),%rdx
+ cmp $0x1ff,%rdx
+-ja TARGET<rook2::movegen::generate_legal+0xa98>
+-cmp 0x50(%rsp),%r14b
+-jne TARGET<rook2::movegen::generate_legal+0xa80>
+-cmpb $0x8,0xb8(%rsp)
+-jae TARGET<rook2::movegen::generate_legal+0x14ea>
+-or 0x64(%rsp),%r13b
+-movzbl %r13b,%r13d
+-cmpb $0x0,(%r11,%r13,1)
+-jne TARGET<rook2::movegen::generate_legal+0xa80>
+-shl $0x6,%r13d
+-or %r15d,%r13d
+-and $0x3f,%r15d
+-cmp 0x48(%rsp),%r15b
+-je TARGET<rook2::movegen::generate_legal+0xa1a>
+-testb $0x1,0xc0(%rsp)
+-je TARGET<rook2::movegen::generate_legal+0xa0c>
+-movzwl %r13w,%eax
++ja TARGET<rook2::movegen::generate_legal+0xa58>
++cmp 0x4c(%rsp),%r14b
++jne TARGET<rook2::movegen::generate_legal+0xa40>
++cmpb $0x8,0xa8(%rsp)
++jae TARGET<rook2::movegen::generate_legal+0x14c2>
++or 0x90(%rsp),%r15b
++movzbl %r15b,%r15d
++cmpb $0x0,(%r11,%r15,1)
++jne TARGET<rook2::movegen::generate_legal+0xa40>
++shl $0x6,%r15d
++or %r12d,%r15d
++and $0x3f,%r12d
++cmp 0x98(%rsp),%r12b
++je TARGET<rook2::movegen::generate_legal+0x9df>
++testb $0x1,0xb0(%rsp)
++je TARGET<rook2::movegen::generate_legal+0x9d1>
++movzwl %r15w,%eax
+ shr $0x6,%eax
+-mov 0xf0(%rsp),%rcx
++mov 0xe0(%rsp),%rcx
+ bt %rax,%rcx
+-jb TARGET<rook2::movegen::generate_legal+0xa1a>
+-jmp TARGET<rook2::movegen::generate_legal+0xa75>
++jb TARGET<rook2::movegen::generate_legal+0x9df>
++jmp TARGET<rook2::movegen::generate_legal+0xa36>
+ cmp $0x6,%eax
+-je TARGET<rook2::movegen::generate_legal+0x8c0>
+-jmp TARGET<rook2::movegen::generate_legal+0x441>
++je TARGET<rook2::movegen::generate_legal+0x880>
++jmp TARGET<rook2::movegen::generate_legal+0x231>
+ cmp $0x6,%eax
+-je TARGET<rook2::movegen::generate_legal+0x94a>
+-jmp TARGET<rook2::movegen::generate_legal+0x441>
+-mov 0xf8(%rsp),%rax
+-bt %r15,%rax
+-jae TARGET<rook2::movegen::generate_legal+0xa5f>
+-mov 0xc8(%rsp),%rax
++je TARGET<rook2::movegen::generate_legal+0x90a>
++jmp TARGET<rook2::movegen::generate_legal+0x231>
++mov 0xe8(%rsp),%rax
++bt %r12,%rax
++jae TARGET<rook2::movegen::generate_legal+0xa20>
++mov 0x40(%rsp),%rax
+ movups (%rax),%xmm0
+ movups 0x10(%rax),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
+ mov %rdx,%rbx
+-movzbl 0x48(%rsp),%edx
++movzbl 0x98(%rsp),%edx
+ mov %r11,%rdi
+-mov %r13d,%esi
+-lea 0x70(%rsp),%rcx
++mov %r15d,%esi
++lea 0x60(%rsp),%rcx
+ call TARGET<rook2::movegen::legal_after_bits>
+ mov %rbx,%rdx
+-mov 0x8(%rsp),%r11
+-mov 0x28(%rsp),%rsi
++mov (%rsp),%r11
++mov 0x20(%rsp),%rsi
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0xa75>
+-mov %r13w,(%rsi,%rdx,2)
++je TARGET<rook2::movegen::generate_legal+0xa36>
++mov %r15w,(%rsi,%rdx,2)
+ mov 0x400(%rsi),%rdx
+ inc %rdx
+ mov %rdx,0x400(%rsi)
+ cmp $0x1ff,%rdx
+-ja TARGET<rook2::movegen::generate_legal+0xa8f>
+-xchg %ax,%ax
+-cmp %r12,0x58(%rsp)
+-je TARGET<rook2::movegen::generate_legal+0xa8f>
+-inc %r12
+-jmp TARGET<rook2::movegen::generate_legal+0x810>
++ja TARGET<rook2::movegen::generate_legal+0xa4f>
++nop
++cmp %rbp,0x58(%rsp)
++je TARGET<rook2::movegen::generate_legal+0xa4f>
++inc %rbp
++jmp TARGET<rook2::movegen::generate_legal+0x7d0>
+ cmp $0x1ff,%rdx
+-jbe TARGET<rook2::movegen::generate_legal+0xaaa>
+-add $0x128,%rsp
++jbe TARGET<rook2::movegen::generate_legal+0xa6a>
++add $0x108,%rsp
+ pop %rbx
+ pop %r12
+ pop %r13
+@@ -613,42 +613,40 @@
+ pop %r15
+ pop %rbp
+ ret
+-cmpq $0x1,0x38(%rsp)
+-jne TARGET<rook2::movegen::generate_legal+0xadb>
++cmpq $0x1,0x30(%rsp)
++jne TARGET<rook2::movegen::generate_legal+0xa9a>
+ mov %rsi,%rdi
+ mov 0x10(%rsp),%rsi
+-mov 0x18(%rsp),%rcx
+-mov 0xb0(%rsp),%r8d
+-mov 0x30(%rsp),%r9
++mov 0x8(%rsp),%rcx
++mov 0xb8(%rsp),%r8d
++mov 0x28(%rsp),%r9
+ call TARGET<rook2::movegen::single_check_pawn_prefix>
+-mov 0x8(%rsp),%r11
+-mov 0x28(%rsp),%rsi
+-mov 0xa8(%rsp),%rax
++mov (%rsp),%r11
++mov 0x20(%rsp),%rsi
++mov 0xa0(%rsp),%rax
+ lea (%r11,%rax,2),%rax
+ add $0x60,%rax
+-mov %rax,0xc0(%rsp)
+-movl $0x4030201,0x120(%rsp)
+-movb $0x5,0x124(%rsp)
+-movzbl 0xe0(%rsp),%eax
+-mov %al,0x10(%rsp)
+-movzbl 0xe1(%rsp),%eax
+-mov %al,0x64(%rsp)
+-mov 0xd0(%rsp),%rax
+ mov %rax,0xb0(%rsp)
+-mov 0xd8(%rsp),%rax
+-mov %rax,0xb8(%rsp)
+-lea 0x80(%r11),%rax
+-mov %rax,0x40(%rsp)
++movl $0x4030201,0x100(%rsp)
++movb $0x5,0x104(%rsp)
++movzbl 0xd0(%rsp),%eax
++mov %al,0x4c(%rsp)
++movzbl 0xd1(%rsp),%eax
++mov %al,0xa8(%rsp)
++mov 0xc0(%rsp),%rax
++mov %rax,0xa0(%rsp)
++mov 0xc8(%rsp),%rax
++mov %rax,0x10(%rsp)
+ xor %r14d,%r14d
+-jmp TARGET<rook2::movegen::generate_legal+0xb6c>
+-nop
+-mov 0xc8(%rsp),%r14
++jmp TARGET<rook2::movegen::generate_legal+0xb2c>
++data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
++mov 0xb8(%rsp),%r14
+ inc %r14
+ cmpq $0x200,0x400(%rsi)
+-jae TARGET<rook2::movegen::generate_legal+0xa98>
++jae TARGET<rook2::movegen::generate_legal+0xa58>
+ cmp $0x5,%r14
+-je TARGET<rook2::movegen::generate_legal+0xa98>
+-movzbl 0x120(%rsp,%r14,1),%eax
++je TARGET<rook2::movegen::generate_legal+0xa58>
++movzbl 0x100(%rsp,%r14,1),%eax
+ mov $0x4,%ecx
+ lea RIP<anon.97e4a8a199518c575ceab5ee49f3765e.1+0x4e7>,%rdi
+ movslq (%rdi,%rax,4),%rdx
+@@ -662,23 +660,23 @@
+ mov $0x8,%ecx
+ lea -0x1(%rax),%rdi
+ cmp $0x7,%rdi
+-mov 0xc0(%rsp),%rbx
+-jae TARGET<rook2::movegen::generate_legal+0xbf0>
+-xor %r13d,%r13d
++mov 0xb0(%rsp),%rbx
++jae TARGET<rook2::movegen::generate_legal+0xbb0>
++xor %ebp,%ebp
+ xor %r10d,%r10d
+-jmp TARGET<rook2::movegen::generate_legal+0xc4d>
++jmp TARGET<rook2::movegen::generate_legal+0xc0d>
+ xor %edx,%edx
+ lea RIP<anon.7a066d98510451803408212fe4ed9a88.5+0x3e6>,%r15
+ lea -0x1(%rax),%rdi
+ cmp $0x7,%rdi
+-mov 0xc0(%rsp),%rbx
+-jb TARGET<rook2::movegen::generate_legal+0xbc2>
+-nopl 0x0(%rax,%rax,1)
+-xor %r13d,%r13d
++mov 0xb0(%rsp),%rbx
++jb TARGET<rook2::movegen::generate_legal+0xb82>
++nopw 0x0(%rax,%rax,1)
++xor %ebp,%ebp
+ xor %r10d,%r10d
+-cs nopw 0x0(%rax,%rax,1)
++data16 cs nopw 0x0(%rax,%rax,1)
+ movzbl (%rbx,%r10,1),%edi
+-add %r13,%rdi
++add %rbp,%rdi
+ movzbl 0x1(%rbx,%r10,1),%r8d
+ movzbl 0x2(%rbx,%r10,1),%r9d
+ add %r8,%r9
+@@ -690,530 +688,527 @@
+ add %r8,%rdi
+ add %r9,%rdi
+ movzbl 0x6(%rbx,%r10,1),%r8d
+-movzbl 0x7(%rbx,%r10,1),%r13d
+-add %r8,%r13
+-add %rdi,%r13
++movzbl 0x7(%rbx,%r10,1),%ebp
++add %r8,%rbp
++add %rdi,%rbp
+ add $0x8,%r10
+-jne TARGET<rook2::movegen::generate_legal+0xc00>
++jne TARGET<rook2::movegen::generate_legal+0xbc0>
+ test %rax,%rax
+-je TARGET<rook2::movegen::generate_legal+0xc70>
++je TARGET<rook2::movegen::generate_legal+0xc30>
+ add %rbx,%r10
+ xor %edi,%edi
+ nopw 0x0(%rax,%rax,1)
+ movzbl (%r10,%rdi,1),%r8d
+-add %r8,%r13
++add %r8,%rbp
+ inc %rdi
+ cmp %rdi,%rax
+-jne TARGET<rook2::movegen::generate_legal+0xc60>
++jne TARGET<rook2::movegen::generate_legal+0xc20>
+ movzbl (%rbx,%rax,1),%edi
+-mov %r13,%rax
++mov %rbp,%rax
+ add %rdi,%rax
+-jb TARGET<rook2::movegen::generate_legal+0x1498>
++jb TARGET<rook2::movegen::generate_legal+0x1470>
+ cmp $0x10,%rax
+-ja TARGET<rook2::movegen::generate_legal+0x14ab>
+-mov %r15,0x18(%rsp)
+-mov %r14,0xc8(%rsp)
+-mov %rdi,0xa8(%rsp)
++ja TARGET<rook2::movegen::generate_legal+0x1483>
++mov %r15,0x90(%rsp)
++mov %r14,0xb8(%rsp)
++mov %rdi,0x30(%rsp)
+ test %rdi,%rdi
+-je TARGET<rook2::movegen::generate_legal+0xb50>
+-add 0xe8(%rsp),%r13
+-add %r13,0xa8(%rsp)
+-mov 0x18(%rsp),%rax
++je TARGET<rook2::movegen::generate_legal+0xb10>
++add 0xd8(%rsp),%rbp
++add %rbp,0x30(%rsp)
++mov 0x90(%rsp),%rax
+ lea (%rax,%rcx,2),%r10
+-movzbl 0x10(%rsp),%eax
++movzbl 0x4c(%rsp),%eax
+ mov %eax,0x58(%rsp)
+ test %dl,%dl
+-mov %r10,0x20(%rsp)
+-jne TARGET<rook2::movegen::generate_legal+0x12be>
+-movzbl 0x0(%r13),%ecx
++mov %r10,0x18(%rsp)
++jne TARGET<rook2::movegen::generate_legal+0x128b>
++movzbl 0x0(%rbp),%ecx
+ mov %ecx,%edi
+ mov %ecx,%edx
+ movzwl %cx,%eax
+-mov %eax,0x68(%rsp)
++mov %eax,0x38(%rsp)
+ mov %ecx,%eax
+ and $0x7,%al
+-mov %rax,0x38(%rsp)
++mov %rax,0x98(%rsp)
+ mov $0x1,%eax
+ shl %cl,%rax
+ shr $0x3,%dil
+-mov %rdi,0x48(%rsp)
++mov %rdi,0x8(%rsp)
+ and $0x3f,%dl
+-mov 0x18(%rsp),%r15
+-cmp 0x10(%rsp),%dl
+-je TARGET<rook2::movegen::generate_legal+0xd5d>
+-mov 0x18(%rsp),%r15
+-testb $0x1,0x64(%rsp)
+-jne TARGET<rook2::movegen::generate_legal+0xebd>
+-mov 0x18(%rsp),%r15
+-and 0xb0(%rsp),%rax
+-jne TARGET<rook2::movegen::generate_legal+0x104d>
+-mov 0x18(%rsp),%rax
+-jmp TARGET<rook2::movegen::generate_legal+0x11ad>
++mov 0x90(%rsp),%r13
++cmp 0x4c(%rsp),%dl
++je TARGET<rook2::movegen::generate_legal+0xd2d>
++mov 0x90(%rsp),%r13
++testb $0x1,0xa8(%rsp)
++jne TARGET<rook2::movegen::generate_legal+0xe8d>
++mov 0x90(%rsp),%r13
++and 0xa0(%rsp),%rax
++jne TARGET<rook2::movegen::generate_legal+0x101d>
++mov 0x90(%rsp),%rax
++jmp TARGET<rook2::movegen::generate_legal+0x117d>
+ cmp $0x6,%eax
+-jne TARGET<rook2::movegen::generate_legal+0x441>
+-data16 cs nopw 0x0(%rax,%rax,1)
+-add $0x2,%r15
+-cmp %r10,%r15
+-je TARGET<rook2::movegen::generate_legal+0x1297>
+-movzbl (%r15),%ecx
+-movzbl 0x1(%r15),%r14d
+-mov 0x38(%rsp),%rax
++jne TARGET<rook2::movegen::generate_legal+0x231>
++cs nopw 0x0(%rax,%rax,1)
++add $0x2,%r13
++cmp %r10,%r13
++je TARGET<rook2::movegen::generate_legal+0x1267>
++movzbl 0x0(%r13),%ecx
++movzbl 0x1(%r13),%r14d
++mov 0x98(%rsp),%rax
+ mov %rcx,0x50(%rsp)
+ add %ecx,%eax
+-mov 0x48(%rsp),%rcx
+-lea (%r14,%rcx,1),%r12d
+-mov %r12d,%ecx
++mov 0x8(%rsp),%rcx
++lea (%r14,%rcx,1),%r15d
++mov %r15d,%ecx
+ or %al,%cl
+ cmp $0x7,%cl
+-ja TARGET<rook2::movegen::generate_legal+0xd50>
+-shl $0x3,%r12b
+-or %al,%r12b
+-nopl 0x0(%rax)
+-movzbl %r12b,%r12d
+-cmp $0x3f,%r12b
+-ja TARGET<rook2::movegen::generate_legal+0x14c0>
+-movzbl (%r11,%r12,1),%ebx
++ja TARGET<rook2::movegen::generate_legal+0xd20>
++shl $0x3,%r15b
++or %al,%r15b
++movzbl %r15b,%r15d
++cmp $0x3f,%r15b
++ja TARGET<rook2::movegen::generate_legal+0x1498>
++movzbl (%r11,%r15,1),%ebx
+ test %ebx,%ebx
+-je TARGET<rook2::movegen::generate_legal+0xdc5>
++je TARGET<rook2::movegen::generate_legal+0xd95>
+ mov %ebx,%eax
+ shr $0x3,%al
+ and $0x1,%al
+-cmp 0x30(%rsp),%al
+-je TARGET<rook2::movegen::generate_legal+0xd50>
++cmp 0x28(%rsp),%al
++je TARGET<rook2::movegen::generate_legal+0xd20>
+ mov %ebx,%eax
+ and $0x7,%eax
+ lea -0x1(%rax),%ecx
+ cmp $0x5,%ecx
+-jae TARGET<rook2::movegen::generate_legal+0xd3c>
+-mov %r12d,%ebp
+-shl $0x6,%ebp
+-or 0x68(%rsp),%ebp
++jae TARGET<rook2::movegen::generate_legal+0xd0d>
++mov %r15d,%r12d
++shl $0x6,%r12d
++or 0x38(%rsp),%r12d
+ mov 0x40(%rsp),%rax
+ movups (%rax),%xmm0
+ movups 0x10(%rax),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
+ mov %r11,%rdi
+-mov %ebp,%esi
++mov %r12d,%esi
+ mov 0x58(%rsp),%edx
+-lea 0x70(%rsp),%rcx
++lea 0x60(%rsp),%rcx
+ call TARGET<rook2::movegen::legal_after_bits>
+-mov 0x28(%rsp),%rsi
++mov 0x20(%rsp),%rsi
+ mov 0x400(%rsi),%rcx
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0xe50>
++je TARGET<rook2::movegen::generate_legal+0xe20>
+ cmp $0x1ff,%rcx
+-mov 0x8(%rsp),%r11
+-mov 0x20(%rsp),%r10
+-ja TARGET<rook2::movegen::generate_legal+0x145a>
+-mov %bp,(%rsi,%rcx,2)
++mov (%rsp),%r11
++mov 0x18(%rsp),%r10
++ja TARGET<rook2::movegen::generate_legal+0x1438>
++mov %r12w,(%rsi,%rcx,2)
+ mov 0x400(%rsi),%rcx
+ inc %rcx
+ mov %rcx,0x400(%rsi)
+ cmp $0x1ff,%rcx
+-jbe TARGET<rook2::movegen::generate_legal+0xe67>
+-jmp TARGET<rook2::movegen::generate_legal+0xb50>
++jbe TARGET<rook2::movegen::generate_legal+0xe36>
++jmp TARGET<rook2::movegen::generate_legal+0xb10>
+ data16 cs nopw 0x0(%rax,%rax,1)
+-mov 0x8(%rsp),%r11
+-mov 0x20(%rsp),%r10
++mov (%rsp),%r11
++mov 0x18(%rsp),%r10
+ cmp $0x1ff,%rcx
+-ja TARGET<rook2::movegen::generate_legal+0xb50>
++ja TARGET<rook2::movegen::generate_legal+0xb10>
+ test %ebx,%ebx
+-jne TARGET<rook2::movegen::generate_legal+0xd50>
+-mov %r12d,%eax
++jne TARGET<rook2::movegen::generate_legal+0xd20>
++mov %r15d,%eax
+ and $0x7,%al
+ add 0x50(%rsp),%al
+-shr $0x3,%r12b
+-add %r14b,%r12b
+-mov %r12d,%ecx
++shr $0x3,%r15b
++add %r14b,%r15b
++mov %r15d,%ecx
+ or %al,%cl
+-shl $0x3,%r12b
+-add %al,%r12b
++shl $0x3,%r15b
++add %al,%r15b
+ cmp $0x8,%cl
+-jb TARGET<rook2::movegen::generate_legal+0xd90>
+-jmp TARGET<rook2::movegen::generate_legal+0xd50>
++jb TARGET<rook2::movegen::generate_legal+0xd60>
++jmp TARGET<rook2::movegen::generate_legal+0xd20>
+ cmp $0x6,%eax
+-jne TARGET<rook2::movegen::generate_legal+0x441>
+-data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+-add $0x2,%r15
+-cmp %r10,%r15
+-je TARGET<rook2::movegen::generate_legal+0x1297>
+-movzbl (%r15),%ecx
+-movzbl 0x1(%r15),%ebx
+-mov 0x38(%rsp),%rax
++jne TARGET<rook2::movegen::generate_legal+0x231>
++data16 data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
++add $0x2,%r13
++cmp %r10,%r13
++je TARGET<rook2::movegen::generate_legal+0x1267>
++movzbl 0x0(%r13),%ecx
++movzbl 0x1(%r13),%ebx
++mov 0x98(%rsp),%rax
+ mov %rcx,0x50(%rsp)
+ add %ecx,%eax
+-mov 0x48(%rsp),%rcx
+-lea (%rbx,%rcx,1),%r12d
+-mov %r12d,%ecx
++mov 0x8(%rsp),%rcx
++lea (%rbx,%rcx,1),%r15d
++mov %r15d,%ecx
+ or %al,%cl
+ cmp $0x7,%cl
+-ja TARGET<rook2::movegen::generate_legal+0xeb0>
+-shl $0x3,%r12b
+-or %al,%r12b
+-nopl 0x0(%rax)
+-movzbl %r12b,%r12d
+-cmp $0x3f,%r12b
+-ja TARGET<rook2::movegen::generate_legal+0x14c0>
+-movzbl (%r11,%r12,1),%r14d
++ja TARGET<rook2::movegen::generate_legal+0xe80>
++shl $0x3,%r15b
++or %al,%r15b
++movzbl %r15b,%r15d
++cmp $0x3f,%r15b
++ja TARGET<rook2::movegen::generate_legal+0x1498>
++movzbl (%r11,%r15,1),%r14d
+ test %r14d,%r14d
+-je TARGET<rook2::movegen::generate_legal+0xf28>
++je TARGET<rook2::movegen::generate_legal+0xef8>
+ mov %r14d,%eax
+ shr $0x3,%al
+ and $0x1,%al
+-cmp 0x30(%rsp),%al
+-je TARGET<rook2::movegen::generate_legal+0xeb0>
++cmp 0x28(%rsp),%al
++je TARGET<rook2::movegen::generate_legal+0xe80>
+ mov %r14d,%eax
+ and $0x7,%eax
+ lea -0x1(%rax),%ecx
+ cmp $0x5,%ecx
+-jae TARGET<rook2::movegen::generate_legal+0xe99>
+-mov %r12d,%ebp
+-shl $0x6,%ebp
+-or 0x68(%rsp),%ebp
+-mov %ebp,%eax
++jae TARGET<rook2::movegen::generate_legal+0xe68>
++mov %r15d,%r12d
++shl $0x6,%r12d
++or 0x38(%rsp),%r12d
++mov %r12d,%eax
+ shr $0x6,%eax
+-mov 0xb8(%rsp),%rcx
++mov 0x10(%rsp),%rcx
+ bt %rax,%rcx
+-jae TARGET<rook2::movegen::generate_legal+0xfc0>
++jae TARGET<rook2::movegen::generate_legal+0xf90>
+ mov 0x40(%rsp),%rax
+ movups (%rax),%xmm0
+ movups 0x10(%rax),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
+ mov %r11,%rdi
+-mov %ebp,%esi
++mov %r12d,%esi
+ mov 0x58(%rsp),%edx
+-lea 0x70(%rsp),%rcx
++lea 0x60(%rsp),%rcx
+ call TARGET<rook2::movegen::legal_after_bits>
+-mov 0x28(%rsp),%rsi
++mov 0x20(%rsp),%rsi
+ mov 0x400(%rsi),%rcx
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0xfe0>
++je TARGET<rook2::movegen::generate_legal+0xfb0>
+ cmp $0x1ff,%rcx
+-mov 0x8(%rsp),%r11
+-mov 0x20(%rsp),%r10
+-ja TARGET<rook2::movegen::generate_legal+0x145a>
+-mov %bp,(%rsi,%rcx,2)
++mov (%rsp),%r11
++mov 0x18(%rsp),%r10
++ja TARGET<rook2::movegen::generate_legal+0x1438>
++mov %r12w,(%rsi,%rcx,2)
+ mov 0x400(%rsi),%rcx
+ inc %rcx
+ mov %rcx,0x400(%rsi)
+ cmp $0x1ff,%rcx
+-jbe TARGET<rook2::movegen::generate_legal+0xff7>
+-jmp TARGET<rook2::movegen::generate_legal+0xb50>
+-nopl 0x0(%rax,%rax,1)
++jbe TARGET<rook2::movegen::generate_legal+0xfc6>
++jmp TARGET<rook2::movegen::generate_legal+0xb10>
++nopl 0x0(%rax)
+ mov 0x400(%rsi),%rcx
+ cmp $0x1ff,%rcx
+-jbe TARGET<rook2::movegen::generate_legal+0xff7>
+-jmp TARGET<rook2::movegen::generate_legal+0xb50>
++jbe TARGET<rook2::movegen::generate_legal+0xfc6>
++jmp TARGET<rook2::movegen::generate_legal+0xb10>
+ data16 cs nopw 0x0(%rax,%rax,1)
+-mov 0x8(%rsp),%r11
+-mov 0x20(%rsp),%r10
++mov (%rsp),%r11
++mov 0x18(%rsp),%r10
+ cmp $0x1ff,%rcx
+-ja TARGET<rook2::movegen::generate_legal+0xb50>
++ja TARGET<rook2::movegen::generate_legal+0xb10>
+ test %r14d,%r14d
+-jne TARGET<rook2::movegen::generate_legal+0xeb0>
+-mov %r12d,%eax
++jne TARGET<rook2::movegen::generate_legal+0xe80>
++mov %r15d,%eax
+ and $0x7,%al
+ add 0x50(%rsp),%al
+-shr $0x3,%r12b
+-add %bl,%r12b
+-mov %r12d,%ecx
++shr $0x3,%r15b
++add %bl,%r15b
++mov %r15d,%ecx
+ or %al,%cl
+-shl $0x3,%r12b
+-add %al,%r12b
++shl $0x3,%r15b
++add %al,%r15b
+ cmp $0x8,%cl
+-jb TARGET<rook2::movegen::generate_legal+0xef0>
+-jmp TARGET<rook2::movegen::generate_legal+0xeb0>
++jb TARGET<rook2::movegen::generate_legal+0xec0>
++jmp TARGET<rook2::movegen::generate_legal+0xe80>
+ cmp $0x6,%eax
+-jne TARGET<rook2::movegen::generate_legal+0x441>
+-data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+-add $0x2,%r15
+-cmp %r10,%r15
+-je TARGET<rook2::movegen::generate_legal+0x1297>
+-movzbl (%r15),%ecx
+-movzbl 0x1(%r15),%r14d
+-mov 0x38(%rsp),%rax
++jne TARGET<rook2::movegen::generate_legal+0x231>
++data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
++add $0x2,%r13
++cmp %r10,%r13
++je TARGET<rook2::movegen::generate_legal+0x1267>
++movzbl 0x0(%r13),%ecx
++movzbl 0x1(%r13),%r14d
++mov 0x98(%rsp),%rax
+ mov %rcx,0x50(%rsp)
+ add %ecx,%eax
+-mov 0x48(%rsp),%rcx
+-lea (%r14,%rcx,1),%r12d
+-mov %r12d,%ecx
++mov 0x8(%rsp),%rcx
++lea (%r14,%rcx,1),%r15d
++mov %r15d,%ecx
+ or %al,%cl
+ cmp $0x7,%cl
+-ja TARGET<rook2::movegen::generate_legal+0x1040>
+-shl $0x3,%r12b
+-or %al,%r12b
+-nopl 0x0(%rax)
+-movzbl %r12b,%r12d
+-cmp $0x40,%r12b
+-jae TARGET<rook2::movegen::generate_legal+0x14c0>
+-movzbl (%r11,%r12,1),%ebx
++ja TARGET<rook2::movegen::generate_legal+0x1010>
++shl $0x3,%r15b
++or %al,%r15b
++movzbl %r15b,%r15d
++cmp $0x40,%r15b
++jae TARGET<rook2::movegen::generate_legal+0x1498>
++movzbl (%r11,%r15,1),%ebx
+ test %ebx,%ebx
+-je TARGET<rook2::movegen::generate_legal+0x10b5>
++je TARGET<rook2::movegen::generate_legal+0x1085>
+ mov %ebx,%eax
+ shr $0x3,%al
+ and $0x1,%al
+-cmp 0x30(%rsp),%al
+-je TARGET<rook2::movegen::generate_legal+0x1040>
++cmp 0x28(%rsp),%al
++je TARGET<rook2::movegen::generate_legal+0x1010>
+ mov %ebx,%eax
+ and $0x7,%eax
+ lea -0x1(%rax),%ecx
+ cmp $0x5,%ecx
+-jae TARGET<rook2::movegen::generate_legal+0x102a>
+-mov %r12d,%ebp
+-shl $0x6,%ebp
+-or 0x68(%rsp),%ebp
++jae TARGET<rook2::movegen::generate_legal+0xff9>
++mov %r15d,%r12d
++shl $0x6,%r12d
++or 0x38(%rsp),%r12d
+ mov 0x40(%rsp),%rax
+ movups (%rax),%xmm0
+ movups 0x10(%rax),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
+ mov %r11,%rdi
+-mov %ebp,%esi
++mov %r12d,%esi
+ mov 0x58(%rsp),%edx
+-lea 0x70(%rsp),%rcx
++lea 0x60(%rsp),%rcx
+ call TARGET<rook2::movegen::legal_after_bits>
+-mov 0x28(%rsp),%rsi
++mov 0x20(%rsp),%rsi
+ mov 0x400(%rsi),%rcx
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0x1140>
++je TARGET<rook2::movegen::generate_legal+0x1110>
+ cmp $0x200,%rcx
+-mov 0x8(%rsp),%r11
+-mov 0x20(%rsp),%r10
+-jae TARGET<rook2::movegen::generate_legal+0x145a>
+-mov %bp,(%rsi,%rcx,2)
++mov (%rsp),%r11
++mov 0x18(%rsp),%r10
++jae TARGET<rook2::movegen::generate_legal+0x1438>
++mov %r12w,(%rsi,%rcx,2)
+ mov 0x400(%rsi),%rcx
+ inc %rcx
+ mov %rcx,0x400(%rsi)
+ cmp $0x1ff,%rcx
+-jbe TARGET<rook2::movegen::generate_legal+0x1157>
+-jmp TARGET<rook2::movegen::generate_legal+0xb50>
++jbe TARGET<rook2::movegen::generate_legal+0x1126>
++jmp TARGET<rook2::movegen::generate_legal+0xb10>
+ data16 cs nopw 0x0(%rax,%rax,1)
+-mov 0x8(%rsp),%r11
+-mov 0x20(%rsp),%r10
++mov (%rsp),%r11
++mov 0x18(%rsp),%r10
+ cmp $0x1ff,%rcx
+-ja TARGET<rook2::movegen::generate_legal+0xb50>
++ja TARGET<rook2::movegen::generate_legal+0xb10>
+ test %ebx,%ebx
+-jne TARGET<rook2::movegen::generate_legal+0x1040>
+-mov %r12d,%eax
++jne TARGET<rook2::movegen::generate_legal+0x1010>
++mov %r15d,%eax
+ and $0x7,%al
+ add 0x50(%rsp),%al
+-shr $0x3,%r12b
+-add %r14b,%r12b
+-mov %r12d,%ecx
++shr $0x3,%r15b
++add %r14b,%r15b
++mov %r15d,%ecx
+ or %al,%cl
+-shl $0x3,%r12b
+-add %al,%r12b
++shl $0x3,%r15b
++add %al,%r15b
+ cmp $0x8,%cl
+-jb TARGET<rook2::movegen::generate_legal+0x1080>
+-jmp TARGET<rook2::movegen::generate_legal+0x1040>
++jb TARGET<rook2::movegen::generate_legal+0x1050>
++jmp TARGET<rook2::movegen::generate_legal+0x1010>
+ cmp $0x6,%edi
+-jne TARGET<rook2::movegen::generate_legal+0x441>
+-data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
++jne TARGET<rook2::movegen::generate_legal+0x231>
++data16 data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+ add $0x2,%rax
+ cmp %r10,%rax
+-je TARGET<rook2::movegen::generate_legal+0x1297>
++je TARGET<rook2::movegen::generate_legal+0x1267>
+ movzbl (%rax),%ecx
+ movzbl 0x1(%rax),%edx
+-mov 0x38(%rsp),%rdi
++mov 0x98(%rsp),%rdi
+ lea (%rcx,%rdi,1),%r8d
+-mov 0x48(%rsp),%rdi
+-lea (%rdx,%rdi,1),%r12d
+-mov %r12d,%edi
++mov 0x8(%rsp),%rdi
++lea (%rdx,%rdi,1),%r15d
++mov %r15d,%edi
+ or %r8b,%dil
+ cmp $0x7,%dil
+-ja TARGET<rook2::movegen::generate_legal+0x11a0>
+-shl $0x3,%r12b
+-or %r8b,%r12b
++ja TARGET<rook2::movegen::generate_legal+0x1170>
++shl $0x3,%r15b
++or %r8b,%r15b
+ nopl 0x0(%rax)
+-movzbl %r12b,%r12d
+-cmp $0x3f,%r12b
+-ja TARGET<rook2::movegen::generate_legal+0x14c0>
+-movzbl (%r11,%r12,1),%r9d
++movzbl %r15b,%r15d
++cmp $0x3f,%r15b
++ja TARGET<rook2::movegen::generate_legal+0x1498>
++movzbl (%r11,%r15,1),%r9d
+ test %r9d,%r9d
+-je TARGET<rook2::movegen::generate_legal+0x121e>
++je TARGET<rook2::movegen::generate_legal+0x11ee>
+ mov %r9d,%edi
+ shr $0x3,%dil
+ and $0x1,%dil
+-cmp 0x30(%rsp),%dil
+-je TARGET<rook2::movegen::generate_legal+0x11a0>
++cmp 0x28(%rsp),%dil
++je TARGET<rook2::movegen::generate_legal+0x1170>
+ mov %r9d,%edi
+ and $0x7,%edi
+ lea -0x1(%rdi),%r8d
+ cmp $0x5,%r8d
+-jae TARGET<rook2::movegen::generate_legal+0x1189>
++jae TARGET<rook2::movegen::generate_legal+0x1158>
+ mov 0x400(%rsi),%rdi
+ cmp $0x1ff,%rdi
+-ja TARGET<rook2::movegen::generate_legal+0x145a>
+-mov %r12d,%r8d
++ja TARGET<rook2::movegen::generate_legal+0x1438>
++mov %r15d,%r8d
+ shl $0x6,%r8d
+-or 0x68(%rsp),%r8d
++or 0x38(%rsp),%r8d
+ mov %r8w,(%rsi,%rdi,2)
+ mov 0x400(%rsi),%rdi
+ inc %rdi
+ mov %rdi,0x400(%rsi)
+ cmp $0x1ff,%rdi
+-ja TARGET<rook2::movegen::generate_legal+0xa98>
++ja TARGET<rook2::movegen::generate_legal+0xa58>
+ test %r9d,%r9d
+-jne TARGET<rook2::movegen::generate_legal+0x11a0>
+-mov %r12d,%r8d
++jne TARGET<rook2::movegen::generate_legal+0x1170>
++mov %r15d,%r8d
+ and $0x7,%r8b
+ add %cl,%r8b
+-shr $0x3,%r12b
+-add %dl,%r12b
+-mov %r12d,%edi
++shr $0x3,%r15b
++add %dl,%r15b
++mov %r15d,%edi
+ or %r8b,%dil
+-shl $0x3,%r12b
+-add %r8b,%r12b
++shl $0x3,%r15b
++add %r8b,%r15b
+ cmp $0x8,%dil
+-jb TARGET<rook2::movegen::generate_legal+0x11e0>
+-jmp TARGET<rook2::movegen::generate_legal+0x11a0>
+-inc %r13
+-cmp 0xa8(%rsp),%r13
+-jne TARGET<rook2::movegen::generate_legal+0xcd7>
+-jmp TARGET<rook2::movegen::generate_legal+0xb50>
+-nopl (%rax)
+-cmp 0xa8(%rsp),%r13
+-je TARGET<rook2::movegen::generate_legal+0xb50>
+-movzbl 0x0(%r13),%ecx
+-inc %r13
++jb TARGET<rook2::movegen::generate_legal+0x11b0>
++jmp TARGET<rook2::movegen::generate_legal+0x1170>
++inc %rbp
++cmp 0x30(%rsp),%rbp
++jne TARGET<rook2::movegen::generate_legal+0xc97>
++jmp TARGET<rook2::movegen::generate_legal+0xb10>
++nopw 0x0(%rax,%rax,1)
++cmp 0x30(%rsp),%rbp
++je TARGET<rook2::movegen::generate_legal+0xb10>
++movzbl 0x0(%rbp),%ecx
++inc %rbp
+ mov %ecx,%ebx
+ and $0x7,%bl
+-mov %ecx,%r15d
+-shr $0x3,%r15b
++mov %ecx,%r12d
++shr $0x3,%r12b
+ mov %ecx,%eax
+ and $0x3f,%al
+ mov %al,0x50(%rsp)
+ mov $0x1,%eax
+-mov %ecx,0x68(%rsp)
++mov %ecx,0x38(%rsp)
+ shl %cl,%rax
+-mov %rax,0x48(%rsp)
+-mov 0x18(%rsp),%r14
+-jmp TARGET<rook2::movegen::generate_legal+0x1319>
++mov %rax,0x8(%rsp)
++mov 0x90(%rsp),%r14
++jmp TARGET<rook2::movegen::generate_legal+0x12e9>
+ mov 0x400(%rsi),%rax
+ cmp $0x1ff,%rax
+-ja TARGET<rook2::movegen::generate_legal+0xb50>
+-data16 cs nopw 0x0(%rax,%rax,1)
++ja TARGET<rook2::movegen::generate_legal+0xb10>
++data16 data16 cs nopw 0x0(%rax,%rax,1)
+ add $0x2,%r14
+ cmp %r10,%r14
+-je TARGET<rook2::movegen::generate_legal+0x12b0>
++je TARGET<rook2::movegen::generate_legal+0x1280>
+ movzbl (%r14),%eax
+ add %bl,%al
+ movzbl 0x1(%r14),%ecx
+-add %r15b,%cl
++add %r12b,%cl
+ mov %ecx,%edx
+ or %al,%dl
+ cmp $0x8,%dl
+-jae TARGET<rook2::movegen::generate_legal+0x1310>
++jae TARGET<rook2::movegen::generate_legal+0x12e0>
+ shl $0x3,%cl
+ add %al,%cl
+-movzbl %cl,%r12d
+-cmp $0x3f,%r12b
+-ja TARGET<rook2::movegen::generate_legal+0x14c0>
+-movzbl (%r11,%r12,1),%eax
++movzbl %cl,%r15d
++cmp $0x3f,%r15b
++ja TARGET<rook2::movegen::generate_legal+0x1498>
++movzbl (%r11,%r15,1),%eax
+ test %eax,%eax
+-je TARGET<rook2::movegen::generate_legal+0x1369>
++je TARGET<rook2::movegen::generate_legal+0x1339>
+ mov %eax,%ecx
+ shr $0x3,%cl
+ and $0x1,%cl
+-cmp 0x30(%rsp),%cl
+-je TARGET<rook2::movegen::generate_legal+0x1310>
++cmp 0x28(%rsp),%cl
++je TARGET<rook2::movegen::generate_legal+0x12e0>
+ and $0x7,%eax
+ lea -0x1(%rax),%ecx
+ cmp $0x5,%ecx
+-jae TARGET<rook2::movegen::generate_legal+0x1428>
+-shl $0x6,%r12d
+-movzwl 0x68(%rsp),%ebp
+-or %r12d,%ebp
++jae TARGET<rook2::movegen::generate_legal+0x1406>
++shl $0x6,%r15d
++movzwl 0x38(%rsp),%r13d
++or %r15d,%r13d
+ movzbl 0x50(%rsp),%eax
+-cmp 0x10(%rsp),%al
+-je TARGET<rook2::movegen::generate_legal+0x13b0>
+-testb $0x1,0x64(%rsp)
+-je TARGET<rook2::movegen::generate_legal+0x13a0>
+-movzwl %bp,%eax
++cmp 0x4c(%rsp),%al
++je TARGET<rook2::movegen::generate_legal+0x1390>
++testb $0x1,0xa8(%rsp)
++je TARGET<rook2::movegen::generate_legal+0x1372>
++movzwl %r13w,%eax
+ shr $0x6,%eax
+-mov 0xb8(%rsp),%rcx
++mov 0x10(%rsp),%rcx
+ bt %rax,%rcx
+-jb TARGET<rook2::movegen::generate_legal+0x13b0>
+-jmp TARGET<rook2::movegen::generate_legal+0x12f2>
+-mov 0x48(%rsp),%rax
+-test %rax,0xb0(%rsp)
+-je TARGET<rook2::movegen::generate_legal+0x13f3>
+-nop
++jb TARGET<rook2::movegen::generate_legal+0x1390>
++jmp TARGET<rook2::movegen::generate_legal+0x12c1>
++mov 0x8(%rsp),%rax
++test %rax,0xa0(%rsp)
++je TARGET<rook2::movegen::generate_legal+0x13d0>
++data16 data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+ mov 0x40(%rsp),%rax
+ movups (%rax),%xmm0
+ movups 0x10(%rax),%xmm1
+-movaps %xmm1,0x80(%rsp)
+-movaps %xmm0,0x70(%rsp)
++movaps %xmm1,0x70(%rsp)
++movaps %xmm0,0x60(%rsp)
+ mov %r11,%rdi
+-mov %ebp,%esi
++mov %r13d,%esi
+ mov 0x58(%rsp),%edx
+-lea 0x70(%rsp),%rcx
++lea 0x60(%rsp),%rcx
+ call TARGET<rook2::movegen::legal_after_bits>
+-mov 0x20(%rsp),%r10
+-mov 0x8(%rsp),%r11
+-mov 0x28(%rsp),%rsi
++mov 0x18(%rsp),%r10
++mov (%rsp),%r11
++mov 0x20(%rsp),%rsi
+ test %al,%al
+-je TARGET<rook2::movegen::generate_legal+0x12f2>
++je TARGET<rook2::movegen::generate_legal+0x12c1>
+ mov 0x400(%rsi),%rax
+ cmp $0x1ff,%rax
+-ja TARGET<rook2::movegen::generate_legal+0x145a>
+-mov %bp,(%rsi,%rax,2)
++ja TARGET<rook2::movegen::generate_legal+0x1438>
++mov %r13w,(%rsi,%rax,2)
+ mov 0x400(%rsi),%rax
+ inc %rax
+ mov %rax,0x400(%rsi)
+ cmp $0x1ff,%rax
+-jbe TARGET<rook2::movegen::generate_legal+0x1310>
+-jmp TARGET<rook2::movegen::generate_legal+0xb50>
++jbe TARGET<rook2::movegen::generate_legal+0x12e0>
++jmp TARGET<rook2::movegen::generate_legal+0xb10>
+ cmp $0x6,%eax
+-je TARGET<rook2::movegen::generate_legal+0x1310>
+-jmp TARGET<rook2::movegen::generate_legal+0x441>
++je TARGET<rook2::movegen::generate_legal+0x12e0>
++jmp TARGET<rook2::movegen::generate_legal+0x231>
+ xor %edx,%edx
+ lea RIP<anon.7a066d98510451803408212fe4ed9a88.5+0x3ee>,%r15
+ lea -0x1(%rax),%rdi
+ cmp $0x7,%rdi
+-mov 0xc0(%rsp),%rbx
+-jb TARGET<rook2::movegen::generate_legal+0xbc2>
+-jmp TARGET<rook2::movegen::generate_legal+0xbf0>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x1a0>,%rax
+-mov %rax,0x70(%rsp)
+-movq $0x1,0x78(%rsp)
+-movq $0x8,0x80(%rsp)
++mov 0xb0(%rsp),%rbx
++jb TARGET<rook2::movegen::generate_legal+0xb82>
++jmp TARGET<rook2::movegen::generate_legal+0xbb0>
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x140>,%rax
++mov %rax,0x60(%rsp)
++movq $0x1,0x68(%rsp)
++movq $0x8,0x70(%rsp)
+ xorps %xmm0,%xmm0
+-movups %xmm0,0x88(%rsp)
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x1b0>,%rsi
+-lea 0x70(%rsp),%rdi
++movups %xmm0,0x78(%rsp)
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x150>,%rsi
++lea 0x60(%rsp),%rdi
+ call *RIP<core::panicking::panic_fmt>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.293>,%rdx
+-mov %r13,%rdi
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.296>,%rdx
++mov %rbp,%rdi
+ mov %rax,%rsi
+ call *RIP<core::slice::index::slice_index_order_fail>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.293>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.296>,%rdx
+ mov $0x10,%esi
+ mov %rax,%rdi
+ call *RIP<core::slice::index::slice_end_index_len_fail>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x258>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x1f8>,%rdx
+ mov $0x40,%esi
+-mov %r12,%rdi
++mov %r15,%rdi
+ call *RIP<core::panicking::panic_bounds_check>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x228>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x1c8>,%rdx
+ mov $0x40,%esi
+ mov %r8,%rdi
+ call *RIP<core::panicking::panic_bounds_check>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x210>,%rdi
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x1b0>,%rdi
+ call *RIP<core::option::unwrap_failed>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.0>,%rdi
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x240>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.0>,%rdi
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x1e0>,%rdx
+ mov $0x28,%esi
+ call *RIP<core::panicking::panic>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x2a0>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x240>,%rdx
+ xor %edi,%edi
+ xor %esi,%esi
+ call *RIP<core::panicking::panic_bounds_check>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x170>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x110>,%rdx
+ mov $0x40,%esi
+ call *RIP<core::panicking::panic_bounds_check>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x1f8>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.132+0x198>,%rdx
+ mov $0x40,%esi
+ call *RIP<core::panicking::panic_bounds_check>

@@ -1,0 +1,1342 @@
+--- control102-find_attackers-0-normalized.txt
++++ combined103-find_attackers-0-normalized.txt
+@@ -7,183 +7,188 @@
+ movq $0x0,0x8(%rsp)
+ lea -0x1(%rcx),%eax
+ or $0x1,%al
+-mov %edx,%r9d
+-and $0x7,%r9b
++mov %edx,%r8d
++and $0x7,%r8b
+ mov %edx,%r10d
+ shr $0x3,%r10b
+ add %al,%r10b
+-lea 0x0(,%r10,8),%ebx
++lea 0x0(,%r10,8),%r11d
+ shl $0x3,%cl
+-lea 0x1(%rcx),%r11d
+-lea -0x1(%r9),%eax
+-mov %eax,%r8d
+-or %r10b,%r8b
+-cmp $0x8,%r8b
+-jae TARGET<rook2::movegen::find_attackers+0x85>
+-add %bl,%al
+-movzbl %al,%r8d
+-cmp $0x40,%r8b
+-jae TARGET<rook2::movegen::find_attackers+0xeae>
+-cmp %r11b,(%rsi,%r8,1)
+-jne TARGET<rook2::movegen::find_attackers+0x85>
+-mov %al,0x10(%rsp)
++lea 0x1(%rcx),%r9d
++lea -0x1(%r8),%ebx
++mov %ebx,%eax
++or %r10b,%al
++cmp $0x8,%al
++jae TARGET<rook2::movegen::find_attackers+0x60>
++add %r11b,%bl
++movzbl %bl,%eax
++cmp $0x40,%al
++jae TARGET<rook2::movegen::find_attackers+0xe86>
++cmp %r9b,(%rsi,%rax,1)
++je TARGET<rook2::movegen::find_attackers+0x84>
++inc %r8b
++or %r8b,%r10b
++cmp $0x7,%r10b
++ja TARGET<rook2::movegen::find_attackers+0xbe>
++add %r11b,%r8b
++movzbl %r8b,%eax
++cmp $0x3f,%al
++ja TARGET<rook2::movegen::find_attackers+0xe86>
++mov %r8d,%ebx
++cmp %r9b,(%rsi,%rax,1)
++jne TARGET<rook2::movegen::find_attackers+0xbe>
++mov %bl,0x10(%rsp)
+ movq $0x1,0x8(%rsp)
+-mov $0x1,%eax
+-inc %r9b
+-or %r9b,%r10b
+-cmp $0x7,%r10b
+-jbe TARGET<rook2::movegen::find_attackers+0x93>
+-jmp TARGET<rook2::movegen::find_attackers+0xc6>
+-xor %eax,%eax
+-inc %r9b
+-or %r9b,%r10b
+-cmp $0x7,%r10b
+-ja TARGET<rook2::movegen::find_attackers+0xc6>
+-add %bl,%r9b
+-movzbl %r9b,%r8d
+-cmp $0x3f,%r8b
+-ja TARGET<rook2::movegen::find_attackers+0xeae>
+-cmp %r11b,(%rsi,%r8,1)
+-jne TARGET<rook2::movegen::find_attackers+0xc6>
+-mov %r9b,0x10(%rsp,%rax,1)
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-mov $0x1,%eax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%rax
++mov %rax,(%rdi)
++movzbl 0x10(%rsp),%eax
++mov %al,0x8(%rdi)
++mov 0x11(%rsp),%eax
++mov %eax,0x9(%rdi)
++movzwl 0x15(%rsp),%eax
++mov %ax,0xd(%rdi)
++movzbl 0x17(%rsp),%eax
++mov %al,0xf(%rdi)
++jmp TARGET<rook2::movegen::find_attackers+0x6e0>
+ movzbl %dl,%r9d
+ cmp $0x40,%dl
+-jae TARGET<rook2::movegen::find_attackers+0xec3>
+-lea (%r9,%r9,8),%r10
++jae TARGET<rook2::movegen::find_attackers+0xeb0>
++lea (%r9,%r9,8),%rax
+ lea RIP<rook2::geometry::KNIGHT_SOURCES>,%rdx
+-movzbl 0x8(%rdx,%r10,1),%r8d
++movzbl 0x8(%rdx,%rax,1),%r8d
+ cmp $0x9,%r8
+-jae TARGET<rook2::movegen::find_attackers+0xe84>
++jae TARGET<rook2::movegen::find_attackers+0xe71>
+ test %r8,%r8
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
+-add %r10,%rdx
++je TARGET<rook2::movegen::find_attackers+0x128>
++add %rax,%rdx
+ lea 0x2(%rcx),%r10d
+-movzbl (%rdx),%r11d
+-mov %r11d,%ebx
+-and $0x3f,%ebx
+-cmp %r10b,(%rsi,%rbx,1)
+-jne TARGET<rook2::movegen::find_attackers+0x12a>
+-mov %r11b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++movzbl (%rdx),%eax
++mov %eax,%r11d
++and $0x3f,%r11d
++cmp %r10b,(%rsi,%r11,1)
++jne TARGET<rook2::movegen::find_attackers+0x12f>
++mov %al,0x10(%rsp)
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++je TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r8d
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
++jne TARGET<rook2::movegen::find_attackers+0x13b>
++jmp TARGET<rook2::movegen::find_attackers+0x2ef>
++xor %eax,%eax
++jmp TARGET<rook2::movegen::find_attackers+0x2ef>
++xor %eax,%eax
++cmp $0x1,%r8d
++je TARGET<rook2::movegen::find_attackers+0x2ef>
+ movzbl 0x1(%rdx),%r11d
+ mov %r11d,%ebx
+ and $0x3f,%ebx
+ cmp %r10b,(%rsi,%rbx,1)
+-jne TARGET<rook2::movegen::find_attackers+0x16b>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++jne TARGET<rook2::movegen::find_attackers+0x172>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r11b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++je TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x2,%r8d
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
++je TARGET<rook2::movegen::find_attackers+0x2ef>
+ movzbl 0x2(%rdx),%r11d
+ mov %r11d,%ebx
+ and $0x3f,%ebx
+ cmp %r10b,(%rsi,%rbx,1)
+-jne TARGET<rook2::movegen::find_attackers+0x1ac>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++jne TARGET<rook2::movegen::find_attackers+0x1b3>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r11b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++je TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x3,%r8d
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
++je TARGET<rook2::movegen::find_attackers+0x2ef>
+ movzbl 0x3(%rdx),%r11d
+ mov %r11d,%ebx
+ and $0x3f,%ebx
+ cmp %r10b,(%rsi,%rbx,1)
+-jne TARGET<rook2::movegen::find_attackers+0x1ed>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++jne TARGET<rook2::movegen::find_attackers+0x1f4>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r11b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++je TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x4,%r8d
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
++je TARGET<rook2::movegen::find_attackers+0x2ef>
+ movzbl 0x4(%rdx),%r11d
+ mov %r11d,%ebx
+ and $0x3f,%ebx
+ cmp %r10b,(%rsi,%rbx,1)
+-jne TARGET<rook2::movegen::find_attackers+0x22e>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++jne TARGET<rook2::movegen::find_attackers+0x235>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r11b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++je TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x5,%r8d
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
++je TARGET<rook2::movegen::find_attackers+0x2ef>
+ movzbl 0x5(%rdx),%r11d
+ mov %r11d,%ebx
+ and $0x3f,%ebx
+ cmp %r10b,(%rsi,%rbx,1)
+-jne TARGET<rook2::movegen::find_attackers+0x26f>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++jne TARGET<rook2::movegen::find_attackers+0x276>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r11b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++je TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x6,%r8d
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
++je TARGET<rook2::movegen::find_attackers+0x2ef>
+ movzbl 0x6(%rdx),%r11d
+ mov %r11d,%ebx
+ and $0x3f,%ebx
+ cmp %r10b,(%rsi,%rbx,1)
+-jne TARGET<rook2::movegen::find_attackers+0x2ac>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++jne TARGET<rook2::movegen::find_attackers+0x2b3>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r11b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++je TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x7,%r8d
+-je TARGET<rook2::movegen::find_attackers+0x2e8>
++je TARGET<rook2::movegen::find_attackers+0x2ef>
+ movzbl 0x7(%rdx),%edx
+ mov %edx,%r8d
+ and $0x3f,%r8d
+ cmp %r10b,(%rsi,%r8,1)
+-jne TARGET<rook2::movegen::find_attackers+0x2e8>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++jne TARGET<rook2::movegen::find_attackers+0x2ef>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %dl,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%rdx
++lea 0x1(%rdx),%rax
++mov %rax,0x8(%rsp)
++test %rdx,%rdx
++je TARGET<rook2::movegen::find_attackers+0x91>
+ shl $0x6,%r9d
+ lea RIP<rook2::geometry::ATTACK_RAYS>,%r10
+ movzbl 0x7(%r10,%r9,1),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ mov %ecx,%edx
+ or $0x5,%dl
+ mov %ecx,%r8d
+@@ -192,372 +197,267 @@
+ mov %ecx,%r9d
+ or $0x3,%r9b
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
++je TARGET<rook2::movegen::find_attackers+0x385>
+ movzbl (%r10),%r14d
+ mov %r14d,%ebx
+ and $0x3f,%ebx
+ movzbl (%rsi,%rbx,1),%ebx
+ mov %ebx,%ebp
+ test %bl,%bl
+-je TARGET<rook2::movegen::find_attackers+0x374>
++je TARGET<rook2::movegen::find_attackers+0x37b>
+ test %bl,%bl
+ setne %r11b
+ cmp %r8b,%bpl
+ sete %bl
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x34d>
++je TARGET<rook2::movegen::find_attackers+0x354>
+ cmp %r9b,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x34d>
++je TARGET<rook2::movegen::find_attackers+0x354>
+ and %bl,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x385>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r14b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jne TARGET<rook2::movegen::find_attackers+0x37e>
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++jne TARGET<rook2::movegen::find_attackers+0x385>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0x654>
++jne TARGET<rook2::movegen::find_attackers+0x6eb>
+ movzbl 0xf(%r10),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
++je TARGET<rook2::movegen::find_attackers+0x3fa>
+ movzbl 0x8(%r10),%r14d
+ mov %r14d,%ebx
+ and $0x3f,%ebx
+ movzbl (%rsi,%rbx,1),%ebx
+ mov %ebx,%ebp
+ test %bl,%bl
+-je TARGET<rook2::movegen::find_attackers+0x3e9>
++je TARGET<rook2::movegen::find_attackers+0x3f0>
+ test %bl,%bl
+ setne %r11b
+ cmp %r8b,%bpl
+ sete %bl
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x3c2>
++je TARGET<rook2::movegen::find_attackers+0x3c9>
+ cmp %r9b,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x3c2>
++je TARGET<rook2::movegen::find_attackers+0x3c9>
+ and %bl,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x3fa>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r14b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jne TARGET<rook2::movegen::find_attackers+0x3f3>
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++jne TARGET<rook2::movegen::find_attackers+0x3fa>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0x7c6>
++jne TARGET<rook2::movegen::find_attackers+0x7d9>
+ movzbl 0x17(%r10),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
++je TARGET<rook2::movegen::find_attackers+0x46f>
+ movzbl 0x10(%r10),%r14d
+ mov %r14d,%ebx
+ and $0x3f,%ebx
+ movzbl (%rsi,%rbx,1),%ebx
+ mov %ebx,%ebp
+ test %bl,%bl
+-je TARGET<rook2::movegen::find_attackers+0x45e>
++je TARGET<rook2::movegen::find_attackers+0x465>
+ test %bl,%bl
+ setne %r11b
+ cmp %r8b,%bpl
+ sete %bl
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x437>
++je TARGET<rook2::movegen::find_attackers+0x43e>
+ cmp %r9b,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x437>
++je TARGET<rook2::movegen::find_attackers+0x43e>
+ and %bl,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x46f>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r14b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jne TARGET<rook2::movegen::find_attackers+0x468>
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r11
++lea 0x1(%r11),%rax
++mov %rax,0x8(%rsp)
++test %r11,%r11
++jne TARGET<rook2::movegen::find_attackers+0x46f>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0x8da>
++jne TARGET<rook2::movegen::find_attackers+0x8c7>
+ movzbl 0x1f(%r10),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
++je TARGET<rook2::movegen::find_attackers+0x4e4>
+ movzbl 0x18(%r10),%r14d
+ mov %r14d,%ebx
+ and $0x3f,%ebx
+ movzbl (%rsi,%rbx,1),%ebx
+ mov %ebx,%ebp
+ test %bl,%bl
+-je TARGET<rook2::movegen::find_attackers+0x4d3>
++je TARGET<rook2::movegen::find_attackers+0x4da>
+ test %bl,%bl
+ setne %r11b
+ cmp %r8b,%bpl
+ sete %bl
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x4ac>
++je TARGET<rook2::movegen::find_attackers+0x4b3>
+ cmp %r9b,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x4ac>
++je TARGET<rook2::movegen::find_attackers+0x4b3>
+ and %bl,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x4e4>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %r14b,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jne TARGET<rook2::movegen::find_attackers+0x4dd>
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r9
++lea 0x1(%r9),%rax
++mov %rax,0x8(%rsp)
++test %r9,%r9
++jne TARGET<rook2::movegen::find_attackers+0x4e4>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0x9c8>
++jne TARGET<rook2::movegen::find_attackers+0x9b5>
+ movzbl 0x27(%r10),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ or $0x4,%cl
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
++je TARGET<rook2::movegen::find_attackers+0x561>
+ movzbl 0x20(%r10),%ebx
+ mov %ebx,%r9d
+ and $0x3f,%r9d
+ movzbl (%rsi,%r9,1),%r9d
+ mov %r9d,%ebp
+ test %r9b,%r9b
+-je TARGET<rook2::movegen::find_attackers+0x550>
++je TARGET<rook2::movegen::find_attackers+0x557>
+ test %r9b,%r9b
+ setne %r9b
+ cmp %r8b,%bpl
+ sete %r11b
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x52a>
++je TARGET<rook2::movegen::find_attackers+0x531>
+ cmp %cl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x52a>
++je TARGET<rook2::movegen::find_attackers+0x531>
+ and %r11b,%r9b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x561>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %bl,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jne TARGET<rook2::movegen::find_attackers+0x55a>
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r9
++lea 0x1(%r9),%rax
++mov %rax,0x8(%rsp)
++test %r9,%r9
++jne TARGET<rook2::movegen::find_attackers+0x561>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0xab6>
++jne TARGET<rook2::movegen::find_attackers+0xaa3>
+ movzbl 0x2f(%r10),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
++je TARGET<rook2::movegen::find_attackers+0x5db>
+ movzbl 0x28(%r10),%ebx
+ mov %ebx,%r9d
+ and $0x3f,%r9d
+ movzbl (%rsi,%r9,1),%r9d
+ mov %r9d,%ebp
+ test %r9b,%r9b
+-je TARGET<rook2::movegen::find_attackers+0x5ca>
++je TARGET<rook2::movegen::find_attackers+0x5d1>
+ test %r9b,%r9b
+ setne %r9b
+ cmp %r8b,%bpl
+ sete %r11b
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x5a4>
++je TARGET<rook2::movegen::find_attackers+0x5ab>
+ cmp %cl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x5a4>
++je TARGET<rook2::movegen::find_attackers+0x5ab>
+ and %r11b,%r9b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x5db>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %bl,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jne TARGET<rook2::movegen::find_attackers+0x5d4>
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
++mov 0x8(%rsp),%r9
++lea 0x1(%r9),%rax
++mov %rax,0x8(%rsp)
++test %r9,%r9
++jne TARGET<rook2::movegen::find_attackers+0x5db>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0xba4>
++jne TARGET<rook2::movegen::find_attackers+0xb91>
+ movzbl 0x37(%r10),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
++je TARGET<rook2::movegen::find_attackers+0x655>
+ movzbl 0x30(%r10),%ebx
+ mov %ebx,%r9d
+ and $0x3f,%r9d
+ movzbl (%rsi,%r9,1),%r9d
+ mov %r9d,%ebp
+ test %r9b,%r9b
+-je TARGET<rook2::movegen::find_attackers+0x742>
++je TARGET<rook2::movegen::find_attackers+0x64b>
+ test %r9b,%r9b
+ setne %r9b
+ cmp %r8b,%bpl
+ sete %r11b
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x62a>
++je TARGET<rook2::movegen::find_attackers+0x625>
+ cmp %cl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x62a>
++je TARGET<rook2::movegen::find_attackers+0x625>
+ and %r11b,%r9b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x655>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %bl,0x10(%rsp,%rax,1)
+-mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jne TARGET<rook2::movegen::find_attackers+0x74c>
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
+-movzbl 0x1(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x332>
+-cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
+-movzbl 0x2(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x332>
+-cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
+-movzbl 0x3(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x332>
+-cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
+-movzbl 0x4(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x332>
+-cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
+-movzbl 0x5(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x332>
+-cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
+-movzbl 0x6(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x332>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x37e>
+-movzbl 0x7(%r10),%r14d
+-mov %r14d,%r11d
+-and $0x3f,%r11d
+-movzbl (%rsi,%r11,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x332>
++mov 0x8(%rsp),%r9
++lea 0x1(%r9),%rax
++mov %rax,0x8(%rsp)
++test %r9,%r9
++jne TARGET<rook2::movegen::find_attackers+0x655>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0xc92>
++jne TARGET<rook2::movegen::find_attackers+0xc7f>
+ movzbl 0x3f(%r10),%r11d
+ cmp $0x7,%r11b
+-ja TARGET<rook2::movegen::find_attackers+0xe6e>
++ja TARGET<rook2::movegen::find_attackers+0xe5b>
+ test %r11b,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++je TARGET<rook2::movegen::find_attackers+0x6cf>
+ movzbl 0x38(%r10),%ebx
+ mov %ebx,%r9d
+ and $0x3f,%r9d
+ movzbl (%rsi,%r9,1),%r9d
+ mov %r9d,%ebp
+ test %r9b,%r9b
+-je TARGET<rook2::movegen::find_attackers+0x8b4>
++je TARGET<rook2::movegen::find_attackers+0x6c5>
+ test %r9b,%r9b
+ setne %sil
+ cmp %r8b,%bpl
+ sete %r8b
+ cmp %dl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x7a2>
++je TARGET<rook2::movegen::find_attackers+0x69f>
+ cmp %cl,%bpl
+-je TARGET<rook2::movegen::find_attackers+0x7a2>
++je TARGET<rook2::movegen::find_attackers+0x69f>
+ and %r8b,%sil
+-je TARGET<rook2::movegen::find_attackers+0x8be>
+-cmp $0x1,%rax
+-ja TARGET<rook2::movegen::find_attackers+0xe99>
++je TARGET<rook2::movegen::find_attackers+0x6cf>
++cmp $0x1,%rax
++ja TARGET<rook2::movegen::find_attackers+0xe9b>
+ mov %bl,0x10(%rsp,%rax,1)
+ mov 0x8(%rsp),%rax
+-inc %rax
+-mov %rax,0x8(%rsp)
+-cmp $0x2,%rax
+-jmp TARGET<rook2::movegen::find_attackers+0x8be>
+-movzbl 0x9(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x3a7>
+-cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
+-movzbl 0xa(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x3a7>
+-cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
+-movzbl 0xb(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x3a7>
+-cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
+-movzbl 0xc(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x3a7>
+-cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
+-movzbl 0xd(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x3a7>
+-cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
+-movzbl 0xe(%r10),%r14d
+-mov %r14d,%r15d
+-and $0x3f,%r15d
+-movzbl (%rsi,%r15,1),%ebp
+-test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x3a7>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x3f3>
+-movzbl 0xf(%r10),%r14d
+-mov %r14d,%r11d
+-and $0x3f,%r11d
+-movzbl (%rsi,%r11,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x3a7>
++lea 0x1(%rax),%rcx
++mov %rcx,0x8(%rsp)
++test %rax,%rax
++jne TARGET<rook2::movegen::find_attackers+0x6cf>
++jmp TARGET<rook2::movegen::find_attackers+0x91>
+ cmp $0x1,%r11b
+-jne TARGET<rook2::movegen::find_attackers+0xd80>
++jne TARGET<rook2::movegen::find_attackers+0xd6d>
+ mov 0x8(%rsp),%rax
+ mov %rax,(%rdi)
+ mov 0x10(%rsp),%rax
+@@ -568,341 +468,447 @@
+ pop %r15
+ pop %rbp
+ ret
++movzbl 0x1(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x339>
++cmp $0x2,%r11b
++je TARGET<rook2::movegen::find_attackers+0x385>
++movzbl 0x2(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x339>
++cmp $0x3,%r11b
++je TARGET<rook2::movegen::find_attackers+0x385>
++movzbl 0x3(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x339>
++cmp $0x4,%r11b
++je TARGET<rook2::movegen::find_attackers+0x385>
++movzbl 0x4(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x339>
++cmp $0x5,%r11b
++je TARGET<rook2::movegen::find_attackers+0x385>
++movzbl 0x5(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x339>
++cmp $0x6,%r11b
++je TARGET<rook2::movegen::find_attackers+0x385>
++movzbl 0x6(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x339>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x385>
++movzbl 0x7(%r10),%r14d
++mov %r14d,%r11d
++and $0x3f,%r11d
++movzbl (%rsi,%r11,1),%ebp
++jmp TARGET<rook2::movegen::find_attackers+0x339>
++movzbl 0x9(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x3ae>
++cmp $0x2,%r11b
++je TARGET<rook2::movegen::find_attackers+0x3fa>
++movzbl 0xa(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x3ae>
++cmp $0x3,%r11b
++je TARGET<rook2::movegen::find_attackers+0x3fa>
++movzbl 0xb(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x3ae>
++cmp $0x4,%r11b
++je TARGET<rook2::movegen::find_attackers+0x3fa>
++movzbl 0xc(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x3ae>
++cmp $0x5,%r11b
++je TARGET<rook2::movegen::find_attackers+0x3fa>
++movzbl 0xd(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x3ae>
++cmp $0x6,%r11b
++je TARGET<rook2::movegen::find_attackers+0x3fa>
++movzbl 0xe(%r10),%r14d
++mov %r14d,%r15d
++and $0x3f,%r15d
++movzbl (%rsi,%r15,1),%ebp
++test %bpl,%bpl
++jne TARGET<rook2::movegen::find_attackers+0x3ae>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x3fa>
++movzbl 0xf(%r10),%r14d
++mov %r14d,%r11d
++and $0x3f,%r11d
++movzbl (%rsi,%r11,1),%ebp
++jmp TARGET<rook2::movegen::find_attackers+0x3ae>
+ movzbl 0x11(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x41c>
++jne TARGET<rook2::movegen::find_attackers+0x423>
+ cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
++je TARGET<rook2::movegen::find_attackers+0x46f>
+ movzbl 0x12(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x41c>
++jne TARGET<rook2::movegen::find_attackers+0x423>
+ cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
++je TARGET<rook2::movegen::find_attackers+0x46f>
+ movzbl 0x13(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x41c>
++jne TARGET<rook2::movegen::find_attackers+0x423>
+ cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
++je TARGET<rook2::movegen::find_attackers+0x46f>
+ movzbl 0x14(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x41c>
++jne TARGET<rook2::movegen::find_attackers+0x423>
+ cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
++je TARGET<rook2::movegen::find_attackers+0x46f>
+ movzbl 0x15(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x41c>
++jne TARGET<rook2::movegen::find_attackers+0x423>
+ cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
++je TARGET<rook2::movegen::find_attackers+0x46f>
+ movzbl 0x16(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x41c>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x468>
++jne TARGET<rook2::movegen::find_attackers+0x423>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x46f>
+ movzbl 0x17(%r10),%r14d
+ mov %r14d,%r11d
+ and $0x3f,%r11d
+ movzbl (%rsi,%r11,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x41c>
++jmp TARGET<rook2::movegen::find_attackers+0x423>
+ movzbl 0x19(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x491>
++jne TARGET<rook2::movegen::find_attackers+0x498>
+ cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
++je TARGET<rook2::movegen::find_attackers+0x4e4>
+ movzbl 0x1a(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x491>
++jne TARGET<rook2::movegen::find_attackers+0x498>
+ cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
++je TARGET<rook2::movegen::find_attackers+0x4e4>
+ movzbl 0x1b(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x491>
++jne TARGET<rook2::movegen::find_attackers+0x498>
+ cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
++je TARGET<rook2::movegen::find_attackers+0x4e4>
+ movzbl 0x1c(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x491>
++jne TARGET<rook2::movegen::find_attackers+0x498>
+ cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
++je TARGET<rook2::movegen::find_attackers+0x4e4>
+ movzbl 0x1d(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x491>
++jne TARGET<rook2::movegen::find_attackers+0x498>
+ cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
++je TARGET<rook2::movegen::find_attackers+0x4e4>
+ movzbl 0x1e(%r10),%r14d
+ mov %r14d,%r15d
+ and $0x3f,%r15d
+ movzbl (%rsi,%r15,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x491>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x4dd>
++jne TARGET<rook2::movegen::find_attackers+0x498>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x4e4>
+ movzbl 0x1f(%r10),%r14d
+ mov %r14d,%r11d
+ and $0x3f,%r11d
+ movzbl (%rsi,%r11,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x491>
++jmp TARGET<rook2::movegen::find_attackers+0x498>
+ movzbl 0x21(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x50d>
++jne TARGET<rook2::movegen::find_attackers+0x514>
+ cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
++je TARGET<rook2::movegen::find_attackers+0x561>
+ movzbl 0x22(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x50d>
++jne TARGET<rook2::movegen::find_attackers+0x514>
+ cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
++je TARGET<rook2::movegen::find_attackers+0x561>
+ movzbl 0x23(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x50d>
++jne TARGET<rook2::movegen::find_attackers+0x514>
+ cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
++je TARGET<rook2::movegen::find_attackers+0x561>
+ movzbl 0x24(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x50d>
++jne TARGET<rook2::movegen::find_attackers+0x514>
+ cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
++je TARGET<rook2::movegen::find_attackers+0x561>
+ movzbl 0x25(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x50d>
++jne TARGET<rook2::movegen::find_attackers+0x514>
+ cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
++je TARGET<rook2::movegen::find_attackers+0x561>
+ movzbl 0x26(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x50d>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x55a>
++jne TARGET<rook2::movegen::find_attackers+0x514>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x561>
+ movzbl 0x27(%r10),%ebx
+ mov %ebx,%r11d
+ and $0x3f,%r11d
+ movzbl (%rsi,%r11,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x50d>
++jmp TARGET<rook2::movegen::find_attackers+0x514>
+ movzbl 0x29(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x587>
++jne TARGET<rook2::movegen::find_attackers+0x58e>
+ cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
++je TARGET<rook2::movegen::find_attackers+0x5db>
+ movzbl 0x2a(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x587>
++jne TARGET<rook2::movegen::find_attackers+0x58e>
+ cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
++je TARGET<rook2::movegen::find_attackers+0x5db>
+ movzbl 0x2b(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x587>
++jne TARGET<rook2::movegen::find_attackers+0x58e>
+ cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
++je TARGET<rook2::movegen::find_attackers+0x5db>
+ movzbl 0x2c(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x587>
++jne TARGET<rook2::movegen::find_attackers+0x58e>
+ cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
++je TARGET<rook2::movegen::find_attackers+0x5db>
+ movzbl 0x2d(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x587>
++jne TARGET<rook2::movegen::find_attackers+0x58e>
+ cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
++je TARGET<rook2::movegen::find_attackers+0x5db>
+ movzbl 0x2e(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x587>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x5d4>
++jne TARGET<rook2::movegen::find_attackers+0x58e>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x5db>
+ movzbl 0x2f(%r10),%ebx
+ mov %ebx,%r11d
+ and $0x3f,%r11d
+ movzbl (%rsi,%r11,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x587>
++jmp TARGET<rook2::movegen::find_attackers+0x58e>
+ movzbl 0x31(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x609>
++jne TARGET<rook2::movegen::find_attackers+0x608>
+ cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
++je TARGET<rook2::movegen::find_attackers+0x655>
+ movzbl 0x32(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x609>
++jne TARGET<rook2::movegen::find_attackers+0x608>
+ cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
++je TARGET<rook2::movegen::find_attackers+0x655>
+ movzbl 0x33(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x609>
++jne TARGET<rook2::movegen::find_attackers+0x608>
+ cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
++je TARGET<rook2::movegen::find_attackers+0x655>
+ movzbl 0x34(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x609>
++jne TARGET<rook2::movegen::find_attackers+0x608>
+ cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
++je TARGET<rook2::movegen::find_attackers+0x655>
+ movzbl 0x35(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x609>
++jne TARGET<rook2::movegen::find_attackers+0x608>
+ cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
++je TARGET<rook2::movegen::find_attackers+0x655>
+ movzbl 0x36(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x609>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x74c>
++jne TARGET<rook2::movegen::find_attackers+0x608>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x655>
+ movzbl 0x37(%r10),%ebx
+ mov %ebx,%r11d
+ and $0x3f,%r11d
+ movzbl (%rsi,%r11,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x609>
++jmp TARGET<rook2::movegen::find_attackers+0x608>
+ movzbl 0x39(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x781>
++jne TARGET<rook2::movegen::find_attackers+0x682>
+ cmp $0x2,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++je TARGET<rook2::movegen::find_attackers+0x6cf>
+ movzbl 0x3a(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x781>
++jne TARGET<rook2::movegen::find_attackers+0x682>
+ cmp $0x3,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++je TARGET<rook2::movegen::find_attackers+0x6cf>
+ movzbl 0x3b(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x781>
++jne TARGET<rook2::movegen::find_attackers+0x682>
+ cmp $0x4,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++je TARGET<rook2::movegen::find_attackers+0x6cf>
+ movzbl 0x3c(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x781>
++jne TARGET<rook2::movegen::find_attackers+0x682>
+ cmp $0x5,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++je TARGET<rook2::movegen::find_attackers+0x6cf>
+ movzbl 0x3d(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x781>
++jne TARGET<rook2::movegen::find_attackers+0x682>
+ cmp $0x6,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++je TARGET<rook2::movegen::find_attackers+0x6cf>
+ movzbl 0x3e(%r10),%ebx
+ mov %ebx,%r14d
+ and $0x3f,%r14d
+ movzbl (%rsi,%r14,1),%ebp
+ test %bpl,%bpl
+-jne TARGET<rook2::movegen::find_attackers+0x781>
+-cmp $0x7,%r11b
+-je TARGET<rook2::movegen::find_attackers+0x8be>
++jne TARGET<rook2::movegen::find_attackers+0x682>
++cmp $0x7,%r11b
++je TARGET<rook2::movegen::find_attackers+0x6cf>
+ movzbl 0x3f(%r10),%ebx
+ mov %ebx,%r10d
+ and $0x3f,%r10d
+ movzbl (%rsi,%r10,1),%ebp
+-jmp TARGET<rook2::movegen::find_attackers+0x781>
++jmp TARGET<rook2::movegen::find_attackers+0x682>
+ movzbl %r11b,%edi
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x140>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.418+0x6a8>,%rdx
+ mov $0x7,%esi
+ call *RIP<core::slice::index::slice_end_index_len_fail>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x128>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.418+0x690>,%rdx
+ mov $0x8,%esi
+ mov %r8,%rdi
+ call *RIP<core::slice::index::slice_end_index_len_fail>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x158>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.418+0x6d8>,%rdx
++mov $0x40,%esi
++mov %rax,%rdi
++call *RIP<core::panicking::panic_bounds_check>
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.418+0x6c0>,%rdx
+ mov $0x2,%esi
+ mov %rax,%rdi
+ call *RIP<core::panicking::panic_bounds_check>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x170>,%rdx
+-mov $0x40,%esi
+-mov %r8,%rdi
+-call *RIP<core::panicking::panic_bounds_check>
+-lea RIP<anon.612dee680fe6e9c24f0bcfacad79849b.129+0x110>,%rdx
++lea RIP<anon.485607f66ff0db1cbd18f70bf0dd8910.418+0x678>,%rdx
+ mov $0x40,%esi
+ mov %r9,%rdi
+ call *RIP<core::panicking::panic_bounds_check>

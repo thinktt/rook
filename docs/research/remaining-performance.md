@@ -328,7 +328,8 @@ and production review remain requirements alongside optimization.
     lower, all six medians lower,01/02/04/29 ranges separated and05/35 overlap.
     Whole-suite CPU15 has46 nonidle ticks despite own-pane client affinity
     correction; no pervariant interference or absolute idle claim follows.
-    Select later composition testing; no adoption or later-source cost transfer.
+    Adopted through105 after fresh composed validation and a distinct matched
+    generic95-to-combined pilot. These trial timings do not transfer.
     See `evidence/ordered-bit-checkers-phase1-cpu-pilot-20261018/README.md`.
     Own-PGO result:
     `evidence/pgo-ordered-bit-checkers-phase1-cpu-pilot-20261018/README.md`.
@@ -345,3 +346,29 @@ and production review remain requirements alongside optimization.
     separated ranges. Profile02/04/29 favor candidate in separate ranges;
     01/35 overlap. Keep experimental pending a matched own-source PGO test.
     See `evidence/known-check-generation-cpu-pilot-20261018/README.md`.
+
+20. **One projected Q bit view: generic and own PGO support composition.**
+    Phase2 replaces the Q projected mailbox and both consumers together. One
+    existing 32-byte tag-plane projection serves exact ordered first-two route
+    detection and final own-king safety. Optimistic updates, eligibility,
+    reply/history chronology and all charges remain. Native 145, strict 54 and
+    eight-wire/24-search validation pass, including broad pre-legality pseudo
+    projections and fixed unsafe/special/order witnesses. Codegen confirms one
+    shared view; Q text grows 434 bytes, its frame shrinks 16, and unchanged
+    ordinary source grows 143 bytes through outlining. No neutrality follows.
+    The independent 60-lifetime generic pilot sums 14.546593 s for phase1
+    `132ba135` versus 14.341421 s for phase2 `3462a87a`: 1.410447% lower.
+    All six medians are lower; profiles 01/05/29 have separated ranges and
+    02/04/35 overlap. Whole-suite CPU15 has 16 nonidle ticks, without
+    per-variant attribution. Own-source54-case training, independent identical
+    profile remerge and strict54/eight-wire regression also pass. The matched
+    own-PGO60-lifetime pilot independently reconciles13.393119s phase1 control
+    `7b17c000` versus13.1219665s phase2 `737a0946`:2.024566% lower. All six
+    medians are lower and all six observed ranges are separated. Whole-suite
+    CPU15 has15 nonidle ticks without pervariant attribution. Adopted through105
+    after fresh composed validation. The direct generic95-to-combined pilot
+    separately sums14.4239440s versus14.0816565s:2.373051% lower, with all six
+    observed ranges separated. Earlier trial timings do not transfer; full54/12
+    cost/gameplay qualification remains open. See
+    `evidence/ordered-q-bitview-phase2-cpu-pilot-20261018/README.md` and
+    `evidence/pgo-ordered-q-bitview-phase2-cpu-pilot-20261018/README.md`.

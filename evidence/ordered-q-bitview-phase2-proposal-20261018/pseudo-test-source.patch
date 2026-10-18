@@ -1,0 +1,111 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -464,4 +464,108 @@
+             assert_eq!(child.attack_view(), projected);
+         }
+     }
++    /// Compare before own-king legality: rejecting a pseudo-candidate first
++    /// would miss the Q path's optimistic-update/unsafe-capture obligation.
++    fn compare_pseudo_projection(position: &Position, movement: Move, exhaustive: bool) -> bool {
++        let parent = position.attack_view();
++        let projected = parent.projected(position, movement);
++        let board = movegen::projected_board(position, movement);
++        assert!(parent.matches_board(&position.board));
++        assert!(projected.matches_board(&board));
++        assert_eq!(position.attack_view(), parent);
++        let enemy_king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
++        let old = movegen::mailbox_ordered_attackers_for_test::<2>(&board, enemy_king, position.side);
++        assert_eq!(projected.ordered_attackers::<2>(enemy_king, position.side), old,
++            "Q identities {movement} in {}", position.placement());
++        assert_eq!(movegen::check_routes_bits(&projected, enemy_king, position.side, movement.to()),
++            movegen::check_routes(&board, enemy_king, position.side, movement.to()),
++            "Q routes {movement} in {}", position.placement());
++        let own_king = if position.board[movement.from().0 as usize].kind() == PieceKind::King {
++            movement.to()
++        } else { position.piece_squares(position.side, PieceKind::King)[0] };
++        let unsafe_move = movegen::attacked(&board, own_king, position.side.opponent());
++        assert_eq!(projected.attacked(own_king, position.side.opponent()), unsafe_move,
++            "Q safety {movement} in {}", position.placement());
++        if exhaustive {
++            for side in [Color::White, Color::Black] {
++                for square in 0..64 {
++                    let target = Square(square);
++                    assert_eq!(projected.ordered_attackers::<1>(target, side),
++                        movegen::mailbox_ordered_attackers_for_test::<1>(&board, target, side));
++                    assert_eq!(projected.ordered_attackers::<2>(target, side),
++                        movegen::mailbox_ordered_attackers_for_test::<2>(&board, target, side));
++                    assert_eq!(projected.attacked(target, side), movegen::attacked(&board, target, side));
++                    assert_eq!(movegen::check_routes_bits(&projected, target, side, movement.to()),
++                        movegen::check_routes(&board, target, side, movement.to()));
++                }
++            }
++        }
++        unsafe_move
++    }
++
++    #[test]
++    fn every_pseudo_tactical_projection_matches_mailbox_before_legality_on_broad_setups() {
++        let mut state = 0x63de_492b_18a7_f50d;
++        let mut candidates = 0usize;
++        let mut unsafe_candidates = 0usize;
++        for iteration in 0..10000 {
++            let position = constructed(&mut state);
++            let mut moves = MoveList::new();
++            crate::tactical::generate(&position, &mut moves);
++            for &movement in moves.as_slice() {
++                candidates += 1;
++                unsafe_candidates += usize::from(compare_pseudo_projection(&position, movement, iteration < 500));
++            }
++        }
++        assert!(candidates > 0);
++        assert!(unsafe_candidates > 0, "broad pseudo coverage must not silently become legal-only");
++    }
++
++    #[test]
++    fn fixed_pseudo_projection_keeps_unsafe_special_tags_and_exact_capped_routes() {
++        for (fen, spelling, unsafe_move) in [
++            ("k3r3/8/8/8/8/8/4R2p/4K3 w - - 0 1", "e2h2", true),
++            // c7/f2 block bishop rays to their own kings before promotion.
++            ("1b5k/2P5/8/8/8/8/7K/8 w - - 0 1", "c7c8q", true),
++            ("1b5k/2P5/8/8/8/8/7K/8 w - - 0 1", "c7b8q", false),
++            ("8/k7/8/8/8/8/5p2/K5B1 b - - 0 1", "f2f1q", true),
++            ("8/k7/8/8/8/8/5p2/K5B1 b - - 0 1", "f2g1q", false),
++            // Joined EP removes an actual non-pawn blocker, for both colors.
++            ("k7/8/8/4KPnr/8/8/8/8 w - g6 0 1", "f5g6", true),
++            ("8/8/8/8/RNpk4/8/8/7K b - b3 0 1", "c4b3", true),
++            ("7k/8/8/8/8/8/3rP3/K7 w - d3 0 1", "e2d3", false),
++            ("7k/3pR3/8/8/8/8/8/K7 b - e6 0 1", "d7e6", false),
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            let mut moves = MoveList::new();crate::tactical::generate(&position, &mut moves);
++            let movement = *moves.as_slice().iter().find(|m| m.to_string() == spelling)
++                .unwrap_or_else(|| panic!("missing pseudo-candidate {spelling} in {fen}"));
++            assert_eq!(compare_pseudo_projection(&position, movement, true), unsafe_move, "{fen}/{spelling}");
++        }
++        for (fen, spelling, expected, flags, unsafe_move) in [
++            // The moved rook is a third route: first pawn, then knight stop
++            // discovery. All-attackers membership would wrongly return true.
++            ("4k3/3P4/5N2/8/8/8/R7/K7 w - - 0 1", "a2e2", ["d7", "f6"], (true, false), false),
++            // KNIGHT_SOURCES, not numeric square order, emits f6 before d2.
++            ("8/8/5N2/8/4k3/8/8/K4N2 w - - 0 1", "f1d2", ["f6", "d2"], (true, true), false),
++            // An unsafe king capture still participates at its ray's position,
++            // after the earlier diagonal bishop, rather than before sliders.
++            ("8/8/6B1/8/4k3/2Kp4/8/8 w - - 0 1", "c3d3", ["g6", "d3"], (true, true), true),
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            let mut moves = MoveList::new();crate::tactical::generate(&position, &mut moves);
++            let movement = *moves.as_slice().iter().find(|m| m.to_string() == spelling)
++                .unwrap_or_else(|| panic!("missing capped-route pseudo-candidate {spelling} in {fen}"));
++            assert_eq!(compare_pseudo_projection(&position, movement, true), unsafe_move);
++            let projected = position.attack_view().projected(&position, movement);
++            let king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
++            let old_board = movegen::projected_board(&position, movement);
++            let old = movegen::mailbox_ordered_attackers_for_test::<2>(&old_board, king, position.side);
++            assert_eq!(old.1, 2);
++            assert_eq!(old.0, expected.map(|name| Square::parse(name).unwrap()));
++            assert_eq!(projected.ordered_attackers::<2>(king, position.side), old);
++            assert_eq!(movegen::check_routes_bits(&projected, king, position.side, movement.to()), flags);
++        }
++    }
++
+ }
