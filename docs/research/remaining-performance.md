@@ -35,12 +35,15 @@ Function attribution changed through inlining, so source-line evidence matters.
    ownership decision would merit bounded architectural critique after evidence.
 
 3. **Formula-derived relation lookup.** Four tested-piece tiers over two
-   normalized8-bit profiles form a262144-byte pure table. A prototype could
-   retain the common opponent-zero shortcut and compare cache/load costs against
-   the current branchy classifier. Generate from the general formula, never
-   fixture answers; exhaust all256x256 combinations per tier against the old
-   formula, preserve adjusted saturation and all semantic query charges. This
-   idea has no measured benefit yet and may lose through cache pressure.
+   normalized8-bit profiles form a262144-byte direct table. A smaller isolated
+   prototype instead maps each profile to its capped-multiplicity/least-tier
+   pair:16 states, a256-byte map and1024-byte outcome table. It retains the
+   common opponent-zero shortcut and adjusted subtraction on the original byte.
+   The generator uses the general formula, never fixture answers. Source/archive
+   preparation is complete under `evidence/relation-states-preparation-20261018/`;
+   compilation, the existing exhaustive digit-model oracle, all54 replays and
+   a matched generic CPU pilot wait for the live game collection. It has no
+   measured benefit yet; two dependent class loads can offset lower footprint.
 
 4. **Placement bitplanes/other representations.** A private four-u64 bit-sliced
    piece/color encoding could support occupancy and attack masks with32B extra
