@@ -45,6 +45,10 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   constitute a final measurement/uncertainty profile. Clock-sampling attempts
   reported unreliable timers; their percentages are not optimization evidence.
   Callgrind instruction simulation is a separate diagnostic, not PMU counts.
+  A reproducible generic PGO build now passes all54 strict replays and wire
+  interruption checks; its four-anchor CPU pilot shows a further local6.5%
+  sum-of-medians reduction. That named pilot is not either complete collection
+  or a calibrated reference comparison.
 
 These open items permit substantial local progress while PMU support is
 investigated. No hardware limitation currently blocks engine implementation.

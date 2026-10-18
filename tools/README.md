@@ -20,7 +20,7 @@ must already be cached, and an existing Cargo.lock is required.
 
 `--mode native` opts into `target-cpu=native`. Generic and native outputs use
 separate `target/dev-generic` and `target/dev-native` directories and remain
-different artifact modes. Neither mode enables PGO. `--jobs N` changes the
+different artifact modes. Changing target mode does not enable PGO; use the explicit options below. `--jobs N` changes the
 default; `--crate PATH` selects another crate.
 
 `--bin rook2` builds the ordinary production-wire executable; `--bin rook2-dev`
@@ -134,3 +134,23 @@ already retained by `build.py`. It verifies every recorded hash before archiving
 reads the completed archive back, and checks the locally frozen executable
 against the build identity. Archives are fresh files with normalized metadata;
 the helper neither runs the engine nor invents an external dependency closure.
+
+## Staged compiler PGO
+
+For ordinary `--bin rook2`, `build.py --pgo-generate /absolute/fresh/directory`
+adds compiler instrumentation and uses a separate target directory. It never
+runs training. `--pgo-use /absolute/merged.profdata --training-record FILE`
+uses an immutable profile and completed `rook2-pgo-training-v1` provenance that
+must match source, target, base flags and profile hash. Profile/provenance inputs
+are rehashed after compilation. The use build enables LLVM missing-function
+warnings and retains complete compiler output. Generic, instrumented and PGO
+artifacts each have their own identity and evidence; instrumentation timings
+are never substituted for production CPU samples.
+
+The intended procedure follows the
+[official rustc PGO workflow](https://doc.rust-lang.org/rustc/profile-guided-optimization.html):
+use the same source/release/target settings, run real ordinary inputs through
+the instrumented artifact, merge profiles with the matching LLVM tool, then
+rebuild using that profile and regress the new production artifact. The public54
+inputs also trained the approved reference. PGO does not close behavioral,
+hardware, uncertainty, or whole-engine performance qualification.

@@ -109,6 +109,13 @@ def main() -> int:
     parser.add_argument("--mode", choices=("generic", "native"), default="generic")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--bin", dest="binary_name", help="build and hash this Cargo binary target")
+    pgo = parser.add_mutually_exclusive_group()
+    pgo.add_argument("--pgo-generate", type=Path,
+                     help="compiler instrumentation only; fresh absent profile directory")
+    pgo.add_argument("--pgo-use", type=Path,
+                     help="immutable merged profile; requires --training-record")
+    parser.add_argument("--training-record", type=Path,
+                        help="completed native training provenance for --pgo-use")
     parser.add_argument("--dry-run", action="store_true",
                         help="inspect sources/tools and print plan; do not build or write receipts")
     args = parser.parse_args()
@@ -124,6 +131,32 @@ def main() -> int:
         if args.binary_name is not None and (not args.binary_name or any(
                 character in args.binary_name for character in ("/", "\\"))):
             raise ValueError("--bin must be a Cargo binary target name, not a path")
+        if (args.pgo_generate or args.pgo_use) and args.binary_name != "rook2":
+            raise ValueError("PGO recording currently supports only --bin rook2")
+        if args.training_record and not args.pgo_use:
+            raise ValueError("--training-record requires --pgo-use")
+        if args.pgo_generate:
+            args.pgo_generate = args.pgo_generate.absolute()
+            if (args.pgo_generate.exists() or args.pgo_generate.is_symlink()
+                    or not args.pgo_generate.parent.is_dir()):
+                raise ValueError("profile generation directory must be absent with an existing parent")
+        pgo_input = None
+        if args.pgo_use:
+            if args.training_record is None:
+                raise ValueError("--pgo-use requires a completed --training-record")
+            args.pgo_use = args.pgo_use.resolve(strict=True)
+            args.training_record = args.training_record.resolve(strict=True)
+            training = json.loads(args.training_record.read_text())
+            cpu = "x86-64" if args.mode == "generic" else "native"
+            if (training.get("schema") != "rook2-pgo-training-v1"
+                    or training.get("complete") is not True
+                    or training.get("engine_source_sha256") != source_snapshot(root)
+                    or training.get("target_triple") != TARGET
+                    or training.get("base_rust_flags") != ["-C", f"target-cpu={cpu}"]
+                    or training.get("profile_sha256") != digest(args.pgo_use)):
+                raise ValueError("training provenance does not match source, CPU target or merged profile")
+            pgo_input = {str(path): digest(path)
+                         for path in (args.pgo_use, args.training_record)}
         if not HELPERS <= os.sched_getaffinity(0):
             raise ValueError("inherited affinity must permit all housekeeping CPUs")
         cargo = shutil.which("cargo")
@@ -139,16 +172,29 @@ def main() -> int:
     try:
         os.sched_setaffinity(0, HELPERS)
         cpu = "x86-64" if args.mode == "generic" else "native"
+        flags = ["-C", f"target-cpu={cpu}"]
+        pgo_record = {"mode": "none", "training_runs_by_build_helper": 0}
+        build_mode = "dev-" + args.mode
+        if args.pgo_generate:
+            flags += ["-C", f"profile-generate={args.pgo_generate}"]
+            pgo_record.update(mode="instrumented", profile_directory=str(args.pgo_generate))
+            build_mode += "-pgo-generate"
+        if args.pgo_use:
+            flags += ["-C", f"profile-use={args.pgo_use}",
+                      "-C", "llvm-args=-pgo-warn-missing-function"]
+            pgo_record.update(mode="profile-use", input_sha256_before=pgo_input,
+                              profile=str(args.pgo_use), training_record=str(args.training_record))
+            build_mode += "-pgo-use"
         overrides = {
             "RUSTC": rustc,
             "RUSTC_WRAPPER": "", "RUSTC_WORKSPACE_WRAPPER": "",
-            "RUSTFLAGS": f"-C target-cpu={cpu}",
-            "CARGO_ENCODED_RUSTFLAGS": f"-C\x1ftarget-cpu={cpu}",
+            "RUSTFLAGS": " ".join(flags),
+            "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(flags),
             "CARGO_NET_OFFLINE": "true",
             "CARGO_BUILD_JOBS": str(args.jobs),
         }
         env = {**os.environ, **overrides}
-        target_dir = root / "target" / ("dev-" + args.mode)
+        target_dir = root / "target" / build_mode
         argv = [cargo, "build", "--offline", "--locked", "--release", "--verbose",
                 "--target", TARGET, "--jobs", str(args.jobs),
                 "--target-dir", str(target_dir), "--manifest-path", str(root / "Cargo.toml")]
@@ -180,17 +226,22 @@ def main() -> int:
             "initial_affinity": sorted(original_affinity),
             "build_affinity": sorted(os.sched_getaffinity(0)),
             "uname": list(os.uname()),
-            "engine_runs": 0, "pgo": "no PGO automation; explicit rustflags contain no PGO flags",
+            "engine_runs": 0, "pgo": pgo_record,
+            "rust_flags": flags,
             "identity_limit": "manifest/lock/src, tools source files, optional build.rs/toolchain files; not a full external/path-dependency or generated-input closure",
             "binary_name": args.binary_name, "binary_output": None,
             "binary_note": "no binary target requested for hashing; no executable identity asserted" if args.binary_name is None else None,
             "source_archive_planned": "source-before (captured before Cargo, verified against source_sha256_before)",
         }
+        if args.pgo_use and training["engine_source_sha256"] != receipt["source_sha256_before"]:
+            raise ValueError("source changed after profile-use admission")
         if args.dry_run:
             receipt["outcome"] = "plan-only; no Cargo build or receipt writes"
             print(json.dumps(receipt, indent=2, allow_nan=False))
             return 0
         output.mkdir()
+        if args.pgo_generate:
+            args.pgo_generate.mkdir()
         receipt["source_archive"] = archive_sources(
             root, output, receipt["source_sha256_before"] | receipt["tool_sha256_before"])
         write_receipt(output / "receipt.json", {**receipt, "outcome": "build-started"})
@@ -206,12 +257,16 @@ def main() -> int:
         receipt["source_identity_unchanged"] = receipt["source_sha256_before"] == receipt["source_sha256_after"]
         receipt["tool_identity_unchanged"] = receipt["tool_sha256_before"] == receipt["tool_sha256_after"]
         receipt["cargo_config_unchanged"] = receipt["cargo_config_sha256_before"] == receipt["cargo_config_sha256_after"]
+        if pgo_input is not None:
+            pgo_record["input_sha256_after"] = {path: digest(Path(path)) for path in pgo_input}
+            pgo_record["inputs_unchanged"] = pgo_input == pgo_record["input_sha256_after"]
         if args.binary_name is not None and result.returncode == 0:
             binary = target_dir / TARGET / "release" / args.binary_name
             receipt["binary_output"] = {"path": str(binary), "sha256": digest(binary)}
         succeeded = (result.returncode == 0 and receipt["source_identity_unchanged"]
                      and receipt["tool_identity_unchanged"]
-                     and receipt["cargo_config_unchanged"])
+                     and receipt["cargo_config_unchanged"]
+                     and pgo_record.get("inputs_unchanged", True))
         receipt["outcome"] = "build-succeeded-with-stable-input-snapshot" if succeeded else "failed-or-inputs-changed"
         exit_code = 0 if succeeded else 1
     except BaseException as error:
