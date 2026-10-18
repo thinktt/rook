@@ -80,3 +80,16 @@ optimization. None of these hypotheses changes KingRE behavior or the mission.
    two increased case medians. Production adoption is rejected. The unchanged
    representation remains; avoiding prefix sums alone did not select this
    change. See `evidence/king-square-cache-cpu-pilot-20261018/`.
+
+
+7. **Matched derived-bitplane storage experiment: prepared, unexecuted.**
+   An identical Boolean kernel is prepared with persistent Position160/Node176
+   versus local Position128/Node144 supply. The initial consumer scope leaves
+   ordered checker identities and quiescence mailbox reuse intact. Constructors,
+   reflection/recompute and all copied placements are part of the invariant/cost
+   audit. A bounded architectural critique prompted a matched local comparison
+   before choosing storage; ownership and final decisions remain Imp2's.
+   Source/archive and planned checks are in
+   `evidence/bitplane-preparation-20261018/`. No compile, correctness, timing or
+   adoption claim follows from this preparation. The live full12 CPU collection
+   must finish before native tests/builds or another engine measurement starts.
