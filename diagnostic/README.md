@@ -7,7 +7,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current44 operations cover time schedule/allowance, parameters and output
+The current49 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -15,7 +15,8 @@ candidate ordering, priority-sequence permutation and capture preference;
 root randomization/aspiration, quiescence capture policy and PV line length;
 material balance, capture exception/defense/allowance, frontier estimate,
 king pressure and guarded fast cutoff; opaque/produced-history admission and
-local move extensions.
+local move extensions; pawn spread, pawnless potential, minor mating geometry,
+composed endgame material and pawn-race classification.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -39,11 +40,11 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current1968-case external result comprises37 complete fixture files plus
-25 unchanged selected cases from two partially supported files. All34 adapter
+The current2215-case external result comprises41 complete fixture files plus
+25 unchanged selected cases from two partially supported files. All36 adapter
 unit tests pass. Frozen adapter SHA256 is
-`bb87250940e99881bff0ab30e827da326a754619545d7c6e0bbd12e99edb625a`.
-See `evidence/diagnostic-admission-20261018/`; linked native source and all
+`ab8b7c3c186b12325484ab610a4cece923756a8f8b94ee9b5bbcc374e2ba43eb`.
+See `evidence/diagnostic-eval-kernels-20261018/`; linked native source and all
 declared dependencies remain unchanged. The original25-case selection provenance
 remains in `diagnostic-positions-20261018-02/`.
 
@@ -63,3 +64,9 @@ then passed25 units/1214 cases against the integrated persistent-bitplane native
 source in frozenfab90bb7. Both attempts and source archives remain. This is
 component transport acceptance, without whole-production or complete mandatory
 qualification.
+
+The five endgame routes first passed against the previous native source in
+137a71e9. The identical16-file frontend then passed36 units/2215 cases after
+compact relation/typed-list influence integration in ab8b7c3c. Both source
+closures, builds and reports remain retained. No trial timing transfers through
+this component regression.

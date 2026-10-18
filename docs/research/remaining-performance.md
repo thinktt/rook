@@ -1,11 +1,14 @@
 # Remaining performance investigations
 
 Date: 2026-10-18. Statuses below distinguish adopted experiments from hypotheses; none promises
-a qualified speedup. Current canonical915f83e4 full local54 PGO CPU costs total
-88.486549s versus the published63.431779s sum(raw uncalibrated ratio1.394988).
+a qualified speedup. Current canonical8c4619a7 full local54 PGO CPU costs total
+81.828432s versus the published63.431779s sum(raw uncalibrated ratio1.290023).
+The previous915f83e4 collection totals88.486549s; all54 new medians are lower,
+with a7.524440% lower aggregate in this sequential historical comparison.
 The earlier3660 collection totaled97.685122s. Calibration/profile differences
-remain unresolved. The current profile-01 simulated total is13.607B Ir;
-activity and influence are prominent after legality reuse and compiler PGO.
+remain unresolved. The current8c4619a7 profile-01 simulated total is12.027B Ir, versus13.607B
+on earlier3660fecf; activity remains prominent after the adopted evaluation
+kernels. This is whole-lifetime instruction simulation, not PMU counting.
 Function attribution changed through inlining, so source-line evidence matters.
 
 1. **Shared immutable evaluation geometry.** An isolated prototype moves the
@@ -51,8 +54,9 @@ Function attribution changed through inlining, so source-line evidence matters.
    Own-PGO1e5d075d also passes54 replays/eight interruption fixtures. Its separate
    matched60-lifetime pilot sums14.361971s versus14.8805095s canonical915f83e4,
    ratio0.965153176(3.484682% lower); profile02/29 ranges overlap. The kernel is
-   selected for next canonical integration under decision0005, with production
-   source still unchanged pending that step. Canonical timing cannot inherit
+   adopted under decision0005; production source integrates the exact combined
+   kernels after the measured
+   interaction comparison in item9. Canonical timing cannot inherit
    trial results. Two dependent class loads still need complete pipeline cost.
 
 4. **Placement bitplanes/other representations.** The independently developed
@@ -145,5 +149,25 @@ and production review remain requirements alongside optimization.
    sum15.4118105s versus16.181479s baseline, ratio0.952435219(4.756478% lower).
    All six candidate maxima are below their baseline minima, a finite observation
    rather than a confidence band. A fresh combined lookup/list source passes134
-   tests and enters its own PGO training for a baseline/table/combined comparison.
-   No combined or standalone PGO gain or production adoption is inferred yet.
+   tests and its own PGOb17776fb passes54 replays/eight interruption fixtures.
+   The complete90-lifetime baseline/table/combined comparison gives13.7237695s
+   combined versus14.7940530s915f and14.3190285s lookup:7.234552% and4.157119%
+   lower respectively, with all combined observed ranges below both controls.
+   Exact source is integrated under decision0006 and passes134 canonical tests
+   plus36 adapter units/2215 cases. Canonical8c4619a7 has its own54-case profile
+   and passes54 strict replays/eight interruption fixtures. Its own complete54
+   CPU collection independently reconciles216 lifetimes, summing81.828432s in
+   case medians. Trial timing does not transfer; final qualification remains.
+
+10. **Private activity arithmetic widths: correctness checked, cost unmeasured.**
+    An isolated source uses three u32 mobility accumulators in place of
+    i64/i64/u64, plus bounded u32 category/index arithmetic and i32 raw piece
+    score. Public activity fields and outer signed evaluation arithmetic remain
+    unchanged. The source-bound component range review proves destination,
+    category, total mobility, phase index and raw piece-score bounds over the
+    admitted placement/phase domain; it is not the global score audit.
+    All134 native tests and10,000 constructed placements against our independent
+    prior coordinate oracle pass. Generic candidate73ad8177 and baselinee7168491
+    have stable build receipts; full54 strict regression and a fixed matched
+    CPU pilot are the next tests. Canonical8c source remains unchanged.
+    See `evidence/activity-widths-preparation-20261018/`.

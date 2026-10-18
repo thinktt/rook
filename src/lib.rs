@@ -31,6 +31,7 @@ pub mod position;
 pub mod positional_terms;
 pub mod quiescence;
 pub mod quiescence_policy;
+mod relation_table;
 pub mod remembered;
 pub mod session;
 pub mod shelter;

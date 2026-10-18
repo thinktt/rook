@@ -11,6 +11,10 @@ now owns exact placement attack planes while retaining copied-child ownership.
 The matched storage experiments and independent PGO trial support this source
 integration. Canonical915f83e4 passes54 strict replays, eight interruption
 fixtures and its own six-case timing pilot; final qualification remains.
+Compact relation tables and typed-list influence are now also integrated,
+passing134 canonical native tests and the49-operation adapter regression.
+Fresh canonical8c4619a7 passes all54 strict replays and eight interruption
+fixtures/24 searches. Its own complete54 CPU collection is recorded below.
 
 A generation-local pin summary and necessary check-evasion screen now avoid
 redundant full projection under explicit geometric conditions; king/EP/uncertain
@@ -21,14 +25,25 @@ Shared immutable geometry is now also used by influence and activity. Its
 10,000-position coordinate-oracle check and all54 replays pass; a separate
 six-case generic CPU pilot gives a2.25% sum-of-medians reduction. See
 [decision0003](docs/decisions/0003-shared-evaluation-geometry.md). A separately trained PGO comparison also improves the six-case sum by3.19%.
-The latest production PGO artifact915f83e4 passes all54 strict replays and eight
+The latest production PGO artifact8c4619a7 passes all54 strict replays and eight
 interruption fixtures; its complete54 CPU collection is recorded below.
 A reproducible generic x86-64 compiler-PGO build is available
 through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
 
-- Integrated persistent-bitplane source passes131 native library tests and two
+- The integrated pure kernels pass132 library+2 CLI tests. Adapterab8b7c3c
+  passes36 units and2215 cases/49 operations against the exact new source.
+  The own-PGO combined trialb17776fb passes54 replays/eight interruption fixtures;
+  its independently reconciled90-lifetime comparison gives7.234552% lower
+  summed CPU medians than915f83e4 and4.157119% lower than lookup-only1e5d075d.
+  Every combined observed range is below both controls, a finite observation
+  without confidence/acceptance allowance. Canonical8c4619a7 uses its own54-case
+  profile7858420d, passes54 strict replays/eight interruption fixtures and
+  independently reconciles216 full54 CPU lifetimes. See
+  [decision0006](docs/decisions/0006-typed-influence-enumeration.md).
+
+- The historical persistent-bitplane checkpoint passes131 native library tests and two
   development-CLI tests. Adapterbb872509 passes34 units and1968 cases/44 operations
   against that source. The isolated PGO trialf4a2f8bf passes54 strict replays and
   eight interruption fixtures/24 searches; its independently reconciled60-lifetime
@@ -62,9 +77,9 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapterbb872509 implements44 operations and passes1968
-  cases across37 complete fixture files plus25 unchanged selected cases
-  from two partially supported files. All34 adapter unit tests pass. The first
+- The separate external DIAG adapterab8b7c3c implements49 operations and passes2215
+  cases across41 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All36 adapter unit tests pass. The first
   expanded attempt and its12 unsupported ordering failures remain retained;
   prior attempts and their source links remain preserved. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
@@ -76,20 +91,23 @@ Current artifact-specific evidence:
   in [generation pilot](evidence/generation-cpu-pilot-20261018/README.md) and
   [PGO pilot](evidence/pgo-cpu-pilot-20261018/README.md). These are local pilots,
   not complete performance collections or qualified cross-host ratios.
-- The optimized profile-01 Callgrind run passed the strict oracle and reports
-  13,607,144,696 simulated instructions. PGO changes inlining/attribution, so
-  source-line evidence is retained. Activity/influence remain prominent rows.
-  This is a simulated diagnostic, with no PMU instructions/cycles claim.
-  [Profile evidence](evidence/callgrind-pgo-20261018/README.md).
+- The current8c4619a7 profile-01 Callgrind run passes the strict oracle and
+  reports12,027,315,634 simulated instructions. The earlier3660fecf run reported
+  13,607,144,696; changes in code/profile/inlining prevent isolated attribution.
+  Source-line evidence identifies activity as a continuing investigation target.
+  This is instruction simulation, with no PMU instructions/cycles claim.
+  [Profile evidence](evidence/callgrind-eval-kernels-20261018/README.md).
 
-A complete canonical915f83e4 local54 CPU collection now retains216 normal,
+A complete canonical8c4619a7 local54 CPU collection retains216 normal,
 strict-oracle lifetimes(one excluded warmup and three measured per case).
-All raw receipts reconcile independently; the sum of case medians is88.486549s.
-The published reference sum is63.431779s(raw uncalibrated ratio1.394988).
-The earlier3660 collection summed97.685122s; that sequential historical
-comparison spans multiple changes and is not attack-plane attribution. No
-qualified performance pass/fail follows. See
-[canonical whole-native54 collection](evidence/production54-cpu-bitplanes-20261018/README.md).
+All raw receipts reconcile independently; the sum of case medians is81.828432s.
+The published reference sum is63.431779s(raw uncalibrated ratio1.290023).
+The previous915f83e4 collection summed88.486549s; all54 new case medians are
+lower, with a7.524440% lower aggregate. The earlier3660 collection summed
+97.685122s. These sequential historical observations are separate from matched
+attribution pilots. The maximum observed three-sample range/median is1.751798%;
+it is not a confidence or acceptance interval. No qualified performance
+pass/fail follows. See [canonical whole-native54 collection](evidence/production54-cpu-eval-kernels-20261018/README.md).
 
 A complete12 whole-native CPU collection on artifact1dc996b2 has completed
 48 fresh lifetimes/2528 searches with independent original-byte, normal-exit and
@@ -120,15 +138,20 @@ Earlier partial timings below are historical development checkpoints.
 The isolated compact relation kernel now passes133 native tests and all54
 replays. Its own-PGO1e5d075d also passes54 replays/eight interruption fixtures
 and independently reconciles60 CPU lifetimes:3.484682% lower summed medians
-than canonical915f83e4, with profile02/29 ranges overlapping. It is selected
-for the next canonical integration under
+than canonical915f83e4, with profile02/29 ranges overlapping. The exact combined source is integrated
+under
 [decision0005](docs/decisions/0005-compact-relation-kernel.md).
 A separate typed-list influence prototype passes134 tests and54 replays/eight
 interruption fixtures; its60-lifetime generic pilot is4.756478% lower in summed
 medians, with all six observed ranges disjoint. A combined source passes134
-tests and is training its own PGO profile for an explicit interaction comparison.
-Production native source/binary remains unchanged; no trial timing transfers
-to the next canonical artifact or completes qualification.
+tests and its own PGO buildb17776fb passes54 replays/eight interruption fixtures.
+The complete90-lifetime comparison finds7.234552% lower summed medians than915f
+and4.157119% lower than lookup-only, with all six combined ranges below both.
+Exact combined source is now integrated and passes134 canonical native tests
+plus36 adapter units/2215 cases. Fresh canonical8c4619a7 uses its own54-case
+profile7858420d, passes all54 strict replays/eight interruption fixtures and
+independently reconciles its own216-lifetime54 CPU collection. No trial timing
+transfers to this artifact or completes qualification.
 
 ## Runtime policy
 

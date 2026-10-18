@@ -6,13 +6,13 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements44 native-backed operations,
+  The separate `diagnostic/` crate now implements49 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
   supplied candidate/priority/capture order, root randomization/aspiration,
   quiescence capture policy/PV line length, material balance, capture exception/
   defense/allowance, frontier estimate, king pressure and guarded fast cutoff,
-  plus opaque/produced-history admission and local move extensions, with1968
-  external cases. Every other mandatory operation still needs
+  plus opaque/produced-history admission, local move extensions and five endgame
+  components:2215 external cases and36 adapter units pass. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -61,10 +61,12 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
 These open items permit substantial local progress while PMU support is
 investigated. No hardware limitation currently blocks engine implementation.
 
-The latest complete local54 collection on canonical915f83e4 retains216 normal
+The latest complete local54 collection on canonical8c4619a7 retains216 normal
 strict-oracle/native lifetimes and independently reconciles all raw samples.
-Its sum of54 case medians is88.486549s, raw uncalibrated reference ratio1.394988.
-The earlier97.685122s collection belongs to3660fecf. These observations guide
+Its sum of54 case medians is81.828432s, raw uncalibrated reference ratio1.290023.
+The prior915f83e4 collection totals88.486549s; the new aggregate is7.524440%
+lower, with all54 case medians lower. The earlier97.685122s collection belongs
+to3660fecf. These observations guide
 optimization and do not close final comparison/uncertainty requirements.
 The prior1dc996b2 shared-geometry PGO artifact
 has all54 strict replay and wire-interruption agreement, plus a six-case pilot;
@@ -75,7 +77,7 @@ qualification transfers to it. The collection remains reported-only, including
 the disclosed inherited-affinity helper limitation recorded under
 `evidence/production12-cpu-analysis-preparation-20261018/`.
 
-The integrated fresh diagnostic attempt passes34 units and1968 cases across44
+The integrated fresh diagnostic attempt passes36 units and2215 cases across49
 operations. Prior attempts and12 missing-transport failures remain preserved.
 Both matched bitplane variants pass133
 tests and54 replays; their90-lifetime generic pilot favors persistent by2.13%
@@ -93,12 +95,19 @@ strict replays. Its independently reconciled60-lifetime generic pilot is3.163311
 lower in summed medians, with profile29 ranges overlapping. Its own PGO artifact
 passes54 replays/eight interruption fixtures, then independently reconciles60
 matched CPU lifetimes with3.484682% lower summed medians(profile02/29 ranges
-overlap). The kernel is selected for next integration under decision0005;
-canonical source/build/profile and measurements still need their own validation.
+overlap). The kernel is adopted under decision0005 together with the typed-list source
+after the separate interaction comparison below.
 A separate typed-list influence prototype passes134 tests and54 replays/eight
 interruption fixtures; its independently reconciled60-lifetime generic pilot
 is4.756478% lower in summed medians, with all six finite ranges disjoint.
 A combined source passes134 tests and enters its own PGO training/comparison;
-no combined gain or canonical adoption follows yet. The original CPU collection is terminal,
+the full90-lifetime comparison then gives7.234552% lower summed medians than915f
+and4.157119% lower than lookup-only, with all six combined ranges below both.
+Exact source is integrated and passes134 canonical tests and36 adapter units/
+2215 cases. Fresh canonical8c4619a7 has its own54-case profile7858420d, passes all54
+strict replays/eight interruption fixtures and independently reconciles216
+whole-native CPU lifetimes. Current-artifact gameplay and final cost
+qualification remain open; no trial timing transfers.
+The original CPU collection is terminal,
 and all57 verified own lead/client threads are now confined to housekeeping
 CPUs. This later correction does not qualify the prior measurements.

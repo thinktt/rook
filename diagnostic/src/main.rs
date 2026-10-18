@@ -14,6 +14,7 @@ use std::{
 
 mod admission;
 mod candidate_order;
+mod endings;
 mod learned;
 mod ledger;
 mod moves;
@@ -99,6 +100,11 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "evaluation.endgamePawnSpread"
+        | "evaluation.pawnlessPotential"
+        | "evaluation.minorMateGeometry"
+        | "evaluation.endgameMaterialBlend"
+        | "evaluation.pawnRace" => endings::dispatch(operation, input),
         "search.nodeAdmission" | "search.historyAdmission" | "search.moveExtensions" => {
             admission::dispatch(operation, input)
         }

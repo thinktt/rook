@@ -33,7 +33,62 @@ pub struct Influence {
 
 impl Influence {
     pub fn build(position: &Position) -> Self {
-        Self::build_board(&position.board)
+        let mut influence = Self {
+            profiles: [[0; 64]; 2],
+        };
+        // Wrapping placement-only sums commute. Type/side ownership comes from
+        // the coherent chronological lists; ray semantics still read the board.
+        for side in [Color::White, Color::Black] {
+            for &source in position.piece_squares(side, PieceKind::Pawn) {
+                debug_assert!(source.0 < 64);
+                let targets = &PAWN_TARGETS[side.index()][(source.0 & 63) as usize];
+                for &target in &targets.squares[..targets.len as usize] {
+                    influence.add(side, Square(target & 63), Contribution::Pawn as u8);
+                }
+            }
+            for &source in position.piece_squares(side, PieceKind::Knight) {
+                debug_assert!(source.0 < 64);
+                let targets = &KNIGHT_SOURCES[(source.0 & 63) as usize];
+                for &target in &targets.squares[..targets.len as usize] {
+                    influence.add(side, Square(target & 63), Contribution::Minor as u8);
+                }
+            }
+            for &source in position.piece_squares(side, PieceKind::King) {
+                debug_assert!(source.0 < 64);
+                let targets = &KING_TARGETS[(source.0 & 63) as usize];
+                for &target in &targets.squares[..targets.len as usize] {
+                    influence.add(side, Square(target & 63), Contribution::Weak as u8);
+                }
+            }
+            for &source in position.piece_squares(side, PieceKind::Bishop) {
+                for direction in 0..4 {
+                    influence.ray(
+                        &position.board,
+                        side,
+                        source,
+                        direction,
+                        Contribution::Minor,
+                    );
+                }
+            }
+            for &source in position.piece_squares(side, PieceKind::Rook) {
+                for direction in 4..8 {
+                    influence.ray(&position.board, side, source, direction, Contribution::Rook);
+                }
+            }
+            for &source in position.piece_squares(side, PieceKind::Queen) {
+                for direction in 0..8 {
+                    influence.ray(
+                        &position.board,
+                        side,
+                        source,
+                        direction,
+                        Contribution::Queen,
+                    );
+                }
+            }
+        }
+        influence
     }
 
     #[inline]
@@ -41,6 +96,7 @@ impl Influence {
         self.profiles[side.index()][square.0 as usize]
     }
 
+    #[cfg(test)]
     fn build_board(board: &[Piece; 64]) -> Self {
         let mut influence = Self {
             profiles: [[0; 64]; 2],
@@ -152,52 +208,23 @@ pub const fn profile_sum(code: u8) -> u8 {
     (code & 1) + ((code >> 1) & 1) + ((code >> 2) & 3) + ((code >> 4) & 3) + (code >> 6)
 }
 
-#[inline]
-fn least_tier(code: u8) -> u8 {
-    if code >= 64 {
-        1
-    } else if code >= 16 {
-        3
-    } else if code >= 4 {
-        5
-    } else if code >= 2 {
-        9
-    } else {
-        99
-    } // Empty profiles are handled before a tier is used.
-}
-
-/// Classify a pawn, minor (knight/bishop), rook or queen; kings have no query tier.
-/// This function does not charge a relation unit.
+/// Classify the same four tested-piece tiers using capped count/tier states.
+/// Pure lookup; consumers retain all semantic charge decisions.
 #[inline]
 pub fn relation(own: u8, opponent: u8, kind: PieceKind) -> Relation {
     let tested = match kind {
-        PieceKind::Pawn => 1,
-        PieceKind::Knight | PieceKind::Bishop => 3,
-        PieceKind::Rook => 5,
-        PieceKind::Queen => 9,
+        PieceKind::Pawn => 0,
+        PieceKind::Knight | PieceKind::Bishop => 1,
+        PieceKind::Rook => 2,
+        PieceKind::Queen => 3,
         PieceKind::King => panic!("king has no tested-piece relation tier"),
     };
     if opponent == 0 {
         return Relation::Favorable;
     }
-    let attack_tier = least_tier(opponent);
-    if own == 0 || attack_tier < tested {
-        return Relation::Unfavorable;
-    }
-    let attacks = profile_sum(opponent).min(4);
-    let defenses = profile_sum(own).min(4);
-    if attack_tier == tested {
-        if attacks <= defenses {
-            Relation::Contested
-        } else {
-            Relation::Unfavorable
-        }
-    } else if attacks <= defenses || attack_tier > tested + least_tier(own) {
-        Relation::Favorable
-    } else {
-        Relation::Unfavorable
-    }
+    let own = (crate::relation_table::CLASS[own as usize] & 15) as usize;
+    let opponent = (crate::relation_table::CLASS[opponent as usize] & 15) as usize;
+    crate::relation_table::RELATIONS[tested][(own << 4) | opponent]
 }
 
 /// Exclude from normalized own support, preserving the base map and opponent.
@@ -545,6 +572,77 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn typed_list_maps_match_mailbox_and_target_oracles_after_order_changes() {
+        let mut random = 0x52a8_137f_0189_721du64;
+        for count in 0..10000 {
+            let mut board = board(&[
+                ("a1", Color::White, PieceKind::King),
+                ("h8", Color::Black, PieceKind::King),
+            ]);
+            for n in 0..(count % 31) {
+                loop {
+                    random ^= random << 13;
+                    random ^= random >> 7;
+                    random ^= random << 17;
+                    let index = (random & 63) as usize;
+                    if !board[index].is_empty() {
+                        continue;
+                    }
+                    let side = if n % 2 == 0 {
+                        Color::White
+                    } else {
+                        Color::Black
+                    };
+                    // At most three pawns/color and15 non-kings/color; promoted
+                    // counts and arbitrary checks/adjacency remain admitted.
+                    let mut kind = PieceKind::ALL[(n / 2) % 5];
+                    if kind == PieceKind::Pawn && (index < 8 || index >= 56) {
+                        kind = PieceKind::Knight;
+                    }
+                    board[index] = Piece::new(side, kind);
+                    break;
+                }
+            }
+            let mut rows = Vec::new();
+            for rank in (0..8).rev() {
+                let mut row = String::new();
+                let mut empty = 0;
+                for file in 0..8 {
+                    let piece = board[rank * 8 + file];
+                    if piece.is_empty() {
+                        empty += 1;
+                        continue;
+                    }
+                    if empty != 0 {
+                        row.push(char::from(b'0' + empty));
+                        empty = 0;
+                    }
+                    row.push(piece.fen_char());
+                }
+                if empty != 0 {
+                    row.push(char::from(b'0' + empty));
+                }
+                rows.push(row);
+            }
+            let mut position =
+                Position::from_fen(&format!("{} w - - 0 1", rows.join("/"))).unwrap();
+            let expected = Influence::build_board(&board);
+            assert_eq!(expected.profiles, reference_map(&board));
+            assert_eq!(Influence::build(&position), expected);
+            for side in [Color::White, Color::Black] {
+                let mut start = 0;
+                for kind in PieceKind::ALL {
+                    let len = position.counts[side.index()][kind.index()] as usize;
+                    position.squares[side.index()][start..start + len].reverse();
+                    start += len;
+                }
+            }
+            position.validate().unwrap();
+            assert_eq!(Influence::build(&position), expected);
         }
     }
 }

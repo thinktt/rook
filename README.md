@@ -14,15 +14,24 @@ tactical search, a work-timed root controller and persistent ordinary session.
 The `rook2` executable serves the live King XBoard byte stream, including
 search-time controls/status, natural seed acquisition, gate seed commands and
 fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implements
-44 mandatory operations with1968 external cases so far. Complete diagnostics, full gameplay and
+49 mandatory operations with2215 external cases so far. Complete diagnostics, full gameplay and
 performance qualification remain outstanding. Current generation reuse and
 compiler-PGO experiments retain exact builds, strict replay results and balanced
-whole-native CPU pilots; see [STATUS.md](STATUS.md) for their distinct scopes.
+whole-native CPU pilots. Current canonical8c4619a7 passes54 strict replays and
+eight interruption fixtures. Its independently reconciled216-lifetime54 CPU
+collection totals81.828432s in case medians; final qualification remains open.
+See [STATUS.md](STATUS.md) for artifact-specific evidence and limitations.
 
 Placement now includes exact attack planes owned by Position160/Node176,
 retaining copied-child state and independent retained evaluation. The measured
 storage/kernel decision and its validation boundaries are recorded in
 [decision0004](docs/decisions/0004-persistent-attack-planes.md).
+Influence now uses the coherent typed piece lists and a compact immutable
+relation kernel; their combined decision is recorded in
+[decision0006](docs/decisions/0006-typed-influence-enumeration.md).
+The offline [relation generator](scripts/generate_relation_table.py) reproduces
+the source table from the general formula; `--check src/relation_table.rs`
+verifies exact bytes without writing it.
 
 Build the ordinary executable with retained settings and identity:
 

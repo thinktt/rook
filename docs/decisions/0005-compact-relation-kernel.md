@@ -1,7 +1,8 @@
 # Compact pure relation kernel
 
-Status: selected for next canonical integration; production still uses the
-formula pending that integration and canonical validation. Date:2026-10-18.
+Status: adopted in canonical source with typed-list influence after the measured
+combined comparison in decision0006;134 native tests and49 diagnostic operations
+pass after integration. Canonical PGO/timing remain separate. Date:2026-10-18.
 Imp2 owns this engineering decision; no advisor approval is required.
 
 EVAL-RELATIONS depends only on capped multiplicity and least tier for each
