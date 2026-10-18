@@ -37,7 +37,7 @@ broad constructed positions queried on every square/color, projected boards
 and actual transitions, plus castling/promotion and joined EP non-pawn/king
 victims. The existing forced-projection generation oracle explicitly retains
 the old mailbox Boolean route. All these checks are unexecuted at this stage.
-After the live collection terminates, format/compile/test both variants, retain
+After the live collection terminates, compile/test both variants, retain
 any failures, run all54 exact replays, then use balanced whole-native generic
 comparisons with current baseline. A selected PGO candidate needs its own
 training/build/replay and CPU evidence; no generic/PGO inference is authorized.
