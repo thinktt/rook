@@ -37,6 +37,9 @@ the [closed TT checkpoint](evidence/fullbyte-remembered-reciprocal-trial-checkpo
 The placement-transposition census independently reconciles37,094,875 full
 encounters. A1024-slot exact-placement model hits12.9918% of encounters but
 only4.3017% in profile35; these are reuse opportunities, not CPU savings.
+Its [closed checkpoint](evidence/placement-transposition-census-checkpoint-20261018-01/README.md)
+records all741 archived members. The831 MB bulk archive stays local; external
+reproduction requires its separate transfer in addition to the Git metadata.
 One isolated1024-slot pure activity/shelter cache trial is selected for source
 preparation under [decision0014](docs/decisions/0014-pure-component-cache-trial.md).
 Public/custom-influence evaluation remains uncached, and pawn-cache effects,

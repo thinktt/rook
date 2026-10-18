@@ -15,6 +15,10 @@ Profile35 hits only4.3017%; profile08 hits16.9337%. These counts establish reuse
 opportunity, not saved CPU time. The complete report is
 `evidence/placement-transposition-census-model-20261018-01/report.md`, with
 summary SHA256 `69c95d9950182839522364e1a86cc4f5a26a61607058b7a09a48418e285f0de0`.
+The [closed census checkpoint](../../evidence/placement-transposition-census-checkpoint-20261018-01/README.md)
+preserves741 members and4,652,313,626 original bytes. Its831,286,859-byte bulk
+archive is retained locally; committed manifests and receipts require that
+separate archive for external reproduction.
 
 The lead selects one1024-entry direct-map prototype, rather than a larger cache
 or another hit-rate census. Cache only placement-derived activity pieces and
