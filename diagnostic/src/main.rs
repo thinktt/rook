@@ -12,6 +12,9 @@ use std::{
     process::ExitCode,
 };
 
+mod ledger;
+mod pawn_progress;
+mod position_terms;
 mod positions;
 mod relations;
 
@@ -82,6 +85,15 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "clock.workSequence" => ledger::dispatch(input),
+        "evaluation.pawnProgress"
+        | "evaluation.pawnCandidates"
+        | "evaluation.pawnCandidateEnding"
+        | "evaluation.pawnEnding" => pawn_progress::dispatch(operation, input),
+        "evaluation.activity"
+        | "evaluation.boardPatterns"
+        | "evaluation.centralInfluenceBalance"
+        | "evaluation.positionCentralBalance" => position_terms::dispatch(operation, input),
         "evaluation.relations"
         | "evaluation.adjustedRelations"
         | "evaluation.squareRelations"

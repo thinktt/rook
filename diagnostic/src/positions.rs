@@ -83,7 +83,7 @@ fn identity(position: &Position) -> Value {
     json!({"primary":position.primary,"secondary":position.secondary,"pawn":position.pawn,"pawnGroup":position.pawn % 128})
 }
 
-fn phase_value(phase: Phase) -> Value {
+pub(super) fn phase_value(phase: Phase) -> Value {
     json!({"opening":phase.opening,"middlegame":phase.middlegame,"endgame":phase.endgame})
 }
 

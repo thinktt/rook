@@ -227,3 +227,12 @@ king-coordinate metadata also passes132 native tests and all54 replays, but
 its six-case pilot is effectively flat (0.12% lower summed medians); production
 adoption is rejected. Both frozen experiments and all attempted samples are
 retained; production native source remains unchanged by them.
+
+
+Cold diagnostic source now prepares nine more existing-native routes (placement
+terms, ordered pawn progress/endings and work ledger). Source formatting/archive
+is complete; compilation and the planned17-unit/843-case regression wait for
+the live game CPU collection to terminate. The current accepted diagnostic
+result remains the separate15-operation/510-case frozen artifact. Native
+production source is unchanged. See
+[deferred verification](evidence/diagnostic-placement-preparation-20261018/README.md).

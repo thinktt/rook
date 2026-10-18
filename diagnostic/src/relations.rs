@@ -6,7 +6,7 @@ use rook2::{
 };
 use serde_json::{json, Value};
 
-fn profile(value: &Value) -> Result<u8> {
+pub(super) fn profile(value: &Value) -> Result<u8> {
     object(value, &["weak", "queen", "rook", "minor", "pawn"])?;
     let mut code = 0u32;
     for (name, weight) in [
