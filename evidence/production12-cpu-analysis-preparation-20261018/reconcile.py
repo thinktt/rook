@@ -82,6 +82,8 @@ def main():
         raw_semantic_posts=0,games=[],artifact_records={},
         scope='Reported-only direct native wait4 plus small Python child pre-exec prefix; quantized external search observations.',
         qualification='No calibration/PMU/resource/observer/uncertainty qualification; no focused-continuity or full3288-game claim.',
+        helper_affinity_observation_sha256=sha(Path(__file__).parent/'helper-affinity-observation.json'),
+        helper_affinity_limit='Lead Codex/shell permit all16 CPUs; some short inherited-affinity source/status commands overlapped. Engine pinned14 and heavy owned work held; guest exclusivity and interference cost not established.',
         per_search_policy='All three raw CPU samples retained, including null unresolved zero ticks. CPU statistics/rates require all three positive resolved samples.',
         raw_reference_policy='Uncalibrated cross-machine descriptive cost ratios only; no performance pass/fail.')
     grouped = {g['id']:[] for g in fixture['games']}

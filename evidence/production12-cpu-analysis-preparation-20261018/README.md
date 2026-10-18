@@ -19,3 +19,15 @@ These finite independent games do not establish focused continuity or the
 full3288-game gate. Wait4 includes the small Python child pre-exec prefix and
 the supervisor has point observations rather than continuous descendant
 ownership monitoring. Those collection limits remain disclosed.
+
+`parser-control.json` records exact public-stream agreement for three already
+completed immutable lifetimes (main, opening, switching), with no native run.
+It checks the parsing/reconstruction path, not the unfinished collection.
+
+`helper-affinity-observation.json` retains a further limitation: although the
+engine is pinned14 and heavy work has been held, the lead Codex ancestors and
+shell permit all16 CPUs. Some short source/status commands inherited that
+affinity. This point observation does not quantify actual scheduling or cost;
+exclusive guest CPU14/15 ownership is not established. Conditions will remain
+unchanged for the current collection. Verified own lead/helper threads can be
+constrained before later collections without changing host/global isolation.
