@@ -229,6 +229,23 @@ impl Components {
     }
 }
 
+/// Cold full-evaluation details observed from the actual component/finish path.
+/// This record is not stored in nodes or returned by ordinary evaluation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FullDetails {
+    pub components: Components,
+    pub base: i32,
+    pub finished: endgame::Finished,
+    pub pawn_entry_reused: bool,
+}
+
+/// Cold fast-path details from its actual base and single native finishing call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FastDetails {
+    pub base: i32,
+    pub finished: endgame::Finished,
+}
+
 pub struct Evaluator<const DIAGNOSTICS: bool = true> {
     pub root: RootContext,
     pub parameters: Parameters,
@@ -279,7 +296,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
     }
 
     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
-        self.full_impl::<false, _>(node, influence, in_check, |_| {})
+        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
     }
     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
     pub fn full_observed<F: FnOnce(Components)>(
@@ -289,7 +306,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         in_check: bool,
         observer: F,
     ) -> Evaluation {
-        self.full_impl::<false, _>(node, influence, in_check, observer)
+        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
     }
     pub fn fresh_observed<F: FnOnce(Components)>(
         &mut self,
@@ -298,14 +315,36 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         in_check: bool,
         observer: F,
     ) -> Evaluation {
-        self.full_impl::<true, _>(node, influence, in_check, observer)
+        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
     }
-    fn full_impl<const FRESH: bool, F: FnOnce(Components)>(
+    /// Forced-fresh observation includes the single native finishing result.
+    /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+    pub fn fresh_detailed_observed<F: FnOnce(FullDetails)>(
         &mut self,
         node: &mut Node,
         influence: &Influence,
         in_check: bool,
         observer: F,
+    ) -> Evaluation {
+        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
+    }
+    /// Ordinary full selection, including the actual cache identity-match flag.
+    pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+        &mut self,
+        node: &mut Node,
+        influence: &Influence,
+        in_check: bool,
+        observer: F,
+    ) -> Evaluation {
+        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
+    }
+    fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+        &mut self,
+        node: &mut Node,
+        influence: &Influence,
+        in_check: bool,
+        observer: F,
+        details: D,
     ) -> Evaluation {
         let position = &node.position;
         let phase = position.phase();
@@ -393,15 +432,24 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         }
         self.stats.relation_queries += queries;
         observer(components);
-        self.finish(position, components.base(), in_check, progress, queries)
+        let base = components.base();
+        self.finish_observed(position, base, in_check, progress, queries, |finished| {
+            details(FullDetails {
+                components,
+                base,
+                finished,
+                pawn_entry_reused: selected.reused,
+            });
+        })
     }
-    fn finish(
+    fn finish_observed<F: FnOnce(endgame::Finished)>(
         &self,
         position: &Position,
         base: i32,
         checked: bool,
         progress: i32,
         queries: u64,
+        observer: F,
     ) -> Evaluation {
         let value = endgame::finish(
             position,
@@ -414,6 +462,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             checked,
             progress,
         );
+        observer(value);
         Evaluation {
             score: value.score,
             lower: value.lower,
@@ -423,6 +472,23 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         }
     }
     pub fn fast(&mut self, node: &Node, in_check: bool) -> Evaluation {
+        self.fast_impl(node, in_check, |_| {})
+    }
+    /// Observe fast evaluation without influence construction or pawn selection.
+    pub fn fast_detailed_observed<F: FnOnce(FastDetails)>(
+        &mut self,
+        node: &Node,
+        in_check: bool,
+        observer: F,
+    ) -> Evaluation {
+        self.fast_impl(node, in_check, observer)
+    }
+    fn fast_impl<F: FnOnce(FastDetails)>(
+        &mut self,
+        node: &Node,
+        in_check: bool,
+        observer: F,
+    ) -> Evaluation {
         if DIAGNOSTICS {
             self.stats.fast += 1;
         }
@@ -441,7 +507,9 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             + node.retained.positional
             + node.retained.pawn_progress
             + tempo;
-        self.finish(position, base, in_check, node.retained.pawn_progress, 0)
+        self.finish_observed(position, base, in_check, node.retained.pawn_progress, 0, |finished| {
+            observer(FastDetails { base, finished });
+        })
     }
 
     /// Select and refresh from the finished current-side score.
@@ -594,5 +662,141 @@ mod tests {
         assert_eq!((a, root.retained), (b, second.retained));
         assert_eq!(quiet.stats.full, 0);
         assert_eq!(quiet.stats.relation_queries, a.relation_queries);
+    }
+
+    #[test]
+    fn fresh_details_observe_one_native_result_and_preserve_components_apis() {
+        let position = Position::from_fen(START).unwrap();
+        let influence = Influence::build(&position);
+        let mut evaluator = Evaluator::<false>::new(&position);
+        evaluator.parameters.draw = 10000;
+        evaluator.parameters.opponent_selectivity = 49;
+        evaluator.begin_search(&position);
+        let mut node = Node::root(position, &evaluator.root);
+        let mut calls = 0;
+        let mut observed = None;
+        let result = evaluator.fresh_detailed_observed(&mut node, &influence, false, |details| {
+            calls += 1;
+            observed = Some(details);
+        });
+        let details = observed.unwrap();
+        assert_eq!(calls, 1);
+        assert_eq!(details.base, 6);
+        assert_eq!(details.base, details.components.base());
+        assert_eq!((result.score, result.lower, result.upper),
+            (details.finished.score, details.finished.lower, details.finished.upper));
+        assert_eq!(node.retained.positional, details.components.positional());
+        assert_eq!(node.retained.pawn_progress, details.components.pawn_progress);
+        assert_eq!(result.relation_queries, 10);
+        let mut old_node = Node::root(position, &evaluator.root);
+        let mut old_components = None;
+        let old_result = evaluator.fresh_observed(&mut old_node, &influence, false,
+            |components| old_components = Some(components));
+        assert_eq!(old_components, Some(details.components));
+        assert_eq!((old_result, old_node.retained), (result, node.retained));
+        let full_result = evaluator.full_observed(&mut old_node, &influence, false,
+            |components| assert_eq!(components, details.components));
+        assert_eq!(full_result, result);
+    }
+
+    #[test]
+    fn detailed_fresh_bypasses_zero_and_full_identity_matches_without_populating_cache() {
+        let first = Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
+        let collision = Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
+        assert_eq!(first.pawn, collision.pawn);
+        let first_map = Influence::build(&first);
+        let collision_map = Influence::build(&collision);
+        let mut evaluator = Evaluator::<true>::new(&first);
+        let mut first_node = Node::root(first, &evaluator.root);
+        evaluator.full(&mut first_node, &first_map, false);
+        let retained = evaluator.pawns.select(&first, &first_map).structure;
+        let before = evaluator.stats;
+        let mut node = Node::root(collision, &evaluator.root);
+        evaluator.fresh_detailed_observed(&mut node, &collision_map, false, |_| {});
+        assert_eq!(evaluator.stats.pawn_reuses, before.pawn_reuses);
+        assert_eq!(evaluator.stats.pawn_replacements, before.pawn_replacements + 1);
+        let after = evaluator.pawns.select(&collision, &collision_map);
+        assert!(after.reused);
+        assert_eq!(after.structure, retained);
+        assert_ne!(after.structure, pawn_structure::fresh(&collision, &collision_map, [1024; 2]));
+
+        let empty = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
+        assert_eq!(empty.pawn, 0);
+        let map = Influence::build(&empty);
+        let mut evaluator = Evaluator::<true>::new(&empty);
+        let mut node = Node::root(empty, &evaluator.root);
+        evaluator.fresh_detailed_observed(&mut node, &map, false, |_| {});
+        assert_eq!((evaluator.stats.pawn_reuses, evaluator.stats.pawn_replacements), (0, 1));
+        evaluator.full(&mut node, &map, false);
+        assert_eq!(evaluator.stats.pawn_reuses, 1);
+    }
+
+    #[test]
+    fn detailed_full_reports_actual_zero_group_replacement_and_identity_hits() {
+        fn observe(evaluator: &mut Evaluator, position: Position) -> bool {
+            let influence = Influence::build(&position);
+            let mut node = Node::root(position, &evaluator.root);
+            let mut observed = None;
+            evaluator.full_detailed_observed(&mut node, &influence, false,
+                |details| observed = Some(details));
+            observed.unwrap().pawn_entry_reused
+        }
+        let empty = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
+        let group_zero = Position::from_fen("7k/8/8/8/6P1/3P4/8/K7 w - - 0 1").unwrap();
+        assert_eq!(group_zero.pawn % 128, 0);
+        let mut evaluator = Evaluator::<true>::new(&empty);
+        assert!(observe(&mut evaluator, empty));
+        assert!(!observe(&mut evaluator, group_zero));
+        assert!(observe(&mut evaluator, group_zero));
+        assert!(!observe(&mut evaluator, empty));
+        assert!(observe(&mut evaluator, empty));
+    }
+
+    #[test]
+    fn detailed_fast_preserves_node_cache_and_nonfast_work_in_both_monomorphs() {
+        fn verify<const D: bool>() {
+            let first = Position::from_fen("7k/8/8/8/6P1/3P4/8/K7 w - - 0 1").unwrap();
+            let current = Position::from_fen("7k/8/6P1/8/8/3P4/8/K7 w - - 0 1").unwrap();
+            assert_eq!(first.pawn % 128, current.pawn % 128);
+            assert_ne!(first.pawn, current.pawn);
+            let mut evaluator = Evaluator::<D>::new(&first);
+            let first_map = Influence::build(&first);
+            let mut root = Node::root(first, &evaluator.root);
+            evaluator.full(&mut root, &first_map, false);
+            let mut node = Node::root(current, &evaluator.root);
+            node.retained.positional = root.retained.positional;
+            node.retained.pawn_progress = root.retained.pawn_progress;
+            node.retained.age = 19;
+            let saved = node;
+            let before = evaluator.stats;
+            let mut calls = 0;
+            let mut observed = None;
+            let evaluation = evaluator.fast_detailed_observed(&node, false, |details| {
+                calls += 1;
+                observed = Some(details);
+            });
+            let details = observed.unwrap();
+            assert_eq!(calls, 1);
+            assert_eq!(node, saved);
+            assert_eq!(evaluation.relation_queries, 0);
+            assert_eq!((evaluation.score, evaluation.lower, evaluation.upper),
+                (details.finished.score, details.finished.lower, details.finished.upper));
+            assert_eq!(evaluator.stats.full, before.full);
+            assert_eq!(evaluator.stats.influence_builds, before.influence_builds);
+            assert_eq!(evaluator.stats.pawn_reuses, before.pawn_reuses);
+            assert_eq!(evaluator.stats.pawn_replacements, before.pawn_replacements);
+            assert_eq!(evaluator.stats.relation_queries, before.relation_queries);
+            assert_eq!(evaluator.stats.fast, before.fast + u64::from(D));
+            // A fast probe/populate on the different current identity would have
+            // evicted this same-group first entry. It must still be an exact hit.
+            assert!(evaluator.pawns.select(&first, &first_map).reused);
+            assert_eq!(evaluator.fast(&node, false), evaluation);
+            let mut repeated = None;
+            evaluator.fast_detailed_observed(&node, false, |details| repeated = Some(details));
+            assert_eq!(observed, repeated);
+            assert_eq!(node, saved);
+        }
+        verify::<false>();
+        verify::<true>();
     }
 }

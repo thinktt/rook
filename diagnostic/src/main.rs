@@ -16,6 +16,8 @@ mod admission;
 mod candidate_order;
 mod endgame_bounds;
 mod endings;
+mod evaluation_common;
+mod fresh_evaluation;
 mod king_shelter;
 mod learned;
 mod ledger;
@@ -29,6 +31,7 @@ mod policies;
 mod position_terms;
 mod positions;
 mod relations;
+mod retained_evaluation;
 mod root_context;
 mod score_context;
 mod scores;
@@ -119,6 +122,10 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         | "evaluation.endgameAdjust"
         | "evaluation.fortressBounds"
         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
+        "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
+        "evaluation.freshSubtotal" | "evaluation.freshScore" => {
+            fresh_evaluation::dispatch(operation, input)
+        }
         "evaluation.scoreContext" | "evaluation.personalityScore" | "evaluation.positionScore" => {
             score_context::dispatch(operation, input)
         }

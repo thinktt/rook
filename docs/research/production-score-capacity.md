@@ -46,3 +46,13 @@ source matrices and prior proof receipt hashes are retained in
 [delta binding](../../evidence/eval-pawn-observers-integration-20261018/numeric-proof-delta-binding.json).
 Those version-specific proofs retain their original limits; this delta review
 is not a new global arithmetic or whole-engine conformance proof.
+
+The subsequent82-operation source adds passive detailed full/fast observations
+and cold transports while preserving ordinary arithmetic, state fields and
+charge/admission order. Both source closures exactly match the tested proposal;
+139 native tests,99 adapter units,4721 cases and54/eight-wire regressions pass
+on its named frozen artifacts. The ordinary full and main ordinary-search
+functions are byte-identical to frozen79 generic. The separate
+[82-operation delta binding](../../evidence/retained-evaluation-integration-20261018/numeric-proof-delta-binding.json)
+retains the preceding bounded proof premises and limits; no broader arithmetic
+or performance conclusion is inferred from the observer seams.

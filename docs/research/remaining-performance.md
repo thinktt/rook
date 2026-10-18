@@ -235,7 +235,7 @@ and production review remain requirements alongside optimization.
     1817/1856 bytes and total text3656 bytes. This is insufficient evidence
     for PGO or adoption; preserve canonical8d source unchanged.
 
-14. **Exact uncapped influence profile sums: generic pilot positive; own PGO pending.**
+14. **Exact uncapped influence profile sums: own PGO measured and parked.**
     A private immutable256-byte table replaces only profile_sum arithmetic for
     all256 normalized byte inputs; public const API, relation cap tables, charge
     sites, state/layout and consumers remain unchanged. Native134 tests include
@@ -245,9 +245,13 @@ and production review remain requirements alongside optimization.
     Its balanced60-lifetime pilot independently reconciles14.690910s control
     c946104a versus14.527878s lookup,1.109747% lower. Five medians improve,
     profile29 increases, and all six sample ranges overlap. This is a modest
-    finite observation without a confidence/qualification claim. An own-profile
-    PGO comparison is warranted before source selection; no adoption follows yet.
-    See `evidence/profile-sum-cpu-pilot-20261018/`.
+    finite observation without a confidence/qualification claim. The separately
+    trained own-PGO artifact f3562ff6 passes54 strict/eight-wire regression, but
+    its matched60-lifetime pilot sums13.424908s baseline8d9dddc5 versus
+    13.4303025s lookup,0.040183% higher. Four medians decrease and two increase;
+    all six ranges overlap. Park without adoption or broader cost runs.
+    See `evidence/profile-sum-cpu-pilot-20261018/` and
+    `evidence/pgo-profile-sum-cpu-pilot-20261018/`.
 
 15. **Exact activity pressure-mark values: measured and parked.**
     A different private immutable256-byte table replaces only pressure_value
@@ -261,3 +265,16 @@ and production review remain requirements alongside optimization.
     Park this candidate without PGO or integration. It neither inherits nor is
     combined with profile_sum results. See
     `evidence/pressure-value-cpu-pilot-20261018/`.
+
+16. **Repeated capture material endpoints: census supports a Q-only trial.**
+    The frozen79 diagnostic derivative passes54 unchanged strict replays and
+    independently reconciles163,583,266 segment material source demands.
+    An invocation-local1+K model avoids32,274,602 demands (19.7298%) across
+    Q and ordinary frontier. Q alone contributes27,771,603 (41.5391% of Q
+    endpoints;16.9770% of segment material demand); ordinary contributes
+    4,502,999 (2.7527% of segment demand) and has11,035,210 zero-call loops.
+    Select a Q-only lazy pure endpoint trial before any persistent layout.
+    First-use/zero-demand initialization, recursive frame pressure and emitted
+    code remain costs to measure. Counts are source opportunities, not emitted
+    calls or CPU savings. See
+    `evidence/material-allowance-census-20261018/RESULTS.md`.

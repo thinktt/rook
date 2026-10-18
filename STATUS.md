@@ -8,6 +8,11 @@ persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT
 learned state and specified root scheduling. Ordinary `Session<false>` excludes
 development tracing; cold JSON is a separate adapter package. Position160/Node176
 now owns exact placement attack planes while retaining copied-child ownership.
+Current source implements82 mandatory diagnostic operations and passes4721
+unique cases/99 adapter units plus139 native tests. Source promotion exactly
+matches both tested proposal closures; frozenc6839096 passes54 strict replays
+and eight interruption fixtures, and adapterbf4c0150 owns the component result.
+These new source/artifact observations have no own-PGO/cost/gameplay result.
 The matched storage experiments and independent PGO trial support this source
 integration. Canonical915f83e4 passes54 strict replays, eight interruption
 fixtures and its own six-case timing pilot; final qualification remains.
@@ -379,28 +384,41 @@ missing fixture version header before external execution; the corrected fresh
 attempt and original failure are both retained. The subsequent79-route source integration is recorded below; these isolated
 observations carry no new performance result.
 
-The79-operation observer source is now integrated. Fresh canonical adapter
+The earlier79-operation observer integration passed with fresh canonical adapter
 a9f6e9f6 passes4521 unique cases/86 units across73 whole released files after
 135 canonical native tests. Isolated1bce8aea passes54 strict replays/eight wire
 fixtures; fresh canonical generic9709f8e9 also passes54 strict replays/eight wire fixtures.
 Score-context, fresh/retained pawn and phase/subtotal routes share native owners.
 Retained cache construction uses a static miss-only builder, preserving cache-hit
 suppression; no state/layout was added. Remaining mandatory inventory is38
-operations/3152 cases; final own-PGO/cost/gameplay evidence stays separate.
+operations/3152 cases at that checkpoint; final own-PGO/cost/gameplay evidence stays separate.
 
 The separate profile_sum lookup prototype passes134 native tests, the exhaustive
 normalized-byte digit model, a strengthened10000-coordinate oracle,54 strict
 replays and eight interruption fixtures. Its generic balanced60-lifetime pilot
 independently reconciles1.109747% lower summed CPU medians (five lower, one
-higher; all six ranges overlap). Own54-case training and strict54/eight-wire regression now pass on
-f3562ff6; its matched PGO CPU comparison remains pending. No table source
-is adopted. The independent pressure-value table passes135 native tests,10000
+higher; all six ranges overlap). Own54-case training and strict54/eight-wire regression pass on
+f3562ff6. Its matched60-lifetime PGO pilot independently reconciles13.424908s
+baseline8d9dddc5 versus13.4303025s lookup,0.040183% higher; four medians
+decrease, two increase, and all six ranges overlap. It is parked without
+adoption or broader cost runs. The independent pressure-value table passes135 native tests,10000
 coordinate placements and54/eight-wire regression, but its60-lifetime generic
 pilot is0.311677% higher with all six ranges overlapping; it is parked without
 PGO or integration.
 
-The separate detailed forced-fresh proposal now passes137 native tests and
-81-operation/4637-case/92-unit diagnostic regression. Its two new complete
-evaluation routes use a single native finishing result, forced-fresh cache
-bypass and validated supplied pawn chronology. It is not integrated; ordinary
-optimized no-op observation/code-generation and own wire checks remain open.
+The detailed forced-fresh and retained full/fast source is now integrated as82
+operations/4721 unique cases across76 whole files, with139 native and99 adapter
+tests passed. Frozen ordinary c6839096 passes54 strict replays/eight interruption
+fixtures. Both native/frontend source closures exactly match those tested
+artifacts; no canonical-path rebuild is implied. Default full_impl and
+visit_ordinary are byte-identical to frozen79 generic; visit_q differs only in
+three table-base operands whose decoded target windows match. Other artifacts,
+data layout and PGO are outside that static result. Current mandatory remainder
+is35 operations/2952 cases. The new routes share actual native finishing,
+fresh/nonfresh selection, retained state and per-call relation work.
+
+The frozen79 diagnostic census passes54 unchanged strict replays and independent
+counter reconciliation. It finds32,274,602 repeated material endpoint source
+demands (19.7298% of search-segment demand), primarily in Q. A Q-only local
+lazy endpoint trial is selected for investigation; no persistent state or CPU
+benefit is selected from the counts. See its separate RESULTS.md.
