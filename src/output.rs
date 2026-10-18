@@ -40,6 +40,58 @@ pub struct Post {
     pub displayed_moves: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Status {
+    pub centiseconds: i32,
+    pub search_id: u64,
+    pub depth_token: i32,
+    pub remaining: usize,
+    pub total: usize,
+    pub pv: String,
+    pub line: String,
+}
+
+pub fn status(
+    mut root: Position,
+    path: &[Option<Move>],
+    centiseconds: i32,
+    search_id: u64,
+    depth_token: i32,
+    remaining: usize,
+    total: usize,
+) -> Result<Status, InvalidPv> {
+    let mut line = format!(
+        "stat01: {:>6} {:>9} {:>5} {:>3} {:>3}",
+        centiseconds, search_id, depth_token, remaining, total
+    );
+    let mut semantic = String::new();
+    for (index, &movement) in path.iter().enumerate() {
+        let text = if let Some(movement) = movement {
+            let (text, next) = token(&root, movement).ok_or(InvalidPv { index, movement })?;
+            root = next;
+            text
+        } else {
+            root = root.null_child();
+            "null".to_owned()
+        };
+        line.push(' ');
+        line.push_str(&text);
+        if index > 0 {
+            semantic.push(' ');
+        }
+        semantic.push_str(&text.replace('0', "O"));
+    }
+    Ok(Status {
+        centiseconds,
+        search_id,
+        depth_token,
+        remaining,
+        total,
+        pv: semantic,
+        line,
+    })
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InvalidPv {
     pub index: usize,

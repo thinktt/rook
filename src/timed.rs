@@ -96,6 +96,7 @@ pub struct Stop {
 }
 
 pub struct Outcome {
+    pub seed: u32,
     pub initial_candidates: Vec<Move>,
     pub iterations: Vec<Iteration>,
     pub checks: Vec<Check>,
@@ -116,10 +117,12 @@ pub(crate) struct Clock {
     pub root_index: usize,
     pub checks: Vec<Check>,
     pub last_check: Option<Check>,
+    pub root: Position,
+    pub root_total: usize,
 }
 
 impl Clock {
-    fn new(controls: Controls, checked: bool) -> Self {
+    fn new(controls: Controls, checked: bool, root: Position, root_total: usize) -> Self {
         let mut ledger = Ledger::with_origin(controls.origin);
         let start = ledger.observe(Work::default());
         Self {
@@ -129,6 +132,8 @@ impl Clock {
             root_index: 0,
             checks: Vec::new(),
             last_check: None,
+            root,
+            root_total,
         }
     }
 
@@ -315,7 +320,104 @@ mod tests {
     }
 }
 
-impl<const D: bool> Search<D> {
+impl<const D: bool, H: crate::host::Host> Search<D, H> {
+    pub(crate) fn publish_capture(&mut self, capture: &Capture) -> std::io::Result<()> {
+        use crate::{host::Record, output};
+        let Some(control) = self.control.as_mut() else {
+            return Ok(());
+        };
+        if !control.post {
+            return Ok(());
+        }
+        let clock = self.timing.as_ref().unwrap();
+        let mut fields = output::capture_fields(
+            &clock.root,
+            capture,
+            self.evaluator.draw_preference,
+            self.config.selectivity,
+        );
+        if control.fine_work {
+            fields.centiseconds = clock.ledger.fine_post();
+        }
+        let post = output::render(clock.root, &capture.pv, fields).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid captured PV: {e:?}"),
+            )
+        })?;
+        self.host.publish(Record::Post(post))?;
+        control.published = true;
+        Ok(())
+    }
+
+    pub(crate) fn work_poll(&mut self, history: &SearchHistory, work: Work) -> Result<(), Stopped> {
+        use crate::host::{Command, Record};
+        let Some(clock) = self.timing.as_mut() else {
+            return Ok(());
+        };
+        let maximum = clock.check::<D>(Stage::Poll, 0, 0, work);
+        if H::ACTIVE {
+            let command = self.host.command().map_err(|e| Stopped::HostIo(e.kind()))?;
+            if let Some(command) = command {
+                let control = self
+                    .control
+                    .as_mut()
+                    .expect("active host requires session controls");
+                match command {
+                    Command::Finish => return Err(Stopped::HostStop),
+                    Command::Abort => {
+                        control.force = true;
+                        self.host
+                            .publish(Record::Aborting)
+                            .map_err(|e| Stopped::HostIo(e.kind()))?;
+                        return Err(Stopped::HostAbort);
+                    }
+                    Command::Post(enabled) => control.post = enabled,
+                    Command::Easy => control.pondering = false,
+                    Command::Ignore => {}
+                    Command::Time(remaining) => control
+                        .clock
+                        .synchronize(
+                            remaining,
+                            control.game_ply,
+                            control.initial_side,
+                            control.clock_color,
+                            clock.ledger.last(),
+                        )
+                        .map_err(|_| Stopped::HostIo(std::io::ErrorKind::InvalidInput))?,
+                    Command::Status => {
+                        let depth = clock.depth as i32;
+                        let margin = crate::ordinary_policy::selective_depth(
+                            depth,
+                            self.config.selectivity,
+                            clock.root.phase().endgame,
+                            depth,
+                        )
+                        .margin;
+                        let status = crate::output::status(
+                            clock.root,
+                            history.search_path(),
+                            clock.adaptive.elapsed_cs(clock.ledger.last()) as i32,
+                            work.charged_search_units,
+                            1000 * depth + margin,
+                            clock.root_total - clock.root_index - 1,
+                            clock.root_total,
+                        )
+                        .map_err(|_| Stopped::HostIo(std::io::ErrorKind::InvalidData))?;
+                        self.host
+                            .publish(Record::Status(status))
+                            .map_err(|e| Stopped::HostIo(e.kind()))?;
+                    }
+                }
+            }
+        }
+        if maximum {
+            Err(Stopped::WorkPoll)
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn run_work_timed(
         &mut self,
         position: Position,
@@ -332,7 +434,7 @@ impl<const D: bool> Search<D> {
         &mut self,
         position: Position,
         history: &mut SearchHistory,
-        controls: Controls,
+        mut controls: Controls,
         limits: Limits,
     ) -> Result<Outcome, Error> {
         if !(1..=62).contains(&controls.maximum_entered_iterations)
@@ -359,7 +461,16 @@ impl<const D: bool> Search<D> {
             })
             .collect();
         self.begin_sequence(limits);
-        self.timing = Some(Clock::new(controls, checked));
+        if H::ACTIVE {
+            controls.seed = self
+                .host
+                .acquire_seed(controls.seed, controls.origin)
+                .map_err(Error::Host)?;
+        }
+        self.timing = Some(Clock::new(controls, checked, position, roots.len()));
+        if H::ACTIVE {
+            self.host.started(controls.seed).map_err(Error::Host)?;
+        }
         let mut iterations = Vec::new();
         let mut captured = None;
         let mut publications = Vec::new();
@@ -418,7 +529,9 @@ impl<const D: bool> Search<D> {
                         history.pop();
                         let value = match result {
                             Ok(value) => score_add(-value, adjustment),
-                            Err(Stopped::WorkPoll) => {
+                            Err(
+                                stop @ (Stopped::WorkPoll | Stopped::HostStop | Stopped::HostAbort),
+                            ) => {
                                 iterations.push(iteration);
                                 let clock = self.timing.as_ref().unwrap();
                                 break 'search Stop {
@@ -432,7 +545,11 @@ impl<const D: bool> Search<D> {
                                         window: attempt_window,
                                         adjustment,
                                     }),
-                                    reason: "maximum",
+                                    reason: match stop {
+                                        Stopped::HostStop => "host",
+                                        Stopped::HostAbort => "abort",
+                                        _ => "maximum",
+                                    },
                                 };
                             }
                             Err(error) => return Err(Error::Stopped(error)),
@@ -485,6 +602,9 @@ impl<const D: bool> Search<D> {
                         };
                         if depth >= 3 {
                             publications.push(capture.clone());
+                            if H::ACTIVE {
+                                self.publish_capture(&capture).map_err(Error::Host)?;
+                            }
                         }
                         captured = Some(capture);
                     }
@@ -564,6 +684,7 @@ impl<const D: bool> Search<D> {
         };
         let clock = self.timing.take().unwrap();
         Ok(Outcome {
+            seed: controls.seed,
             initial_candidates,
             iterations,
             checks: clock.checks,

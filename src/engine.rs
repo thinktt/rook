@@ -1,5 +1,7 @@
 //! Search-wide ownership shared by ordinary and tactical recursion.
 use crate::evaluator::Evaluator;
+use crate::history::SearchHistory;
+use crate::host::{Host, NoHost};
 use crate::movegen::{MoveList, MOVE_CAPACITY};
 use crate::ordinary_policy::Learning;
 use crate::position::Position;
@@ -29,7 +31,7 @@ impl Default for Config {
     }
 }
 
-pub struct Search<const DIAGNOSTICS: bool = true> {
+pub struct Search<const DIAGNOSTICS: bool = true, H: Host = NoHost> {
     pub evaluator: Evaluator<DIAGNOSTICS>,
     pub config: Config,
     pub(crate) candidates: Box<[MoveList]>,
@@ -43,9 +45,11 @@ pub struct Search<const DIAGNOSTICS: bool = true> {
     pub(crate) stats: Stats,
     pub(crate) limits: Limits,
     pub(crate) timing: Option<crate::timed::Clock>,
+    pub(crate) host: H,
+    pub(crate) control: Option<crate::host::Control>,
 }
 
-impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
+impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
     pub fn new(root: &Position) -> Self {
         Self {
             evaluator: Evaluator::new(root),
@@ -61,7 +65,52 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
             stats: Stats::default(),
             limits: Limits::default(),
             timing: None,
+            host: NoHost,
+            control: None,
         }
+    }
+}
+
+impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
+    /// Transfer reusable storage; changing a host neither clones nor allocates search buffers.
+    pub fn map_host<N: Host>(self, host: N) -> (Search<DIAGNOSTICS, N>, H) {
+        let Self {
+            evaluator,
+            config,
+            candidates,
+            extension_flags,
+            ordering,
+            learning,
+            remembered,
+            table_bytes,
+            pv,
+            pv_len,
+            stats,
+            limits,
+            timing,
+            host: previous,
+            control,
+        } = self;
+        (
+            Search {
+                evaluator,
+                config,
+                candidates,
+                extension_flags,
+                ordering,
+                learning,
+                remembered,
+                table_bytes,
+                pv,
+                pv_len,
+                stats,
+                limits,
+                timing,
+                host,
+                control,
+            },
+            previous,
+        )
     }
 
     pub(crate) fn ensure_table(&mut self) -> Result<(), String> {
@@ -79,7 +128,7 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
         }
     }
 
-    pub(crate) fn charge_node(&mut self) -> Result<(), Stopped> {
+    pub(crate) fn charge_node(&mut self, history: &SearchHistory) -> Result<(), Stopped> {
         if let Some(limit) = self.limits.nodes {
             if self.stats.nodes >= limit {
                 return Err(Stopped::NodeLimit(limit));
@@ -88,11 +137,7 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
         self.stats.nodes += 1;
         if self.stats.nodes & 4095 == 0 {
             let work = self.work();
-            if let Some(clock) = &mut self.timing {
-                if clock.check::<DIAGNOSTICS>(crate::timing::Stage::Poll, 0, 0, work) {
-                    return Err(Stopped::WorkPoll);
-                }
-            }
+            self.work_poll(history, work)?;
         }
         Ok(())
     }

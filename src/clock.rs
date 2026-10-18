@@ -115,6 +115,13 @@ pub struct GameClock {
 }
 
 impl GameClock {
+    pub(crate) fn vacant() -> Self {
+        Self {
+            schedule: Schedule { stages: Vec::new() },
+            adjustment_cs: 0,
+            start: None,
+        }
+    }
     pub fn effective_adjustment(&self, now: u32) -> i32 {
         self.adjustment_cs
             .wrapping_add(self.start.map_or(0, |start| now.wrapping_sub(start) as i32))

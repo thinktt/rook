@@ -50,6 +50,7 @@ pub enum Error {
     FatalEmptyRoot,
     FatalKingVictim,
     Pondering,
+    Host(std::io::Error),
 }
 impl From<parameters::Error> for Error {
     fn from(e: parameters::Error) -> Self {
@@ -78,6 +79,14 @@ pub struct SearchResult {
     pub game_result: Option<GameResult>,
 }
 
+struct Prepared {
+    root: Position,
+    history: SearchHistory,
+    controls: Controls,
+    allowance: Allowance,
+    entry: u32,
+}
+
 pub struct Session<const D: bool = true> {
     pub parameters: Parameters,
     pub clock: GameClock,
@@ -93,7 +102,7 @@ pub struct Session<const D: bool = true> {
     pub recorded_time: i32,
     pub result: Option<GameResult>,
     pub seed_override: Option<u32>,
-    search: Search<D>,
+    search: Option<Search<D>>,
     work: Work,
     king_victim: bool,
 }
@@ -118,7 +127,7 @@ impl<const D: bool> Default for Session<D> {
             recorded_time: 0,
             result: None,
             seed_override: None,
-            search: Search::new(&position),
+            search: Some(Search::new(&position)),
             work: Work::default(),
             king_victim: false,
         }
@@ -186,7 +195,7 @@ impl<const D: bool> Session<D> {
         }
         let p = self.position();
         let mut legal = MoveList::new();
-        movegen::generate_legal(&p, &mut legal);
+        movegen::legal_replies_up_to_two(&p, &mut legal);
         if legal.len == 0 {
             return Some(if movegen::in_check(&p, p.side) {
                 GameResult::Checkmate(p.side.opponent())
@@ -418,12 +427,11 @@ impl<const D: bool> Session<D> {
         Ok(Action::Reply(reply))
     }
 
-    pub fn go(
+    fn prepare_go(
         &mut self,
         system_seconds: u32,
-        limits: Limits,
         iteration_capacity: u8,
-    ) -> Result<SearchResult, Error> {
+    ) -> Result<Prepared, Error> {
         if self.king_victim {
             return Err(Error::FatalKingVictim);
         }
@@ -438,7 +446,7 @@ impl<const D: bool> Session<D> {
         }
         self.force = false;
         self.engine_color = self.position().side;
-        self.parameters.bind(&mut self.search)?;
+        self.parameters.bind(self.search.as_mut().unwrap())?;
         let entry = self.ledger.observe(self.work);
         let allowance =
             self.clock
@@ -449,12 +457,12 @@ impl<const D: bool> Session<D> {
         self.clock.begin(entry);
         self.ledger.reset();
         self.work = Work::default();
-        let root = self.position();
-        let mut history = self.search_history();
-        let result = self.search.run_work_timed(
-            root,
-            &mut history,
-            Controls {
+        Ok(Prepared {
+            root: self.position(),
+            history: self.search_history(),
+            allowance,
+            entry,
+            controls: Controls {
                 average_cs: allowance.average_cs,
                 maximum_cs: allowance.maximum_cs,
                 origin: entry,
@@ -462,30 +470,52 @@ impl<const D: bool> Session<D> {
                 randomness: self.parameters.values[24] as u32,
                 maximum_entered_iterations: iteration_capacity,
             },
+        })
+    }
+
+    fn finish_failed(&mut self, error: ordinary::Error, work: Work) -> Error {
+        self.work = work;
+        let end = self.ledger.observe(work);
+        self.clock.finish(end);
+        if matches!(error, ordinary::Error::NoLegalRoots) {
+            Error::FatalEmptyRoot
+        } else {
+            Error::Search(error)
+        }
+    }
+
+    fn finish_clock(&mut self, outcome: &timed::Outcome) {
+        self.work = outcome.stop.work;
+        self.ledger = outcome.ledger;
+        let finish = self.ledger.observe(self.work);
+        self.clock.finish(finish);
+    }
+
+    pub fn go(
+        &mut self,
+        system_seconds: u32,
+        limits: Limits,
+        iteration_capacity: u8,
+    ) -> Result<SearchResult, Error> {
+        let mut prepared = self.prepare_go(system_seconds, iteration_capacity)?;
+        let result = self.search.as_mut().unwrap().run_work_timed(
+            prepared.root,
+            &mut prepared.history,
+            prepared.controls,
             limits,
         );
         let outcome = match result {
             Ok(outcome) => outcome,
             Err(error) => {
-                self.work = self.search.work();
-                let end = self.ledger.observe(self.work);
-                self.clock.finish(end);
-                return Err(if matches!(error, ordinary::Error::NoLegalRoots) {
-                    Error::FatalEmptyRoot
-                } else {
-                    Error::Search(error)
-                });
+                return Err(self.finish_failed(error, self.search.as_ref().unwrap().work()));
             }
         };
-        self.work = outcome.stop.work;
-        self.ledger = outcome.ledger;
-        let finish = self.ledger.observe(self.work);
-        self.clock.finish(finish);
+        self.finish_clock(&outcome);
         let events = output::completed_events(
-            root,
+            prepared.root,
             &outcome,
-            self.search.evaluator.draw_preference,
-            self.search.config.selectivity,
+            self.search.as_ref().unwrap().evaluator.draw_preference,
+            self.search.as_ref().unwrap().config.selectivity,
             self.post,
         )
         .map_err(Error::Rendering)?;
@@ -497,13 +527,100 @@ impl<const D: bool> Session<D> {
             .unwrap_or(outcome.initial_candidates[0]);
         self.accept_move(movement);
         Ok(SearchResult {
-            seed,
-            entry_clock: entry,
-            allowance,
+            seed: outcome.seed,
+            entry_clock: prepared.entry,
+            allowance: prepared.allowance,
             outcome,
             events,
             game_result: self.result,
         })
+    }
+
+    /// Publish at actual search boundaries and return the host even on failure.
+    pub fn go_live<H: crate::host::Host>(
+        &mut self,
+        host: H,
+        system_seconds: u32,
+        limits: Limits,
+        iteration_capacity: u8,
+        fine_work: bool,
+    ) -> (Result<SearchResult, Error>, H) {
+        use crate::host::{Control, NoHost, Record};
+        let mut prepared = match self.prepare_go(system_seconds, iteration_capacity) {
+            Ok(p) => p,
+            Err(e) => return (Err(e), host),
+        };
+        let (mut active, _) = self.search.take().unwrap().map_host(host);
+        active.control = Some(Control {
+            clock: std::mem::replace(&mut self.clock, GameClock::vacant()),
+            post: self.post,
+            force: self.force,
+            pondering: self.pondering,
+            published: false,
+            fine_work,
+            game_ply: self.game_ply(),
+            initial_side: self.states[0].side,
+            clock_color: self.clock_color,
+        });
+        let result = active.run_work_timed(
+            prepared.root,
+            &mut prepared.history,
+            prepared.controls,
+            limits,
+        );
+        let work = active.work();
+        let control = active.control.take().unwrap();
+        let draw = active.evaluator.draw_preference;
+        let selectivity = active.config.selectivity;
+        let (saved, mut host) = active.map_host(NoHost);
+        self.search = Some(saved);
+        self.clock = control.clock;
+        self.post = control.post;
+        self.force = control.force;
+        self.pondering = control.pondering;
+        let outcome = match result {
+            Ok(outcome) => outcome,
+            Err(error) => return (Err(self.finish_failed(error, work)), host),
+        };
+        self.finish_clock(&outcome);
+        let finished = (|| {
+            if outcome.stop.reason != "abort" {
+                let movement = outcome
+                    .result
+                    .as_ref()
+                    .and_then(|r| r.pv.first())
+                    .copied()
+                    .unwrap_or(outcome.initial_candidates[0]);
+                if self.post && !control.published {
+                    let post = if let Some(capture) = &outcome.result {
+                        let mut fields =
+                            output::capture_fields(&prepared.root, capture, draw, selectivity);
+                        if fine_work {
+                            fields.centiseconds = self.ledger.fine_post();
+                        }
+                        output::render(prepared.root, &capture.pv, fields)
+                    } else {
+                        output::render(prepared.root, &[movement], output::Fields::default())
+                    }
+                    .map_err(Error::Rendering)?;
+                    host.publish(Record::Post(post)).map_err(Error::Host)?;
+                }
+                self.accept_move(movement);
+                host.publish(Record::Move(movement)).map_err(Error::Host)?;
+                if let Some(result) = self.result {
+                    host.publish(Record::Result(result)).map_err(Error::Host)?;
+                }
+            }
+            Ok(SearchResult {
+                seed: outcome.seed,
+                entry_clock: prepared.entry,
+                allowance: prepared.allowance,
+                outcome,
+                events: Vec::new(),
+                game_result: self.result,
+            })
+        })();
+        (finished, host)
     }
 }
 
@@ -595,5 +712,78 @@ mod tests {
             Err(Error::FatalKingVictim)
         ));
         assert_eq!(s.ledger.last(), 0);
+    }
+
+    #[test]
+    fn active_time_command_preserves_allowance_then_abort_keeps_history_and_force_mode() {
+        use crate::host::{Command, Host, Record};
+        use std::collections::VecDeque;
+        struct Queue {
+            commands: VecDeque<Command>,
+            records: Vec<Record>,
+        }
+        impl Host for Queue {
+            fn command(&mut self) -> std::io::Result<Option<Command>> {
+                Ok(self.commands.pop_front())
+            }
+            fn publish(&mut self, record: Record) -> std::io::Result<()> {
+                self.records.push(record);
+                Ok(())
+            }
+        }
+        let mut s = Session::<true>::default();
+        for command in ["level 0 5 0", "time 18100", "cm_parm rnd=0 md=20 tts=65536"] {
+            assert!(matches!(s.idle(command).unwrap(), Action::Reply(_)));
+        }
+        let origin = u32::MAX - 1;
+        s.ledger = Ledger::with_origin(origin);
+        let initial = s.position();
+        let allowance = s.allowance().unwrap();
+        let host = Queue {
+            commands: [
+                Command::Time(-37),
+                Command::Ignore,
+                Command::Easy,
+                Command::Status,
+                Command::Abort,
+            ]
+            .into(),
+            records: Vec::new(),
+        };
+        let (result, host) = s.go_live(
+            host,
+            0,
+            Limits {
+                nodes: Some(100_000),
+            },
+            20,
+            false,
+        );
+        let result = result.unwrap();
+        assert!(host.commands.is_empty());
+        assert_eq!(result.allowance, allowance);
+        assert_eq!(result.outcome.stop.reason, "abort");
+        assert_eq!(result.outcome.stop.work.charged_search_units, 5 * 4096);
+        let first_poll = result
+            .outcome
+            .checks
+            .iter()
+            .find(|c| c.point == timed::Point::Poll)
+            .unwrap();
+        let end_elapsed = s.ledger.last().wrapping_sub(origin);
+        assert_eq!(
+            s.clock.adjustment_cs,
+            30000 + 37 + (end_elapsed - first_poll.elapsed_cs) as i32
+        );
+        assert_eq!(s.position(), initial);
+        assert_eq!(s.game_ply(), 0);
+        assert!(s.force && !s.pondering);
+        assert!(
+            matches!(host.records.as_slice(), [Record::Status(status), Record::Aborting] if status.search_id == 4 * 4096)
+        );
+        for command in ["e2e4", "e7e5"] {
+            assert_eq!(s.idle(command).unwrap(), Action::Reply(Vec::new()));
+        }
+        assert_eq!(s.game_ply(), 2);
     }
 }

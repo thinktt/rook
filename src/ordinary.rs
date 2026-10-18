@@ -23,6 +23,7 @@ pub enum Error {
     Table(String),
     Stopped(Stopped),
     IterationCapacity,
+    Host(std::io::Error),
 }
 
 #[cfg(test)]
@@ -314,7 +315,7 @@ pub(crate) struct Predecessor<'a> {
     pub(crate) movement: Option<Move>,
 }
 
-impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
+impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
     pub fn run_iterations(
         &mut self,
         position: Position,
@@ -475,7 +476,7 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS> {
                 false,
             );
         }
-        self.charge_node()?;
+        self.charge_node(history)?;
         if DIAGNOSTICS {
             self.stats.ordinary_nodes += 1;
         }

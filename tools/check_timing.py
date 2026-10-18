@@ -12,7 +12,7 @@ FILES = ['work-clock-v1.json', 'adaptive-time-v1.json', 'iteration-terminal-stop
          'time-allowance-v1.json','personality-configuration-v1.json',
          'clock-session-setup-v1.json','root-go-outcome-v1.json','ordinary-joined-search-v1.json',
          'clock-seeded-sessions-v1.json','persistent-ordinary-session-public-v1.json',
-         'persistent-ordinary-session-v1.json']
+         'persistent-ordinary-session-v1.json','interrupted-sessions-v1.json']
 CASES = []
 
 def generate(case):

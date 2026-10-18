@@ -99,7 +99,10 @@ impl Parameters {
     }
 
     /// Bind effective native domains. The stored opk is excluded from all admission.
-    pub fn bind<const D: bool>(&self, search: &mut Search<D>) -> Result<(), Error> {
+    pub fn bind<const D: bool, H: crate::host::Host>(
+        &self,
+        search: &mut Search<D, H>,
+    ) -> Result<(), Error> {
         let v = self.values;
         if !(0..22)
             .filter(|&i| i != 11)

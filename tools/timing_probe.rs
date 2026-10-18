@@ -27,6 +27,26 @@ pub fn run(path:&str){
         real_search(input,expected);return;
     }
     match case["operation"].s(){
+        "session.interruptedSearches"=>{
+            let mut s=rook2::session::Session::<true>::default();
+            assert_eq!(input["searches"].a().len(),expected["results"].a().len());
+            for(q,e)in input["searches"].a().iter().zip(expected["results"].a()){
+                for c in q["commands"].a(){s.idle(c.s()).unwrap();}
+                s.idle(&format!("time {}",q["allowanceCs"].n())).unwrap();
+                let host=QueueHost{commands:q["queued"].a().iter().map(|v|match v.s(){"?"=>rook2::host::Command::Finish,"force"=>rook2::host::Command::Abort,"."=>rook2::host::Command::Status,"post"=>rook2::host::Command::Post(true),"nopost"=>rook2::host::Command::Post(false),_=>panic!("queue")}).collect(),records:Vec::new()};
+                let (result,host)=s.go_live(host,0,rook2::quiescence::Limits{nodes:Some(524288)},21,false);let _result=result.unwrap();assert!(host.commands.is_empty());
+                let actual=host.records.iter().filter(|v|!matches!(v,rook2::host::Record::Aborting)).collect::<Vec<_>>();
+                assert_eq!(actual.len(),e["events"].a().len());
+                for(record,e)in actual.into_iter().zip(e["events"].a()){
+                    match record{
+                        rook2::host::Record::Post(p)=>{assert_eq!(e["type"].s(),"post");post(p,e);},
+                        rook2::host::Record::Status(s)=>{assert_eq!(e["type"].s(),"status");assert_eq!((s.centiseconds,s.search_id,s.depth_token,s.remaining,s.total,s.pv.as_str()),(e["engineCentiseconds"].n(),e["searchId"].u() as u64,e["depthToken"].n(),e["remaining"].u() as usize,e["total"].u() as usize,e["pv"].s()));},
+                        rook2::host::Record::Move(m)=>{assert_eq!(e["type"].s(),"move");assert_eq!(m.to_string(),e["move"].s());},
+                        _=>panic!("unexpected record"),
+                    }
+                }
+            }
+        },
         "session.ordinaryIterations"=>persistent(input,expected),
         "session.clockSeededSearches"|"session.searches"=>{
             let mut s=rook2::session::Session::<true>::default();
@@ -138,6 +158,11 @@ fn descriptor(m:rook2::types::Move,e:&J){
     use rook2::types::MoveKind;
     assert_eq!(m.to_string(),e["move"].s());
     assert_eq!(match m.kind(){MoveKind::Castle=>"castle",MoveKind::EnPassant=>"enPassant",_=>"ordinary"},e["kind"].s());
+}
+struct QueueHost{commands:std::collections::VecDeque<rook2::host::Command>,records:Vec<rook2::host::Record>}
+impl rook2::host::Host for QueueHost{
+    fn command(&mut self)->std::io::Result<Option<rook2::host::Command>>{Ok(self.commands.pop_front())}
+    fn publish(&mut self,record:rook2::host::Record)->std::io::Result<()>{self.records.push(record);Ok(())}
 }
 fn schedule(q:&J)->rook2::clock::Schedule{
     rook2::clock::Schedule{stages:q["stages"].a().iter().map(|s|rook2::clock::Stage{moves:s["moves"].u(),base_seconds:s["baseSeconds"].u(),increment_seconds:s["incrementSeconds"].u()}).collect()}

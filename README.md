@@ -10,12 +10,23 @@ The released behavioral and performance contracts are in
 
 This repository contains an integrated development engine: compact position
 state, legal generation, composed retained evaluation and recursive ordinary/
-tactical search, with a native work-timed root controller and persistent
-session model. The model joins parameter/clock commands, history/reset/rewind,
-allocated search and semantic post/move output. Live byte-stream integration
-remains incomplete. It does not yet implement the
-complete ordinary KingRE engine or claim
-conformance or performance qualification.
+tactical search, a work-timed root controller and persistent ordinary session.
+The `rook2` executable serves the live King XBoard byte stream, including
+search-time controls/status, natural seed acquisition, gate seed commands and
+fine-work posts. Mandatory diagnostic transport, full gameplay and performance
+qualification remain outstanding.
+
+Build the ordinary executable with retained settings and identity:
+
+```sh
+python3 tools/build.py --output evidence/fresh-ordinary-build --bin rook2
+```
+
+Run the emitted binary directly for the ordinary silent-startup profile.
+`--diagnostic-seed-command` enables the opt-in persistent `king_seed` command
+and consumed-seed stderr observations. `--work-clock=kingwcr` selects the default
+work clock explicitly; `--work-clock-post=work` enables fine-work posts. The
+ordinary binary has no diagnostic JSON mode or host wall-clock mode.
 
 Build the development executable with retained settings and identity:
 

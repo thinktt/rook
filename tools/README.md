@@ -23,8 +23,9 @@ separate `target/dev-generic` and `target/dev-native` directories and remain
 different artifact modes. Neither mode enables PGO. `--jobs N` changes the
 default; `--crate PATH` selects another crate.
 
-`--bin rook2-dev` builds the current native development executable and records
-its SHA256. The helper never runs the compiled binary or tests.
+`--bin rook2` builds the ordinary production-wire executable; `--bin rook2-dev`
+builds the native development executable. Both record the selected binary's
+SHA256. The helper never runs the compiled binary or tests.
 
 Every actual build requires a fresh receipt directory. It retains
 `receipt.json`, `build.stdout` and `build.stderr`, including failures. The receipt
@@ -54,8 +55,18 @@ ledger, adaptive limits, iteration terminal stop, root randomness/aspiration
 and selected actual recursive timed-search observations. It compares native
 root/time/stop/capture state and complete semantic post/move trails. It also
 checks schedule allocation, parameter commands, idle clock setup, fresh joined
-search projections and persistent clock-seeded sessions. Literal wire I/O,
-live command handling and strict diagnostic validation remain separate.
+search projections, persistent clock-seeded sessions and deterministic live
+host interruption/status events. Literal wire I/O and strict diagnostic
+validation remain separate.
+
+`check_live.py --engine /absolute/path/rook2 --output evidence/fresh-live-check`
+replays all eight released interruption fixtures through the ordinary byte
+stream. Each fixture retains one process across its three searches. It sends
+the queue with `go`, waits for the move/abort boundary before later setup,
+compares every semantic event and abort diagnostic, and retains raw input,
+stdout/stderr, clean exits and identities. Its empty ordinary parameter query
+observes setup order without changing settings. It runs on housekeeping CPUs
+and is not a timing sample or a strict DIAG parser check.
 
 These require a fresh output directory and use housekeeping CPUs. Their receipts
 bind input fixtures, generated source/data, native source and raw results.

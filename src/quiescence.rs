@@ -1,9 +1,8 @@
 //! Concrete tactical recursion over the produced position/evaluation lifetimes.
 //!
-//! Search policy follows SEARCH-QUIESCENCE-TREE, but the current composed
-//! evaluator is partial. Results are development evidence, not KingRE parity.
-//! Host polling and timed interruption are not connected yet; the explicit
-//! node budget returns an error and never publishes an incomplete score.
+//! Search policy follows SEARCH-QUIESCENCE-TREE with retained composed evaluation.
+//! Charged-work polls service the optional live host and timed interruption.
+//! The separate development node budget returns an error, never a partial score.
 
 pub use crate::engine::Search as Quiescence;
 use crate::evaluator::{EvalStats, Node};
@@ -40,6 +39,9 @@ pub struct Limits {
 pub enum Stopped {
     NodeLimit(u64),
     WorkPoll,
+    HostStop,
+    HostAbort,
+    HostIo(std::io::ErrorKind),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -94,7 +96,7 @@ pub struct Outcome {
     pub evaluations: EvalStats,
 }
 
-impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
+impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
     /// This preparation's relation work is excluded by `search_subtree`.
     pub fn prepare_root(&mut self, position: Position) -> Node {
@@ -166,7 +168,7 @@ impl<const DIAGNOSTICS: bool> Quiescence<DIAGNOSTICS> {
         checked: Option<bool>,
         replies_available: bool,
     ) -> Result<i32, Stopped> {
-        self.charge_node()?;
+        self.charge_node(history)?;
         let ply = entry.ply;
         self.pv_len[ply] = 0;
         let position = node.position;

@@ -91,6 +91,10 @@ impl SearchHistory {
         *self.arrivals.last().unwrap()
     }
 
+    pub fn search_path(&self) -> &[Option<Move>] {
+        &self.arrivals[self.root + 1..]
+    }
+
     pub fn repetition_count(&self, in_check: bool) -> u32 {
         let current = *self.boundaries.last().unwrap();
         let h = current.halfmove as usize;
