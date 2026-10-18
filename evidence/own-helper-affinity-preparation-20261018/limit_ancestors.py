@@ -54,14 +54,15 @@ def main():
                 active.append(int(path.name))
         except (OSError,UnicodeDecodeError): pass
     if active: parser.error(f'old collection/native remains live: {active}')
-    ancestry = []; pid = os.getpid()
-    for _ in range(16):
-        info = process(pid); ancestry.append(info)
-        if info['parent'] == 0: break
-        pid = info['parent']
     observed = json.loads(OBSERVATION.read_text())
     targets = [item for item in observed['process_ancestry_point_observation'] if item['name'] == 'codex']
     if len(targets) != 2: parser.error('expected exactly the two previously observed own Codex ancestors')
+    required = {item['pid'] for item in targets}
+    ancestry = []; pid = os.getpid()
+    for _ in range(16):
+        info = process(pid); ancestry.append(info)
+        if required <= {item['pid'] for item in ancestry} or info['parent'] == 0: break
+        pid = info['parent']
     current = {item['pid']:item for item in ancestry}
     for item in targets:
         info = current.get(item['pid'])

@@ -7,14 +7,12 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current operations are `time.schedule`, `time.allowance`,
-`session.parameters`, `search.selectiveDepth`, `output.searchScore` and
-`output.personalitySearchScore`, plus `position.setup`,
-`position.setupMoveSequence`, `position.moveSequence`, `position.identity` and
-`evaluation.phase`, plus `evaluation.relations`,
-`evaluation.adjustedRelations`, `evaluation.squareRelations` and
-`evaluation.influence`. Other operations fail explicitly until
-implemented. This is not complete mandatory diagnostic acceptance.
+The current27 operations cover time schedule/allowance, parameters and output
+scores; position setup/history/identity and phase; influence and relations;
+activity, board patterns, central balances and pawn progress/endings; work
+ledger sequences; selective depth, cutoff memory, retained results and supplied
+candidate ordering. Other operations fail explicitly until implemented. This
+is not complete mandatory diagnostic acceptance.
 
 ```sh
 cargo build --offline --locked --release --manifest-path diagnostic/Cargo.toml
@@ -36,19 +34,20 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current510-case external result comprises twelve complete fixture files plus
-25 unchanged selected cases from two partially supported files. Nine adapter
-unit tests also pass. See `evidence/diagnostic-relations-20261018/`; the original
-25-case selection provenance remains in `diagnostic-positions-20261018-02/`.
-Fifteen operations are implemented. Relation encoding calls the native classifier
-and placement influence builder, with operation-specific charge counts; neither
-fixtures nor expected answers are read at runtime.
+The current1130-case external result comprises22 complete fixture files plus
+25 unchanged selected cases from two partially supported files. All23 adapter
+unit tests pass. Frozen adapter SHA256 is
+`c4cd856638cbaa8ed4ef1408ab1478f02ab58fa60fc79e920292a2e73cfe1924`.
+See `evidence/diagnostic-placement-20261018-02/`; linked native source and all
+declared dependencies remain unchanged. The original25-case selection provenance
+remains in `diagnostic-positions-20261018-02/`.
 
-
-The current source also prepares eleven additional placement, pawn-progress,
-clock-ledger, cutoff-learning and remembered-result routes. They are
-uncompiled/unverified while the full12 timing
-collection runs; the15-operation/510-case claim above belongs to the frozen
-93293f8d adapter. The deferred21-unit/1022-case verification plan is retained in
-`evidence/diagnostic-placement-preparation-20261018/`. Do not count these routes
-as mandatory acceptance until the actual frozen build/results pass.
+The retained first expanded attempt passed1010of1022 cases and failed12
+unsupported candidate-order requests bundled with cutoff learning. Adding the
+native-backed candidate-order transport and its complete108-case fixture file
+produced the passing fresh attempt. Original source preparations, failed build,
+all reports and the corrected source archive remain. Ordering accepts full
+unsigned32 synthetic history without applying cutoff learning's total limit.
+All priorities and their final permutation call native policy. Relation encoding,
+charge counts and retained-state changes likewise retain their native owners;
+neither fixtures nor expected answers are read at runtime.

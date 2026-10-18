@@ -12,6 +12,7 @@ use std::{
     process::ExitCode,
 };
 
+mod candidate_order;
 mod learned;
 mod ledger;
 mod moves;
@@ -87,6 +88,7 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "search.orderCandidates" => candidate_order::dispatch(input),
         "clock.workSequence" => ledger::dispatch(input),
         "search.cutoffMemory" | "search.rememberedResults" => learned::dispatch(operation, input),
         "evaluation.pawnProgress"

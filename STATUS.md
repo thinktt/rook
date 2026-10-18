@@ -45,10 +45,11 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapter implements15 operations and passes510
-  cases across twelve complete fixture files plus25 unchanged selected cases
-  from two partially supported files. Nine adapter unit tests cover admission,
-  setup/raw-state distinction and sequence boundaries. Other mandatory operations
+- The separate external DIAG adapter c4cd8566 implements27 operations and passes1130
+  cases across22 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All23 adapter unit tests pass. The first
+  expanded attempt and its12 unsupported ordering failures remain retained;
+  native production source is unchanged. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
 - A balanced four-anchor pilot selected the generation-summary/evasion
   algorithm: all80 lifetimes passed the strict oracle, and the sum of four
@@ -71,17 +72,21 @@ reference sum is63.431779s (uncalibrated planning ratio1.5400); this is not a
 qualified performance pass/fail. See
 [whole-native54 collection](evidence/production54-cpu-20261018-pgo/README.md).
 
-A complete12 whole-native CPU collection is now running on artifact1dc996b2,
-with48 scheduled fresh lifetimes/2528 searches and original byte capture. Four
+A complete12 whole-native CPU collection on artifact1dc996b2 has completed
+48 fresh lifetimes/2528 searches with independent original-byte, normal-exit and
+input/artifact reconciliation. Its sum of12 game CPU medians is941.928787s;
+the raw uncalibrated reference planning ratio is1.462116. Four
 recorder controls, fixed5s forced-cleanup reconciliation and a balanced complete-
 game observer pilot passed first; observed CPU median overhead was0.15% within
-overlapping ranges. The collection is reported-only and remains incomplete
-until all terminal/raw/input checks reconcile. See
+overlapping ranges. The collection remains reported-only: guest helper/lead
+affinity was not uniformly constrained, and interference cost is unquantified.
+After actual termination, all57 verified own lead/client threads were restricted
+to housekeeping CPUs; this does not retroactively qualify existing samples. See
 [game collection](evidence/production12-cpu-20261018-pgo/README.md).
 
 Mandatory diagnostics, production review, the full3288-game gate, the newer
 artifact's full focused replay and final performance qualification remain open. The [production map](docs/production-map.md) is an initial ownership map,
-not a completed normative audit. The current PMU probe still returns EACCES with
+not a completed normative audit. The last retained disabled PMU self-open returned EACCES with
 UID1000/zero effective capabilities/paranoid3/seccomp0; no security setting was
 changed. Clock sampling was unreliable and its percentages are unused.
 Calibration and final measurement/uncertainty conditions remain open, alongside
@@ -229,11 +234,10 @@ adoption is rejected. Both frozen experiments and all attempted samples are
 retained; production native source remains unchanged by them.
 
 
-Cold diagnostic source now prepares eleven more existing-native routes (placement
-terms, ordered pawn progress/endings, work ledger, cutoff learning and retained
-results). Source formatting/archive is complete; compilation and the planned
-21-unit/1022-case regression wait for
-the live game CPU collection to terminate. The current accepted diagnostic
-result remains the separate15-operation/510-case frozen artifact. Native
-production source is unchanged. See
+The twelve added native-backed diagnostic routes (placement terms, ordered pawn
+progress/endings, work ledger, cutoff learning, retained results and supplied
+candidate order) now pass the23-unit/1130-case regression in frozen c4cd8566.
+The first1022-case attempt passed1010 and exposed12 missing candidate-order
+transport calls; it remains preserved with its original source/build/report.
+Native production source is unchanged. See
 [deferred verification](evidence/diagnostic-placement-preparation-20261018/README.md).

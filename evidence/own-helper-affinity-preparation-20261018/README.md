@@ -1,7 +1,6 @@
-# Scoped own-helper affinity correction
+# Scoped own-helper affinity correction — completed
 
-The source is prepared and syntax-parsed only; no affinity has changed yet.
-After the original collector handle37105 is authoritatively terminal,
+After original collector handle37105 returned terminal0,
 `limit_ancestors.py --output evidence/owned-helper-affinity-20261018` checks that
 the old collector and named native image are gone. It constrains only the two
 previously observed Codex ancestors of its own process, rechecking ancestry,
@@ -15,3 +14,13 @@ engine accounting explicitly assigns each future native child to14; inherited
 helper affinity is not a cpuset restriction. This point correction does not
 establish continuous exclusive CPU14/15 ownership or quantify prior interference.
 The already running collection retains its original conditions and limitation.
+
+The first preflight traversed beyond the required ancestors and was denied
+access to `/proc/1/exe`; it changed no affinity and created no result directory.
+Its original script and failure record remain in
+`../owned-helper-affinity-20261018-first/`. The corrected traversal stops once
+both recorded ancestors are found. `../owned-helper-affinity-20261018/` verifies
+all57 threads across the two own Codex ancestors on the housekeeping set.
+This occurred after the game collection ended. The first diagnostic compilation
+had started with its own explicit housekeeping affinity before that correction
+completed; it was functional verification, with no CPU timing claim.

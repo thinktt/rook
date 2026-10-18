@@ -21,7 +21,7 @@ agreement is not a proof over every admitted setup or a full gameplay pass.
 | N/R charges, natural4096 polls, captures, terminal work and publication | `work_clock`, `engine`, `timed`, `host`, `session` | External native timing fixtures, active-time native tests, all54 work-post replays and eight literal interruption fixtures. Review every pre/post-capture interrupted ownership boundary. |
 | Persistent game/clock/parameters/seed lifetime and ordinary command meaning | `session`, `clock`, `parameters`, `timing` | Persistent native sequences, literal seed controls, same-artifact focused12/632 plus continuity. Full3288-game gate and admitted command-domain audit remain. |
 | Framing, nonblocking queue/polls, live records, result/fatal exits, PV/score spelling | `wire`, `host`, `output`, `bin/rook2` | Literal process controls, eight wire interruption fixtures, complete all54 and focused replay. Full ordinary protocol requirement review remains. |
-| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Fifteen operations pass510 cases across twelve complete files plus25 selected cases from two partial files. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
+| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozen c4cd8566 passes27 operations/1130 cases across22 complete files plus25 selected cases from two partial files, with23 adapter units. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
 | Owned whole-engine cost, repeatability, cross-host calibration and final performance | External measurement tools and frozen build artifacts | Direct wait4 controls, balanced local pilots and a complete54-case local CPU collection; PMU unavailable through disabled self-opens. Final measurement profile, calibration and complete54/12 collections remain separate obligations. |
 
 Production search uses static generic diagnostic/host specialization. Ordinary
@@ -49,7 +49,9 @@ all charging, observation, lifecycle and interruption consumers remain open.
 A separate [depth/history range review](research/depth-range-review.md) binds
 ordinary recursive depth/target and learned-history capacity to this same native
 source. It proves those arithmetic ranges without closing score storage or
-uncertified-hint eligibility. Cold adapter source now prepares eleven more
-native-backed routes, including ledger, placement/pawn terms and learned/table
-sequences; the planned21-unit/1022-case verification has not run. The accepted
-external result remains the frozen15-operation/510-case artifact.
+uncertified-hint eligibility. Frozen adapter c4cd8566 now verifies twelve more
+native-backed routes, including ledger, placement/pawn terms, learned/table
+sequences and supplied candidate order:23 units and1130 external cases pass.
+That closes the transport subset that was still pending at the scalar review's
+original checkpoint; its immutable source-review receipt remains historical.
+The first1022-case attempt and its12 unsupported ordering failures are retained.

@@ -6,8 +6,9 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements15 native-backed arithmetic,
-  command, position/history and influence/relation operations with510 external cases. Every other mandatory operation still needs
+  The separate `diagnostic/` crate now implements27 native-backed operations,
+  including placement/pawn terms, work ledger, learned/table sequences and
+  supplied candidate order, with1130 external cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -62,14 +63,17 @@ The raw uncalibrated reference planning ratio is1.5400. This changes optimizatio
 priorities and does not close final comparison or uncertainty requirements.
 That collection belongs to3660fecf. The newer1dc996b2 shared-geometry PGO artifact
 has all54 strict replay and wire-interruption agreement, plus a six-case pilot;
-its complete12-game CPU collection is currently live. No older focused/CPU
+its complete12-game CPU collection now independently reconciles48 lifetimes/
+2528 searches, summing941.928787s in game CPU medians (raw uncalibrated ratio
+1.462116). No older focused/CPU
 qualification transfers to it. The collection remains reported-only, including
 the disclosed inherited-affinity helper limitation recorded under
 `evidence/production12-cpu-analysis-preparation-20261018/`.
 
-Cold source prepares eleven further diagnostic routes and a deferred21-unit,
-1022-case regression. This is uncompiled/unverified preparation, not an increase
-in accepted mandatory coverage. Matched local/persistent bitplanes and the
-compact relation-state lookup are also unexecuted experiments. All native
-builds/tests and further engine measurements wait for the live collection to
-terminate and for scoped own-helper affinity to be constrained.
+The corrected fresh diagnostic attempt passes23 units and1130 cases across27
+operations. Its first attempt and12 missing-transport failures remain preserved;
+native production source is unchanged. Matched local/persistent bitplane
+verification is running; the compact relation-state lookup remains unexecuted.
+Neither is selected for production. The original CPU collection is terminal,
+and all57 verified own lead/client threads are now confined to housekeeping
+CPUs. This later correction does not qualify the prior measurements.
