@@ -1,0 +1,214 @@
+//! Supplied score/phase and fresh coefficient schemas; native owners compute results.
+use super::{array, boolean, color, integer, object, phase, positions, unsigned32, Result};
+use rook2::{
+    endgame, evaluator, influence::Influence, position::Position, positional_terms, types::Color,
+};
+use serde_json::{json, Map, Value};
+
+pub(super) const NAMES: [&str; 11] = [
+    "pawn",
+    "knight",
+    "bishop",
+    "rook",
+    "queen",
+    "king",
+    "centralInfluence",
+    "mobility",
+    "kingSafety",
+    "pawnProgress",
+    "pawnStructure",
+];
+
+fn weights(query: &Value, composed: bool) -> Result<Value> {
+    if composed {
+        object(query, &["rootSide", "percentages", "placement", "phase"])?;
+    } else {
+        object(query, &["rootSide", "percentages"])?;
+    }
+    let root_side = color(&query["rootSide"])?;
+    let percentages = &query["percentages"];
+    object(percentages, &["own", "opponent"])?;
+    let mut bound = [[0i32; 11]; 2];
+    for (owner, side) in [("own", root_side), ("opponent", root_side.opponent())] {
+        object(&percentages[owner], &NAMES)?;
+        for (index, name) in NAMES.iter().enumerate() {
+            let percentage = integer(
+                &percentages[owner][*name],
+                if composed { -1000 } else { i32::MIN },
+                if composed { 1000 } else { i32::MAX },
+            )?;
+            bound[side.index()][index] = if index == 5 {
+                1024
+            } else {
+                evaluator::coefficient(percentage)
+            };
+        }
+    }
+    let colors: Map<String, Value> = [Color::White, Color::Black]
+        .into_iter()
+        .map(|side| {
+            let mut fields: Map<String, Value> = NAMES
+                .iter()
+                .enumerate()
+                .map(|(i, name)| (name.to_string(), json!(bound[side.index()][i])))
+                .collect();
+            fields.insert("doubledPawn".into(), json!(1024));
+            (
+                if side == Color::White {
+                    "white"
+                } else {
+                    "black"
+                }
+                .into(),
+                Value::Object(fields),
+            )
+        })
+        .collect();
+    let mut result = json!({"weights":colors,"relationQueries":0});
+    if composed {
+        let position = positions::placement(&query["placement"], true)?;
+        let influence = Influence::build(&position);
+        let central = positional_terms::central(
+            &influence,
+            phase(&query["phase"])?,
+            [bound[0][6], bound[1][6]],
+        );
+        result["central"] = json!({"white":central.colors[0],"black":central.colors[1],"weighted":central.weighted});
+    }
+    Ok(result)
+}
+
+fn finish(query: &Value, late: bool) -> Result<Value> {
+    let mut fields = vec![
+        "baseScore",
+        "drawPreference",
+        "rootSide",
+        "side",
+        "variationRange",
+        "variationIdentity",
+        "reversiblePlies",
+        "endgameWeight",
+    ];
+    if late {
+        fields.extend(["placement", "inCheck", "passedPawnBalance"]);
+    }
+    object(query, &fields)?;
+    let base = integer(&query["baseScore"], -1_000_000, 1_000_000)?;
+    let preference = integer(&query["drawPreference"], -1_000_000, 1_000_000)?;
+    let root_side = color(&query["rootSide"])?;
+    let side = color(&query["side"])?;
+    let range = integer(&query["variationRange"], 0, 1_000_000)? as u32;
+    let identity = unsigned32(&query["variationIdentity"])?;
+    let reversible = integer(&query["reversiblePlies"], 0, 255)? as u8;
+    let endgame = integer(&query["endgameWeight"], 0, if late { 256 } else { 191 })? as u16;
+    let (mut position, checked, progress) = if late {
+        (
+            positions::placement(&query["placement"], true)?,
+            boolean(&query["inCheck"])?,
+            integer(&query["passedPawnBalance"], -10_000, 10_000)?,
+        )
+    } else {
+        // This native branch consumes only side/halfmove. No placement is admitted
+        // or inferred for the ordinary-phase component diagnostic.
+        (
+            Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1")?,
+            false,
+            0,
+        )
+    };
+    position.side = side;
+    position.halfmove = reversible;
+    if endgame >= 192 {
+        // Admission arithmetic only; the native finisher computes the result.
+        let adjusted = endgame::adjusted_subtotal(base, preference, root_side, range, identity);
+        if !(-10_000..=10_000).contains(&adjusted) {
+            return Err("late-phase adjusted subtotal outside diagnostic domain".into());
+        }
+    }
+    let result = endgame::finish(
+        &position, base, preference, root_side, range, identity, endgame, checked, progress,
+    );
+    Ok(json!({"score":result.score,"lowerBound":result.lower,"upperBound":result.upper}))
+}
+
+pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+    object(input, &["queries"])?;
+    let mut results = Vec::new();
+    for query in array(&input["queries"], 1, 4096)? {
+        results.push(match operation {
+            "evaluation.personalityWeights" => weights(query, false)?,
+            "evaluation.personalityCentralBalance" => weights(query, true)?,
+            "evaluation.scoreFinish" => finish(query, false)?,
+            "evaluation.finalScore" => finish(query, true)?,
+            _ => return Err(format!("unsupported score/weight operation: {operation}")),
+        });
+    }
+    Ok(json!({"results":results}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn score_query(late: bool) -> Value {
+        let mut q = json!({"baseScore":-16,"drawPreference":0,"rootSide":"black","side":"white",
+            "variationRange":0,"variationIdentity":4294967295u32,"reversiblePlies":36,"endgameWeight":191});
+        if late {
+            q["placement"] = json!("8/8/kK6/8/8/8/1P6/8");
+            q["inCheck"] = json!(false);
+            q["passedPawnBalance"] = json!(0);
+        }
+        q
+    }
+
+    #[test]
+    fn finish_schema_keeps_ordinary_and_late_domains_distinct() {
+        let q = score_query(false);
+        assert_eq!(finish(&q, false).unwrap()["score"], -11);
+        let mut ordinary = q.clone();
+        ordinary["endgameWeight"] = json!(192);
+        assert!(finish(&ordinary, false).is_err());
+        let mut extra = q.clone();
+        extra["placement"] = json!("8/8/8/8/8/8/k7/K7");
+        assert!(finish(&extra, false).is_err());
+        let mut invalid = q;
+        invalid["variationIdentity"] = json!(4294967296u64);
+        assert!(finish(&invalid, false).is_err());
+    }
+
+    #[test]
+    fn late_domain_is_checked_after_context_and_before_adjustment() {
+        let mut q = score_query(true);
+        q["endgameWeight"] = json!(192);
+        q["baseScore"] = json!(10001);
+        assert!(finish(&q, true).is_err());
+        q["drawPreference"] = json!(1); // Black root makes the produced sum10000.
+        assert!(finish(&q, true).is_ok());
+        q["inCheck"] = json!(0);
+        assert!(finish(&q, true).is_err());
+        q["endgameWeight"] = json!(191);
+        assert!(finish(&q, true).is_err()); // Validate supplied dependencies even below gate.
+    }
+
+    #[test]
+    fn fresh_coefficients_validate_ignored_king_and_composed_domain() {
+        let fields: Map<String, Value> = NAMES
+            .iter()
+            .map(|name| (name.to_string(), json!(100)))
+            .collect();
+        let mut q =
+            json!({"rootSide":"black","percentages":{"own":fields.clone(),"opponent":fields}});
+        q["percentages"]["own"]["pawn"] = json!(i32::MAX);
+        assert_eq!(weights(&q, false).unwrap()["weights"]["black"]["pawn"], -9);
+        q["percentages"]["own"]["king"] = json!(2147483648u64);
+        assert!(weights(&q, false).is_err());
+        q["percentages"]["own"]["king"] = json!(-1000);
+        q["placement"] = json!("8/8/8/8/8/8/k7/K7");
+        q["phase"] = json!({"opening":0,"middlegame":0,"endgame":256});
+        assert!(weights(&q, true).is_err());
+        q["percentages"]["own"]["pawn"] = json!(-1000);
+        assert!(weights(&q, true).is_ok());
+        q["percentages"]["opponent"]["extra"] = json!(0);
+        assert!(weights(&q, true).is_err());
+    }
+}

@@ -68,3 +68,10 @@ the new named artifacts. The
 retains the preceding bounded numerical premises and unresolved composition
 limits. Neither source transport nor finite static comparison is a broader
 arithmetic, whole-behavior or CPU-neutrality proof.
+
+The87-operation retained/search pawn expansion changes only cold parsing,
+request ownership and formatting. All43 native source files remain exactly
+equal to85. Its [cold-only delta binding](../../evidence/retained-search-pawn-integration-20261018/numeric-proof-delta-binding.json)
+therefore retains the same bounded production premises and limitations;
+supplied-context weights and produced fixed-root coefficients keep their
+separate admissions.

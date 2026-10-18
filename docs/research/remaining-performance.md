@@ -288,3 +288,18 @@ and production review remain requirements alongside optimization.
     variants without PGO or adoption. Source opportunities did not become a
     useful measured CPU gain. See
     `evidence/q-material-reuse-cpu-pilot-20261018/README.md`.
+
+17. **Checked bounded reply order: generic pilot advances to own PGO.**
+    Two production consumers need only the saturated count, with exact complete
+    zero/one replies reused by Q. A checked-only LIMIT2 trial preserves EP first,
+    tries existing king evasions early and skips their duplicate final pass.
+    Full generation order, legality predicates and work/state ownership stay
+    unchanged. All144 native tests,54 strict replays and eight interruption
+    fixtures pass. Main capped code shrinks but a helper is newly outlined;
+    combined code and peak stack do not establish a win. The balanced generic
+    60-lifetime pilot independently reconciles14.679567s control d38ff037 versus
+    14.4964515s candidate61fdefb3 in summed medians,1.247418% lower. Five medians
+    improve, one rises and four observed ranges are separated. Advance to new
+    exact-source own-PGO profiles for both sides before selecting. No adoption,
+    old8d profile transfer or complete cost result is claimed. See
+    `evidence/bounded-reply-king-first-cpu-pilot-20261018/README.md`.

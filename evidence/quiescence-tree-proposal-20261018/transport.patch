@@ -1,0 +1,414 @@
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -32,6 +32,7 @@
+ mod position_terms;
+ mod positions;
+ mod quiescence_evaluation;
++mod quiescence_tree;
+ mod relations;
+ mod retained_evaluation;
+ mod root_context;
+@@ -124,6 +125,7 @@
+         | "evaluation.endgameAdjust"
+         | "evaluation.fortressBounds"
+         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
++        "search.quiescenceTree" => quiescence_tree::dispatch(input),
+         "evaluation.moveSequence" => move_evaluation::dispatch(input),
+         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
+         "evaluation.quiescenceEntry" | "evaluation.quiescenceDisposition" => {
+--- a/diagnostic/src/positions.rs
++++ b/diagnostic/src/positions.rs
+@@ -34,7 +34,7 @@
+     Ok(position)
+ }
+ 
+-fn rights(position: &Position) -> String {
++pub(super) fn rights(position: &Position) -> String {
+     let mut result = String::new();
+     for (name, bit) in [
+         ('K', WHITE_KINGSIDE),
+@@ -52,7 +52,7 @@
+     result
+ }
+ 
+-fn ep(position: &Position) -> String {
++pub(super) fn ep(position: &Position) -> String {
+     if position.ep == NO_SQUARE {
+         "-".into()
+     } else {
+--- /dev/null
++++ b/diagnostic/src/quiescence_tree.rs
+@@ -0,0 +1,373 @@
++//! Cold typed recording over the actual recursive native tactical search.
++use super::{array, boolean, evaluation_common as common, integer, object, positions, text, Result};
++use rook2::{
++    evaluator::{EvaluationStage, Parameters, Retained, StageKind},
++    history::SearchHistory,
++    movegen,
++    position::{Position, NO_SQUARE},
++    quiescence::{Entry, Limits, Observer, Outcome, Quiescence, Work},
++    quiescence_policy,
++    types::{Color, Move, MoveKind, Piece, PieceKind},
++};
++use serde_json::{json, Value};
++
++const FIXED: [(&str, i32); 30] = [
++    ("myp",100),("myn",100),("myb",100),("myr",100),("myq",100),
++    ("mycc",100),("mymob",100),("myks",100),("mypp",100),("mypw",100),
++    ("opp",100),("opn",100),("opb",100),("opr",100),("opq",100),
++    ("opcc",100),("opmob",100),("opks",100),("oppp",100),("oppw",100),
++    ("sop",100),("ana",0),("avd",0),("cfd",0),("myk",0),("opk",0),
++    ("rnd",0),("md",99),("sel",14),("tts",67108864),
++];
++
++struct Request { root: Position, history: SearchHistory, movement: Move }
++
++impl Request {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["fen","moves","personalityParameters","rootMove","controls"])?;
++        let fen = text(&input["fen"])?;
++        let names: Vec<_> = FIXED.iter().map(|(name,_)| *name).collect();
++        object(&input["personalityParameters"], &names)?;
++        for (name, value) in FIXED {
++            integer(&input["personalityParameters"][name], value, value)?;
++        }
++        let controls = &input["controls"];
++        object(controls, &["iterationDepth","rootPass","learnedState","pondering"])?;
++        integer(&controls["iterationDepth"],1,1)?;
++        if text(&controls["rootPass"])? != "first-unrestricted"
++            || text(&controls["learnedState"])? != "fresh-ordinary-search"
++            || boolean(&controls["pondering"])?
++        { return Err("unsupported quiescence tree controls".into()); }
++        let supplied = array(&input["moves"],0,255)?.iter().map(|value| {
++            let spelling = text(value)?;
++            positions::coordinate(spelling)?;
++            Ok(spelling)
++        }).collect::<Result<Vec<_>>>()?;
++        object(&input["rootMove"], &["move","kind"])?;
++        let root_spelling = text(&input["rootMove"]["move"])?;
++        positions::coordinate(root_spelling)?;
++        let root_kind = text(&input["rootMove"]["kind"])?;
++        if !matches!(root_kind,"ordinary" | "castle" | "enPassant") {
++            return Err("invalid root move kind".into());
++        }
++        // POSITION-SETUP admission is wider than the separate bounded
++        // moveSequence diagnostic. Use its native parser without type caps.
++        let mut root = Position::from_fen(fen)?;
++        if movegen::in_check(&root,root.side.opponent()) {
++            return Err("initial nonmoving king is in check".into());
++        }
++        retained_ep(&root)?;
++        let mut history = SearchHistory::new(&root);
++        for spelling in supplied {
++            let movement = positions::legal_move(&root,spelling)?;
++            root = root.played_unchecked(movement);
++            history.push(&root,Some(movement));
++        }
++        history.mark_root();
++        let movement = positions::legal_move(&root,root_spelling)?;
++        if kind(movement) != root_kind { return Err("root move kind disagrees with legal move".into()); }
++        let child = root.played_unchecked(movement);
++        if movegen::in_check(&child,child.side) {
++            return Err("selected root child must not be in check".into());
++        }
++        Ok(Self { root, history, movement })
++    }
++
++    fn observe(mut self) -> Result<Value> {
++        let mut search = Quiescence::<true>::new(&self.root);
++        // These ignored fields still carry the exact validated fixed vector.
++        let mut parameters = Parameters::default();
++        parameters.own[5] = 0;
++        parameters.opponent[5] = 0;
++        search.evaluator.parameters = parameters;
++        let root = search.prepare_root(self.root);
++        let mut child = root.child(&search.evaluator.root,self.movement);
++        self.history.push(&child.position,Some(self.movement));
++        let entry = Entry { ply:1,target:1,iteration_depth:1,lower:-10000,upper:10000,
++            analysis:0,capture_exception:quiescence_policy::capture_exception(&self.root,&self.movement) };
++        let mut sink = Sink::default();
++        let outcome = search.search_subtree_observed(&mut child,&mut self.history,entry,
++            Limits { nodes:Some(4095) },&root.retained,&mut sink)
++            .map_err(|stop| format!("quiescence tree did not complete: {stop:?}"))?;
++        if !sink.first_ordered || outcome.pv.len() > 63 {
++            return Err("quiescence tree outside qualified first-list/PV boundary".into());
++        }
++        sink.output(outcome)
++    }
++}
++
++fn retained_ep(position: &Position) -> Result<()> {
++    if position.ep != NO_SQUARE {
++        let rank = if position.side == Color::White { 5 } else { 2 };
++        let victim = if position.side == Color::White { position.ep - 8 } else { position.ep + 8 };
++        if position.ep / 8 != rank || position.board[victim as usize]
++            != Piece::new(position.side.opponent(),PieceKind::Pawn)
++        { return Err("retained EP requires ordinary rank and opposing pawn victim".into()); }
++    }
++    Ok(())
++}
++
++fn kind(movement: Move) -> &'static str {
++    match movement.kind() {
++        MoveKind::Castle => "castle",
++        MoveKind::EnPassant => "enPassant",
++        _ => "ordinary",
++    }
++}
++fn movement(mv: Move) -> Value { json!({"move":mv.to_string(),"kind":kind(mv)}) }
++fn variation(pv: &[Move]) -> Vec<Value> { pv.iter().copied().map(movement).collect() }
++fn work(work: Work) -> Value {
++    json!({"searchCounterDelta":work.effective_search_count(),
++        "chargedSearchUnits":work.charged_search_units,"chargedRelationQueries":work.charged_relation_queries})
++}
++
++struct EvaluationRecord {
++    parent: Option<usize>, arrival: Retained, parent_retained: Retained,
++    stages: Vec<EvaluationStage>, departure: Retained,
++}
++enum Event {
++    Enter { node:usize,parent:Option<usize>,entry:Entry,movement:Option<Move>,
++        position:Position,checked:bool,work:Work },
++    Leave { node:usize,score:i32,pv:Vec<Move>,work:Work },
++}
++#[derive(Default)]
++struct Sink {
++    events: Vec<Event>, evaluations: Vec<EvaluationRecord>, stack: Vec<usize>, first_ordered:bool,
++}
++impl Observer for Sink {
++    const ENABLED: bool = true;
++    type Parent = Retained;
++    type Frame = usize;
++    fn parent(retained: &Retained) -> Retained { *retained }
++    fn enter(&mut self, position:&Position, entry:Entry, movement:Option<Move>,
++        parent_retained:Retained, arrival:Retained, checked:bool, work:Work) -> usize
++    {
++        let index = self.evaluations.len();
++        let parent = self.stack.last().map(|index| index+1);
++        self.events.push(Event::Enter { node:index+1,parent,entry,movement,
++            position:*position,checked,work });
++        self.evaluations.push(EvaluationRecord { parent,arrival,parent_retained,
++            stages:Vec::new(),departure:arrival });
++        self.stack.push(index);
++        index
++    }
++    fn stage(&mut self, stage:EvaluationStage) {
++        self.evaluations[*self.stack.last().unwrap()].stages.push(stage);
++    }
++    fn ordered(&mut self) {
++        if self.stack.len() == 1 && self.stack[0] == 0 { self.first_ordered = true; }
++    }
++    fn leave(&mut self, index:usize, departure:Retained, score:i32, pv:&[Move], work:Work) {
++        assert_eq!(self.stack.pop(),Some(index));
++        self.evaluations[index].departure = departure;
++        self.events.push(Event::Leave { node:index+1,score,pv:pv.to_vec(),work });
++    }
++}
++impl Sink {
++    fn output(self, outcome:Outcome) -> Result<Value> {
++        if !self.stack.is_empty() || self.evaluations.len() as u64 != outcome.stats.nodes {
++            return Err("incomplete native trace".into());
++        }
++        let mut trace = Vec::with_capacity(self.events.len());
++        for event in self.events {
++            trace.push(match event {
++                Event::Enter { node,parent,entry,movement:incoming,position,checked,work:sample } => {
++                    let incoming = incoming.ok_or("played tree node has no arrival move")?;
++                    json!({"event":"enter","node":node,"parent":parent,"ply":entry.ply,
++                        "target":entry.target,"window":{"lower":entry.lower,"upper":entry.upper},
++                        "move":movement(incoming),"position":{"placement":position.placement(),
++                        "sideToMove":if position.side==Color::White {"white"} else {"black"},
++                        "castling":positions::rights(&position),"enPassant":positions::ep(&position),
++                        "halfmoveClock":position.halfmove,"inCheck":checked},"work":work(sample)})
++                }
++                Event::Leave { node,score,pv,work:sample } => json!({"event":"leave","node":node,
++                    "score":score,"principalVariation":variation(&pv),"work":work(sample)}),
++            });
++        }
++        let evaluations: Vec<_> = self.evaluations.into_iter().enumerate().map(|(index,node)| {
++            let stages: Vec<_> = node.stages.into_iter().map(|stage| json!({
++                "kind":match stage.kind { StageKind::Full=>"full", StageKind::Fast=>"fast" },
++                "before":common::retained_output(stage.before),"after":common::retained_output(stage.after),
++                "score":stage.evaluation.score,"lowerBound":stage.evaluation.lower,
++                "upperBound":stage.evaluation.upper,"work":work(Work { charged_search_units:0,
++                    charged_relation_queries:stage.evaluation.relation_queries })
++            })).collect();
++            json!({"node":index+1,"parent":node.parent,"arrival":common::retained_output(node.arrival),
++                "parentRetained":common::retained_output(node.parent_retained),"stages":stages,
++                "departure":common::retained_output(node.departure)})
++        }).collect();
++        Ok(json!({"nodes":outcome.stats.nodes,"score":outcome.score,
++            "principalVariation":variation(&outcome.pv),"work":work(outcome.work),
++            "trace":trace,"evaluations":evaluations}))
++    }
++}
++
++pub(super) fn dispatch(input:&Value) -> Result<Value> { Request::parse(input)?.observe() }
++
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn request(fen:&str, moves:&[&str], selected:&str, kind:&str) -> Value {
++        let parameters:serde_json::Map<String,Value> = FIXED.iter()
++            .map(|(name,value)|(name.to_string(),json!(value))).collect();
++        json!({"fen":fen,"moves":moves,"personalityParameters":parameters,
++            "rootMove":{"move":selected,"kind":kind},"controls":{"iterationDepth":1,
++            "rootPass":"first-unrestricted","learnedState":"fresh-ordinary-search","pondering":false}})
++    }
++    fn promotion() -> Value {
++        request("r3k3/1Pr5/8/8/8/8/8/4K3 b - - 0 1",&[],"c7c8","ordinary")
++    }
++
++    #[test]
++    fn recursive_trace_is_nested_and_stages_expose_actual_parent_and_work_lifetimes() {
++        let out = dispatch(&promotion()).unwrap();
++        assert_eq!(out.as_object().unwrap().len(),6);
++        assert_eq!(out["nodes"],7);
++        assert_eq!(out["score"],-540);
++        assert_eq!(out["work"],json!({"searchCounterDelta":7,"chargedSearchUnits":7,"chargedRelationQueries":4}));
++        let events = out["trace"].as_array().unwrap();
++        let nodes = out["evaluations"].as_array().unwrap();
++        assert_eq!(events.len(),14);
++        let mut stack = Vec::new();
++        let mut entered = 0;
++        for event in events {
++            let id = event["node"].as_u64().unwrap();
++            if event["event"]=="enter" {
++                entered += 1;
++                assert_eq!(id,entered);
++                assert_eq!(event["parent"],stack.last().map(|id| json!(id)).unwrap_or(Value::Null));
++                assert_eq!(event["work"]["chargedSearchUnits"],entered-1);
++                assert_eq!(event["position"].as_object().unwrap().len(),6);
++                stack.push(id);
++            } else {
++                assert_eq!(event["event"],"leave");
++                assert_eq!(stack.pop(),Some(id));
++            }
++        }
++        assert!(stack.is_empty());
++        assert_eq!(events.last().unwrap()["work"],out["work"]);
++        assert_eq!(events.last().unwrap()["principalVariation"],out["principalVariation"]);
++        let mut relation_sum = 0;
++        for node in nodes {
++            let parent = node["parent"].as_u64();
++            if let Some(id) = parent { assert_eq!(node["parentRetained"],nodes[id as usize-1]["departure"]); }
++            assert_eq!(node["arrival"]["positionalSubtotal"],node["parentRetained"]["positionalSubtotal"]);
++            assert_eq!(node["arrival"]["pawnProgress"],node["parentRetained"]["pawnProgress"]);
++            assert_eq!(node["arrival"]["evaluationAge"].as_u64().unwrap(),
++                (node["parentRetained"]["evaluationAge"].as_u64().unwrap()+1)%256);
++            let mut retained = &node["arrival"];
++            for stage in node["stages"].as_array().unwrap() {
++                assert_eq!(&stage["before"],retained);
++                assert_eq!(stage["work"]["chargedSearchUnits"],0);
++                relation_sum += stage["work"]["chargedRelationQueries"].as_u64().unwrap();
++                retained = &stage["after"];
++            }
++            assert_eq!(&node["departure"],retained);
++        }
++        assert_eq!(relation_sum,4);
++        assert_eq!(nodes[0]["stages"][0]["kind"],"fast");
++        assert_eq!(nodes[0]["stages"][1]["kind"],"full");
++        assert_eq!(events[0]["work"],json!({"searchCounterDelta":0,"chargedSearchUnits":0,"chargedRelationQueries":0}));
++        assert_eq!(dispatch(&promotion()).unwrap(),out);
++    }
++
++    #[test]
++    fn later_equal_mate_result_preserves_the_earlier_principal_variation() {
++        let out = dispatch(&request("1r5k/6pp/6Q1/8/8/3B4/8/K7 b - - 0 1",&[],"b8b7","ordinary")).unwrap();
++        assert_eq!(out["score"],9998);
++        assert_eq!(out["principalVariation"],json!([{"move":"g6h7","kind":"ordinary"}]));
++        let events = out["trace"].as_array().unwrap();
++        let later = events.iter().find(|event|event["event"]=="enter" && event["move"]["move"]=="g6e8").unwrap();
++        let returned = events.iter().find(|event|event["event"]=="leave" && event["node"]==later["node"]).unwrap();
++        assert_eq!(returned["score"],-9998);
++        assert!(out["evaluations"].as_array().unwrap().iter().any(|n|n["stages"].as_array().unwrap().is_empty()));
++    }
++
++    #[test]
++    fn public_history_and_selected_castle_define_one_fresh_fixed_root_boundary() {
++        let input = request("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++            &["e2e4","e7e5","g1f3","b8c6","f1b5","a7a6","b5a4","g8f6","e1g1","f8e7","f1e1","b7b5","a4b3","d7d6","c2c3"],"e8g8","castle");
++        let out = dispatch(&input).unwrap();
++        assert_eq!(out["nodes"],1);
++        let first = &out["trace"][0];
++        assert_eq!(first["ply"],1);
++        assert_eq!(first["target"],1);
++        assert_eq!(first["window"],json!({"lower":-10000,"upper":10000}));
++        assert_eq!(first["move"],input["rootMove"]);
++        assert_eq!(first["position"]["castling"],"-");
++        assert_eq!(first["position"]["halfmoveClock"],1);
++        assert_eq!(out["evaluations"][0]["parentRetained"]["evaluationAge"],0);
++        assert_eq!(out["evaluations"][0]["arrival"]["evaluationAge"],1);
++        assert_eq!(out["work"]["chargedRelationQueries"],6);
++    }
++
++    #[test]
++    fn tree_setup_admits_wider_piece_populations_and_normalizes_before_ep_admission() {
++        let broad = request("7k/6pp/8/8/8/QQQQQQQQ/QQ6/K7 w - - 0 1",&[],"a1b1","ordinary");
++        let parsed = Request::parse(&broad).unwrap();
++        assert_eq!(parsed.root.counts[0][PieceKind::Queen.index()],10);
++        let normalized = request("7k/8/8/8/8/8/8/K7 w KQ e6 255 1",&[],"a1b1","ordinary");
++        let parsed = Request::parse(&normalized).unwrap();
++        assert_eq!(parsed.root.rights,0);
++        assert_eq!(parsed.root.ep,NO_SQUARE);
++        let ep = request("7k/8/8/3pP3/8/8/8/K7 w - d6 0 1",&[],"e5d6","enPassant");
++        assert!(Request::parse(&ep).is_ok());
++    }
++
++    #[test]
++    fn tree_rejects_attacked_nonmoving_king_bad_retained_ep_and_wrong_selected_kind() {
++        for fen in ["7k/8/8/8/8/8/7R/7K w - - 0 1",
++            "7k/8/8/3nP3/8/8/8/K7 w - d6 0 1",
++            "7k/8/8/8/8/8/3P4/K7 w - e3 0 1"]
++        { assert!(Request::parse(&request(fen,&[],"a1b1","ordinary")).is_err()); }
++        assert!(Request::parse(&request("7k/8/5KQ1/8/8/8/8/8 w - - 0 1",&[],"g6g7","ordinary")).is_err());
++        let mut input = promotion();
++        input["rootMove"]["kind"] = json!("enPassant");
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();
++        input["rootMove"]["move"] = json!("c7c8q");
++        assert!(Request::parse(&input).is_err());
++    }
++
++    #[test]
++    fn whole_fixed_schema_is_checked_before_replay_and_ignored_settings_are_not_skipped() {
++        let mut input = promotion();
++        input["moves"] = json!(["a1a8"]); // well-formed but illegal at this position
++        input["rootMove"]["kind"] = json!(false);
++        match Request::parse(&input) {
++            Err(error)=>assert_eq!(error,"expected string"),
++            Ok(_)=>panic!("root descriptor schema must precede replay"),
++        }
++        for field in ["myk","opk","rnd","tts"] {
++            let mut input = promotion();
++            input["personalityParameters"][field] = json!(1);
++            assert!(Request::parse(&input).is_err());
++        }
++        for field in ["score","phase","pawnOrder","trace"] {
++            let mut input = promotion();input[field]=json!(0);
++            assert!(Request::parse(&input).is_err());
++        }
++        let mut input = promotion();input["controls"]["pondering"]=json!(true);
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();input["controls"]["iterationDepth"]=json!(2);
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();input["moves"]=json!(["é2e4"]);
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();input["moves"]=json!(vec!["a1b1";256]);
++        assert!(Request::parse(&input).is_err());
++    }
++
++    #[test]
++    fn first_child_must_reach_actual_nonempty_ordering_even_when_native_search_returns() {
++        let input = request("7k/8/8/8/8/8/8/K7 w - - 0 1",&[],"a1b1","ordinary");
++        assert!(Request::parse(&input).is_ok());
++        assert!(dispatch(&input).unwrap_err().contains("first-list"));
++        // A one-node completed tree can still meet the boundary: a nonempty
++        // tactical list may reject every candidate without entering a child.
++        let input = request("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++            &["e2e4","e7e5","g1f3","b8c6","f1b5","a7a6","b5a4","g8f6","e1g1","f8e7","f1e1","b7b5","a4b3","d7d6","c2c3"],"e8g8","castle");
++        assert_eq!(dispatch(&input).unwrap()["nodes"],1);
++    }
++}

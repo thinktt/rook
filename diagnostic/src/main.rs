@@ -173,7 +173,9 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         | "evaluation.pawnSubtotal"
         | "evaluation.candidatePawnSubtotal"
         | "evaluation.freshPawnSubtotal"
-        | "evaluation.contextPawnSubtotal" => pawn_subtotals::dispatch(operation, input),
+        | "evaluation.contextPawnSubtotal"
+        | "evaluation.retainedPawnSubtotal"
+        | "evaluation.searchPawnSequence" => pawn_subtotals::dispatch(operation, input),
         "evaluation.pawnStructure"
         | "evaluation.pawnPressure"
         | "evaluation.pawnStructureScore"

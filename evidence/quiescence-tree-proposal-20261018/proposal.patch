@@ -1,0 +1,1285 @@
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -32,6 +32,7 @@
+ mod position_terms;
+ mod positions;
+ mod quiescence_evaluation;
++mod quiescence_tree;
+ mod relations;
+ mod retained_evaluation;
+ mod root_context;
+@@ -124,6 +125,7 @@
+         | "evaluation.endgameAdjust"
+         | "evaluation.fortressBounds"
+         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
++        "search.quiescenceTree" => quiescence_tree::dispatch(input),
+         "evaluation.moveSequence" => move_evaluation::dispatch(input),
+         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
+         "evaluation.quiescenceEntry" | "evaluation.quiescenceDisposition" => {
+--- a/diagnostic/src/positions.rs
++++ b/diagnostic/src/positions.rs
+@@ -34,7 +34,7 @@
+     Ok(position)
+ }
+ 
+-fn rights(position: &Position) -> String {
++pub(super) fn rights(position: &Position) -> String {
+     let mut result = String::new();
+     for (name, bit) in [
+         ('K', WHITE_KINGSIDE),
+@@ -52,7 +52,7 @@
+     result
+ }
+ 
+-fn ep(position: &Position) -> String {
++pub(super) fn ep(position: &Position) -> String {
+     if position.ep == NO_SQUARE {
+         "-".into()
+     } else {
+--- /dev/null
++++ b/diagnostic/src/quiescence_tree.rs
+@@ -0,0 +1,373 @@
++//! Cold typed recording over the actual recursive native tactical search.
++use super::{array, boolean, evaluation_common as common, integer, object, positions, text, Result};
++use rook2::{
++    evaluator::{EvaluationStage, Parameters, Retained, StageKind},
++    history::SearchHistory,
++    movegen,
++    position::{Position, NO_SQUARE},
++    quiescence::{Entry, Limits, Observer, Outcome, Quiescence, Work},
++    quiescence_policy,
++    types::{Color, Move, MoveKind, Piece, PieceKind},
++};
++use serde_json::{json, Value};
++
++const FIXED: [(&str, i32); 30] = [
++    ("myp",100),("myn",100),("myb",100),("myr",100),("myq",100),
++    ("mycc",100),("mymob",100),("myks",100),("mypp",100),("mypw",100),
++    ("opp",100),("opn",100),("opb",100),("opr",100),("opq",100),
++    ("opcc",100),("opmob",100),("opks",100),("oppp",100),("oppw",100),
++    ("sop",100),("ana",0),("avd",0),("cfd",0),("myk",0),("opk",0),
++    ("rnd",0),("md",99),("sel",14),("tts",67108864),
++];
++
++struct Request { root: Position, history: SearchHistory, movement: Move }
++
++impl Request {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["fen","moves","personalityParameters","rootMove","controls"])?;
++        let fen = text(&input["fen"])?;
++        let names: Vec<_> = FIXED.iter().map(|(name,_)| *name).collect();
++        object(&input["personalityParameters"], &names)?;
++        for (name, value) in FIXED {
++            integer(&input["personalityParameters"][name], value, value)?;
++        }
++        let controls = &input["controls"];
++        object(controls, &["iterationDepth","rootPass","learnedState","pondering"])?;
++        integer(&controls["iterationDepth"],1,1)?;
++        if text(&controls["rootPass"])? != "first-unrestricted"
++            || text(&controls["learnedState"])? != "fresh-ordinary-search"
++            || boolean(&controls["pondering"])?
++        { return Err("unsupported quiescence tree controls".into()); }
++        let supplied = array(&input["moves"],0,255)?.iter().map(|value| {
++            let spelling = text(value)?;
++            positions::coordinate(spelling)?;
++            Ok(spelling)
++        }).collect::<Result<Vec<_>>>()?;
++        object(&input["rootMove"], &["move","kind"])?;
++        let root_spelling = text(&input["rootMove"]["move"])?;
++        positions::coordinate(root_spelling)?;
++        let root_kind = text(&input["rootMove"]["kind"])?;
++        if !matches!(root_kind,"ordinary" | "castle" | "enPassant") {
++            return Err("invalid root move kind".into());
++        }
++        // POSITION-SETUP admission is wider than the separate bounded
++        // moveSequence diagnostic. Use its native parser without type caps.
++        let mut root = Position::from_fen(fen)?;
++        if movegen::in_check(&root,root.side.opponent()) {
++            return Err("initial nonmoving king is in check".into());
++        }
++        retained_ep(&root)?;
++        let mut history = SearchHistory::new(&root);
++        for spelling in supplied {
++            let movement = positions::legal_move(&root,spelling)?;
++            root = root.played_unchecked(movement);
++            history.push(&root,Some(movement));
++        }
++        history.mark_root();
++        let movement = positions::legal_move(&root,root_spelling)?;
++        if kind(movement) != root_kind { return Err("root move kind disagrees with legal move".into()); }
++        let child = root.played_unchecked(movement);
++        if movegen::in_check(&child,child.side) {
++            return Err("selected root child must not be in check".into());
++        }
++        Ok(Self { root, history, movement })
++    }
++
++    fn observe(mut self) -> Result<Value> {
++        let mut search = Quiescence::<true>::new(&self.root);
++        // These ignored fields still carry the exact validated fixed vector.
++        let mut parameters = Parameters::default();
++        parameters.own[5] = 0;
++        parameters.opponent[5] = 0;
++        search.evaluator.parameters = parameters;
++        let root = search.prepare_root(self.root);
++        let mut child = root.child(&search.evaluator.root,self.movement);
++        self.history.push(&child.position,Some(self.movement));
++        let entry = Entry { ply:1,target:1,iteration_depth:1,lower:-10000,upper:10000,
++            analysis:0,capture_exception:quiescence_policy::capture_exception(&self.root,&self.movement) };
++        let mut sink = Sink::default();
++        let outcome = search.search_subtree_observed(&mut child,&mut self.history,entry,
++            Limits { nodes:Some(4095) },&root.retained,&mut sink)
++            .map_err(|stop| format!("quiescence tree did not complete: {stop:?}"))?;
++        if !sink.first_ordered || outcome.pv.len() > 63 {
++            return Err("quiescence tree outside qualified first-list/PV boundary".into());
++        }
++        sink.output(outcome)
++    }
++}
++
++fn retained_ep(position: &Position) -> Result<()> {
++    if position.ep != NO_SQUARE {
++        let rank = if position.side == Color::White { 5 } else { 2 };
++        let victim = if position.side == Color::White { position.ep - 8 } else { position.ep + 8 };
++        if position.ep / 8 != rank || position.board[victim as usize]
++            != Piece::new(position.side.opponent(),PieceKind::Pawn)
++        { return Err("retained EP requires ordinary rank and opposing pawn victim".into()); }
++    }
++    Ok(())
++}
++
++fn kind(movement: Move) -> &'static str {
++    match movement.kind() {
++        MoveKind::Castle => "castle",
++        MoveKind::EnPassant => "enPassant",
++        _ => "ordinary",
++    }
++}
++fn movement(mv: Move) -> Value { json!({"move":mv.to_string(),"kind":kind(mv)}) }
++fn variation(pv: &[Move]) -> Vec<Value> { pv.iter().copied().map(movement).collect() }
++fn work(work: Work) -> Value {
++    json!({"searchCounterDelta":work.effective_search_count(),
++        "chargedSearchUnits":work.charged_search_units,"chargedRelationQueries":work.charged_relation_queries})
++}
++
++struct EvaluationRecord {
++    parent: Option<usize>, arrival: Retained, parent_retained: Retained,
++    stages: Vec<EvaluationStage>, departure: Retained,
++}
++enum Event {
++    Enter { node:usize,parent:Option<usize>,entry:Entry,movement:Option<Move>,
++        position:Position,checked:bool,work:Work },
++    Leave { node:usize,score:i32,pv:Vec<Move>,work:Work },
++}
++#[derive(Default)]
++struct Sink {
++    events: Vec<Event>, evaluations: Vec<EvaluationRecord>, stack: Vec<usize>, first_ordered:bool,
++}
++impl Observer for Sink {
++    const ENABLED: bool = true;
++    type Parent = Retained;
++    type Frame = usize;
++    fn parent(retained: &Retained) -> Retained { *retained }
++    fn enter(&mut self, position:&Position, entry:Entry, movement:Option<Move>,
++        parent_retained:Retained, arrival:Retained, checked:bool, work:Work) -> usize
++    {
++        let index = self.evaluations.len();
++        let parent = self.stack.last().map(|index| index+1);
++        self.events.push(Event::Enter { node:index+1,parent,entry,movement,
++            position:*position,checked,work });
++        self.evaluations.push(EvaluationRecord { parent,arrival,parent_retained,
++            stages:Vec::new(),departure:arrival });
++        self.stack.push(index);
++        index
++    }
++    fn stage(&mut self, stage:EvaluationStage) {
++        self.evaluations[*self.stack.last().unwrap()].stages.push(stage);
++    }
++    fn ordered(&mut self) {
++        if self.stack.len() == 1 && self.stack[0] == 0 { self.first_ordered = true; }
++    }
++    fn leave(&mut self, index:usize, departure:Retained, score:i32, pv:&[Move], work:Work) {
++        assert_eq!(self.stack.pop(),Some(index));
++        self.evaluations[index].departure = departure;
++        self.events.push(Event::Leave { node:index+1,score,pv:pv.to_vec(),work });
++    }
++}
++impl Sink {
++    fn output(self, outcome:Outcome) -> Result<Value> {
++        if !self.stack.is_empty() || self.evaluations.len() as u64 != outcome.stats.nodes {
++            return Err("incomplete native trace".into());
++        }
++        let mut trace = Vec::with_capacity(self.events.len());
++        for event in self.events {
++            trace.push(match event {
++                Event::Enter { node,parent,entry,movement:incoming,position,checked,work:sample } => {
++                    let incoming = incoming.ok_or("played tree node has no arrival move")?;
++                    json!({"event":"enter","node":node,"parent":parent,"ply":entry.ply,
++                        "target":entry.target,"window":{"lower":entry.lower,"upper":entry.upper},
++                        "move":movement(incoming),"position":{"placement":position.placement(),
++                        "sideToMove":if position.side==Color::White {"white"} else {"black"},
++                        "castling":positions::rights(&position),"enPassant":positions::ep(&position),
++                        "halfmoveClock":position.halfmove,"inCheck":checked},"work":work(sample)})
++                }
++                Event::Leave { node,score,pv,work:sample } => json!({"event":"leave","node":node,
++                    "score":score,"principalVariation":variation(&pv),"work":work(sample)}),
++            });
++        }
++        let evaluations: Vec<_> = self.evaluations.into_iter().enumerate().map(|(index,node)| {
++            let stages: Vec<_> = node.stages.into_iter().map(|stage| json!({
++                "kind":match stage.kind { StageKind::Full=>"full", StageKind::Fast=>"fast" },
++                "before":common::retained_output(stage.before),"after":common::retained_output(stage.after),
++                "score":stage.evaluation.score,"lowerBound":stage.evaluation.lower,
++                "upperBound":stage.evaluation.upper,"work":work(Work { charged_search_units:0,
++                    charged_relation_queries:stage.evaluation.relation_queries })
++            })).collect();
++            json!({"node":index+1,"parent":node.parent,"arrival":common::retained_output(node.arrival),
++                "parentRetained":common::retained_output(node.parent_retained),"stages":stages,
++                "departure":common::retained_output(node.departure)})
++        }).collect();
++        Ok(json!({"nodes":outcome.stats.nodes,"score":outcome.score,
++            "principalVariation":variation(&outcome.pv),"work":work(outcome.work),
++            "trace":trace,"evaluations":evaluations}))
++    }
++}
++
++pub(super) fn dispatch(input:&Value) -> Result<Value> { Request::parse(input)?.observe() }
++
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn request(fen:&str, moves:&[&str], selected:&str, kind:&str) -> Value {
++        let parameters:serde_json::Map<String,Value> = FIXED.iter()
++            .map(|(name,value)|(name.to_string(),json!(value))).collect();
++        json!({"fen":fen,"moves":moves,"personalityParameters":parameters,
++            "rootMove":{"move":selected,"kind":kind},"controls":{"iterationDepth":1,
++            "rootPass":"first-unrestricted","learnedState":"fresh-ordinary-search","pondering":false}})
++    }
++    fn promotion() -> Value {
++        request("r3k3/1Pr5/8/8/8/8/8/4K3 b - - 0 1",&[],"c7c8","ordinary")
++    }
++
++    #[test]
++    fn recursive_trace_is_nested_and_stages_expose_actual_parent_and_work_lifetimes() {
++        let out = dispatch(&promotion()).unwrap();
++        assert_eq!(out.as_object().unwrap().len(),6);
++        assert_eq!(out["nodes"],7);
++        assert_eq!(out["score"],-540);
++        assert_eq!(out["work"],json!({"searchCounterDelta":7,"chargedSearchUnits":7,"chargedRelationQueries":4}));
++        let events = out["trace"].as_array().unwrap();
++        let nodes = out["evaluations"].as_array().unwrap();
++        assert_eq!(events.len(),14);
++        let mut stack = Vec::new();
++        let mut entered = 0;
++        for event in events {
++            let id = event["node"].as_u64().unwrap();
++            if event["event"]=="enter" {
++                entered += 1;
++                assert_eq!(id,entered);
++                assert_eq!(event["parent"],stack.last().map(|id| json!(id)).unwrap_or(Value::Null));
++                assert_eq!(event["work"]["chargedSearchUnits"],entered-1);
++                assert_eq!(event["position"].as_object().unwrap().len(),6);
++                stack.push(id);
++            } else {
++                assert_eq!(event["event"],"leave");
++                assert_eq!(stack.pop(),Some(id));
++            }
++        }
++        assert!(stack.is_empty());
++        assert_eq!(events.last().unwrap()["work"],out["work"]);
++        assert_eq!(events.last().unwrap()["principalVariation"],out["principalVariation"]);
++        let mut relation_sum = 0;
++        for node in nodes {
++            let parent = node["parent"].as_u64();
++            if let Some(id) = parent { assert_eq!(node["parentRetained"],nodes[id as usize-1]["departure"]); }
++            assert_eq!(node["arrival"]["positionalSubtotal"],node["parentRetained"]["positionalSubtotal"]);
++            assert_eq!(node["arrival"]["pawnProgress"],node["parentRetained"]["pawnProgress"]);
++            assert_eq!(node["arrival"]["evaluationAge"].as_u64().unwrap(),
++                (node["parentRetained"]["evaluationAge"].as_u64().unwrap()+1)%256);
++            let mut retained = &node["arrival"];
++            for stage in node["stages"].as_array().unwrap() {
++                assert_eq!(&stage["before"],retained);
++                assert_eq!(stage["work"]["chargedSearchUnits"],0);
++                relation_sum += stage["work"]["chargedRelationQueries"].as_u64().unwrap();
++                retained = &stage["after"];
++            }
++            assert_eq!(&node["departure"],retained);
++        }
++        assert_eq!(relation_sum,4);
++        assert_eq!(nodes[0]["stages"][0]["kind"],"fast");
++        assert_eq!(nodes[0]["stages"][1]["kind"],"full");
++        assert_eq!(events[0]["work"],json!({"searchCounterDelta":0,"chargedSearchUnits":0,"chargedRelationQueries":0}));
++        assert_eq!(dispatch(&promotion()).unwrap(),out);
++    }
++
++    #[test]
++    fn later_equal_mate_result_preserves_the_earlier_principal_variation() {
++        let out = dispatch(&request("1r5k/6pp/6Q1/8/8/3B4/8/K7 b - - 0 1",&[],"b8b7","ordinary")).unwrap();
++        assert_eq!(out["score"],9998);
++        assert_eq!(out["principalVariation"],json!([{"move":"g6h7","kind":"ordinary"}]));
++        let events = out["trace"].as_array().unwrap();
++        let later = events.iter().find(|event|event["event"]=="enter" && event["move"]["move"]=="g6e8").unwrap();
++        let returned = events.iter().find(|event|event["event"]=="leave" && event["node"]==later["node"]).unwrap();
++        assert_eq!(returned["score"],-9998);
++        assert!(out["evaluations"].as_array().unwrap().iter().any(|n|n["stages"].as_array().unwrap().is_empty()));
++    }
++
++    #[test]
++    fn public_history_and_selected_castle_define_one_fresh_fixed_root_boundary() {
++        let input = request("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++            &["e2e4","e7e5","g1f3","b8c6","f1b5","a7a6","b5a4","g8f6","e1g1","f8e7","f1e1","b7b5","a4b3","d7d6","c2c3"],"e8g8","castle");
++        let out = dispatch(&input).unwrap();
++        assert_eq!(out["nodes"],1);
++        let first = &out["trace"][0];
++        assert_eq!(first["ply"],1);
++        assert_eq!(first["target"],1);
++        assert_eq!(first["window"],json!({"lower":-10000,"upper":10000}));
++        assert_eq!(first["move"],input["rootMove"]);
++        assert_eq!(first["position"]["castling"],"-");
++        assert_eq!(first["position"]["halfmoveClock"],1);
++        assert_eq!(out["evaluations"][0]["parentRetained"]["evaluationAge"],0);
++        assert_eq!(out["evaluations"][0]["arrival"]["evaluationAge"],1);
++        assert_eq!(out["work"]["chargedRelationQueries"],6);
++    }
++
++    #[test]
++    fn tree_setup_admits_wider_piece_populations_and_normalizes_before_ep_admission() {
++        let broad = request("7k/6pp/8/8/8/QQQQQQQQ/QQ6/K7 w - - 0 1",&[],"a1b1","ordinary");
++        let parsed = Request::parse(&broad).unwrap();
++        assert_eq!(parsed.root.counts[0][PieceKind::Queen.index()],10);
++        let normalized = request("7k/8/8/8/8/8/8/K7 w KQ e6 255 1",&[],"a1b1","ordinary");
++        let parsed = Request::parse(&normalized).unwrap();
++        assert_eq!(parsed.root.rights,0);
++        assert_eq!(parsed.root.ep,NO_SQUARE);
++        let ep = request("7k/8/8/3pP3/8/8/8/K7 w - d6 0 1",&[],"e5d6","enPassant");
++        assert!(Request::parse(&ep).is_ok());
++    }
++
++    #[test]
++    fn tree_rejects_attacked_nonmoving_king_bad_retained_ep_and_wrong_selected_kind() {
++        for fen in ["7k/8/8/8/8/8/7R/7K w - - 0 1",
++            "7k/8/8/3nP3/8/8/8/K7 w - d6 0 1",
++            "7k/8/8/8/8/8/3P4/K7 w - e3 0 1"]
++        { assert!(Request::parse(&request(fen,&[],"a1b1","ordinary")).is_err()); }
++        assert!(Request::parse(&request("7k/8/5KQ1/8/8/8/8/8 w - - 0 1",&[],"g6g7","ordinary")).is_err());
++        let mut input = promotion();
++        input["rootMove"]["kind"] = json!("enPassant");
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();
++        input["rootMove"]["move"] = json!("c7c8q");
++        assert!(Request::parse(&input).is_err());
++    }
++
++    #[test]
++    fn whole_fixed_schema_is_checked_before_replay_and_ignored_settings_are_not_skipped() {
++        let mut input = promotion();
++        input["moves"] = json!(["a1a8"]); // well-formed but illegal at this position
++        input["rootMove"]["kind"] = json!(false);
++        match Request::parse(&input) {
++            Err(error)=>assert_eq!(error,"expected string"),
++            Ok(_)=>panic!("root descriptor schema must precede replay"),
++        }
++        for field in ["myk","opk","rnd","tts"] {
++            let mut input = promotion();
++            input["personalityParameters"][field] = json!(1);
++            assert!(Request::parse(&input).is_err());
++        }
++        for field in ["score","phase","pawnOrder","trace"] {
++            let mut input = promotion();input[field]=json!(0);
++            assert!(Request::parse(&input).is_err());
++        }
++        let mut input = promotion();input["controls"]["pondering"]=json!(true);
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();input["controls"]["iterationDepth"]=json!(2);
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();input["moves"]=json!(["é2e4"]);
++        assert!(Request::parse(&input).is_err());
++        let mut input = promotion();input["moves"]=json!(vec!["a1b1";256]);
++        assert!(Request::parse(&input).is_err());
++    }
++
++    #[test]
++    fn first_child_must_reach_actual_nonempty_ordering_even_when_native_search_returns() {
++        let input = request("7k/8/8/8/8/8/8/K7 w - - 0 1",&[],"a1b1","ordinary");
++        assert!(Request::parse(&input).is_ok());
++        assert!(dispatch(&input).unwrap_err().contains("first-list"));
++        // A one-node completed tree can still meet the boundary: a nonempty
++        // tactical list may reject every candidate without entering a child.
++        let input = request("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++            &["e2e4","e7e5","g1f3","b8c6","f1b5","a7a6","b5a4","g8f6","e1g1","f8e7","f1e1","b7b5","a4b3","d7d6","c2c3"],"e8g8","castle");
++        assert_eq!(dispatch(&input).unwrap()["nodes"],1);
++    }
++}
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -122,6 +122,18 @@
+     pub pawn_reuses: u64,
+     pub pawn_replacements: u64,
+     pub relation_queries: u64,
++}
++
++/// An actual evaluator call, with retained state sampled around that call.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum StageKind { Full, Fast }
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct EvaluationStage {
++    pub kind: StageKind,
++    pub before: Retained,
++    pub after: Retained,
++    pub evaluation: Evaluation,
+ }
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+@@ -521,8 +533,8 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
+-        self.select_noncheck_impl::<false, _, _>(
+-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {},
++        self.select_noncheck_impl::<false, false, _, _, _>(
++            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
+         )
+     }
+ 
+@@ -543,14 +555,50 @@
+         F: FnMut(FullDetails),
+         G: FnMut(FastDetails),
+     {
+-        self.select_noncheck_impl::<true, _, _>(
+-            node, lower, upper, capture_exception, scratch, full_observer, fast_observer,
++        self.select_noncheck_impl::<true, false, _, _, _>(
++            node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
+         )
++    }
++
++    /// Observe actual selected calls, including the fast stage before a refresh.
++    pub fn select_noncheck_stages_observed<F: FnMut(EvaluationStage)>(
++        &mut self,
++        node: &mut Node,
++        lower: i32,
++        upper: i32,
++        capture_exception: bool,
++        scratch: &mut Option<Influence>,
++        observer: F,
++    ) -> Selection {
++        self.select_noncheck_impl::<false, true, _, _, _>(
++            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
++        )
++    }
++
++    /// Terminal Q leaves also observe one actual fast call without a refresh.
++    pub fn fast_stage_observed<F: FnOnce(EvaluationStage)>(
++        &mut self, node: &Node, checked: bool, observer: F,
++    ) -> Evaluation {
++        let before = node.retained;
++        let evaluation = self.fast(node, checked);
++        observer(EvaluationStage { kind: StageKind::Fast, before,
++            after: node.retained, evaluation });
++        evaluation
++    }
++
++    fn full_stage_observed<F: FnOnce(EvaluationStage)>(
++        &mut self, node: &mut Node, influence: &Influence, observer: F,
++    ) -> Evaluation {
++        let before = node.retained;
++        let evaluation = self.full(node, influence, false);
++        observer(EvaluationStage { kind: StageKind::Full, before,
++            after: node.retained, evaluation });
++        evaluation
+     }
+ 
+     // Only stage call wrappers differ. The ordinary instantiation retains its
+     // original full/fast call sites; every selection condition stays shared.
+-    fn select_noncheck_impl<const OBSERVE: bool, F, G>(
++    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, F, G, S>(
+         &mut self,
+         node: &mut Node,
+         lower: i32,
+@@ -559,10 +607,12 @@
+         scratch: &mut Option<Influence>,
+         mut full_observer: F,
+         mut fast_observer: G,
++        mut stage_observer: S,
+     ) -> Selection
+     where
+         F: FnMut(FullDetails),
+         G: FnMut(FastDetails),
++        S: FnMut(EvaluationStage),
+     {
+         let sparse = node.position.counts.iter().all(|c| {
+             (c[1] as u16
+@@ -576,7 +626,9 @@
+         if sparse {
+             let influence = self.ensure_influence(&node.position, scratch);
+             return Selection {
+-                evaluation: if OBSERVE {
++                evaluation: if STAGES {
++                    self.full_stage_observed(node, influence, |stage| stage_observer(stage))
++                } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+                 } else {
+                     self.full(node, influence, false)
+@@ -586,7 +638,9 @@
+                 refreshed: false,
+             };
+         }
+-        let fast = if OBSERVE {
++        let fast = if STAGES {
++            self.fast_stage_observed(node, false, |stage| stage_observer(stage))
++        } else if OBSERVE {
+             self.fast_detailed_observed(node, false, |details| fast_observer(details))
+         } else {
+             self.fast(node, false)
+@@ -594,7 +648,9 @@
+         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
+         let evaluation = if refresh {
+             let influence = self.ensure_influence(&node.position, scratch);
+-            if OBSERVE {
++            if STAGES {
++                self.full_stage_observed(node, influence, |stage| stage_observer(stage))
++            } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+             } else {
+                 self.full(node, influence, false)
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -5,7 +5,7 @@
+ //! The separate development node budget returns an error, never a partial score.
+ 
+ pub use crate::engine::Search as Quiescence;
+-use crate::evaluator::{EvalStats, Node};
++use crate::evaluator::{EvalStats, EvaluationStage, Node, Retained};
+ use crate::history::{repetition_draw, SearchHistory};
+ use crate::movegen;
+ #[cfg(test)]
+@@ -96,6 +96,34 @@
+     pub evaluations: EvalStats,
+ }
+ 
++/// Cold observation stays outside Search/Node state and uses static dispatch.
++/// Methods and all snapshot arguments are guarded by ENABLED in the recursion.
++pub trait Observer {
++    const ENABLED: bool;
++    type Parent: Default;
++    type Frame: Default;
++    fn parent(retained: &Retained) -> Self::Parent;
++    fn enter(&mut self, position: &Position, entry: Entry, movement: Option<Move>,
++        parent: Self::Parent, arrival: Retained, checked: bool, work: Work) -> Self::Frame;
++    fn stage(&mut self, stage: EvaluationStage);
++    fn ordered(&mut self);
++    fn leave(&mut self, frame: Self::Frame, departure: Retained,
++        score: i32, pv: &[Move], work: Work);
++}
++
++struct NoTrace;
++impl Observer for NoTrace {
++    const ENABLED: bool = false;
++    type Parent = ();
++    type Frame = ();
++    fn parent(_: &Retained) {}
++    fn enter(&mut self, _: &Position, _: Entry, _: Option<Move>, _: (),
++        _: Retained, _: bool, _: Work) {}
++    fn stage(&mut self, _: EvaluationStage) {}
++    fn ordered(&mut self) {}
++    fn leave(&mut self, _: (), _: Retained, _: i32, _: &[Move], _: Work) {}
++}
++
+ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
+     /// This preparation's relation work is excluded by `search_subtree`.
+@@ -136,6 +164,22 @@
+         self.continue_subtree(node, history, entry)
+     }
+ 
++    /// Observe a selected subtree with caller-owned typed storage. Parent retained
++    /// is sampled by the caller before producing this selected child.
++    pub fn search_subtree_observed<O: Observer>(
++        &mut self, node: &mut Node, history: &mut SearchHistory,
++        entry: Entry, limits: Limits, parent_retained: &Retained, observer: &mut O,
++    ) -> Result<Outcome, Stopped> {
++        assert!((1..PLIES).contains(&entry.ply));
++        assert_eq!(entry.ply, history.search_ply());
++        assert!(entry.iteration_depth >= 1 && entry.target >= 0);
++        assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
++        self.begin_sequence(limits);
++        let parent = if O::ENABLED { O::parent(parent_retained) } else { O::Parent::default() };
++        let score = self.visit_q_impl(node, history, entry, None, false, parent, observer)?;
++        Ok(self.outcome(entry.ply, score))
++    }
++
+     /// Start the measured/search-work segment without clearing shared pawns.
+     /// Root candidates then use `continue_subtree` in actual visit order.
+     pub fn begin_sequence(&mut self, limits: Limits) {
+@@ -168,240 +212,271 @@
+         checked: Option<bool>,
+         replies_available: bool,
+     ) -> Result<i32, Stopped> {
+-        self.charge_node(history)?;
+-        let ply = entry.ply;
+-        self.pv_len[ply] = 0;
+-        let position = node.position;
+-        let checked = checked.unwrap_or_else(|| movegen::in_check(&position, position.side));
+-        if repetition_draw(history.repetition_count(checked), ply, entry.analysis) {
+-            return Ok(0);
+-        }
+-        self.learning.clear_next(ply);
+-        if entry.upper <= 0 && history.short_reversal() {
+-            return Ok(0);
+-        }
+-        if ply == PLIES - 1 {
+-            let value = self.evaluator.fast(node, checked);
++        self.visit_q_impl(node, history, entry, checked, replies_available, (), &mut NoTrace)
++    }
++
++    fn visit_q_impl<O: Observer>(
++        &mut self, node: &mut Node, history: &mut SearchHistory,
++        entry: Entry, checked: Option<bool>, replies_available: bool,
++        parent: O::Parent, observer: &mut O,
++    ) -> Result<i32, Stopped> {
++        let entry_work = if O::ENABLED { self.work() } else { Work::default() };
++        let mut frame = O::Frame::default();
++        // The one shared body retains all early returns. The wrapper observes
++        // every successful return; stopped searches never produce partial output.
++        let returned = (|| {
++            self.charge_node(history)?;
++            let ply = entry.ply;
++            self.pv_len[ply] = 0;
++            let position = node.position;
++            let checked = checked.unwrap_or_else(|| movegen::in_check(&position, position.side));
++            if O::ENABLED {
++                frame = observer.enter(&position, entry, history.previous_move(),
++                    parent, node.retained, checked, entry_work);
++            }
++            if repetition_draw(history.repetition_count(checked), ply, entry.analysis) {
++                return Ok(0);
++            }
++            self.learning.clear_next(ply);
++            if entry.upper <= 0 && history.short_reversal() {
++                return Ok(0);
++            }
++            if ply == PLIES - 1 {
++                let value = if O::ENABLED {
++                    self.evaluator.fast_stage_observed(node, checked, |stage| observer.stage(stage))
++                } else {
++                    self.evaluator.fast(node, checked)
++                };
++                if DIAGNOSTICS {
++                    self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
++                }
++                return Ok(value.score);
++            }
++
++            let mut influence = None;
++            let mut lower = entry.lower;
++            let (mut best, standing, evaluation_upper) = if checked {
++                (-10000, -10000, 10000)
++            } else {
++                let value = if O::ENABLED {
++                    self.evaluator.select_noncheck_stages_observed(
++                        node, lower, entry.upper, entry.capture_exception, &mut influence,
++                        |stage| observer.stage(stage),
++                    )
++                } else {
++                    self.evaluator.select_noncheck(
++                        node, lower, entry.upper, entry.capture_exception, &mut influence,
++                    )
++                }.evaluation;
++                if DIAGNOSTICS {
++                    self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
++                }
++                if let Some(returned) = policy::evaluation_return(
++                    value.lower, value.upper, value.score, lower, entry.upper,
++                ) {
++                    return Ok(returned.score());
++                }
++                lower = lower.max(value.score);
++                (value.score, value.score, value.upper)
++            };
++
++            if checked {
++                if replies_available {
++                    if DIAGNOSTICS {
++                        self.stats.reused_reply_lists += 1;
++                    }
++                } else {
++                    movegen::generate_legal(&position, &mut self.candidates[ply]);
++                }
++            } else {
++                tactical::generate(&position, &mut self.candidates[ply]);
++            }
++            let count = self.candidates[ply].len;
+             if DIAGNOSTICS {
+-                self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
+-            }
+-            return Ok(value.score);
+-        }
+-
+-        let mut influence = None;
+-        let mut lower = entry.lower;
+-        let (mut best, standing, evaluation_upper) = if checked {
+-            (-10000, -10000, 10000)
+-        } else {
+-            let value = self
+-                .evaluator
+-                .select_noncheck(
+-                    node,
+-                    lower,
+-                    entry.upper,
+-                    entry.capture_exception,
+-                    &mut influence,
+-                )
+-                .evaluation;
+-            if DIAGNOSTICS {
+-                self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
+-            }
+-            if let Some(returned) = policy::evaluation_return(
+-                value.lower, value.upper, value.score, lower, entry.upper,
+-            ) {
+-                return Ok(returned.score());
+-            }
+-            lower = lower.max(value.score);
+-            (value.score, value.score, value.upper)
+-        };
+-
+-        if checked {
+-            if replies_available {
++                self.stats.generated += count as u64;
++            }
++            if count == 0 {
++                return Ok(if checked { ply as i32 - 10000 } else { best });
++            }
++            if checked && ply as i32 - 9998 >= entry.upper {
++                return Ok(ply as i32 - 9998);
++            }
++            tactical::order_with_scratch(
++                &position,
++                &self.evaluator.root,
++                &self.learning.history,
++                &mut self.candidates[ply],
++                &mut self.ordering,
++            );
++            if O::ENABLED { observer.ordered(); }
++
++            let previous = history.previous_move();
++            let king = position.piece_squares(position.side, PieceKind::King)[0];
++            let enemy_king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
++            for index in 0..count {
++                let movement = self.candidates[ply].moves[index];
+                 if DIAGNOSTICS {
+-                    self.stats.reused_reply_lists += 1;
+-                }
+-            } else {
+-                movegen::generate_legal(&position, &mut self.candidates[ply]);
+-            }
+-        } else {
+-            tactical::generate(&position, &mut self.candidates[ply]);
+-        }
+-        let count = self.candidates[ply].len;
+-        if DIAGNOSTICS {
+-            self.stats.generated += count as u64;
+-        }
+-        if count == 0 {
+-            return Ok(if checked { ply as i32 - 10000 } else { best });
+-        }
+-        if checked && ply as i32 - 9998 >= entry.upper {
+-            return Ok(ply as i32 - 9998);
+-        }
+-        tactical::order_with_scratch(
+-            &position,
+-            &self.evaluator.root,
+-            &self.learning.history,
+-            &mut self.candidates[ply],
+-            &mut self.ordering,
+-        );
+-
+-        let previous = history.previous_move();
+-        let king = position.piece_squares(position.side, PieceKind::King)[0];
+-        let enemy_king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
+-        for index in 0..count {
+-            let movement = self.candidates[ply].moves[index];
+-            if DIAGNOSTICS {
+-                self.stats.examined += 1;
+-            }
+-            let mut prepared_child = None;
+-            let mut child_checked = None;
+-            let mut complete_replies = false;
+-            if !checked {
+-                let recapture = policy::is_recapture(&movement, previous);
+-                if ply as i32 > entry.target + entry.iteration_depth && !recapture {
+-                    continue;
+-                }
+-                let victim = position.board[movement.to().0 as usize];
+-                let special = matches!(
+-                    movement.kind(),
+-                    MoveKind::Promotion(_) | MoveKind::EnPassant
+-                );
+-                let mut forced = special;
+-                if !special && !victim.is_empty() {
+-                    let estimate = standing
+-                        + policy::allowance(
+-                            &self.evaluator.root,
+-                            &position,
+-                            &movement,
+-                            node.retained.positional,
+-                            node.retained.pawn_progress,
+-                        );
+-                    let moving_value =
+-                        policy::moving_value(&self.evaluator.root, &position, &movement);
+-                    let decision = policy::capture_policy(
+-                        estimate,
+-                        moving_value,
+-                        CaptureContext {
+-                            ply: ply as i32,
+-                            target: entry.target,
+-                            iteration_depth: entry.iteration_depth,
+-                            best,
+-                            alpha: lower,
+-                        },
+-                        || {
+-                            let map = self.evaluator.ensure_influence(&position, &mut influence);
+-                            policy::destination_support(&position, map, movement.to())
+-                        },
+-                    );
+-                    if DIAGNOSTICS && decision.best > best {
+-                        self.stats.optimistic_updates += 1;
+-                    }
+-                    best = decision.best;
+-                    forced = decision.force_search;
+-                }
+-
+-                let board = movegen::projected_board(&position, movement);
+-                if DIAGNOSTICS {
+-                    self.stats.projections += 1;
+-                }
+-                let (checking, double_check) =
+-                    movegen::check_routes(&board, enemy_king, position.side, movement.to());
+-                child_checked = Some(checking);
+-                // Every quiet item from the non-check producer checks directly;
+-                // retain this screen explicitly for the composed policy.
+-                if !policy::initial_eligibility(
+-                    &position,
+-                    &movement,
+-                    previous,
+-                    checking,
+-                    ply as i32,
+-                    entry.target,
+-                    entry.iteration_depth,
+-                ) {
+-                    continue;
+-                }
+-                if !forced {
+-                    if !checking {
++                    self.stats.examined += 1;
++                }
++                let mut prepared_child = None;
++                let mut child_checked = None;
++                let mut complete_replies = false;
++                if !checked {
++                    let recapture = policy::is_recapture(&movement, previous);
++                    if ply as i32 > entry.target + entry.iteration_depth && !recapture {
+                         continue;
+                     }
+-                    if !double_check && !recapture {
+-                        let child = node.child(&self.evaluator.root, movement);
+-                        history.push(&child.position, Some(movement));
+-                        let repeats = history.repetition_count(true) > 0;
+-                        if !repeats {
+-                            if DIAGNOSTICS {
+-                                self.stats.reply_probes += 1;
++                    let victim = position.board[movement.to().0 as usize];
++                    let special = matches!(
++                        movement.kind(),
++                        MoveKind::Promotion(_) | MoveKind::EnPassant
++                    );
++                    let mut forced = special;
++                    if !special && !victim.is_empty() {
++                        let estimate = standing
++                            + policy::allowance(
++                                &self.evaluator.root,
++                                &position,
++                                &movement,
++                                node.retained.positional,
++                                node.retained.pawn_progress,
++                            );
++                        let moving_value =
++                            policy::moving_value(&self.evaluator.root, &position, &movement);
++                        let decision = policy::capture_policy(
++                            estimate,
++                            moving_value,
++                            CaptureContext {
++                                ply: ply as i32,
++                                target: entry.target,
++                                iteration_depth: entry.iteration_depth,
++                                best,
++                                alpha: lower,
++                            },
++                            || {
++                                let map = self.evaluator.ensure_influence(&position, &mut influence);
++                                policy::destination_support(&position, map, movement.to())
++                            },
++                        );
++                        if DIAGNOSTICS && decision.best > best {
++                            self.stats.optimistic_updates += 1;
++                        }
++                        best = decision.best;
++                        forced = decision.force_search;
++                    }
++
++                    let board = movegen::projected_board(&position, movement);
++                    if DIAGNOSTICS {
++                        self.stats.projections += 1;
++                    }
++                    let (checking, double_check) =
++                        movegen::check_routes(&board, enemy_king, position.side, movement.to());
++                    child_checked = Some(checking);
++                    // Every quiet item from the non-check producer checks directly;
++                    // retain this screen explicitly for the composed policy.
++                    if !policy::initial_eligibility(
++                        &position,
++                        &movement,
++                        previous,
++                        checking,
++                        ply as i32,
++                        entry.target,
++                        entry.iteration_depth,
++                    ) {
++                        continue;
++                    }
++                    if !forced {
++                        if !checking {
++                            continue;
++                        }
++                        if !double_check && !recapture {
++                            let child = node.child(&self.evaluator.root, movement);
++                            history.push(&child.position, Some(movement));
++                            let repeats = history.repetition_count(true) > 0;
++                            if !repeats {
++                                if DIAGNOSTICS {
++                                    self.stats.reply_probes += 1;
++                                }
++                                let replies = movegen::legal_replies_up_to_two(
++                                    &child.position,
++                                    &mut self.candidates[ply + 1],
++                                );
++                                if replies > 1 {
++                                    history.pop();
++                                    continue;
++                                }
++                                complete_replies = true;
+                             }
+-                            let replies = movegen::legal_replies_up_to_two(
+-                                &child.position,
+-                                &mut self.candidates[ply + 1],
+-                            );
+-                            if replies > 1 {
+-                                history.pop();
+-                                continue;
+-                            }
+-                            complete_replies = true;
++                            history.pop();
++                            prepared_child = Some(child);
+                         }
+-                        history.pop();
+-                        prepared_child = Some(child);
+                     }
+-                }
+-                let moving = position.board[movement.from().0 as usize];
+-                let king_after = if moving.kind() == PieceKind::King {
+-                    movement.to()
+-                } else {
+-                    king
+-                };
+-                if movegen::attacked(&board, king_after, position.side.opponent()) {
+-                    if DIAGNOSTICS {
+-                        self.stats.unsafe_rejections += 1;
++                    let moving = position.board[movement.from().0 as usize];
++                    let king_after = if moving.kind() == PieceKind::King {
++                        movement.to()
++                    } else {
++                        king
++                    };
++                    if movegen::attacked(&board, king_after, position.side.opponent()) {
++                        if DIAGNOSTICS {
++                            self.stats.unsafe_rejections += 1;
++                        }
++                        continue;
+                     }
+-                    continue;
+-                }
+-            }
+-            let mut child =
+-                prepared_child.unwrap_or_else(|| node.child(&self.evaluator.root, movement));
+-            let capture_exception = policy::capture_exception(&position, &movement);
+-            history.push(&child.position, Some(movement));
+-            if DIAGNOSTICS {
+-                self.stats.children += 1;
+-            }
+-            let returned = self.visit_q(
+-                &mut child,
+-                history,
+-                Entry {
++                }
++                let mut child =
++                    prepared_child.unwrap_or_else(|| node.child(&self.evaluator.root, movement));
++                let capture_exception = policy::capture_exception(&position, &movement);
++                history.push(&child.position, Some(movement));
++                if DIAGNOSTICS {
++                    self.stats.children += 1;
++                }
++                let child_entry = Entry {
+                     ply: ply + 1,
+                     target: entry.target + i32::from(checked),
+                     lower: -entry.upper,
+                     upper: -lower,
+                     capture_exception,
+                     ..entry
+-                },
+-                child_checked,
+-                complete_replies,
+-            );
+-            history.pop();
+-            let score = -returned?;
+-            if score > best {
+-                best = score;
+-                if score > lower && score < entry.upper {
+-                    self.pv[ply][0] = movement;
+-                    let child_len = self.pv_len[ply + 1];
+-                    let (parents, children) = self.pv.split_at_mut(ply + 1);
+-                    parents[ply][1..1 + child_len].copy_from_slice(&children[0][..child_len]);
+-                    self.pv_len[ply] = child_len + 1;
+-                }
+-            }
+-            if score > lower {
+-                lower = score;
+-                if lower >= entry.upper {
+-                    if DIAGNOSTICS {
+-                        self.stats.cutoffs += 1;
++                };
++                let returned = if O::ENABLED {
++                    let parent = O::parent(&node.retained);
++                    self.visit_q_impl(&mut child, history, child_entry, child_checked,
++                        complete_replies, parent, observer)
++                } else {
++                    self.visit_q(&mut child, history, child_entry, child_checked, complete_replies)
++                };
++                history.pop();
++                let score = -returned?;
++                if score > best {
++                    best = score;
++                    if score > lower && score < entry.upper {
++                        self.pv[ply][0] = movement;
++                        let child_len = self.pv_len[ply + 1];
++                        let (parents, children) = self.pv.split_at_mut(ply + 1);
++                        parents[ply][1..1 + child_len].copy_from_slice(&children[0][..child_len]);
++                        self.pv_len[ply] = child_len + 1;
+                     }
+-                    break;
+-                }
++                }
++                if score > lower {
++                    lower = score;
++                    if lower >= entry.upper {
++                        if DIAGNOSTICS {
++                            self.stats.cutoffs += 1;
++                        }
++                        break;
++                    }
++                }
++            }
++            Ok(best.min(evaluation_upper))
++        })();
++        if O::ENABLED {
++            if let Ok(score) = returned {
++                observer.leave(frame, node.retained, score,
++                    &self.pv[entry.ply][..self.pv_len[entry.ply]], self.work());
+             }
+         }
+-        Ok(best.min(evaluation_upper))
++        returned
+     }
+ }
+ 
+@@ -633,4 +708,179 @@
+         );
+         assert_eq!(search.learning.killers[2][0], movement("a1", "a2"));
+     }
+-}
++
++    #[derive(Default)]
++    struct ObservedNode {
++        parent: Option<usize>, arrival: Retained, current: Retained,
++        stages: Vec<EvaluationStage>, entry_work: Work, leave_work: Work,
++    }
++    #[derive(Default)]
++    struct TestTrace { nodes: Vec<ObservedNode>, stack: Vec<usize>, ordered: Vec<usize>, leaves: usize }
++    impl Observer for TestTrace {
++        const ENABLED: bool = true;
++        type Parent = Retained;
++        type Frame = usize;
++        fn parent(retained: &Retained) -> Retained { *retained }
++        fn enter(&mut self, _: &Position, _: Entry, _: Option<Move>, parent: Retained,
++            arrival: Retained, _: bool, work: Work) -> usize
++        {
++            let parent_index = self.stack.last().copied();
++            if let Some(index) = parent_index { assert_eq!(parent,self.nodes[index].current); }
++            assert_eq!(arrival.positional,parent.positional);
++            assert_eq!(arrival.pawn_progress,parent.pawn_progress);
++            assert_eq!(arrival.age,parent.age.wrapping_add(1));
++            let index = self.nodes.len();
++            assert_eq!(work.charged_search_units,index as u64);
++            self.nodes.push(ObservedNode { parent:parent_index,arrival,current:arrival,
++                entry_work:work,..ObservedNode::default() });
++            self.stack.push(index);
++            index
++        }
++        fn stage(&mut self, stage: EvaluationStage) {
++            let current = &mut self.nodes[*self.stack.last().unwrap()];
++            assert_eq!(stage.before,current.current);
++            if stage.kind == crate::evaluator::StageKind::Fast {
++                assert_eq!(stage.before,stage.after);
++                assert_eq!(stage.evaluation.relation_queries,0);
++            } else { assert_eq!(stage.after.age,0); }
++            current.current = stage.after;
++            current.stages.push(stage);
++        }
++        fn ordered(&mut self) { self.ordered.push(*self.stack.last().unwrap()); }
++        fn leave(&mut self, index:usize, departure:Retained, _:i32, _: &[Move], work:Work) {
++            assert_eq!(self.stack.pop(),Some(index));
++            assert_eq!(departure,self.nodes[index].current);
++            assert!(work.charged_search_units > self.nodes[index].entry_work.charged_search_units);
++            self.nodes[index].leave_work = work;
++            self.leaves += 1;
++        }
++    }
++
++    fn observed_input<const D:bool>(fen:&str, token:&str) -> (Quiescence<D>,Node,SearchHistory,Entry,Retained) {
++        let position = Position::from_fen(fen).unwrap();
++        let mut search = Quiescence::new(&position);
++        let root = search.prepare_root(position);
++        let mut legal = MoveList::new();
++        movegen::generate_legal(&position,&mut legal);
++        let movement = *legal.as_slice().iter().find(|m| m.to_string()==token).unwrap();
++        let child = root.child(&search.evaluator.root,movement);
++        let mut history = SearchHistory::new(&position);
++        history.push(&child.position,Some(movement));
++        let entry = Entry { ply:1,target:1,iteration_depth:1,lower:-10000,upper:10000,
++            analysis:0,capture_exception:policy::capture_exception(&position,&movement) };
++        (search,child,history,entry,root.retained)
++    }
++
++    #[test]
++    fn observed_recursion_matches_plain_state_work_pv_and_shared_pawn_followup() {
++        fn check<const D:bool>() {
++            for (fen,token) in [
++                ("r3k3/1Pr5/8/8/8/8/8/4K3 b - - 0 1","c7c8"),
++                ("1N2k3/4r3/8/8/8/8/8/K3R3 w - - 0 1","b8d7"),
++                ("1r5k/7p/6Q1/8/8/3B4/8/K7 b - - 0 1","b8b6"),
++                ("1r5k/6pp/6Q1/8/8/3B4/8/K7 b - - 0 1","b8b7"),
++                ("4k3/8/8/8/3p4/8/4P3/4K3 w - - 0 1","e2e4"),
++                ("7k/8/5KQ1/8/8/8/8/8 w - - 0 1","g6g7"),
++            ] {
++                let (mut plain,mut a,mut ah,entry,_) = observed_input::<D>(fen,token);
++                let (mut traced,mut b,mut bh,_,parent) = observed_input::<D>(fen,token);
++                let mut trace = TestTrace::default();
++                let x = plain.search_subtree(&mut a,&mut ah,entry,Limits::default()).unwrap();
++                let y = traced.search_subtree_observed(&mut b,&mut bh,entry,Limits::default(),&parent,&mut trace).unwrap();
++                assert_eq!((x.score,&x.pv,x.work,x.stats,x.evaluations),(y.score,&y.pv,y.work,y.stats,y.evaluations));
++                assert_eq!(a,b);
++                assert_eq!(ah.search_ply(),1);
++                assert_eq!(ah.search_path(),bh.search_path());
++                assert!(trace.stack.is_empty());
++                assert_eq!(trace.leaves,trace.nodes.len());
++                assert_eq!(trace.nodes.len() as u64,y.stats.nodes);
++                let charges:u64 = trace.nodes.iter().flat_map(|n| &n.stages)
++                    .map(|s| s.evaluation.relation_queries).sum();
++                assert_eq!(charges,y.work.charged_relation_queries);
++                assert_eq!(trace.nodes[0].leave_work,y.work);
++                assert_eq!(trace.nodes[0].parent,None);
++                assert_eq!(trace.nodes[0].arrival.age,1);
++                // A subsequent full evaluation consumes the cache actually left by
++                // each recursive visit sequence, rather than a rolled-back copy.
++                let map = crate::influence::Influence::build(&a.position);
++                let checked = movegen::in_check(&a.position,a.position.side);
++                let mut ap = Node::root(a.position,&plain.evaluator.root);
++                let mut bp = Node::root(b.position,&traced.evaluator.root);
++                let mut ax = None;
++                let mut bx = None;
++                let av = plain.evaluator.full_detailed_observed(&mut ap,&map,checked,|v| ax=Some(v.pawn_entry_reused));
++                let bv = traced.evaluator.full_detailed_observed(&mut bp,&map,checked,|v| bx=Some(v.pawn_entry_reused));
++                assert_eq!((av,ap,ax),(bv,bp,bx));
++            }
++        }
++        check::<true>();
++        check::<false>();
++    }
++
++    #[test]
++    fn observation_wraps_draw_static_mate_and_terminal_returns_without_extra_stages() {
++        // A repetition admission return has an entry charge, no evaluator,
++        // and preserves next-ply killers exactly as the ordinary body does.
++        let (mut search,mut node,mut history,entry,parent) = observed_input::<true>(
++            "7k/8/8/8/8/8/8/K7 w - - 101 1","a1b1");
++        search.learning.killers[2] = [movement("a1","a2"),Move::NONE];
++        let mut trace = TestTrace::default();
++        let out = search.search_subtree_observed(&mut node,&mut history,entry,Limits::default(),&parent,&mut trace).unwrap();
++        assert_eq!((out.score,trace.leaves,trace.nodes[0].stages.len()),(0,1,0));
++        assert_eq!(search.learning.killers[2][0],movement("a1","a2"));
++        assert!(trace.ordered.is_empty());
++        // A wide material position with a very low beta returns from static
++        // selection before ordering; all actual fast/full calls remain visible.
++        let (mut search,mut node,mut history,mut entry,parent) = observed_input::<true>(
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1","e2e4");
++        entry.upper = -9999;
++        let mut trace = TestTrace::default();
++        let _ = search.search_subtree_observed(&mut node,&mut history,entry,Limits::default(),&parent,&mut trace).unwrap();
++        assert_eq!((trace.leaves,trace.nodes[0].stages.len()),(1,1));
++        assert_eq!(trace.nodes[0].stages[0].kind,crate::evaluator::StageKind::Fast);
++        assert!(trace.ordered.is_empty());
++        // Native API permits checked entry even though the standalone tree
++        // diagnostic excludes its first child; no-reply mate has no stages.
++        let (mut search,mut node,mut history,entry,parent) = observed_input::<true>(
++            "7k/8/5KQ1/8/8/8/8/8 w - - 0 1","g6g7");
++        let mut trace = TestTrace::default();
++        let out = search.search_subtree_observed(&mut node,&mut history,entry,Limits::default(),&parent,&mut trace).unwrap();
++        assert_eq!((out.score,trace.leaves,trace.nodes[0].stages.len()),(-9999,1,0));
++        assert!(trace.ordered.is_empty());
++        // Terminal fast observes a single native call and keeps the aged pair.
++        let position = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        let mut search = Quiescence::<true>::new(&position);
++        let mut node = search.prepare_root(position);
++        let mut history = SearchHistory::new(&position);
++        for _ in 0..62 { node=node.null_child();history.push(&node.position,None); }
++        let parent = node.retained;
++        node=node.null_child();
++        history.push(&node.position,None);
++        let saved = node.retained;
++        let mut trace = TestTrace::default();
++        let entry = Entry { ply:63,target:63,iteration_depth:1,lower:-10000,upper:10000,analysis:0,capture_exception:false };
++        let _ = search.search_subtree_observed(&mut node,&mut history,entry,Limits::default(),&parent,&mut trace).unwrap();
++        assert_eq!((trace.leaves,trace.nodes[0].stages.len()),(1,1));
++        assert_eq!(trace.nodes[0].stages[0].kind,crate::evaluator::StageKind::Fast);
++        assert_eq!(node.retained,saved);
++        assert!(trace.ordered.is_empty());
++    }
++
++    #[test]
++    fn observed_resource_error_restores_history_and_does_not_invent_returns() {
++        let (mut search,mut node,mut history,entry,parent) = observed_input::<true>(
++            "r3k3/1Pr5/8/8/8/8/8/4K3 b - - 0 1","c7c8");
++        let mut trace = TestTrace::default();
++        let stopped = search.search_subtree_observed(&mut node,&mut history,entry,
++            Limits { nodes:Some(2) },&parent,&mut trace);
++        assert!(matches!(stopped,Err(Stopped::NodeLimit(2))));
++        assert_eq!(history.search_ply(),1);
++        assert_eq!(search.stats.nodes,2);
++        assert_eq!(trace.nodes.len(),2);
++        assert!(trace.leaves < trace.nodes.len());
++        // The external owner discards this incomplete sink instead of emitting
++        // a partial nested trace or treating a stop as a search score.
++        assert!(!trace.stack.is_empty());
++    }
++
++}

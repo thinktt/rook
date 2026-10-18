@@ -7,7 +7,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current85 operations cover time schedule/allowance, parameters and output
+The current87 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -23,7 +23,8 @@ material-threat production and board-derived pressure/threat/cutoff composition;
 root material/square and raw shelter observations; score-context production;
 fresh/retained pawn structure/candidates and fresh phase/subtotals; complete
 forced-fresh subtotal/score, controlled retained full/fast sequences, actual
-move/null evaluation sequences and admitted Q entry/disposition.
+move/null evaluation sequences, admitted Q entry/disposition, retained pawn
+subtotals and fixed-root search pawn sequences.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -47,14 +48,14 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current5289-case external result comprises79 complete released fixture
-files with no partial selection or duplicate cases. All117 adapter unit tests
+The current6151-case external result comprises82 complete released fixture
+files with no partial selection or duplicate cases. All126 adapter unit tests
 pass after142 native tests. Frozen adapter SHA256 is
-`7dd00a4337b01a5e33ff6ac29a20f8d8af608bcf90d36af2afd23d04b58cfcd6`.
-See `evidence/diagnostic-move-q-evaluation-20261018/`; both the30-file frontend
+`bf4c3daaeb84a075f18311d24bae988d5bd3271f97a4411fba44fa760b0dba06`.
+See `evidence/diagnostic-retained-search-pawn-20261018/`; both the30-file frontend
 and43-file native closure are stable and independently reconciled. Integration
 independently matches both source closures to the exact tested proposal in
-`evidence/move-q-evaluation-integration-20261018/`. This is source promotion
+`evidence/retained-search-pawn-integration-20261018/`. This is source promotion
 with named frozen artifacts, without a canonical-path rebuild claim. Native
 observation helpers share production arithmetic and retain state/layout/charge
 ownership. This does not transfer timing or gameplay from prior8d artifacts.
@@ -154,5 +155,14 @@ native tests,54 strict replays/eight interruption fixtures; combined adapter
 7dd00a43 passes5289 cases/117 units. Its bounded default codegen review restores
 the prior evaluation call scope and stack size, without a CPU-neutrality claim.
 The original metadata-stability failure and clean replay retry are preserved.
-Complete mandatory acceptance now needs32 operations/2384 cases, followed by
-wider production/gameplay/performance qualification.
+At that85-operation checkpoint, mandatory acceptance still needed32
+operations/2384 cases.
+
+Two subsequent cold pawn routes add862 cases and25992 result records. They
+share native retained selection, current membership/phase/piece terms, ending
+fallback and fixed-root context production; all schemas validate before state
+creation. Native43 is unchanged, so accepted142/strict54/eight-wire evidence is
+reused. All126 adapter units and6151 original/raw/exit comparisons pass across
+87 mandatory operations/82 whole files. Complete mandatory acceptance now needs
+30 operations/1522 cases, followed by wider production/gameplay/performance
+qualification.
