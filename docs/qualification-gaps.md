@@ -1,13 +1,16 @@
 # Remaining qualification work
 
-Current full-byte relation source has complete mandatory fixture success:
-117 operations,7673 unique cases/115 whole files,209 diagnostic units and
-178 native tests,54 strict replays and eight interruption fixtures/24 searches.
-Fresh diagnostic/raw reconciliation binds source112 graph91772367; native,
-strict and wire evidence is reused only by exact source69 equality. Own-PGO79d19ebe
-has its own profile and strict/wire evidence plus a seven-case pilot; current
-full54/12 performance and12-game pre-gate remain open. See
-[decision0013](decisions/0013-full-byte-relation-table.md).
+Current candidate25 projected Boolean source has complete mandatory fixture
+success:117 operations,7673 cases/115 whole files and209 fresh diagnostic units,
+with178 native tests reused by exact source69 equality. Root source112 graph
+is `c33fc447`. Own-PGO51529ceb has its own54-case profile/remerge, fresh strict54
+and eight interruption fixtures/24 searches. Its matched seven-case pilot is
+2.074767% lower than fullbyte79d, all seven medians lower. The same exact image
+passes12-game pre-gate/632 searches, continuity8 and required seed controls,
+independently reconciled. Full54/12 performance qualification, production domain
+review and external full3288 gate remain open. The two-binary candidate25 package
+is prepared for original-hardware benchmarking; see
+[decision0015](decisions/0015-ordinary-projected-bit-checks.md).
 
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).

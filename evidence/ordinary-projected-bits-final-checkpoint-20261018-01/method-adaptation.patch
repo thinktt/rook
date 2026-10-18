@@ -1,0 +1,136 @@
+--- /home/legolas/rook2/evidence/ordinary-projected-bits-generic-checkpoint-20261018-01/prepare_scope.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-checkpoint-20261018-01/prepare_scope.py
+@@ -1,4 +1,4 @@
+-"""Whitelist only: closed14 ordinary projected-bit generic trees plus explicit dependency bytes; no native runs."""
++"""Whitelist only: closed17 candidate25 own-PGO/final117 trees plus explicit dependency bytes; no native runs."""
+ from pathlib import Path
+ import hashlib,json,os,stat,traceback
+ HERE=Path(__file__).resolve().parent;REPO=Path('/home/legolas/rook2');E=REPO/'evidence'
+@@ -55,7 +55,7 @@
+  global ROOTS,EXTRAS,SCOPE
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13] and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  plan=load(PLAN);roots=[Path(x) for x in plan['directories']]
+- assert len(roots)==len(set(roots))==plan['expected_whole_trees']==14
++ assert len(roots)==len(set(roots))==plan['expected_whole_trees']==17
+  assert all(a==b or not(a in b.parents or b in a.parents) for a in roots for b in roots)
+  assert all(p.is_dir() and not p.is_symlink() and p.resolve()==p for p in roots)
+  def inside(path):return any(path==root or root in path.parents for root in roots)
+@@ -85,6 +85,7 @@
+  for name,h in sorted(pins.items()):
+   path=Path(name);assert path.is_absolute() and '..' not in path.parts
+   assert not any(x in name.lower() for x in ['opaque','calibration','census','/.git/']),name
++  assert not name.startswith('/home/legolas/rook2-private/'),name
+   resolved=path.resolve(strict=True);assert stat.S_ISREG(resolved.lstat().st_mode),name
+   chain=links(path)
+   if chain:aliases.append(dict(logical_path=name,resolved_regular_source=str(resolved),symlink_components=chain,expected_sha256=h,archive_member=member(resolved)))
+@@ -95,15 +96,15 @@
+  files=originals|extra;members={member(p):str(p) for p in files};assert len(members)==len(files)
+  assert not any(HERE==p or HERE in p.parents for p in files)
+  assert all(Path(row['resolved_regular_source']) in files for row in refs)
+- scope=dict(directories=[str(p) for p in roots],explicit_extra_files=[str(p) for p in sorted(extra)],external_logical_reference_paths=[row['path'] for row in refs if not inside(Path(row['path']))],reference_dependencies=refs,explicit_symlink_resolutions=aliases,preservation_plan=str(PLAN),preservation_plan_sha256=sha(PLAN),closed_tree_regular_files=sorted(str(p) for p in originals),closed_tree_directories=sorted(dirs),unsupported_nonregular_closed_tree_entries=[],archive_mapping='repository-relative paths; external/absolute-path-without-leading-slash for outside repository; explicit symlink aliases map to included canonical regular payload bytes',no_silent_exclusions=True,excluded_checkpoint=str(HERE),excluded_active_or_future_scope='No whole current-profile/private/census/opaque/calibration/PGO/root/Git/unrelated trial tree; individual consumed files only, including immutable PGO declaration',overlap='No timing active; all selected generic/decision trees closed; separate PGO text preparation has no timing interpretation.')
++ scope=dict(directories=[str(p) for p in roots],explicit_extra_files=[str(p) for p in sorted(extra)],external_logical_reference_paths=[row['path'] for row in refs if not inside(Path(row['path']))],reference_dependencies=refs,explicit_symlink_resolutions=aliases,preservation_plan=str(PLAN),preservation_plan_sha256=sha(PLAN),closed_tree_regular_files=sorted(str(p) for p in originals),closed_tree_directories=sorted(dirs),unsupported_nonregular_closed_tree_entries=[],archive_mapping='repository-relative paths; external/absolute-path-without-leading-slash for outside repository; explicit symlink aliases map to included canonical regular payload bytes',no_silent_exclusions=True,excluded_checkpoint=str(HERE),excluded_active_or_future_scope='No whole current-profile/private/census/opaque/calibration/root/Git/unrelated trial or generic-checkpoint tree; individually consumed files only; selected own-PGO trees are explicit.',overlap='No timing active during authorized preflight; all17 selected trees are parent-declared closed. Archive execution remains separately gated.')
+  write('included-scope.json',scope)
+- write('preflight-verification.json',dict(complete=True,closed_trial_trees=14,whole_trees=14,reference_union_paths=len(refs),external_logical_paths=len(scope['external_logical_reference_paths']),explicit_extra_regular_payloads=len(extra),explicit_symlink_resolutions=aliases,unsupported_entries=[],duplicate_members=0,all_reference_hashes_equal=True,prospective_regular_members=len(files),source_bytes=sum(p.stat().st_size for p in files),no_native_execution=True))
++ write('preflight-verification.json',dict(complete=True,closed_trial_trees=17,whole_trees=17,reference_union_paths=len(refs),external_logical_paths=len(scope['external_logical_reference_paths']),explicit_extra_regular_payloads=len(extra),explicit_symlink_resolutions=aliases,unsupported_entries=[],duplicate_members=0,all_reference_hashes_equal=True,prospective_regular_members=len(files),source_bytes=sum(p.stat().st_size for p in files),no_native_execution=True))
+  ROOTS=roots;EXTRAS=sorted(extra);SCOPE=scope
+  rows,inventory_dirs=inventory()
+  assert len(rows)==len(files) and inventory_dirs==sorted(dirs)
+  write('preflight-member-manifest.json',dict(file_count=len(rows),source_bytes=sum(row['bytes'] for row in rows),members=rows))
+- write('preflight-summary.json',dict(complete=True,archive_created=False,whole_trees=14,regular_members=len(rows),source_bytes=sum(row['bytes'] for row in rows),explicit_extra_regular_payloads=len(extra),reference_union_paths=len(refs),scope_sha256=sha(HERE/'included-scope.json'),member_manifest_sha256=sha(HERE/'preflight-member-manifest.json'),preservation_plan_sha256=sha(PLAN),symlink_resolution_count=len(aliases)))
+- print(json.dumps(dict(complete=True,whole_trees=14,reference_union_paths=len(refs),explicit_extra_payloads=len(extra),members=len(files),source_bytes=sum(p.stat().st_size for p in files),symlink_resolution_count=len(aliases))))
++ write('preflight-summary.json',dict(complete=True,archive_created=False,whole_trees=17,regular_members=len(rows),source_bytes=sum(row['bytes'] for row in rows),explicit_extra_regular_payloads=len(extra),reference_union_paths=len(refs),scope_sha256=sha(HERE/'included-scope.json'),member_manifest_sha256=sha(HERE/'preflight-member-manifest.json'),preservation_plan_sha256=sha(PLAN),symlink_resolution_count=len(aliases)))
++ print(json.dumps(dict(complete=True,whole_trees=17,reference_union_paths=len(refs),explicit_extra_payloads=len(extra),members=len(files),source_bytes=sum(p.stat().st_size for p in files),symlink_resolution_count=len(aliases))))
+ if __name__=='__main__':
+  try:main()
+  except BaseException as error:write('preflight-failure.json',dict(error=repr(error),traceback=traceback.format_exc()));raise
+--- /home/legolas/rook2/evidence/ordinary-projected-bits-generic-checkpoint-20261018-01/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-checkpoint-20261018-01/archive_checkpoint.py
+@@ -6,7 +6,7 @@
+ SCOPE=json.loads((HERE/'included-scope.json').read_text())
+ ROOTS=[Path(name) for name in SCOPE['directories']]
+ EXTRAS=[Path(name) for name in SCOPE['explicit_extra_files']]
+-ARCHIVE=HERE/'closed-ordinary-projected-bits-generic.tar.gz'
++ARCHIVE=HERE/'closed-ordinary-projected-bits-candidate25-final.tar.gz'
+ def sha(path):
+  h=hashlib.sha256()
+  with path.open('rb') as f:
+@@ -70,61 +70,26 @@
+  assert approval['preflight_member_manifest_sha256']==sha(HERE/'preflight-member-manifest.json')
+  assert approval['archive_writer_sha256']==sha(Path(__file__))
+  preflight=load(HERE/'preflight-summary.json');assert preflight['complete'] and not preflight['archive_created']
+- assert (len(ROOTS),len(rows),sum(row['bytes'] for row in rows),len(EXTRAS))==(14,preflight['regular_members'],preflight['source_bytes'],preflight['explicit_extra_regular_payloads'])
++ assert (len(ROOTS),len(rows),sum(row['bytes'] for row in rows),len(EXTRAS))==(17,preflight['regular_members'],preflight['source_bytes'],preflight['explicit_extra_regular_payloads'])
+  assert rows==load(HERE/'preflight-member-manifest.json')['members']
+- nv=E/'ordinary-projected-bits-native-validation-20261018-01';native=load(nv/'result.json')
+- assert native['complete'] and native['total_tests']==178 and native['tests']['lib']['passed']==176 and native['tests']['dev']['passed']==2
+- assert all(row['exit_code']==0 and row['actual_child_return_observed'] for row in native['commands'])
+- for item in native['tests'].values():included(item['executable'],item['sha256'])
+- generic=E/'ordinary-projected-bits-generic-build-20261018-01';basis=load(generic/'receipt.json')
+- assert basis['binary_output']['sha256']=='2940ae5c003fa396b31639749b4c3ba29e52e8aebabfc96a7dde565b6d9abd04'
+- included(generic/'rook2-exact',basis['binary_output']['sha256'])
+- source=basis['source_sha256_before']|basis['tool_sha256_before'];assert len(source)==69
+- assert basis['source_sha256_before']==basis['source_sha256_after'] and basis['tool_sha256_before']==basis['tool_sha256_after']
+- for name,h in source.items():included(generic/'source-before'/name,h)
+- ar=load(generic/'archive-receipt.json');assert ar['files']==69;included(generic/ar['archive'],ar['sha256'])
+- proposal=E/'ordinary-projected-bits-proposal-20261018-01';proposal_plan=load(proposal/'plan.json')
+- included(proposal/'source69.tar.gz',proposal_plan['source_archive_sha256'])
+- assert proposal_plan['source69_graph']=='d4bb0f948c650f9675b050410a3a4d2811dcc58357ceb2fc1c4f99f21f2fff50'
+- for archive_path in [generic/ar['archive'],proposal/'source69.tar.gz']:
+-  with tarfile.open(archive_path,'r:gz') as archive:
+-   found={}
+-   for member in archive:
+-    assert member.isfile() and member.name in source and member.name not in found
+-    found[member.name]=hashlib.sha256(archive.extractfile(member).read()).hexdigest()
+-   assert found==source
+- reg=E/'ordinary-projected-bits-regression-20261018-01';rr=load(reg/'result.json')
+- assert rr['complete'] and rr['strict54_pass'] and rr['interruption_fixtures']==8 and rr['interruption_searches']==24
+- strict=load(reg/'strict54.stdout');assert len(strict['results'])==54 and strict['status']=='pass'
+- wire=load(reg/'wire/receipt.json');assert wire['pass'] and len(wire['results'])==8 and sum(len(x['searches']) for x in wire['results'])==24
+- for case in wire['results']:
+-  for name,item in case['raw'].items():included(reg/'wire'/case['id']/(name+'.raw'),item['sha256'])
+- functional=E/'ordinary-projected-bits-independent-preparation-20261018-01/independent-verification.json';included(functional)
+- assert load(functional)['complete'] and load(functional)['native_tests']==178 and len(load(functional)['dependencies'])==253
+- pilot=E/'ordinary-projected-bits-cpu-pilot-20261018-01';plan=load(pilot/'plan.json')
+- independent=E/'ordinary-projected-bits-cpu-independent-preparation-20261018-01/independent-reconciliation.json';ind=load(independent)
+- included(independent,'e6ebbadd95bfdc5d0ebda5c670dbb01473ad9141edec372698bd476c0081367e')
+- assert ind['complete'] and ind['normal_lifetimes']==ind['original_checkReplay']==70 and ind['warmups_excluded']==14 and ind['measured']==56
+- assert len(ind['dependencies'])==757
+- assert ind['advance_rule_satisfied'] and ind['lower_case_medians']==7 and ind['aggregate_ratio']<=0.995 and ind['worst_case_ratio']<=1.02
+- assert ind['frozen_rule']==plan['advance_rule'] and all(x['range_relation']=='candidate-below' for x in ind['cases'])
+- for variant in plan['variants'].values():included(variant['path'],variant['sha256'])
+- assert plan['variants']['baseline']['sha256']=='948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219'
+- assert plan['variants']['candidate']['sha256']==basis['binary_output']['sha256']
+- actual=load(pilot/'tool-terminal.json');assert actual['actual_tool_terminal_observed'] and actual['exit_code']==0 and actual['session_id']==52227 and actual['terminal_chunk_id']=='f277f5'
+- ia=load(independent.parent/'tool-terminal.json');assert ia['actual_tool_terminal_observed'] and ia['exit_code']==0 and ia['terminal_chunk_id']=='b0cfb0'
+- records=sorted(pilot.glob('profile-*/*/native.json'));assert len(records)==70
+- for record in records:
+-  included(record);data=load(record);assert data['native_exit_code']==0 and data['exec_error'] is None and data['failure'] is None
+-  assert data['engine_sha256_before']==data['engine_sha256_after']==plan['variants']['baseline' if record.parent.name.endswith('baseline') else 'candidate']['sha256']
+-  included(record.parent/'comparator.stdout');included(record.parent/'comparator.stderr')
+- assert load(independent.parent/'original-checkReplay70-result.json')['original_oracle_calls']==70
+- decision_path=E/'ordinary-projected-bits-generic-decision-20261018-01/decision.json';included(decision_path,'b4ea9a11841cb110cbf7d749b81b6a819a33c46cad67650e4149b6de22803014');decision=load(decision_path)
+- assert not decision['source_promotion'] and not decision['performance_qualification']
++ cpu_path=E/'ordinary-projected-bits-pgo-cpu-independent-preparation-20261018-01/independent-reconciliation.json'
++ included(cpu_path,'895e58549474bc1385188b459fd75c6e0b647bf9ee33b10d90c4a59ce704aa4d');cpu=load(cpu_path)
++ assert cpu['complete'] and cpu['normal_lifetimes']==cpu['original_checkReplay']==70 and cpu['warmups_excluded']==14 and cpu['measured']==56
++ assert len(cpu['dependencies'])==2030 and cpu['advance_rule_satisfied'] and cpu['lower_case_medians']==7
++ F=E/'ordinary-projected-bits-final-validation-preparation-20261018-01';final=load(F/'validation-summary.json');ind=load(F/'reconciliation/independent-verification.json');gate=load(F/'pregate/independent-raw-reconciliation.json')
++ assert final['cases']==ind['diagnostic_cases']==7673 and final['diagnostic_units']==ind['diagnostic_units']==209
++ assert final['native_units']==178 and final['operations']==117 and final['whole_files']==115
++ assert ind['status']=='pass' and ind['all_raw_expected_and_actual_equal'] and ind['all_native_child_exits_confirmed']
++ assert gate['complete'] and gate['independentGames']==12 and gate['independentSearches']==632 and gate['continuousSearches']==8
++ pgo=E/'ordinary-projected-bits-pgo-use-build-20261018-01';included(pgo/'rook2-exact','51529cebf24ad91b0cf86e4ae497bc32bb7ad7a819f8b300f8b86028326b254a')
++ included(F/'diagnostic-build/rook2-diag-exact','f1f7f5d9c899ebf3881d4033f437f7780e8f9bcf542d10db14a7f37d804ebb79')
++ raw=[p for p in by_path if str(F/'diagnostic/raw-cases')+'/' in p];assert len(raw)==30693
++ training=load(E/'ordinary-projected-bits-pgo-training-20261018-01/training.json');assert training['complete'] and len(training['raw_profiles_sha256'])==54
++ for path,digest in training['raw_profiles_sha256'].items():included(path,digest)
++ hand=load(E/'candidate25-binary-handoff-20261018-01/manifest.json');assert hand['candidate']==25 and len(hand['package_members'])==2
++ for item in hand['package_members'].values():included(item['path'],item['sha256']);included(item['origin'],item['sha256'])
+  declaration=E/'ordinary-projected-bits-pgo-cpu-plan-20261018-01/plan.json';included(declaration,'83ad9ecca4ff5207dd362e3f2645465350e3e52e2e038d7f505bfc3a107cb27b')
+- selected_pgo={p for p in by_path if '/ordinary-projected-bits-pgo-' in p}
+- assert selected_pgo=={str(declaration)}
+- return dict(whole_closed_trial_trees=14,reference_dependency_paths=len(SCOPE['reference_dependencies']),external_regular_payloads=len(EXTRAS),explicit_symlink_resolutions=SCOPE['explicit_symlink_resolutions'],native178_images_raw_tests_source69_archives_included=True,both_source69_archives_reopened=True,strict54_wire8_searches24_all_raw_included=True,pilot_actual=actual,independent_actual=ia,all70_lifetimes_and14_warmups_56measured_preserved=True,decision='Generic PASS: fresh own-source PGO preparation only; no source promotion or qualification',aggregate_ratio=ind['aggregate_ratio'],lower_case_medians=7,all7_ranges_candidate_below=True,variants=plan['variants'],all_regular_files_in_selected_trees=True,only_PGO_file_is_immutable_pretraining_declaration=True,no_unrelated_whole_tree_private_raw_census_opaque_root_git=True,parent_whitelist_approval_sha256=sha(HERE/'parent-whitelist-approval.json'),qualification=False)
++ return dict(whole_closed_trial_trees=17,reference_dependency_paths=len(SCOPE['reference_dependencies']),external_regular_payloads=len(EXTRAS),explicit_symlink_resolutions=SCOPE['explicit_symlink_resolutions'],own54_profile_raw_and_both_builds_preserved=True,all70_cpu_lifetimes_preserved=True,full117_all_regular_raw_files_preserved=True,diagnostic_raw_case_files=len(raw),pregate12_searches632_continuity8_preserved=True,source_and_individual_consumed_dependencies_preserved=True,handoff_two_images_preserved=True,no_unrelated_whole_tree_private_raw_census_opaque_root_git=True,parent_whitelist_approval_sha256=sha(HERE/'parent-whitelist-approval.json'),qualification=False)
+ 
+ def main():
+  result=dict(complete=False,failure=None,affinity=sorted(os.sched_getaffinity(0)),no_native_compiler_profiler_timing_git_subprocesses=True)

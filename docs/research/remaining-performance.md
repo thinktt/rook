@@ -516,7 +516,7 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     source/full54/12 qualification are unchanged. See
     [decision0014](../decisions/0014-pure-component-cache-trial.md).
 
-25. **Ordinary projected Boolean checks: generic pass, own-PGO preparation.**
+25. **Ordinary projected Boolean checks: own-PGO pass and integrated.**
     Current79d instruction simulation independently maps the two ordinary
     mailbox finder/projection packets to2.893823%/3.001704% of whole-lifetime
     simulated Ir in35/08. Unresolved line0 stays separate; no CPU or saved-work
@@ -533,3 +533,11 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     fresh own-source PGO only; production remains unchanged. The separate PGO
     rule/cases/schedule are frozen before training. See
     [decision0015](../decisions/0015-ordinary-projected-bit-checks.md).
+    Own-PGO51529ceb independently passes own54 training/remerge/use54 and
+    eight-wire24. Its fixed70 pilot sums13.072816s control79d versus12.8015855s,
+    ratio0.9792523279 (2.074767% lower),7/7 lower and all ranges separated.
+    Fresh209/all7673/117/115 and final12-game632/continuity8/seed controls pass
+    with independent raw reconciliation. Exact source112c33fc447 is integrated;
+    no canonical-path rebuild or full54/12 performance acceptance is claimed.
+    The outside-repo candidate25 engine/diagnostic package preserves those exact
+    executable bytes for original-hardware measurement. No candidate26 selected.

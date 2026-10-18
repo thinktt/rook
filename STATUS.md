@@ -1,6 +1,34 @@
 # Implementation status
 
-## Current stage — full-byte relation table, 2026-10-18
+## Current stage — candidate25 projected Boolean checks, 2026-10-18
+
+Candidate25 is integrated by exact source equality after its own-PGO trial,
+fresh mandatory117-operation validation and final12-game pre-gate. Only the
+four ordinary-search projection/query lines change; existing bit planes supply
+the Boolean checks without added state. Root source112 is
+`c33fc44748780ed24b8f56ddec160ff02e0e7b8a14253fbb76d0f9577eabd7f7`.
+
+Own-PGO51529ceb uses its own54-case profile, byte-identical independent remerge,
+fresh strict54 and eight interruption fixtures/24 searches. The frozen matched
+70-lifetime pilot against fullbyte79d independently sums13.072816s versus
+12.8015855s: ratio0.9792523279,2.074767% lower, seven of seven medians lower
+and all observed sample ranges separated. This custom development set is not
+full54/12 cost qualification. Fresh209 diagnostic units and all7673 original
+mandatory cases/117 operations/115 whole files pass with independent raw checks.
+The exact PGO image also passes12 games/632 searches, continuity8 and required
+seed controls with independent raw reconciliation. Generic native178 is reused
+only by exact source69 equality. Companion diagnostic image is `f1f7f5d9`.
+
+The two exact validated executables are packaged outside the repository at
+`/home/legolas/benchmark-handoff/candidate25`, containing only `rook2` and `rook2-diag`.
+Original-hardware benchmarking through cleanroom-gate/rook-tester is pending.
+Current final54/12 performance qualification, normative production audit and
+external full3288-game gate remain open. See
+[decision0015](docs/decisions/0015-ordinary-projected-bit-checks.md),
+[source promotion](evidence/ordinary-projected-bits-integration-20261018-01/source-promotion.json)
+and [handoff identities](evidence/candidate25-binary-handoff-20261018-01/manifest.json).
+
+## Previous full-byte relation checkpoint, 2026-10-18
 
 The direct typed relation table is integrated after fresh209 diagnostic tests
 and all7673 original cases/117 operations/115 whole files. Independent raw

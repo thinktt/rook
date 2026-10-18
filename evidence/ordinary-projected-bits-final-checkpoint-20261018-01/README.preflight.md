@@ -1,0 +1,11 @@
+# Candidate25 final checkpoint — preflight only
+
+Preserve exactly the17 closed whole trees enumerated in preservation-plan.json, including newly closed integration and handoff metadata, plus the explicit union of actual CPU2030 dependencies/P-I plans/ownPGO pins/backend inputs/final117 immutable dependencies115fixtures/112source origins and exact two handoff binaries. Resolve consumed symlink aliases explicitly to canonical regular payloads; no whole unrelated tree or generic checkpoint archive tree is selected. Every selected regular file is included, with no hidden-file/name filter. Reject unsupported entries, conflicting pins, missing payloads, changing inventory and duplicate/unsafe archive names.
+
+Preflight is authorized; archive execution is NOT. prepare_scope.py emits a source-path/size/mode/SHA manifest and finite whitelist proof; stop for parent review. The accepted deterministic streaming writer is prepared but unrun. It requires the parent approval file to bind this exact scope/member manifest/writer hash, then streams sorted fixed-header tar/gzip, reopens and verifies every member and rehashes/reinventories all originals. No deletes or engine/native/oracle/build/timing/Git commands are used. Caller metadata limits remain; finite conformance/12 pre-gate/7-case CPU evidence is not cross-hardware or full3288 acceptance.
+
+Full117 raw files are all preserved by whole-tree inventory. Actual preflight count basis is31,142 files in final validation, including30,693 diagnostic/raw-cases files, rather than the informal41k estimate. Archive must wait for explicit parent approval and any outside benchmark quiet-window clearance.
+
+Preflight actual91565/445cb9→dd7a40 exit0; 33,513 regular members / 806,735,530 source bytes,17whole trees,1,248 explicit external canonical payloads,2,336 consumed logical dependency paths,5explicit aliases. Unsupported/duplicate/path/hash conflicts:zero. included-scope SHAfa79dda9597f6771d48a18ce943de11a8ee7cd848eaf4d0e6317c9c05f363b52; preflight-member-manifest SHA0c3833b2b8792e40d55403c4e1cf3dfe10bf19e135a3386e67d63f964f59dcff.
+
+Writer SHAa523fa4b89d300e9af4ef960b852f41195c16f7c69b4706fcd342bdf370e6c03; preflight helper SHA032a5206571d7ccce82412d2543f1d43b823900f85608f48e0d4b6cfeb12be90. No archive has been created. Parent whitelist review and any outside quiet-window clearance remain required.

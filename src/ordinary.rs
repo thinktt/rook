@@ -885,9 +885,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                 if movement.kind() != MoveKind::Ordinary {
                     continue;
                 }
-                let board = movegen::projected_board(&position, movement);
+                let projected = position.attack_view().projected(&position, movement);
                 let king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
-                if !movegen::attacked(&board, king, position.side) {
+                if !projected.attacked(king, position.side) {
                     continue;
                 }
                 if DIAGNOSTICS {
@@ -961,9 +961,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
             let mut child_checked = None;
             let estimate = if depth <= 0 {
                 let checking = if movement.kind() == MoveKind::Ordinary {
-                    let board = movegen::projected_board(&position, movement);
+                    let projected = position.attack_view().projected(&position, movement);
                     let king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
-                    let checking = movegen::attacked(&board, king, position.side);
+                    let checking = projected.attacked(king, position.side);
                     child_checked = Some(checking);
                     checking
                 } else {
