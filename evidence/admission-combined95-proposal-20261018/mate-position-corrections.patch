@@ -1,0 +1,57 @@
+--- a/diagnostic/src/boundary_admission.rs
++++ b/diagnostic/src/boundary_admission.rs
+@@ -184,7 +184,15 @@
+         let flags = flag_position(&json!({"side":side,"castling":if fields[2]=="-" {""} else {fields[2]},
+             "enPassant":if fields[3]=="-" {Value::Null} else {json!(fields[3])}}))?;
+         let mut position = positions::sequence_position(&format!("{} {} - - 0 1", fields[0], fields[1]), true)?;
+-        position.rights = flags.rights;
++        // The opaque-history parser's injective equality bits are not the
++        // native castling-wing representation used by actual move generation.
++        position.rights = fields[2].bytes().fold(0, |rights, flag| rights | match flag {
++            b'K' => rook2::position::WHITE_KINGSIDE,
++            b'Q' => rook2::position::WHITE_QUEENSIDE,
++            b'k' => rook2::position::BLACK_KINGSIDE,
++            b'q' => rook2::position::BLACK_QUEENSIDE,
++            _ => 0, // Canonical raw syntax was validated by flag_position above.
++        });
+         position.ep = flags.ep;
+         // No legal-history/nonmoving-king/EP-pawn-victim admission is imported.
+         // Actual legal replies are not capped at the supplied-count230 domain.
+@@ -357,7 +365,6 @@
+         let raw=MatePosition::parse(&json!({"fen":"7k/8/3N4/4P3/8/8/8/K7 w KQkq d6","searchPly":1})).unwrap();
+         assert_eq!(raw.position.rights,15);
+         assert_eq!(raw.position.ep,rook2::types::Square::parse("d6").unwrap().0);
+-        assert!(raw.position.validate().is_ok());
+         let mut actual=MoveList::new();movegen::generate_legal(&raw.position,&mut actual);
+         assert!(actual.as_slice().iter().all(|m| m.kind()!=rook2::types::MoveKind::EnPassant));
+         assert_eq!(raw.observe()["score"],0);
+@@ -366,4 +373,28 @@
+             assert!(MatePosition::parse(&json!({"fen":fen,"searchPly":1})).is_err());
+         }
+     }
+-}
++
++    #[test]
++    fn mate_position_partial_rights_preserve_native_wings_with_asymmetric_obstruction() {
++        for (fen, expected_castle) in [
++            ("3k4/8/8/8/8/8/8/RN2K2R w K -", "e1g1"),
++            ("3k4/8/8/8/8/8/8/R3K1NR w Q -", "e1c1"),
++            ("rn2k2r/8/8/8/8/8/8/3K4 b k -", "e8g8"),
++            ("r3k1nr/8/8/8/8/8/8/3K4 b q -", "e8c8"),
++        ] {
++            let parsed=MatePosition::parse(&json!({"fen":fen,"searchPly":1})).unwrap();
++            // These supported flags survive native setup; compare the full
++            // real inventory so swapping a wing cannot hide behind equal counts.
++            let reference=Position::from_fen(&format!("{fen} 0 1")).unwrap();
++            assert_eq!(parsed.position.rights, reference.rights);
++            let mut actual=MoveList::new();movegen::generate_legal(&parsed.position,&mut actual);
++            let mut expected=MoveList::new();movegen::generate_legal(&reference,&mut expected);
++            assert_eq!(actual.as_slice(),expected.as_slice());
++            let castles:Vec<_>=actual.as_slice().iter()
++                .filter(|movement|movement.kind()==rook2::types::MoveKind::Castle)
++                .map(ToString::to_string).collect();
++            assert_eq!(castles,vec![expected_castle.to_owned()]);
++            assert_eq!(parsed.observe()["legalReplies"],expected.len);
++        }
++    }
++}

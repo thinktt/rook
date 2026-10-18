@@ -6,7 +6,7 @@
 
 pub use crate::engine::Search as Quiescence;
 use crate::evaluator::{EvalStats, EvaluationStage, Node, Retained};
-use crate::history::{repetition_draw, SearchHistory};
+use crate::history::SearchHistory;
 use crate::movegen;
 #[cfg(test)]
 use crate::movegen::MoveList;
@@ -234,11 +234,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                 frame = observer.enter(&position, entry, history.previous_move(),
                     parent, node.retained, checked, entry_work);
             }
-            if repetition_draw(history.repetition_count(checked), ply, entry.analysis) {
-                return Ok(0);
-            }
-            self.learning.clear_next(ply);
-            if entry.upper <= 0 && history.short_reversal() {
+            if crate::ordinary_policy::early_draw(history,ply,checked,entry.analysis,entry.upper,&mut self.learning) {
                 return Ok(0);
             }
             if ply == PLIES - 1 {
@@ -296,7 +292,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                 self.stats.generated += count as u64;
             }
             if count == 0 {
-                return Ok(if checked { ply as i32 - 10000 } else { best });
+                return Ok(if checked { crate::ordinary_policy::mate_score(ply) } else { best });
             }
             if checked && ply as i32 - 9998 >= entry.upper {
                 return Ok(ply as i32 - 9998);

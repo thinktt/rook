@@ -13,7 +13,9 @@ use std::{
 };
 
 mod admission;
+mod boundary_admission;
 mod candidate_order;
+mod cached_entry;
 mod endgame_bounds;
 mod endings;
 mod evaluation_common;
@@ -125,6 +127,7 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         | "evaluation.endgameAdjust"
         | "evaluation.fortressBounds"
         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
+        "search.cachedAdmission" | "search.fastEntry" | "search.evaluationBounds" => cached_entry::dispatch(operation,input),
         "search.quiescenceTree" => quiescence_tree::dispatch(input),
         "evaluation.moveSequence" => move_evaluation::dispatch(input),
         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
@@ -146,6 +149,9 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         | "evaluation.minorMateGeometry"
         | "evaluation.endgameMaterialBlend"
         | "evaluation.pawnRace" => endings::dispatch(operation, input),
+        "search.drawBoundary" | "search.moveReversal" | "search.mateLeaf" | "search.mateLeafPosition" => {
+            boundary_admission::dispatch(operation, input)
+        }
         "search.nodeAdmission" | "search.historyAdmission" | "search.moveExtensions" => {
             admission::dispatch(operation, input)
         }

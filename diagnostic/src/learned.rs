@@ -99,7 +99,7 @@ fn cutoff_memory(input: &Value) -> Result<Value> {
 }
 
 #[derive(Default)]
-struct Labels {
+pub(super) struct Labels {
     groups: BTreeMap<String, usize>,
     identities: BTreeMap<String, u32>,
 }
@@ -117,7 +117,7 @@ fn label(value: &Value) -> Result<&str> {
 }
 
 impl Labels {
-    fn query(&mut self, event: &Value) -> Result<Query> {
+    pub(super) fn query(&mut self, event: &Value) -> Result<Query> {
         let group = label(&event["group"])?;
         let group = match self.groups.get(group) {
             Some(&index) => index,
@@ -149,7 +149,7 @@ impl Labels {
     }
 }
 
-fn observation(result: ProbeResult) -> Value {
+pub(super) fn observation(result: ProbeResult) -> Value {
     let bound = match result.bound {
         Bound::None => "none",
         Bound::Upper => "upper",
@@ -161,63 +161,49 @@ fn observation(result: ProbeResult) -> Value {
         "quietMateChecked":result.quiet_mate_checked})
 }
 
-fn remembered_results(input: &Value) -> Result<Value> {
-    object(input, &["events"])?;
-    let mut table = RememberedTable::with_groups(16);
-    let mut labels = Labels::default();
-    let mut observations = Vec::new();
-    for event in array(&input["events"], 1, 256)? {
+/// Parsed before any table mutation, so a suppressed stage still validates
+/// all supplied fields and the global request's label/group domain.
+pub(super) enum TableEvent { Clear, Store(Store), Probe(Query) }
+impl TableEvent {
+    pub(super) fn parse(event:&Value, labels:&mut Labels) -> Result<Self> {
         match text(&event["kind"])? {
-            "clear" => {
-                object(event, &["kind"])?;
-                table.clear();
-            }
+            "clear" => { object(event,&["kind"])?; Ok(Self::Clear) }
             "store" => {
-                object(
-                    event,
-                    &[
-                        "kind",
-                        "group",
-                        "identity",
-                        "searchPly",
-                        "targetPly",
-                        "lowerBound",
-                        "upperBound",
-                        "score",
-                        "move",
-                        "quietMateChecked",
-                        "markDepth",
-                    ],
-                )?;
-                table.store(Store {
-                    query: labels.query(event)?,
-                    score: integer(&event["score"], -10000, 10000)?,
-                    move_hint: moves::movement(&event["move"])?,
-                    quiet_mate_checked: boolean(&event["quietMateChecked"])?,
-                    mark_depth: boolean(&event["markDepth"])?,
-                });
+                object(event,&["kind","group","identity","searchPly","targetPly",
+                    "lowerBound","upperBound","score","move","quietMateChecked","markDepth"])?;
+                Ok(Self::Store(Store { query:labels.query(event)?,
+                    score:integer(&event["score"],-10000,10000)?,
+                    move_hint:moves::movement(&event["move"])?,
+                    quiet_mate_checked:boolean(&event["quietMateChecked"])?,
+                    mark_depth:boolean(&event["markDepth"])? }))
             }
             "probe" => {
-                object(
-                    event,
-                    &[
-                        "kind",
-                        "group",
-                        "identity",
-                        "searchPly",
-                        "targetPly",
-                        "lowerBound",
-                        "upperBound",
-                    ],
-                )?;
-                observations.push(observation(table.probe(labels.query(event)?)));
+                object(event,&["kind","group","identity","searchPly","targetPly","lowerBound","upperBound"])?;
+                Ok(Self::Probe(labels.query(event)?))
             }
-            _ => return Err("unknown remembered-result event".into()),
+            _ => Err("unknown remembered-result event".into()),
         }
     }
-    if observations.is_empty() {
+    pub(super) fn apply(self, table:&mut RememberedTable) -> Option<ProbeResult> {
+        match self {
+            Self::Clear => { table.clear();None }
+            Self::Store(store) => { table.store(store);None }
+            Self::Probe(query) => Some(table.probe(query)),
+        }
+    }
+}
+
+fn remembered_results(input: &Value) -> Result<Value> {
+    object(input, &["events"])?;
+    let mut labels = Labels::default();
+    let events = array(&input["events"],1,256)?.iter()
+        .map(|event| TableEvent::parse(event,&mut labels)).collect::<Result<Vec<_>>>()?;
+    if !events.iter().any(|event|matches!(event,TableEvent::Probe(_))) {
         return Err("remembered sequence requires a probe".into());
     }
+    let mut table = RememberedTable::with_groups(16);
+    let observations:Vec<_> = events.into_iter().filter_map(|event|event.apply(&mut table))
+        .map(observation).collect();
     Ok(json!({"observations":observations,"chargedSearchUnits":0,"chargedRelationQueries":0}))
 }
 

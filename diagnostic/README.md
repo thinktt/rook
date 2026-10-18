@@ -1,13 +1,14 @@
 # External diagnostic adapter
 
-This separate Rust crate implements the required JSON transport incrementally,
-calling the native `rook2` library for all specified calculations. It does not
+This separate Rust crate implements the required JSON transport incrementally
+around the native `rook2` library. Controlled supplied-input compositions also
+use shared cold arithmetic, with the FastCutoff boundary documented below. It does not
 read fixture files, recognize case IDs or contain expected answers. JSON
 parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current88 operations cover time schedule/allowance, parameters and output
+The current95 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -24,7 +25,9 @@ root material/square and raw shelter observations; score-context production;
 fresh/retained pawn structure/candidates and fresh phase/subtotals; complete
 forced-fresh subtotal/score, controlled retained full/fast sequences, actual
 move/null evaluation sequences, admitted Q entry/disposition, retained pawn
-subtotals, fixed-root search pawn sequences and actual recursive quiescence trees.
+subtotals, fixed-root search pawn sequences and actual recursive quiescence trees;
+cached admission/controlled fast entry, effective evaluation bounds,
+draw/reversal boundaries and bounded mate leaf/supplied-position leaf.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -48,18 +51,28 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current6161-case external result comprises83 complete released fixture
-files with no partial selection or duplicate cases. All133 adapter unit tests
-pass after147 native tests. Frozen adapter SHA256 is
-`e70e9cadfdea544c95c9f0575cf08471fa67c8cda42135b9b5eb0a763abebdd2`.
-See `evidence/king-first88-diagnostic-20261018/`; both the31-file frontend
+The current7393-case external result comprises89 complete released fixture
+files with no partial selection or duplicate cases. All149 adapter unit tests
+pass after151 native tests. Frozen adapter SHA256 is
+`9a968d5473e9931d1c3ebad5174f8c7cae5ceaa206d668fb8a08f90438269d00`.
+See `evidence/diagnostic-admission-combined95-02-20261018/`; both the33-file frontend
 and43-file native closure are stable and independently reconciled. Integration
 independently matches both source closures to the exact tested proposal in
-`evidence/king-first88-integration-20261018/`. This is source promotion
+`evidence/admission-combined95-integration-20261018/`. This is source promotion
 with named frozen artifacts, without a canonical-path rebuild claim. Native
 observation helpers share production arithmetic and retain state/layout/charge
 ownership. This does not transfer timing or gameplay from prior8d artifacts.
 Earlier selected-case provenance remains retained with its original attempts.
+
+Controlled fastEntry/fastCutoff share the existing cold threatened-material
+subtraction and final comparison, alongside actual native selective/admission/
+pressure/table/bound owners. They do not certify a production threat estimator,
+whole ordinary fast-entry execution or a production final-finishing kernel.
+The uncertified-hint completion gap remains unresolved. MateLeafPosition keeps
+its separate raw castling/occupied-EP domain and maps K/Q/k/q to actual native
+wing constants without normalizing away unsupported flags. ENOSPC compile01
+and exact-byte home-backed retry02 remain retained; the retry changes storage,
+not source or admitted domains.
 
 The retained first expanded attempt passed1010of1022 cases and failed12
 unsupported candidate-order requests bundled with cutoff learning. Adding the

@@ -1,0 +1,359 @@
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -647,6 +647,15 @@
+         return;
+     }
+     let safety = GenerationSafety::new(position, king, checkers);
++    // The capped predicate discards its witnesses once two replies exist.
++    // Keep complete generation in its observable order, including the EP prefix.
++    let king_early = LIMIT == 2 && checkers.len != 0;
++    if king_early {
++        pieces::<LIMIT>(position, list, &safety, PieceKind::King);
++        if list.len >= LIMIT {
++            return;
++        }
++    }
+     let pawn_start = list.len;
+     pawns::<LIMIT>(position, list, &safety);
+     if list.len >= LIMIT {
+@@ -672,6 +681,9 @@
+         PieceKind::Queen,
+         PieceKind::King,
+     ] {
++        if king_early && kind == PieceKind::King {
++            continue;
++        }
+         pieces::<LIMIT>(position, list, &safety, kind);
+         if list.len >= LIMIT {
+             return;
+@@ -876,6 +888,60 @@
+     }
+ 
+     #[test]
++    fn capped_checked_replies_keep_fixed_zero_one_and_two_king_witnesses() {
++        for (fen, full_count, capped_names) in [
++            ("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1", 0, &[][..]),
++            ("7k/7R/6K1/8/8/8/8/8 b - - 0 1", 1, &["h8g8"][..]),
++            // The knight and bishop can interpose, but two king escapes
++            // alone prove the threshold without adopting the full base order.
++            ("5n1k/8/8/5b2/8/8/8/K6R b - - 0 1", 5, &["h8g7", "h8g8"][..]),
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            assert!(in_check(&position, position.side));
++            compare_projection(&position, fen);
++            let mut full = MoveList::new();
++            let mut capped = MoveList::new();
++            generate_legal(&position, &mut full);
++            assert_eq!(full.len, full_count, "fixed legal count: {fen}");
++            assert_eq!(legal_replies_up_to_two(&position, &mut capped), full_count.min(2));
++            let names: Vec<String> = capped.as_slice().iter().map(ToString::to_string).collect();
++            let expected: Vec<String> = capped_names.iter().map(ToString::to_string).collect();
++            assert_eq!(names, expected, "fixed threshold witnesses: {fen}");
++            assert!(capped.as_slice().iter().all(|movement| full.as_slice().contains(movement)));
++            if full_count == 5 {
++                assert_eq!(full.moves[0].to_string(), "f8h7");
++                assert_ne!(capped.as_slice(), &full.as_slice()[..2]);
++            }
++        }
++    }
++
++    #[test]
++    fn capped_checked_replies_keep_sole_nonking_and_joined_ep_evasions() {
++        let fen = "7k/8/8/8/2b5/2p5/2R4r/K6r w - - 0 1";
++        let position = Position::from_fen(fen).unwrap();
++        assert!(in_check(&position, position.side));
++        compare_projection(&position, fen);
++        let mut capped = MoveList::new();
++        assert_eq!(legal_replies_up_to_two(&position, &mut capped), 1);
++        assert_eq!(capped.moves[0].to_string(), "c2c1");
++
++        // Joined EP removes a knight checker and interposes on a bishop ray.
++        // A double-check king-only shortcut would lose this legal prefix.
++        let fen = "1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1";
++        let position = Position::from_fen(fen).unwrap();
++        let king = position.piece_squares(position.side, PieceKind::King)[0];
++        assert_eq!(find_attackers::<2>(&position.board, king, position.side.opponent()).len, 2);
++        compare_projection(&position, fen);
++        let mut full = MoveList::new();
++        generate_legal(&position, &mut full);
++        assert!(full.len >= 2);
++        assert_eq!(legal_replies_up_to_two(&position, &mut capped), 2);
++        assert_eq!(capped.moves[0].to_string(), "c5d6");
++        assert_eq!(capped.moves[0].kind(), MoveKind::EnPassant);
++        assert!(capped.as_slice().iter().all(|movement| full.as_slice().contains(movement)));
++    }
++
++    #[test]
+     fn check_route_classification_separates_discovered_and_simultaneous_checks() {
+         for (fen, from, to, expected) in [
+             (
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -3,7 +3,7 @@
+ use crate::engine::Search;
+ use crate::evaluator::{EvalStats, Node};
+ use crate::first_iteration::Step;
+-use crate::history::{repetition_draw, SearchHistory};
++use crate::history::SearchHistory;
+ use crate::influence::Influence;
+ use crate::movegen::{self, MoveList};
+ use crate::ordinary_policy::{self as policy, Extensions};
+@@ -457,7 +457,7 @@
+     ) -> Result<i32, Stopped> {
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+-        if request.depth <= 0 || p == 63 || p >= self.config.maximum_depth {
++        if policy::quiescence_handoff(request.depth, p, self.config.maximum_depth) {
+             return self.visit_q(
+                 node,
+                 history,
+@@ -485,11 +485,7 @@
+         let checked = request
+             .checked
+             .unwrap_or_else(|| movegen::in_check(&position, position.side));
+-        if repetition_draw(history.repetition_count(checked), p, self.config.analysis) {
+-            return Ok(0);
+-        }
+-        self.learning.clear_next(p);
+-        if request.upper <= 0 && history.short_reversal() {
++        if policy::early_draw(history,p,checked,self.config.analysis,request.upper,&mut self.learning) {
+             return Ok(0);
+         }
+         let table = self.remembered.as_mut().unwrap();
+@@ -557,16 +553,10 @@
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+-        let (effective_lower, effective_upper) = if p as i32 <= target / 2 {
+-            (-10000, 10000)
+-        } else {
+-            (evaluation.lower, evaluation.upper)
+-        };
+-        if effective_lower >= request.upper {
+-            return Ok(effective_lower);
+-        }
+-        if effective_upper <= request.lower {
+-            return Ok(effective_upper);
++        let bounds = policy::evaluation_bounds(p as i32,target,evaluation.lower,evaluation.upper);
++        let (effective_lower,effective_upper) = (bounds.lower,bounds.upper);
++        if let Some(bound) = bounds.cutoff(request.lower,request.upper) {
++            return Ok(bound.score());
+         }
+         let current = Predecessor {
+             position: &position,
+@@ -618,7 +608,7 @@
+             self.stats.generated += count as u64;
+         }
+         if count == 0 {
+-            return Ok(if checked { p as i32 - 10000 } else { 0 });
++            return Ok(if checked { policy::mate_score(p) } else { 0 });
+         }
+         if p as i32 - 9998 >= request.upper {
+             return Ok(p as i32 - 9998);
+--- a/src/ordinary_policy.rs
++++ b/src/ordinary_policy.rs
+@@ -1,5 +1,6 @@
+ //! Native ordinary-search decisions. Callers own search/relation charges.
+ use crate::evaluation::RootContext;
++use crate::history::{repetition_draw, SearchHistory};
+ use crate::influence::{
+     adjusted_relation, profile_sum, relation, Contribution, Influence, Relation,
+ };
+@@ -12,6 +13,64 @@
+     pub adjustment: i32,
+     pub margin: i32,
+     pub adjusted_target: i32,
++}
++
++/// The caller charges entry before this ordered draw/clearing boundary.
++/// A mate leaf supplies upper=0 when reversal is unconditional.
++#[inline]
++pub fn early_draw(
++    history:&SearchHistory, ply:usize, checked:bool, analysis:i32, upper:i32, learning:&mut Learning,
++) -> bool {
++    if repetition_draw(history.repetition_count(checked),ply,analysis) { return true; }
++    learning.clear_next(ply);
++    upper <= 0 && history.short_reversal()
++}
++
++/// The ordinary caller supplies its original remaining depth and current ply.
++/// This gate runs before either ordinary or tactical entry charges a visit.
++#[inline]
++pub fn quiescence_handoff(depth: i32, ply: usize, maximum_depth: usize) -> bool {
++    depth <= 0 || ply == 63 || ply >= maximum_depth
++}
++
++/// Shared terminal score for a checked node without legal replies.
++#[inline]
++pub fn mate_score(ply: usize) -> i32 { ply as i32 - 10000 }
++
++/// SEARCH-MATE-LEAF component owner; this is not a full mate-search engine.
++/// The caller admits a reached target/final ply and charges its single entry.
++/// The legal-count dependency is requested only after all earlier returns.
++#[inline]
++pub fn mate_leaf<F: FnOnce() -> usize>(
++    history: &SearchHistory, ply: usize, checked: bool, analysis: i32,
++    learning: &mut Learning, legal_reply_count: F,
++) -> i32 {
++    if early_draw(history, ply, checked, analysis, 0, learning) { return 0; }
++    if ply == 63 || !checked { return 0; }
++    if legal_reply_count() == 0 { mate_score(ply) } else { 0 }
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct EvaluationBounds { pub lower:i32, pub upper:i32 }
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum EvaluationBoundReturn { Lower(i32), Upper(i32) }
++impl EvaluationBoundReturn {
++    #[inline]
++    pub fn score(self) -> i32 { match self { Self::Lower(score)|Self::Upper(score)=>score } }
++}
++impl EvaluationBounds {
++    #[inline]
++    pub fn cutoff(self, alpha:i32, beta:i32) -> Option<EvaluationBoundReturn> {
++        if self.lower >= beta { Some(EvaluationBoundReturn::Lower(self.lower)) }
++        else if self.upper <= alpha { Some(EvaluationBoundReturn::Upper(self.upper)) }
++        else { None }
++    }
++}
++/// These effective endpoints also initialize/clamp the later candidate search.
++#[inline]
++pub fn evaluation_bounds(ply:i32, target:i32, lower:i32, upper:i32) -> EvaluationBounds {
++    let (lower,upper) = if ply <= target/2 { (-10000,10000) } else { (lower,upper) };
++    EvaluationBounds { lower,upper }
+ }
+ 
+ pub fn selective_depth(
+@@ -610,4 +669,98 @@
+         assert_eq!(result.queries, 2);
+         assert!(result.value >= 600);
+     }
+-}
++
++    #[test]
++    fn shared_early_draw_preserves_repetition_exception_clearing_and_null_reversal_order() {
++        let bare = || Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        let mv = |from:&str,to:&str| Move::new(Square::parse(from).unwrap(),Square::parse(to).unwrap(),MoveKind::Ordinary);
++        let hint = mv("a1","b1");
++        // A twofold match across the pre-root boundary is admitted with ana!=0
++        // at ply1, clearing next preferences; ana0 returns before that clear.
++        let mut position = bare();position.primary=1;
++        let mut history = SearchHistory::new(&position);
++        for index in 1..=3 { position.primary=index+1;history.push(&position,None); }
++        history.mark_root();position.primary=1;position.halfmove=4;history.push(&position,None);
++        assert_eq!(history.repetition_count(false),2);
++        let mut learning = Learning::default();learning.killers[2]=[hint,Move::NONE];
++        assert!(early_draw(&history,1,false,0,1,&mut learning));
++        assert_eq!(learning.killers[2][0],hint);
++        assert!(!early_draw(&history,1,false,1,1,&mut learning));
++        assert_eq!(learning.killers[2],[Move::NONE;2]);
++        // Supplied endpoints can form a reversal independently of placement.
++        for (earlier,current,cycle) in [(Some(mv("g1","f3")),Some(mv("f3","g1")),true),
++            (None,Some(mv("f3","g1")),false),(Some(mv("g1","f3")),None,false),(None,None,false)]
++        {
++            let mut position=bare();let mut history=SearchHistory::new(&position);
++            history.push(&position,earlier);history.push(&position,None);
++            position.halfmove=3;history.push(&position,current);
++            assert_eq!(history.short_reversal(),cycle);
++            for upper in [-1,0,1] {
++                let mut learning=Learning::default();learning.killers[4]=[hint,Move::NONE];
++                learning.killers[64]=[hint,Move::NONE];
++                assert_eq!(early_draw(&history,3,false,0,upper,&mut learning),cycle && upper<=0);
++                assert_eq!(learning.killers[4],[Move::NONE;2]);
++                assert_eq!(learning.killers[64][0],hint);
++            }
++        }
++    }
++
++    #[test]
++    fn effective_evaluation_bounds_use_absolute_floor_threshold_and_lower_priority_even_when_crossed() {
++        for (ply,target) in [(4,8),(4,9)] {
++            let bounds=evaluation_bounds(ply,target,10000,-10000);
++            assert_eq!((bounds.lower,bounds.upper),(-10000,10000));
++            assert_eq!(bounds.cutoff(-1,0),None);
++        }
++        let bounds=evaluation_bounds(5,9,10,-10);
++        assert_eq!(bounds.cutoff(-1,1),Some(EvaluationBoundReturn::Lower(10)));
++        assert_eq!(evaluation_bounds(5,9,0,100).cutoff(-1,0),Some(EvaluationBoundReturn::Lower(0)));
++        assert_eq!(evaluation_bounds(5,9,-100,0).cutoff(0,1),Some(EvaluationBoundReturn::Upper(0)));
++        assert_eq!(evaluation_bounds(5,9,-1,1).cutoff(-1,1),None);
++    }
++
++
++    #[test]
++    fn shared_handoff_uses_remaining_depth_and_original_scalar_boundaries() {
++        for (depth,ply,maximum,expected) in [(0,1,99,true),(-1,1,99,true),
++            (1,62,99,false),(1,63,99,true),(1,1,1,true),(1,1,0,true),(1,1,2,false)] {
++            assert_eq!(quiescence_handoff(depth,ply,maximum),expected);
++        }
++        assert_eq!(mate_score(1),-9999);assert_eq!(mate_score(62),-9938);
++    }
++
++    #[test]
++    fn mate_leaf_orders_repetition_clearing_reversal_ceiling_and_lazy_replies() {
++        let bare=|| Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        let make=|ply:usize,cycle:bool| {
++            let mut position=bare();let mut history=SearchHistory::new(&position);
++            for index in 1..=ply {
++                position.primary=index as u32;
++                position.halfmove=if index==ply && cycle {3} else {0};
++                let arrival=if cycle && index==ply {Some(movement("b1","a1"))}
++                    else if cycle && index+2==ply {Some(movement("a1","b1"))} else {None};
++                history.push(&position,arrival);
++            }
++            history
++        };
++        let hint=movement("a1","b1");
++        for (ply,checked,cycle,replies,score,queries) in [(62,true,false,0,-9938,1),
++            (62,true,false,230,0,1),(62,false,false,0,0,0),(63,true,false,0,0,0),
++            (3,true,true,0,0,0)] {
++            let mut learning=Learning::default();learning.killers[ply+1]=[hint,Move::NONE];
++            learning.killers[1]=[hint,Move::NONE];let mut asked=0;
++            let observed=mate_leaf(&make(ply,cycle),ply,checked,0,&mut learning,|| {asked+=1;replies});
++            assert_eq!((observed,asked),(score,queries));
++            assert_eq!(learning.killers[ply+1],[Move::NONE;2]);assert_eq!(learning.killers[1][0],hint);
++        }
++        // A pre-root repetition returns before clearing and before dependency.
++        let mut position=bare();position.primary=0;let mut history=SearchHistory::new(&position);
++        for index in 1..=3 {position.primary=index;history.push(&position,None);}
++        history.mark_root();position.primary=0;position.halfmove=4;history.push(&position,None);
++        let mut learning=Learning::default();learning.killers[2]=[hint,Move::NONE];
++        assert_eq!(mate_leaf(&history,1,true,0,&mut learning,|| panic!("early draw queried replies")),0);
++        assert_eq!(learning.killers[2][0],hint);
++        assert_eq!(mate_leaf(&history,1,true,1,&mut learning,|| 0),-9999);
++        assert_eq!(learning.killers[2],[Move::NONE;2]);
++    }
++}
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -6,7 +6,7 @@
+ 
+ pub use crate::engine::Search as Quiescence;
+ use crate::evaluator::{EvalStats, EvaluationStage, Node, Retained};
+-use crate::history::{repetition_draw, SearchHistory};
++use crate::history::SearchHistory;
+ use crate::movegen;
+ #[cfg(test)]
+ use crate::movegen::MoveList;
+@@ -234,11 +234,7 @@
+                 frame = observer.enter(&position, entry, history.previous_move(),
+                     parent, node.retained, checked, entry_work);
+             }
+-            if repetition_draw(history.repetition_count(checked), ply, entry.analysis) {
+-                return Ok(0);
+-            }
+-            self.learning.clear_next(ply);
+-            if entry.upper <= 0 && history.short_reversal() {
++            if crate::ordinary_policy::early_draw(history,ply,checked,entry.analysis,entry.upper,&mut self.learning) {
+                 return Ok(0);
+             }
+             if ply == PLIES - 1 {
+@@ -296,7 +292,7 @@
+                 self.stats.generated += count as u64;
+             }
+             if count == 0 {
+-                return Ok(if checked { ply as i32 - 10000 } else { best });
++                return Ok(if checked { crate::ordinary_policy::mate_score(ply) } else { best });
+             }
+             if checked && ply as i32 - 9998 >= entry.upper {
+                 return Ok(ply as i32 - 9998);

@@ -1,0 +1,1100 @@
+--- a/diagnostic/src/admission.rs
++++ b/diagnostic/src/admission.rs
+@@ -33,11 +33,16 @@
+ }
+ 
+ fn killers(value: &Value) -> Result<Learning> {
++    parse_killers(value, 63)
++}
++
++/// Cold schema capacity is chosen by the consumer; older admission stays63.
++pub(super) fn parse_killers(value: &Value, maximum: usize) -> Result<Learning> {
+     let mut learning = Learning::default();
+-    let mut seen = [false; 64];
+-    for entry in array(value, 0, 63)? {
++    let mut seen = [false; 65];
++    for entry in array(value, 0, maximum)? {
+         object(entry, &["ply", "moves"])?;
+-        let ply = integer(&entry["ply"], 1, 63)? as usize;
++        let ply = integer(&entry["ply"], 1, maximum as i32)? as usize;
+         if seen[ply] {
+             return Err("duplicate killer ply".into());
+         }
+@@ -62,22 +67,26 @@
+     if !draw {
+         learning.clear_next(history.search_ply());
+     }
+-    let mut pairs = Vec::new();
+-    for ply in 1..=63 {
+-        let pair = learning.killers[ply];
+-        if pair != [Move::NONE; 2] {
+-            pairs.push(
+-                json!({"ply":ply,"moves":[moves::descriptor(pair[0]),moves::descriptor(pair[1])]}),
+-            );
+-        }
+-    }
++    let pairs = killers_output(&learning, 63);
+     // The diagnostic executes exactly one admission stage, including its
+     // unconditional visit charge. History replay is outside that stage.
+     json!({"repetitionCount":count,"outcome":if draw {"draw"} else {"continue"},
+            "chargedSearchUnits":1,"killers":pairs})
+ }
+ 
+-fn opaque_position(value: &Value, labels: &mut BTreeMap<String, u32>) -> Result<Position> {
++/// Formatting only; preserve native pair order, omit empty pairs and sort plies.
++pub(super) fn killers_output(learning: &Learning, maximum: usize) -> Value {
++    let mut pairs = Vec::new();
++    for ply in 1..=maximum {
++        let pair = learning.killers[ply];
++        if pair != [Move::NONE; 2] {
++            pairs.push(json!({"ply":ply,"moves":[moves::descriptor(pair[0]),moves::descriptor(pair[1])]}));
++        }
++    }
++    json!(pairs)
++}
++
++pub(super) fn opaque_position(value: &Value, labels: &mut BTreeMap<String, u32>) -> Result<Position> {
+     object(value, &["identity", "side", "castling", "enPassant"])?;
+     let label = text(&value["identity"])?;
+     if !(1..=32).contains(&label.len())
+--- /dev/null
++++ b/diagnostic/src/boundary_admission.rs
+@@ -0,0 +1,400 @@
++//! Cold exact boundary/mate schemas; query producers remain native owners.
++use super::{admission, array, boolean, integer, moves, object, positions, text, Result};
++use rook2::{history::SearchHistory, ordinary_policy::{self as policy, Learning}, movegen::{self, MoveList}, position::Position, types::Move};
++use serde_json::{json, Value};
++use std::collections::BTreeMap;
++
++struct Context {
++    ply: usize,
++    pre_root: usize,
++    checked: bool,
++    analysis: i32,
++    prior: Vec<Position>,
++    current: Position,
++    current_move: Option<Move>,
++    earlier_move: Option<Move>,
++    learning: Learning,
++}
++
++impl Context {
++    // Caller validates the exact operation object before shared field parsing.
++    fn parse(input: &Value) -> Result<Self> {
++        let ply = integer(&input["searchPly"], 1, 63)? as usize;
++        let pre_root = integer(&input["preRootLength"], 0, 512)? as usize;
++        let halfmove = integer(&input["halfmoveClock"], 0, 255)? as u8;
++        let checked = boolean(&input["inCheck"])?;
++        let analysis = integer(&input["analysis"], i32::MIN, i32::MAX)?;
++        let current_move = moves::movement(&input["currentMove"])?;
++        let earlier_move = moves::movement(&input["earlierMove"])?;
++        let learning = admission::parse_killers(&input["killers"], 64)?;
++        let mut labels = BTreeMap::new();
++        let prior = array(&input["prior"], pre_root + ply, pre_root + ply)?.iter()
++            .map(|state| admission::opaque_position(state, &mut labels)).collect::<Result<Vec<_>>>()?;
++        let mut current = admission::opaque_position(&input["current"], &mut labels)?;
++        current.halfmove = halfmove;
++        Ok(Self { ply, pre_root, checked, analysis, prior, current, current_move, earlier_move, learning })
++    }
++
++    fn history(&self) -> SearchHistory {
++        let mut history = SearchHistory::new(&self.prior[0]);
++        let earlier_index = (self.ply >= 3).then(|| self.pre_root + self.ply - 2);
++        for (index, position) in self.prior.iter().enumerate().skip(1) {
++            let arrival = if Some(index) == earlier_index { self.earlier_move } else { None };
++            history.push(position, arrival);
++            if index == self.pre_root { history.mark_root(); }
++        }
++        history.push(&self.current, self.current_move);
++        debug_assert_eq!((history.search_ply(), history.pre_root_len()), (self.ply, self.pre_root));
++        history
++    }
++}
++
++#[derive(Clone, Copy)]
++enum Mode { Full, Quiescence, MateInterior }
++impl Mode {
++    fn name(self) -> &'static str {
++        match self { Self::Full => "full", Self::Quiescence => "quiescence", Self::MateInterior => "mateInterior" }
++    }
++    fn parse(value: &Value) -> Result<Self> {
++        match text(value)? {
++            "full" => Ok(Self::Full), "quiescence" => Ok(Self::Quiescence),
++            "mateInterior" => Ok(Self::MateInterior), _ => Err("invalid draw-boundary mode".into()),
++        }
++    }
++}
++
++struct Draw {
++    context: Context,
++    mode: Mode,
++    target: i32,
++    maximum: usize,
++    upper: i32,
++}
++impl Draw {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["mode", "searchPly", "targetPly", "maximumDepth", "upperBound", "preRootLength", "halfmoveClock", "inCheck", "analysis", "prior", "current", "currentMove", "earlierMove", "killers"])?;
++        let mode = Mode::parse(&input["mode"])?;
++        let target = integer(&input["targetPly"], 0, 64)?;
++        let maximum = integer(&input["maximumDepth"], 0, 99)? as usize;
++        let upper = integer(&input["upperBound"], -10000, 10000)?;
++        let context = Context::parse(input)?;
++        if matches!(mode, Mode::MateInterior) && (context.ply == 63 || target <= context.ply as i32) {
++            return Err("mateInterior must precede its target and final active ply".into());
++        }
++        Ok(Self { context, mode, target, maximum, upper })
++    }
++
++    fn observe(mut self) -> Value {
++        let history = self.context.history();
++        let count = history.repetition_count(self.context.checked);
++        let cycle = history.short_reversal();
++        let effective = if matches!(self.mode, Mode::Full)
++            && policy::quiescence_handoff(self.target - self.context.ply as i32, self.context.ply, self.maximum)
++            { Mode::Quiescence } else { self.mode };
++        let draw = policy::early_draw(&history, self.context.ply, self.context.checked,
++            self.context.analysis, self.upper, &mut self.context.learning);
++        json!({"repetitionCount":count,"isCycle":cycle,"outcome":if draw {"draw"} else {"continue"},
++            "continuationMode":if draw {Value::Null} else {json!(effective.name())},
++            "chargedSearchUnits":1,"killers":admission::killers_output(&self.context.learning,64)})
++    }
++}
++
++struct MateLeaf {
++    context: Context,
++    replies: usize,
++}
++impl MateLeaf {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["searchPly", "targetPly", "preRootLength", "halfmoveClock", "inCheck", "analysis", "prior", "current", "currentMove", "earlierMove", "killers", "legalReplyCount"])?;
++        let target = integer(&input["targetPly"], 0, 64)?;
++        let replies = integer(&input["legalReplyCount"], 0, 230)? as usize;
++        let context = Context::parse(input)?;
++        if context.ply < 63 && (context.ply as i32) < target {
++            return Err("mateLeaf entry must reach its target or final active ply".into());
++        }
++        Ok(Self { context, replies })
++    }
++
++    fn observe(mut self) -> Value {
++        let history = self.context.history();
++        let count = history.repetition_count(self.context.checked);
++        let cycle = history.short_reversal();
++        let mut queries = 0;
++        let replies = self.replies;
++        let score = policy::mate_leaf(&history, self.context.ply, self.context.checked,
++            self.context.analysis, &mut self.context.learning, || { queries += 1; replies });
++        json!({"repetitionCount":count,"isCycle":cycle,"score":score,"replyQueries":queries,
++            "chargedSearchUnits":1,"killers":admission::killers_output(&self.context.learning,64)})
++    }
++}
++
++fn flag_position(value: &Value) -> Result<Position> {
++    object(value, &["side", "castling", "enPassant"])?;
++    let mut full = value.clone();
++    full["identity"] = json!("flags");
++    admission::opaque_position(&full, &mut BTreeMap::new())
++}
++
++struct Reversal {
++    ply: usize,
++    current: Position,
++    baseline: Position,
++    current_move: Option<Move>,
++    earlier_move: Option<Move>,
++}
++impl Reversal {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["searchPly", "halfmoveClock", "currentMove", "earlierMove", "current", "baseline"])?;
++        let ply = integer(&input["searchPly"], 0, 63)? as usize;
++        let halfmove = integer(&input["halfmoveClock"], 0, 255)? as u8;
++        let current_move = moves::movement(&input["currentMove"])?;
++        let earlier_move = moves::movement(&input["earlierMove"])?;
++        let mut current = flag_position(&input["current"])?;
++        let baseline = flag_position(&input["baseline"])?;
++        current.halfmove = halfmove;
++        Ok(Self { ply, current, baseline, current_move, earlier_move })
++    }
++
++    fn observe(self) -> Value {
++        let initial = if self.ply == 0 { &self.current } else { &self.baseline };
++        let mut history = SearchHistory::new(initial);
++        for ply in 1..=self.ply {
++            let (position, arrival) = if ply == self.ply { (&self.current, self.current_move) }
++                else if self.ply >= 3 && ply == self.ply - 2 { (&self.baseline, self.earlier_move) }
++                else { (&self.baseline, None) };
++            history.push(position, arrival);
++        }
++        json!({"isCycle":history.short_reversal(),"chargedSearchUnits":0})
++    }
++}
++
++struct MatePosition { position: Position, ply: usize }
++impl MatePosition {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["fen", "searchPly"])?;
++        let ply = integer(&input["searchPly"], 1, 63)? as usize;
++        let fen = text(&input["fen"])?;
++        let fields: Vec<_> = fen.split_whitespace().collect();
++        if fields.len() != 4 { return Err("mateLeafPosition needs exactly four FEN fields".into()); }
++        let side = match fields[1] { "w" => "white", "b" => "black", _ => return Err("invalid FEN side".into()) };
++        // This component permits raw flags, including an occupied EP target.
++        // Parse them exactly, produce placement with native neutral setup, and
++        // restore the supplied native flags without importing setup's narrower
++        // empty-target domain or its normalization of unsupported requests.
++        let flags = flag_position(&json!({"side":side,"castling":if fields[2]=="-" {""} else {fields[2]},
++            "enPassant":if fields[3]=="-" {Value::Null} else {json!(fields[3])}}))?;
++        let mut position = positions::sequence_position(&format!("{} {} - - 0 1", fields[0], fields[1]), true)?;
++        // The opaque-history parser's injective equality bits are not the
++        // native castling-wing representation used by actual move generation.
++        position.rights = fields[2].bytes().fold(0, |rights, flag| rights | match flag {
++            b'K' => rook2::position::WHITE_KINGSIDE,
++            b'Q' => rook2::position::WHITE_QUEENSIDE,
++            b'k' => rook2::position::BLACK_KINGSIDE,
++            b'q' => rook2::position::BLACK_QUEENSIDE,
++            _ => 0, // Canonical raw syntax was validated by flag_position above.
++        });
++        position.ep = flags.ep;
++        // No legal-history/nonmoving-king/EP-pawn-victim admission is imported.
++        // Actual legal replies are not capped at the supplied-count230 domain.
++        Ok(Self { position, ply })
++    }
++}
++
++impl MatePosition {
++    fn observe(self) -> Value {
++        let checked = movegen::in_check(&self.position, self.position.side);
++        let mut replies = MoveList::new();
++        movegen::generate_legal(&self.position, &mut replies);
++        // The full legal count is auxiliary, including when the leaf skips its
++        // dependency. No extra search entry is charged for this observation.
++        let mut history = SearchHistory::new(&self.position);
++        for _ in 0..self.ply { history.push(&self.position, None); }
++        let score = policy::mate_leaf(&history, self.ply, checked, 0,
++            &mut Learning::default(), || replies.len);
++        json!({"inCheck":checked,"legalReplies":replies.len,"score":score,"chargedSearchUnits":1})
++    }
++}
++
++pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
++    // Every operation parses the whole request before any query or mutation.
++    match operation {
++        "search.drawBoundary" => Ok(Draw::parse(input)?.observe()),
++        "search.moveReversal" => Ok(Reversal::parse(input)?.observe()),
++        "search.mateLeaf" => Ok(MateLeaf::parse(input)?.observe()),
++        "search.mateLeafPosition" => Ok(MatePosition::parse(input)?.observe()),
++        _ => Err("unknown boundary-admission operation".into()),
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn state(identity: &str) -> Value {
++        json!({"identity":identity,"side":"white","castling":"","enPassant":null})
++    }
++    fn remembered(coordinates: &str) -> Value { json!({"move":coordinates,"kind":"ordinary"}) }
++    fn leaf(ply: usize, pre: usize) -> Value {
++        let prior: Vec<_> = (0..pre+ply).map(|index| state(&format!("p{index}"))).collect();
++        json!({"searchPly":ply,"targetPly":ply,"preRootLength":pre,"halfmoveClock":0,
++            "inCheck":true,"analysis":0,"prior":prior,"current":state("current"),
++            "currentMove":null,"earlierMove":null,"killers":[],"legalReplyCount":0})
++    }
++    fn draw(ply: usize, pre: usize) -> Value {
++        let mut value = leaf(ply,pre);
++        value.as_object_mut().unwrap().remove("legalReplyCount");
++        value["mode"]=json!("full");value["maximumDepth"]=json!(99);value["upperBound"]=json!(1);
++        value
++    }
++    fn preferences(ply: usize) -> Value {
++        json!([{"ply":ply,"moves":[remembered("a1b1"),null]}])
++    }
++
++    #[test]
++    fn exact_schemas_validate_ignored_fields_and_boundary_capacities_before_work() {
++        let mut value=draw(1,0);value["mode"]=json!("quiescence");
++        value["maximumDepth"]=json!(100);assert!(Draw::parse(&value).is_err());
++        value["maximumDepth"]=json!(0);value["earlierMove"]=json!({"move":"a1a1","kind":"ordinary"});
++        assert!(Draw::parse(&value).is_err());
++        value["earlierMove"]=Value::Null;value["extra"]=json!(0);assert!(Draw::parse(&value).is_err());
++        let mut value=leaf(63,0);value["legalReplyCount"]=json!(231);
++        assert!(MateLeaf::parse(&value).is_err()); // validated even though ceiling skips it
++        value["legalReplyCount"]=json!(230);value["killers"]=preferences(64);
++        assert!(MateLeaf::parse(&value).is_ok());
++        let duplicate=value["killers"][0].clone();value["killers"].as_array_mut().unwrap().push(duplicate);
++        assert!(MateLeaf::parse(&value).is_err());
++        let mut value=draw(3,0);value["mode"]=json!("mateInterior");
++        assert!(Draw::parse(&value).is_err());value["targetPly"]=json!(4);
++        value["maximumDepth"]=json!(0);assert!(Draw::parse(&value).is_ok());
++        let mut value=leaf(1,0);value["targetPly"]=json!(2);assert!(MateLeaf::parse(&value).is_err());
++    }
++
++    #[test]
++    fn root_offset_places_reversal_arrivals_and_baseline_at_native_indices() {
++        for pre in [0,5,512] {
++            let mut value=leaf(3,pre);value["halfmoveClock"]=json!(3);
++            value["currentMove"]=remembered("b1a1");value["earlierMove"]=remembered("a1b1");
++            let context=Context::parse(&value).unwrap();let history=context.history();
++            assert_eq!((history.search_ply(),history.pre_root_len()),(3,pre));
++            assert!(history.short_reversal());
++            // Baseline is root (not the preceding pre-root boundary or ply1).
++            value["prior"][pre]["castling"]=json!("K");
++            assert!(!Context::parse(&value).unwrap().history().short_reversal());
++        }
++        for ply in [1,2] {
++            let context=Context::parse(&leaf(ply,0)).unwrap();
++            assert_eq!(context.history().search_ply(),ply);
++        }
++    }
++
++    #[test]
++    fn admission_preserves_repetition_preferences_but_clears_on_guarded_reversal_and_handoff() {
++        let mut value=draw(1,3);value["current"]=state("p0");value["halfmoveClock"]=json!(4);
++        value["killers"]=preferences(2);
++        let observed=Draw::parse(&value).unwrap().observe();
++        assert_eq!(observed["repetitionCount"],2);assert_eq!(observed["outcome"],"draw");
++        assert_eq!(observed["killers"],value["killers"]);
++        value["analysis"]=json!(1);
++        let observed=Draw::parse(&value).unwrap().observe();
++        assert_eq!(observed["outcome"],"continue");assert_eq!(observed["continuationMode"],"quiescence");
++        assert_eq!(observed["killers"],json!([]));
++        let mut value=draw(3,0);value["targetPly"]=json!(4);value["halfmoveClock"]=json!(3);
++        value["currentMove"]=remembered("b1a1");value["earlierMove"]=remembered("a1b1");
++        value["killers"]=preferences(4);
++        for (upper,outcome) in [(1,"continue"),(0,"draw"),(-1,"draw")] {
++            value["upperBound"]=json!(upper);
++            let observed=Draw::parse(&value).unwrap().observe();
++            assert_eq!(observed["isCycle"],true);assert_eq!(observed["outcome"],outcome);
++            assert_eq!(observed["killers"],json!([]));assert_eq!(observed["chargedSearchUnits"],1);
++        }
++        value["upperBound"]=json!(-1);value["currentMove"]=Value::Null;value["earlierMove"]=Value::Null;
++        value["targetPly"]=json!(3);
++        let observed=Draw::parse(&value).unwrap().observe();
++        assert_eq!(observed["isCycle"],false);assert_eq!(observed["outcome"],"continue");
++        assert_eq!(observed["continuationMode"],"quiescence");
++    }
++
++    #[test]
++    fn supplied_mate_count_is_lazy_and_final_ply_clears_pair64() {
++        for (ply,checked,replies,score,queries) in [(62,true,0,-9938,1),(62,true,1,0,1),
++            (62,false,0,0,0),(63,true,0,0,0)] {
++            let mut value=leaf(ply,0);value["inCheck"]=json!(checked);value["legalReplyCount"]=json!(replies);
++            value["killers"]=preferences(ply+1);
++            let observed=MateLeaf::parse(&value).unwrap().observe();
++            assert_eq!(observed["score"],score);assert_eq!(observed["replyQueries"],queries);
++            assert_eq!(observed["killers"],json!([]));assert_eq!(observed["chargedSearchUnits"],1);
++        }
++        let mut value=leaf(3,0);value["halfmoveClock"]=json!(3);
++        value["currentMove"]=remembered("b1a1");value["earlierMove"]=remembered("a1b1");
++        let observed=MateLeaf::parse(&value).unwrap().observe();
++        assert_eq!(observed["score"],0);assert_eq!(observed["replyQueries"],0);
++        value["currentMove"]=Value::Null;value["earlierMove"]=Value::Null;
++        let observed=MateLeaf::parse(&value).unwrap().observe();
++        assert_eq!(observed["isCycle"],false);assert_eq!(observed["score"],-9997);
++        assert_eq!(observed["replyQueries"],1);
++    }
++
++    #[test]
++    fn standalone_reversal_validates_even_below_guard_and_ignores_side_kind_promotion() {
++        let mut value=json!({"searchPly":3,"halfmoveClock":3,
++            "currentMove":{"move":"a1b1q","kind":"ordinary"},
++            "earlierMove":{"move":"b1a1","kind":"castle"},
++            "current":{"side":"white","castling":"Kq","enPassant":"d6"},
++            "baseline":{"side":"black","castling":"Kq","enPassant":"d6"}});
++        assert_eq!(Reversal::parse(&value).unwrap().observe()["isCycle"],true);
++        value["searchPly"]=json!(0);value["baseline"]["castling"]=json!("qK");
++        assert!(Reversal::parse(&value).is_err());
++        value["baseline"]["castling"]=json!("Kq");value["currentMove"]=Value::Null;
++        value["earlierMove"]=Value::Null;value["searchPly"]=json!(3);
++        assert_eq!(Reversal::parse(&value).unwrap().observe()["isCycle"],false);
++    }
++
++    #[test]
++    fn mate_position_uses_actual_replies_broad_setup_and_ceiling_before_checkmate() {
++        let fen="7k/6Q1/5K2/8/8/8/8/8 b - -";
++        for (ply,score) in [(62,-9938),(63,0)] {
++            let observed=MatePosition::parse(&json!({"fen":fen,"searchPly":ply})).unwrap().observe();
++            assert_eq!(observed["inCheck"],true);assert_eq!(observed["legalReplies"],0);
++            assert_eq!(observed["score"],score);assert_eq!(observed["chargedSearchUnits"],1);
++        }
++        for fen in ["7k/8/8/8/8/8/8/K6R w - -", "7k/8/8/3nP3/8/8/8/K7 w - d6"] {
++            assert!(MatePosition::parse(&json!({"fen":fen,"searchPly":1})).is_ok());
++        }
++        // Occupied EP and unsupported raw rights are permitted by this
++        // contract; they must reach native generation instead of setup reject.
++        let raw=MatePosition::parse(&json!({"fen":"7k/8/3N4/4P3/8/8/8/K7 w KQkq d6","searchPly":1})).unwrap();
++        assert_eq!(raw.position.rights,15);
++        assert_eq!(raw.position.ep,rook2::types::Square::parse("d6").unwrap().0);
++        let mut actual=MoveList::new();movegen::generate_legal(&raw.position,&mut actual);
++        assert!(actual.as_slice().iter().all(|m| m.kind()!=rook2::types::MoveKind::EnPassant));
++        assert_eq!(raw.observe()["score"],0);
++        for fen in ["7k/8/8/8/8/8/8/K7 w qK -", "7k/8/8/8/8/8/8/K7 w - d4",
++            "7k/8/8/8/8/8/8/K7 w - - 0 1", "7k/8/8/8/8/8/8/K6P w - -"] {
++            assert!(MatePosition::parse(&json!({"fen":fen,"searchPly":1})).is_err());
++        }
++    }
++
++    #[test]
++    fn mate_position_partial_rights_preserve_native_wings_with_asymmetric_obstruction() {
++        for (fen, expected_castle) in [
++            ("3k4/8/8/8/8/8/8/RN2K2R w K -", "e1g1"),
++            ("3k4/8/8/8/8/8/8/R3K1NR w Q -", "e1c1"),
++            ("rn2k2r/8/8/8/8/8/8/3K4 b k -", "e8g8"),
++            ("r3k1nr/8/8/8/8/8/8/3K4 b q -", "e8c8"),
++        ] {
++            let parsed=MatePosition::parse(&json!({"fen":fen,"searchPly":1})).unwrap();
++            // These supported flags survive native setup; compare the full
++            // real inventory so swapping a wing cannot hide behind equal counts.
++            let reference=Position::from_fen(&format!("{fen} 0 1")).unwrap();
++            assert_eq!(parsed.position.rights, reference.rights);
++            let mut actual=MoveList::new();movegen::generate_legal(&parsed.position,&mut actual);
++            let mut expected=MoveList::new();movegen::generate_legal(&reference,&mut expected);
++            assert_eq!(actual.as_slice(),expected.as_slice());
++            let castles:Vec<_>=actual.as_slice().iter()
++                .filter(|movement|movement.kind()==rook2::types::MoveKind::Castle)
++                .map(ToString::to_string).collect();
++            assert_eq!(castles,vec![expected_castle.to_owned()]);
++            assert_eq!(parsed.observe()["legalReplies"],expected.len);
++        }
++    }
++}
+--- /dev/null
++++ b/diagnostic/src/cached_entry.rs
+@@ -0,0 +1,351 @@
++//! Cold composition of native admission, result-table and supplied-score owners.
++//! Parse complete requests before any semantic gate or mutable table operation.
++use super::{admission, array, boolean, integer, learned::{self, Labels, TableEvent},
++    moves, object, supplied::{self, FastCutoff, FastCutoffResult}, text, Result};
++use rook2::{history::SearchHistory, ordinary_policy::{self, EvaluationBoundReturn, Learning},
++    position::Position, remembered::{Query, RememberedTable, Store}, types::{Move, MoveKind}};
++use serde_json::{json, Value};
++use std::collections::BTreeMap;
++
++struct CachedEntry {
++    history:SearchHistory, learning:Learning, checked:bool, analysis:i32, ply:usize,
++    query:Query, setup:Vec<TableEvent>, followup:Vec<Query>,
++}
++impl CachedEntry {
++    fn parse(input:&Value) -> Result<Self> {
++        object(input,&["context","setup","group","identity","followup"])?;
++        let context=&input["context"];
++        object(context,&["mode","searchPly","targetPly","maximumDepth","upperBound","lowerBound",
++            "preRootLength","halfmoveClock","inCheck","analysis","prior","current",
++            "currentMove","earlierMove","killers"])?;
++        let ply=integer(&context["searchPly"],1,62)? as usize;
++        let target=integer(&context["targetPly"],ply as i32+1,64)?;
++        let maximum=integer(&context["maximumDepth"],0,99)?;
++        match text(&context["mode"])? {
++            "full" if (ply as i32)<maximum => {},
++            "mateInterior" => {},
++            _ => return Err("requires non-frontier full or interior mate context".into()),
++        }
++        let pre_root=integer(&context["preRootLength"],0,512)? as usize;
++        let halfmove=integer(&context["halfmoveClock"],0,255)? as u8;
++        let checked=boolean(&context["inCheck"])?;
++        let analysis=integer(&context["analysis"],i32::MIN,i32::MAX)?;
++        let current_move=moves::movement(&context["currentMove"])?;
++        let earlier_move=moves::movement(&context["earlierMove"])?;
++        let learning=admission::parse_killers(&context["killers"],64)?;
++        // Repetition equality is independent from all result-table labels.
++        let mut identities=BTreeMap::new();
++        let prior=array(&context["prior"],pre_root+ply,pre_root+ply)?;
++        let mut history=SearchHistory::new(&admission::opaque_position(&prior[0],&mut identities)?);
++        for (index,state) in prior.iter().enumerate().skip(1) {
++            let arrival=if ply>=3 && index==pre_root+ply-2 { earlier_move } else { None };
++            history.push(&admission::opaque_position(state,&mut identities)?,arrival);
++            if index==pre_root { history.mark_root(); }
++        }
++        let mut current=admission::opaque_position(&context["current"],&mut identities)?;
++        current.halfmove=halfmove;history.push(&current,current_move);
++        let mut labels=Labels::default();
++        let setup=array(&input["setup"],0,128)?.iter()
++            .map(|event|TableEvent::parse(event,&mut labels)).collect::<Result<Vec<_>>>()?;
++        let query=labels.query(&json!({"group":input["group"],"identity":input["identity"],
++            "searchPly":ply,"targetPly":target,"lowerBound":context["lowerBound"],
++            "upperBound":context["upperBound"]}))?;
++        let followup=array(&input["followup"],1,16)?.iter().map(|event| {
++            match TableEvent::parse(event,&mut labels)? {
++                TableEvent::Probe(query)=>Ok(query),
++                _=>Err("followup requires probe events".into()),
++            }
++        }).collect::<Result<Vec<_>>>()?;
++        Ok(Self { history,learning,checked,analysis,ply,query,setup,followup })
++    }
++    fn observe(mut self) -> Value {
++        let mut table=RememberedTable::with_groups(16);
++        for event in self.setup { event.apply(&mut table); }
++        // These immutable auxiliary observations do not imply real-search
++        // execution after a preceding return. The mutable query below does.
++        let repetition=self.history.repetition_count(self.checked);
++        let cycle=self.history.short_reversal();
++        let draw=ordinary_policy::early_draw(&self.history,self.ply,self.checked,self.analysis,
++            self.query.upper,&mut self.learning);
++        let cache=if draw { None } else { Some(table.probe(self.query)) };
++        let score=if draw { Some(0) } else { cache.as_ref().and_then(|hit|hit.score) };
++        let outcome=if draw { "draw" } else if score.is_some() { "cached" } else { "continue" };
++        let followup:Vec<_>=self.followup.into_iter().map(|query|learned::observation(table.probe(query))).collect();
++        let killers:Vec<_>=(1..=64).filter_map(|ply| {
++            let pair=self.learning.killers[ply];
++            (pair!=[Move::NONE;2]).then(||json!({"ply":ply,
++                "moves":[moves::descriptor(pair[0]),moves::descriptor(pair[1])]}))
++        }).collect();
++        json!({"repetitionCount":repetition,"isCycle":cycle,"outcome":outcome,"score":score,
++            "cache":cache.map(learned::observation),"followup":followup,
++            "chargedSearchUnits":1,"chargedRelationQueries":0,"killers":killers})
++    }
++}
++
++struct FastEntry {
++    cutoff:FastCutoff, iteration:i32, selectivity:i32, endgame:u16,
++    current:Position, movement:Move, lower:i32, followups:Vec<Query>,
++}
++impl FastEntry {
++    fn parse(query:&Value) -> Result<Self> {
++        object(query,&["cutoff","iterationDepth","selectivity","endgameWeight","moveKind",
++            "currentMaterial","lowerBound","followups"])?;
++        let cutoff=FastCutoff::parse(&query["cutoff"])?;
++        let kind=match text(&query["moveKind"])? {
++            "ordinary"=>cutoff.capture.movement.kind(),
++            "enPassant"=>MoveKind::EnPassant,
++            "castling"=>MoveKind::Castle,
++            _=>return Err("invalid fast-entry move kind".into()),
++        };
++        if kind!=cutoff.capture.movement.kind() && cutoff.capture.movement.kind()!=MoveKind::Ordinary {
++            return Err("nonordinary kind requires null promotion".into());
++        }
++        let movement=Move::new(cutoff.capture.movement.from(),cutoff.capture.movement.to(),kind);
++        let mut current=Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1")?;
++        current.counts=supplied::counts(&query["currentMaterial"])?;
++        let lower=integer(&query["lowerBound"],-10000,cutoff.upper-1)?;
++        let followups=array(&query["followups"],1,4)?.iter().map(|followup| {
++            object(followup,&["searchPly","targetPly","lowerBound","upperBound"])?;
++            let lower=integer(&followup["lowerBound"],-10000,10000)?;
++            let upper=integer(&followup["upperBound"],-10000,10000)?;
++            if lower>=upper { return Err("window must have lower strictly below upper".into()); }
++            Ok(Query { group:0,identity:1,ply:integer(&followup["searchPly"],0,63)?,
++                target:integer(&followup["targetPly"],0,64)?,lower,upper })
++        }).collect::<Result<Vec<_>>>()?;
++        Ok(Self { cutoff,current,movement,lower,followups,
++            iteration:integer(&query["iterationDepth"],0,64)?,
++            selectivity:integer(&query["selectivity"],i32::MIN,i32::MAX)?,
++            endgame:integer(&query["endgameWeight"],0,256)? as u16 })
++    }
++    fn observe(self) -> Value {
++        let adjustment=ordinary_policy::selective_depth(self.iteration,self.selectivity,
++            self.endgame,self.cutoff.target).adjustment;
++        let admitted=ordinary_policy::fast_admitted(&self.current,&self.cutoff.capture.position,
++            Some(self.movement),self.cutoff.target-self.cutoff.ply,adjustment);
++        let result=if admitted { self.cutoff.observe() } else { FastCutoffResult::default() };
++        let mut table=RememberedTable::with_groups(1);
++        if let Some(score)=result.score {
++            table.store(Store { query:Query { group:0,identity:1,ply:self.cutoff.ply,
++                target:self.cutoff.target,lower:self.lower,upper:self.cutoff.upper },score,
++                move_hint:None,quiet_mate_checked:false,mark_depth:false });
++        }
++        let remembered:Vec<_>=self.followups.into_iter().map(|query|learned::observation(table.probe(query))).collect();
++        json!({"cutoffScore":result.score,"pressureChecked":result.pressure_checked,
++            "materialThreatQueried":result.threat_queried,"fastEvaluationQueried":admitted,
++            "resultStored":result.score.is_some(),"remembered":remembered})
++    }
++}
++
++struct EvaluationBounds { ply:i32,target:i32,lower:i32,upper:i32,evaluation_lower:i32,evaluation_upper:i32 }
++impl EvaluationBounds {
++    fn parse(query:&Value) -> Result<Self> {
++        object(query,&["searchPly","targetPly","lowerBound","upperBound","staticScore","evaluationLower","evaluationUpper"])?;
++        let ply=integer(&query["searchPly"],1,62)?;
++        let target=integer(&query["targetPly"],ply+1,64)?;
++        let lower=integer(&query["lowerBound"],-10000,10000)?;
++        let upper=integer(&query["upperBound"],-10000,10000)?;
++        if lower>=upper { return Err("window must have lower strictly below upper".into()); }
++        integer(&query["staticScore"],-10000,10000)?;
++        Ok(Self { ply,target,lower,upper,evaluation_lower:integer(&query["evaluationLower"],-10000,10000)?,
++            evaluation_upper:integer(&query["evaluationUpper"],-10000,10000)? })
++    }
++    fn observe(self) -> Value {
++        match ordinary_policy::evaluation_bounds(self.ply,self.target,self.evaluation_lower,self.evaluation_upper)
++            .cutoff(self.lower,self.upper) {
++            Some(EvaluationBoundReturn::Lower(score))=>json!({"outcome":"lower","score":score}),
++            Some(EvaluationBoundReturn::Upper(score))=>json!({"outcome":"upper","score":score}),
++            None=>json!({"outcome":"continue","score":null}),
++        }
++    }
++}
++
++pub(super) fn dispatch(operation:&str,input:&Value) -> Result<Value> {
++    if operation=="search.cachedAdmission" { return Ok(CachedEntry::parse(input)?.observe()); }
++    object(input,&["queries"])?;
++    let queries=array(&input["queries"],1,4096)?;
++    match operation {
++        "search.fastEntry"=> {
++            let parsed=queries.iter().map(FastEntry::parse).collect::<Result<Vec<_>>>()?;
++            Ok(json!({"results":parsed.into_iter().map(FastEntry::observe).collect::<Vec<_>>()}))
++        }
++        "search.evaluationBounds"=> {
++            let parsed=queries.iter().map(EvaluationBounds::parse).collect::<Result<Vec<_>>>()?;
++            Ok(json!({"results":parsed.into_iter().map(EvaluationBounds::observe).collect::<Vec<_>>()}))
++        }
++        _=>Err("unsupported cached-entry operation".into()),
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn state(id:&str) -> Value {
++        json!({"identity":id,"side":"white","castling":"KQ","enPassant":null})
++    }
++    fn probe(target:i32) -> Value {
++        json!({"kind":"probe","group":"G","identity":"A","searchPly":1,
++            "targetPly":target,"lowerBound":-1,"upperBound":1})
++    }
++    fn cached() -> Value {
++        let movement=json!({"move":"a2a3q","kind":"ordinary"});
++        json!({"context":{"mode":"full","searchPly":1,"targetPly":6,"maximumDepth":99,
++            "lowerBound":-1,"upperBound":1,"preRootLength":3,"halfmoveClock":4,
++            "inCheck":false,"analysis":0,"prior":[state("repeat"),state("x"),state("y"),state("z")],
++            "current":state("repeat"),"currentMove":null,"earlierMove":null,
++            "killers":[{"ply":2,"moves":[movement,null]},{"ply":64,"moves":[movement,null]}]},
++            "setup":[{"kind":"store","group":"G","identity":"A","searchPly":1,"targetPly":2,
++                "lowerBound":-1,"upperBound":1,"score":9000,"move":movement,
++                "quietMateChecked":true,"markDepth":true}],
++            "group":"G","identity":"A","followup":[probe(6),probe(6)]})
++    }
++    fn empty_material() -> Value {
++        let side=json!({"pawn":0,"knight":0,"bishop":0,"rook":0,"queen":0});
++        json!({"white":side,"black":side})
++    }
++    fn fast() -> Value {
++        let profile=json!({"weak":0,"queen":0,"rook":0,"minor":0,"pawn":0});
++        let neighbor=json!({"included":true,"previous":profile,"current":profile});
++        let mut material=empty_material();material["black"]["knight"]=json!(2);
++        json!({"cutoff":{"searchPly":1,"targetPly":2,"staticScore":100,"upperBound":0,
++                "currentCheck":false,"previousCheck":false,
++                "capture":{"promotion":null,"destination":null,"material":empty_material()},
++                "pressure":{"side":"white","neighbors":vec![neighbor;8]},"materialThreat":0},
++            "iterationDepth":10,"selectivity":14,"endgameWeight":0,"moveKind":"ordinary",
++            "currentMaterial":material,"lowerBound":-1,
++            "followups":[{"searchPly":1,"targetPly":2,"lowerBound":-1,"upperBound":0},
++                {"searchPly":1,"targetPly":64,"lowerBound":-1,"upperBound":0}]})
++    }
++    fn fast_result(query:Value) -> Value { FastEntry::parse(&query).unwrap().observe() }
++
++    #[test]
++    fn draw_skips_mutable_mate_probe_and_preserves_preferences_before_analysis_exception() {
++        let mut query=cached();let draw=CachedEntry::parse(&query).unwrap().observe();
++        assert_eq!(draw["outcome"],"draw");assert_eq!(draw["cache"],Value::Null);
++        assert_eq!(draw["score"],0);assert_eq!(draw["killers"].as_array().unwrap().len(),2);
++        // First follow-up sees old depth; only that actual query raises it.
++        assert_eq!(draw["followup"][0]["markedDepth"],1);
++        assert_eq!(draw["followup"][1]["markedDepth"],5);
++        query["context"]["analysis"]=json!(1);
++        let hit=CachedEntry::parse(&query).unwrap().observe();
++        assert_eq!(hit["outcome"],"cached");assert_eq!(hit["score"],9000);
++        assert_eq!(hit["cache"]["markedDepth"],1);
++        assert_eq!(hit["followup"][0]["markedDepth"],5);
++        assert_eq!(hit["killers"].as_array().unwrap().len(),1);
++        assert_eq!(hit["killers"][0]["ply"],64);
++        assert_eq!(hit["killers"][0]["moves"][0]["move"],"a2a3q");
++        assert_eq!(hit["cache"]["move"],"a2a3");
++    }
++    #[test]
++    fn cache_zero_is_a_return_but_exact_interior_retains_metadata_on_continuation() {
++        let mut query=cached();query["context"]["halfmoveClock"]=json!(0);
++        query["setup"][0]["targetPly"]=json!(6);query["setup"][0]["score"]=json!(0);
++        let inside=CachedEntry::parse(&query).unwrap().observe();
++        assert_eq!(inside["outcome"],"continue");assert_eq!(inside["score"],Value::Null);
++        assert_eq!(inside["cache"]["bound"],"exact");assert_eq!(inside["cache"]["quietMateChecked"],true);
++        query["context"]["upperBound"]=json!(0);
++        let zero=CachedEntry::parse(&query).unwrap().observe();
++        assert_eq!(zero["outcome"],"cached");assert_eq!(zero["score"],0);
++    }
++    #[test]
++    fn setup_probe_mutations_precede_draw_and_result_contexts_do_not_alias_repetition_labels() {
++        let mut query=cached();let setup_probe=probe(8);
++        query["setup"].as_array_mut().unwrap().push(setup_probe);
++        // Setup is executed even though this stage itself returns an early draw.
++        let out=CachedEntry::parse(&query).unwrap().observe();
++        assert_eq!(out["outcome"],"draw");assert_eq!(out["followup"][0]["markedDepth"],7);
++        // Cache A was stored despite the repetition history using another label.
++        query["context"]["analysis"]=json!(1);
++        let out=CachedEntry::parse(&query).unwrap().observe();
++        assert_eq!(out["outcome"],"cached");assert_eq!(out["cache"]["markedDepth"],7);
++    }
++    #[test]
++    fn short_reversal_uses_supplied_arrival_and_rights_before_table_lookup() {
++        let mut query=cached();query["context"]["searchPly"]=json!(3);
++        query["context"]["preRootLength"]=json!(0);
++        query["context"]["prior"]=json!([state("root"),state("one"),state("two")]);
++        query["context"]["halfmoveClock"]=json!(3);query["context"]["upperBound"]=json!(0);
++        query["context"]["earlierMove"]=json!({"move":"g1f3","kind":"castle"});
++        query["context"]["currentMove"]=json!({"move":"f3g1q","kind":"ordinary"});
++        let cycle=CachedEntry::parse(&query).unwrap().observe();
++        assert_eq!(cycle["isCycle"],true);assert_eq!(cycle["cache"],Value::Null);
++        query["context"]["current"]["castling"]=json!("K");
++        assert_eq!(CachedEntry::parse(&query).unwrap().observe()["isCycle"],false);
++        query["context"]["current"]["castling"]=json!("KQ");
++        query["context"]["earlierMove"]=Value::Null;
++        assert_eq!(CachedEntry::parse(&query).unwrap().observe()["isCycle"],false);
++    }
++    #[test]
++    fn draw_still_validates_late_table_groups_descriptors_and_frontier_domain() {
++        let mut query=cached();query["followup"][1]["targetPly"]=json!(65);
++        assert!(CachedEntry::parse(&query).is_err());
++        let mut query=cached();let events:Vec<_>=(0..16).map(|index| {
++            let mut event=probe(0);event["group"]=json!(format!("group{index}"));event
++        }).collect();query["setup"]=json!(events);
++        assert!(CachedEntry::parse(&query).is_err()); // G is distinct group17, even on draw.
++        query["group"]=json!("group0");query["followup"][0]["group"]=json!("group0");
++        query["followup"][1]["group"]=json!("group0");assert!(CachedEntry::parse(&query).is_ok());
++        query["context"]["maximumDepth"]=json!(1);assert!(CachedEntry::parse(&query).is_err());
++        query["context"]["mode"]=json!("mateInterior");assert!(CachedEntry::parse(&query).is_ok());
++        query["context"]["killers"][1]["moves"][1]=json!({"move":"a1a1","kind":"ordinary"});
++        assert!(CachedEntry::parse(&query).is_err());
++    }
++    #[test]
++    fn fast_request_precedes_depth_and_check_rejection_and_uses_current_material() {
++        let query=fast();let out=fast_result(query.clone());
++        assert_eq!(out["fastEvaluationQueried"],true);assert_eq!(out["cutoffScore"],0);
++        assert_eq!(out["resultStored"],true);assert_eq!(out["remembered"][0]["score"],0);
++        assert_eq!(out["remembered"][0]["bound"],"lower");assert_eq!(out["remembered"][1]["score"],Value::Null);
++        let mut depth=query.clone();depth["cutoff"]["targetPly"]=json!(4);
++        let out=fast_result(depth);assert_eq!(out["fastEvaluationQueried"],true);
++        assert_eq!(out["pressureChecked"],false);assert_eq!(out["materialThreatQueried"],false);
++        let mut check=query.clone();check["cutoff"]["currentCheck"]=json!(true);
++        assert_eq!(fast_result(check)["fastEvaluationQueried"],true);
++        let mut previous_only=query.clone();previous_only["cutoff"]["capture"]["material"]=query["currentMaterial"].clone();
++        previous_only["currentMaterial"]=empty_material();
++        assert_eq!(fast_result(previous_only)["fastEvaluationQueried"],false);
++        for kind in ["enPassant","castling"] { let mut special=query.clone();special["moveKind"]=json!(kind);
++            assert_eq!(fast_result(special)["fastEvaluationQueried"],false); }
++        let mut occupied=query.clone();occupied["cutoff"]["capture"]["destination"]=json!({"side":"black","piece":"king"});
++        assert_eq!(fast_result(occupied)["fastEvaluationQueried"],false);
++        let mut promotion=query.clone();promotion["cutoff"]["capture"]["promotion"]=json!("queen");
++        assert_eq!(fast_result(promotion.clone())["fastEvaluationQueried"],false);
++        promotion["moveKind"]=json!("castling");assert!(FastEntry::parse(&promotion).is_err());
++    }
++    #[test]
++    fn fast_material_normalization_negative_storage_and_pressure_request_order_remain_native() {
++        let mut query=fast();query["currentMaterial"]=empty_material();
++        query["currentMaterial"]["white"]["knight"]=json!(15);
++        query["currentMaterial"]["white"]["rook"]=json!(1); // H17 mod16 =1.
++        assert_eq!(fast_result(query.clone())["fastEvaluationQueried"],false);
++        query["currentMaterial"]["black"]["bishop"]=json!(2);
++        assert_eq!(fast_result(query)["fastEvaluationQueried"],true);
++        let mut negative=fast();negative["cutoff"]["upperBound"]=json!(-2);
++        negative["cutoff"]["staticScore"]=json!(99);negative["lowerBound"]=json!(-3);
++        negative["followups"][0]["lowerBound"]=json!(-3);negative["followups"][0]["upperBound"]=json!(-2);
++        let out=fast_result(negative);assert_eq!(out["cutoffScore"],-1);
++        assert_eq!(out["resultStored"],true);assert_eq!(out["remembered"][0]["score"],-1);
++        let mut pressure=fast();pressure["cutoff"]["pressure"]["neighbors"][0]["current"]["minor"]=json!(2);
++        let out=fast_result(pressure);assert_eq!(out["pressureChecked"],true);
++        assert_eq!(out["materialThreatQueried"],false);assert_eq!(out["resultStored"],false);
++    }
++    #[test]
++    fn unused_fast_profiles_and_late_batch_queries_are_eagerly_validated() {
++        let mut invalid=fast();invalid["moveKind"]=json!("enPassant");
++        invalid["cutoff"]["pressure"]["neighbors"][7]["included"]=json!(false);
++        invalid["cutoff"]["pressure"]["neighbors"][7]["current"]["queen"]=json!(99);
++        assert!(dispatch("search.fastEntry",&json!({"queries":[fast(),invalid]})).is_err());
++    }
++    #[test]
++    fn evaluation_bounds_keep_absolute_threshold_crossed_priority_and_static_independence() {
++        let mut query=json!({"searchPly":4,"targetPly":9,"lowerBound":-1,"upperBound":0,
++            "staticScore":-10000,"evaluationLower":0,"evaluationUpper":-1});
++        assert_eq!(EvaluationBounds::parse(&query).unwrap().observe()["outcome"],"continue");
++        query["searchPly"]=json!(5);
++        for score in [-10000,0,10000] { query["staticScore"]=json!(score);
++            assert_eq!(EvaluationBounds::parse(&query).unwrap().observe(),json!({"outcome":"lower","score":0})); }
++        query["staticScore"]=json!(10001);
++        assert!(dispatch("search.evaluationBounds",&json!({"queries":[{
++            "searchPly":1,"targetPly":2,"lowerBound":-1,"upperBound":1,
++            "staticScore":0,"evaluationLower":0,"evaluationUpper":0},query]})).is_err());
++    }
++}
+--- a/diagnostic/src/learned.rs
++++ b/diagnostic/src/learned.rs
+@@ -99,7 +99,7 @@
+ }
+ 
+ #[derive(Default)]
+-struct Labels {
++pub(super) struct Labels {
+     groups: BTreeMap<String, usize>,
+     identities: BTreeMap<String, u32>,
+ }
+@@ -117,7 +117,7 @@
+ }
+ 
+ impl Labels {
+-    fn query(&mut self, event: &Value) -> Result<Query> {
++    pub(super) fn query(&mut self, event: &Value) -> Result<Query> {
+         let group = label(&event["group"])?;
+         let group = match self.groups.get(group) {
+             Some(&index) => index,
+@@ -149,7 +149,7 @@
+     }
+ }
+ 
+-fn observation(result: ProbeResult) -> Value {
++pub(super) fn observation(result: ProbeResult) -> Value {
+     let bound = match result.bound {
+         Bound::None => "none",
+         Bound::Upper => "upper",
+@@ -161,63 +161,49 @@
+         "quietMateChecked":result.quiet_mate_checked})
+ }
+ 
++/// Parsed before any table mutation, so a suppressed stage still validates
++/// all supplied fields and the global request's label/group domain.
++pub(super) enum TableEvent { Clear, Store(Store), Probe(Query) }
++impl TableEvent {
++    pub(super) fn parse(event:&Value, labels:&mut Labels) -> Result<Self> {
++        match text(&event["kind"])? {
++            "clear" => { object(event,&["kind"])?; Ok(Self::Clear) }
++            "store" => {
++                object(event,&["kind","group","identity","searchPly","targetPly",
++                    "lowerBound","upperBound","score","move","quietMateChecked","markDepth"])?;
++                Ok(Self::Store(Store { query:labels.query(event)?,
++                    score:integer(&event["score"],-10000,10000)?,
++                    move_hint:moves::movement(&event["move"])?,
++                    quiet_mate_checked:boolean(&event["quietMateChecked"])?,
++                    mark_depth:boolean(&event["markDepth"])? }))
++            }
++            "probe" => {
++                object(event,&["kind","group","identity","searchPly","targetPly","lowerBound","upperBound"])?;
++                Ok(Self::Probe(labels.query(event)?))
++            }
++            _ => Err("unknown remembered-result event".into()),
++        }
++    }
++    pub(super) fn apply(self, table:&mut RememberedTable) -> Option<ProbeResult> {
++        match self {
++            Self::Clear => { table.clear();None }
++            Self::Store(store) => { table.store(store);None }
++            Self::Probe(query) => Some(table.probe(query)),
++        }
++    }
++}
++
+ fn remembered_results(input: &Value) -> Result<Value> {
+     object(input, &["events"])?;
++    let mut labels = Labels::default();
++    let events = array(&input["events"],1,256)?.iter()
++        .map(|event| TableEvent::parse(event,&mut labels)).collect::<Result<Vec<_>>>()?;
++    if !events.iter().any(|event|matches!(event,TableEvent::Probe(_))) {
++        return Err("remembered sequence requires a probe".into());
++    }
+     let mut table = RememberedTable::with_groups(16);
+-    let mut labels = Labels::default();
+-    let mut observations = Vec::new();
+-    for event in array(&input["events"], 1, 256)? {
+-        match text(&event["kind"])? {
+-            "clear" => {
+-                object(event, &["kind"])?;
+-                table.clear();
+-            }
+-            "store" => {
+-                object(
+-                    event,
+-                    &[
+-                        "kind",
+-                        "group",
+-                        "identity",
+-                        "searchPly",
+-                        "targetPly",
+-                        "lowerBound",
+-                        "upperBound",
+-                        "score",
+-                        "move",
+-                        "quietMateChecked",
+-                        "markDepth",
+-                    ],
+-                )?;
+-                table.store(Store {
+-                    query: labels.query(event)?,
+-                    score: integer(&event["score"], -10000, 10000)?,
+-                    move_hint: moves::movement(&event["move"])?,
+-                    quiet_mate_checked: boolean(&event["quietMateChecked"])?,
+-                    mark_depth: boolean(&event["markDepth"])?,
+-                });
+-            }
+-            "probe" => {
+-                object(
+-                    event,
+-                    &[
+-                        "kind",
+-                        "group",
+-                        "identity",
+-                        "searchPly",
+-                        "targetPly",
+-                        "lowerBound",
+-                        "upperBound",
+-                    ],
+-                )?;
+-                observations.push(observation(table.probe(labels.query(event)?)));
+-            }
+-            _ => return Err("unknown remembered-result event".into()),
+-        }
+-    }
+-    if observations.is_empty() {
+-        return Err("remembered sequence requires a probe".into());
+-    }
++    let observations:Vec<_> = events.into_iter().filter_map(|event|event.apply(&mut table))
++        .map(observation).collect();
+     Ok(json!({"observations":observations,"chargedSearchUnits":0,"chargedRelationQueries":0}))
+ }
+ 
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -13,7 +13,9 @@
+ };
+ 
+ mod admission;
++mod boundary_admission;
+ mod candidate_order;
++mod cached_entry;
+ mod endgame_bounds;
+ mod endings;
+ mod evaluation_common;
+@@ -125,6 +127,7 @@
+         | "evaluation.endgameAdjust"
+         | "evaluation.fortressBounds"
+         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
++        "search.cachedAdmission" | "search.fastEntry" | "search.evaluationBounds" => cached_entry::dispatch(operation,input),
+         "search.quiescenceTree" => quiescence_tree::dispatch(input),
+         "evaluation.moveSequence" => move_evaluation::dispatch(input),
+         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
+@@ -146,6 +149,9 @@
+         | "evaluation.minorMateGeometry"
+         | "evaluation.endgameMaterialBlend"
+         | "evaluation.pawnRace" => endings::dispatch(operation, input),
++        "search.drawBoundary" | "search.moveReversal" | "search.mateLeaf" | "search.mateLeafPosition" => {
++            boundary_admission::dispatch(operation, input)
++        }
+         "search.nodeAdmission" | "search.historyAdmission" | "search.moveExtensions" => {
+             admission::dispatch(operation, input)
+         }
+--- a/diagnostic/src/supplied.rs
++++ b/diagnostic/src/supplied.rs
+@@ -92,17 +92,21 @@
+     Ok(Piece::new(color(&value["side"])?, piece))
+ }
+ 
+-fn capture_exception(value: &Value) -> Result<bool> {
+-    object(value, &["promotion", "destination", "material"])?;
+-    let kind = promotion(&value["promotion"])?;
+-    let mut position = bare();
+-    position.counts = counts(&value["material"])?;
+-    position.board[DESTINATION.0 as usize] = occupant(&value["destination"], true)?;
+-    Ok(quiescence_policy::capture_exception(
+-        &position,
+-        &Move::new(SOURCE, DESTINATION, kind),
+-    ))
+-}
++pub(super) struct CaptureContext { pub position:Position, pub movement:Move }
++impl CaptureContext {
++    fn parse(value:&Value) -> Result<Self> {
++        object(value,&["promotion","destination","material"])?;
++        let kind = promotion(&value["promotion"])?;
++        let mut position = bare();
++        position.counts = counts(&value["material"])?;
++        position.board[DESTINATION.0 as usize] = occupant(&value["destination"],true)?;
++        Ok(Self { position,movement:Move::new(SOURCE,DESTINATION,kind) })
++    }
++    fn exception(&self) -> bool {
++        quiescence_policy::capture_exception(&self.position,&self.movement)
++    }
++}
++fn capture_exception(value:&Value) -> Result<bool> { Ok(CaptureContext::parse(value)?.exception()) }
+ 
+ fn capture(position: &mut Position, value: &Value, required: bool) -> Result<Piece> {
+     let piece = occupant(value, false)?;
+@@ -180,6 +184,51 @@
+     }
+ }
+ 
++/// Shared cold controlled-response query; arithmetic and request ordering are
++/// moved from the existing fastCutoff transport rather than duplicated.
++pub(super) struct FastCutoff {
++    pub ply:i32, pub target:i32, pub upper:i32, pub capture:CaptureContext,
++    score:i32, checked:bool, previous_checked:bool, pressure:Pressure, threat:i32,
++}
++#[derive(Default)]
++pub(super) struct FastCutoffResult {
++    pub score:Option<i32>, pub pressure_checked:bool, pub threat_queried:bool,
++}
++impl FastCutoffResult {
++    pub(super) fn output(&self) -> Value {
++        json!({"cutoffScore":self.score,"pressureChecked":self.pressure_checked,
++            "materialThreatQueried":self.threat_queried})
++    }
++}
++impl FastCutoff {
++    pub(super) fn parse(query:&Value) -> Result<Self> {
++        object(query,&["searchPly","targetPly","staticScore","upperBound","currentCheck",
++            "previousCheck","capture","pressure","materialThreat"])?;
++        let ply = integer(&query["searchPly"],1,62)?;
++        Ok(Self { ply,target:integer(&query["targetPly"],ply+1,64)?,
++            score:integer(&query["staticScore"],-10000,10000)?,
++            upper:integer(&query["upperBound"],-9999,10000)?,
++            checked:boolean(&query["currentCheck"])?,previous_checked:boolean(&query["previousCheck"])?,
++            capture:CaptureContext::parse(&query["capture"])?,pressure:Pressure::parse(&query["pressure"])?,
++            threat:integer(&query["materialThreat"],0,20000)? })
++    }
++    pub(super) fn observe(&self) -> FastCutoffResult {
++        let admitted = ordinary_policy::fast_cutoff_gate(self.score,self.target-self.ply,
++            self.upper,self.checked,self.previous_checked,self.capture.exception());
++        let mut cutoff = None;
++        let pressure_checked = admitted.is_some();
++        let mut threat_queried = false;
++        if let Some(adjusted) = admitted {
++            if !self.pressure.guard() {
++                threat_queried = true;
++                let result = adjusted-self.threat;
++                if result >= self.upper { cutoff = Some(result); }
++            }
++        }
++        FastCutoffResult { score:cutoff,pressure_checked,threat_queried }
++    }
++}
++
+ pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+     if operation == "evaluation.materialBalance" {
+         let (root, position) = material(input)?;
+@@ -258,32 +307,7 @@
+                 json!({"guard":pressure.guard(), "previousPressure":pressure.previous_pressure,
+                        "currentPressure":pressure.current_pressure})
+             }
+-            "search.fastCutoff" => {
+-                object(query, &["searchPly", "targetPly", "staticScore", "upperBound", "currentCheck", "previousCheck", "capture", "pressure", "materialThreat"])?;
+-                let ply = integer(&query["searchPly"], 1, 62)?;
+-                let target = integer(&query["targetPly"], ply + 1, 64)?;
+-                let score = integer(&query["staticScore"], -10000, 10000)?;
+-                let upper = integer(&query["upperBound"], -9999, 10000)?;
+-                let checked = boolean(&query["currentCheck"])?;
+-                let previous_checked = boolean(&query["previousCheck"])?;
+-                let exception = capture_exception(&query["capture"])?;
+-                let pressure = Pressure::parse(&query["pressure"])?;
+-                let threat = integer(&query["materialThreat"], 0, 20000)?;
+-                let admitted = ordinary_policy::fast_cutoff_gate(score, target - ply, upper, checked, previous_checked, exception);
+-                let mut cutoff = None;
+-                let pressure_checked = admitted.is_some();
+-                let mut threat_queried = false;
+-                if let Some(adjusted) = admitted {
+-                    if !pressure.guard() {
+-                        threat_queried = true;
+-                        let result = adjusted - threat;
+-                        if result >= upper {
+-                            cutoff = Some(result);
+-                        }
+-                    }
+-                }
+-                json!({"cutoffScore":cutoff, "pressureChecked":pressure_checked, "materialThreatQueried":threat_queried})
+-            }
++            "search.fastCutoff" => FastCutoff::parse(query)?.observe().output(),
+             _ => return Err(format!("unsupported supplied-context operation: {operation}")),
+         });
+     }

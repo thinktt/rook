@@ -8,11 +8,14 @@ persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT
 learned state and specified root scheduling. Ordinary `Session<false>` excludes
 development tracing; cold JSON is a separate adapter package. Position160/Node176
 now owns exact placement attack planes while retaining copied-child ownership.
-Current source implements88 mandatory diagnostic operations and passes6161
-unique cases/133 adapter units plus147 native tests. Source promotion exactly
-matches both tested proposal closures; frozen731aa0aa passes54 strict replays
-and eight interruption fixtures, and adaptere70e9cad owns the component result.
-These new source/artifact observations have no own-PGO/cost/gameplay result.
+Current source implements95 mandatory diagnostic operations and passes7393
+unique cases/149 adapter units plus151 native tests. Source promotion exactly
+matches the tested99-file closure; frozen6e7b2935 passes54 strict replays and
+eight interruption fixtures/24 searches, and adapter9a968d54 owns the component
+result. The matched generic pilot is0.173772% higher in summed medians with
+all six ranges overlapping; it establishes no clear regression or neutrality.
+Current source has no own-PGO/full54/12 cost/gameplay result. Remaining mandatory
+inventory is22 operations/280 cases.
 The earlier85-operation Q observer restored default evaluation call scope and stack size;
 its disposition extraction retains a small code difference. The original
 metadata-instability failure and stable replay retry remain preserved. See
@@ -25,10 +28,17 @@ and native evaluation stages. Its default NoTrace body retains the reviewed
 call scope and recursive ABI, with32 additional local stack bytes and116 fewer
 text bytes. This bounded risk is accepted without a CPU-neutrality claim. See
 [88-operation integration](evidence/quiescence-tree-integration-20261018/README.md).
-The current source then adopts checked-only capped king-first reply probing,
+The preceding source adopted checked-only capped king-first reply probing,
 after its generic and own-PGO trials and fresh composed147/54/eight-wire/6161
 regression. Full generated order is unchanged; exact0/1 reply lists remain
 complete. See [decision0008](docs/decisions/0008-checked-bounded-reply-order.md).
+Current95 source then shares ordered draw/clear/reversal, handoff, mate scalar
+and evaluation-bound policies and adds seven cold transports. Its accepted
+codegen risk is ordinary+753text/+16local stack and Q+23text/unchanged stack;
+no query/layout/charge ownership change is introduced. DIAG compile ENOSPC01
+remains preserved; exact-source disk-backed retry02 passes the full suite. See
+[decision0009](docs/decisions/0009-shared-search-boundaries.md) and
+[95-operation integration](evidence/admission-combined95-integration-20261018/README.md).
 The matched storage experiments and independent PGO trial support this source
 integration. Canonical915f83e4 passes54 strict replays, eight interruption
 fixtures and its own six-case timing pilot; final qualification remains.
@@ -65,6 +75,15 @@ A reproducible generic x86-64 compiler-PGO build is available
 through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
+
+The isolated ordered-bit checker candidate now passes its own54-case compiler
+training, strict54/eight-wire regression and independent profile remerge. Its
+matched60-lifetime own-PGO pilot sums13.4018985s versus13.5684265s control:
+1.227320% lower, all six medians lower, four ranges separated and two overlapping.
+This supports composition testing; it is not integrated and does not transfer
+timing to current88 source. Whole-suite CPU15 has46 nonidle ticks without
+pervariant attribution. See
+[own-PGO checker pilot](evidence/pgo-ordered-bit-checkers-phase1-cpu-pilot-20261018/README.md).
 
 The later guest-client isolation audit found own launcher/server/code-mode
 threads still eligible on14/15. It restricted109 verified own-pane threads to

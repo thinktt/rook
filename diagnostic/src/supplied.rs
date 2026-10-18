@@ -92,17 +92,21 @@ fn occupant(value: &Value, king: bool) -> Result<Piece> {
     Ok(Piece::new(color(&value["side"])?, piece))
 }
 
-fn capture_exception(value: &Value) -> Result<bool> {
-    object(value, &["promotion", "destination", "material"])?;
-    let kind = promotion(&value["promotion"])?;
-    let mut position = bare();
-    position.counts = counts(&value["material"])?;
-    position.board[DESTINATION.0 as usize] = occupant(&value["destination"], true)?;
-    Ok(quiescence_policy::capture_exception(
-        &position,
-        &Move::new(SOURCE, DESTINATION, kind),
-    ))
+pub(super) struct CaptureContext { pub position:Position, pub movement:Move }
+impl CaptureContext {
+    fn parse(value:&Value) -> Result<Self> {
+        object(value,&["promotion","destination","material"])?;
+        let kind = promotion(&value["promotion"])?;
+        let mut position = bare();
+        position.counts = counts(&value["material"])?;
+        position.board[DESTINATION.0 as usize] = occupant(&value["destination"],true)?;
+        Ok(Self { position,movement:Move::new(SOURCE,DESTINATION,kind) })
+    }
+    fn exception(&self) -> bool {
+        quiescence_policy::capture_exception(&self.position,&self.movement)
+    }
 }
+fn capture_exception(value:&Value) -> Result<bool> { Ok(CaptureContext::parse(value)?.exception()) }
 
 fn capture(position: &mut Position, value: &Value, required: bool) -> Result<Piece> {
     let piece = occupant(value, false)?;
@@ -177,6 +181,51 @@ impl Pressure {
 
     fn guard(&self) -> bool {
         ordinary_policy::king_pressure(&self.position, &self.previous, &self.current)
+    }
+}
+
+/// Shared cold controlled-response query; arithmetic and request ordering are
+/// moved from the existing fastCutoff transport rather than duplicated.
+pub(super) struct FastCutoff {
+    pub ply:i32, pub target:i32, pub upper:i32, pub capture:CaptureContext,
+    score:i32, checked:bool, previous_checked:bool, pressure:Pressure, threat:i32,
+}
+#[derive(Default)]
+pub(super) struct FastCutoffResult {
+    pub score:Option<i32>, pub pressure_checked:bool, pub threat_queried:bool,
+}
+impl FastCutoffResult {
+    pub(super) fn output(&self) -> Value {
+        json!({"cutoffScore":self.score,"pressureChecked":self.pressure_checked,
+            "materialThreatQueried":self.threat_queried})
+    }
+}
+impl FastCutoff {
+    pub(super) fn parse(query:&Value) -> Result<Self> {
+        object(query,&["searchPly","targetPly","staticScore","upperBound","currentCheck",
+            "previousCheck","capture","pressure","materialThreat"])?;
+        let ply = integer(&query["searchPly"],1,62)?;
+        Ok(Self { ply,target:integer(&query["targetPly"],ply+1,64)?,
+            score:integer(&query["staticScore"],-10000,10000)?,
+            upper:integer(&query["upperBound"],-9999,10000)?,
+            checked:boolean(&query["currentCheck"])?,previous_checked:boolean(&query["previousCheck"])?,
+            capture:CaptureContext::parse(&query["capture"])?,pressure:Pressure::parse(&query["pressure"])?,
+            threat:integer(&query["materialThreat"],0,20000)? })
+    }
+    pub(super) fn observe(&self) -> FastCutoffResult {
+        let admitted = ordinary_policy::fast_cutoff_gate(self.score,self.target-self.ply,
+            self.upper,self.checked,self.previous_checked,self.capture.exception());
+        let mut cutoff = None;
+        let pressure_checked = admitted.is_some();
+        let mut threat_queried = false;
+        if let Some(adjusted) = admitted {
+            if !self.pressure.guard() {
+                threat_queried = true;
+                let result = adjusted-self.threat;
+                if result >= self.upper { cutoff = Some(result); }
+            }
+        }
+        FastCutoffResult { score:cutoff,pressure_checked,threat_queried }
     }
 }
 
@@ -258,32 +307,7 @@ pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
                 json!({"guard":pressure.guard(), "previousPressure":pressure.previous_pressure,
                        "currentPressure":pressure.current_pressure})
             }
-            "search.fastCutoff" => {
-                object(query, &["searchPly", "targetPly", "staticScore", "upperBound", "currentCheck", "previousCheck", "capture", "pressure", "materialThreat"])?;
-                let ply = integer(&query["searchPly"], 1, 62)?;
-                let target = integer(&query["targetPly"], ply + 1, 64)?;
-                let score = integer(&query["staticScore"], -10000, 10000)?;
-                let upper = integer(&query["upperBound"], -9999, 10000)?;
-                let checked = boolean(&query["currentCheck"])?;
-                let previous_checked = boolean(&query["previousCheck"])?;
-                let exception = capture_exception(&query["capture"])?;
-                let pressure = Pressure::parse(&query["pressure"])?;
-                let threat = integer(&query["materialThreat"], 0, 20000)?;
-                let admitted = ordinary_policy::fast_cutoff_gate(score, target - ply, upper, checked, previous_checked, exception);
-                let mut cutoff = None;
-                let pressure_checked = admitted.is_some();
-                let mut threat_queried = false;
-                if let Some(adjusted) = admitted {
-                    if !pressure.guard() {
-                        threat_queried = true;
-                        let result = adjusted - threat;
-                        if result >= upper {
-                            cutoff = Some(result);
-                        }
-                    }
-                }
-                json!({"cutoffScore":cutoff, "pressureChecked":pressure_checked, "materialThreatQueried":threat_queried})
-            }
+            "search.fastCutoff" => FastCutoff::parse(query)?.observe().output(),
             _ => return Err(format!("unsupported supplied-context operation: {operation}")),
         });
     }

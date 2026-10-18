@@ -33,11 +33,16 @@ fn consumer_position(fen: &str) -> Result<Position> {
 }
 
 fn killers(value: &Value) -> Result<Learning> {
+    parse_killers(value, 63)
+}
+
+/// Cold schema capacity is chosen by the consumer; older admission stays63.
+pub(super) fn parse_killers(value: &Value, maximum: usize) -> Result<Learning> {
     let mut learning = Learning::default();
-    let mut seen = [false; 64];
-    for entry in array(value, 0, 63)? {
+    let mut seen = [false; 65];
+    for entry in array(value, 0, maximum)? {
         object(entry, &["ply", "moves"])?;
-        let ply = integer(&entry["ply"], 1, 63)? as usize;
+        let ply = integer(&entry["ply"], 1, maximum as i32)? as usize;
         if seen[ply] {
             return Err("duplicate killer ply".into());
         }
@@ -62,22 +67,26 @@ fn admission(
     if !draw {
         learning.clear_next(history.search_ply());
     }
-    let mut pairs = Vec::new();
-    for ply in 1..=63 {
-        let pair = learning.killers[ply];
-        if pair != [Move::NONE; 2] {
-            pairs.push(
-                json!({"ply":ply,"moves":[moves::descriptor(pair[0]),moves::descriptor(pair[1])]}),
-            );
-        }
-    }
+    let pairs = killers_output(&learning, 63);
     // The diagnostic executes exactly one admission stage, including its
     // unconditional visit charge. History replay is outside that stage.
     json!({"repetitionCount":count,"outcome":if draw {"draw"} else {"continue"},
            "chargedSearchUnits":1,"killers":pairs})
 }
 
-fn opaque_position(value: &Value, labels: &mut BTreeMap<String, u32>) -> Result<Position> {
+/// Formatting only; preserve native pair order, omit empty pairs and sort plies.
+pub(super) fn killers_output(learning: &Learning, maximum: usize) -> Value {
+    let mut pairs = Vec::new();
+    for ply in 1..=maximum {
+        let pair = learning.killers[ply];
+        if pair != [Move::NONE; 2] {
+            pairs.push(json!({"ply":ply,"moves":[moves::descriptor(pair[0]),moves::descriptor(pair[1])]}));
+        }
+    }
+    json!(pairs)
+}
+
+pub(super) fn opaque_position(value: &Value, labels: &mut BTreeMap<String, u32>) -> Result<Position> {
     object(value, &["identity", "side", "castling", "enPassant"])?;
     let label = text(&value["identity"])?;
     if !(1..=32).contains(&label.len())

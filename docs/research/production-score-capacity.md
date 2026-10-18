@@ -93,3 +93,14 @@ and retained owners remain unchanged. The
 retains the same premises and unresolved composition limits. Fresh147 native,
 54/eight-wire and133 adapter units/6161 cases bind the named88 artifacts;
 separate frozen85 trial costs do not transfer.
+
+The95-operation extraction shares the existing draw/clear/reversal, handoff,
+mate score and effective endpoint/cutoff scalars without changing their
+arithmetic, state layouts or caller-owned charges. The explicit caller ply and
+lower-before-upper ordering remain. Its
+[95-operation delta binding](../../evidence/admission-combined95-integration-20261018/numeric-proof-delta-binding.json)
+retains the same bounded premises and unresolved hint-composition gap; the new
+lazy bounded mate leaf has a separate component admission. Native151,149 adapter
+units/7393 cases and54/eight-wire are finite regression evidence. Accepted
+codegen growth and an overlapping generic CPU pilot establish no global proof,
+CPU neutrality or exact95 own-PGO qualification.

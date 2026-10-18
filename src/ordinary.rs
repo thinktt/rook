@@ -3,7 +3,7 @@
 use crate::engine::Search;
 use crate::evaluator::{EvalStats, Node};
 use crate::first_iteration::Step;
-use crate::history::{repetition_draw, SearchHistory};
+use crate::history::SearchHistory;
 use crate::influence::Influence;
 use crate::movegen::{self, MoveList};
 use crate::ordinary_policy::{self as policy, Extensions};
@@ -457,7 +457,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
     ) -> Result<i32, Stopped> {
         let p = request.ply;
         let target = p as i32 + request.depth;
-        if request.depth <= 0 || p == 63 || p >= self.config.maximum_depth {
+        if policy::quiescence_handoff(request.depth, p, self.config.maximum_depth) {
             return self.visit_q(
                 node,
                 history,
@@ -485,11 +485,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         let checked = request
             .checked
             .unwrap_or_else(|| movegen::in_check(&position, position.side));
-        if repetition_draw(history.repetition_count(checked), p, self.config.analysis) {
-            return Ok(0);
-        }
-        self.learning.clear_next(p);
-        if request.upper <= 0 && history.short_reversal() {
+        if policy::early_draw(history,p,checked,self.config.analysis,request.upper,&mut self.learning) {
             return Ok(0);
         }
         let table = self.remembered.as_mut().unwrap();
@@ -557,16 +553,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         if DIAGNOSTICS {
             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
         }
-        let (effective_lower, effective_upper) = if p as i32 <= target / 2 {
-            (-10000, 10000)
-        } else {
-            (evaluation.lower, evaluation.upper)
-        };
-        if effective_lower >= request.upper {
-            return Ok(effective_lower);
-        }
-        if effective_upper <= request.lower {
-            return Ok(effective_upper);
+        let bounds = policy::evaluation_bounds(p as i32,target,evaluation.lower,evaluation.upper);
+        let (effective_lower,effective_upper) = (bounds.lower,bounds.upper);
+        if let Some(bound) = bounds.cutoff(request.lower,request.upper) {
+            return Ok(bound.score());
         }
         let current = Predecessor {
             position: &position,
@@ -618,7 +608,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
             self.stats.generated += count as u64;
         }
         if count == 0 {
-            return Ok(if checked { p as i32 - 10000 } else { 0 });
+            return Ok(if checked { policy::mate_score(p) } else { 0 });
         }
         if p as i32 - 9998 >= request.upper {
             return Ok(p as i32 - 9998);

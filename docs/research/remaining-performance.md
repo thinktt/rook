@@ -304,13 +304,14 @@ and production review remain requirements alongside optimization.
     byte-identical profile remerging. Their matched60-lifetime pilot reconciles
     13.544937s controle4921975 versus13.340055s candidate52ec6b9e:1.512609%
     lower, all six medians lower, five ranges separated and profile29 overlapping.
-    Select adoption contingent fresh composition validation with current88.
+    Adoption is complete after fresh147/54/eight-wire/6161 composition validation
+    with current88; full generated order and exact zero/one replies stay complete.
     No old8d profile transfer or complete cost result is claimed. See
     `evidence/bounded-reply-king-first-cpu-pilot-20261018/README.md`.
     Exact own-PGO evidence is in
     `evidence/pgo-bounded-reply-cpu-pilot-20261018/README.md`.
 
-18. **Ordered bitplane checker discovery: generic pilot advances to own PGO.**
+18. **Ordered bitplane checker discovery: generic and own PGO support composition.**
     Phase1 reuses existing coherent Position planes for exact ordered first-two
     checker identities at full/capped generation. It preserves pawn/knight/ray
     order, adjacent-king interleaving, blockers and caps. Q's projected mailbox
@@ -320,9 +321,17 @@ and production review remain requirements alongside optimization.
     whole text grows1408 bytes and Q outlining changes; no neutrality follows.
     The generic60-lifetime pilot independently reconciles14.696158s d38ff037
     versus14.496659s132ba135:1.357491% lower, all six medians lower, with
-    profile01/02/29 ranges separated and04/05/35 overlapping. Select an own-PGO
-    follow-up before adoption. No later source or cost qualification transfers.
+    profile01/02/29 ranges separated and04/05/35 overlapping. Candidate7b17c000
+    then passes own54 training/profile remerge,54 strict/eight-wire with zero
+    missing/stale warnings. Its matched own-PGO60-lifetime pilot independently
+    reconciles13.5684265s controle4921975 versus13.4018985s candidate:1.227320%
+    lower, all six medians lower,01/02/04/29 ranges separated and05/35 overlap.
+    Whole-suite CPU15 has46 nonidle ticks despite own-pane client affinity
+    correction; no pervariant interference or absolute idle claim follows.
+    Select later composition testing; no adoption or later-source cost transfer.
     See `evidence/ordered-bit-checkers-phase1-cpu-pilot-20261018/README.md`.
+    Own-PGO result:
+    `evidence/pgo-ordered-bit-checkers-phase1-cpu-pilot-20261018/README.md`.
 
 19. **Ordinary known-check admission: generic signal, own PGO pending.**
     Reuse the reached ordinary node's existing immutable-position check fact
