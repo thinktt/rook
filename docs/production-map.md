@@ -38,3 +38,10 @@ Current frozen baseline evidence is under
 its actual code/artifact; passing observations are not silently transferred to
 a later binary. This map must be expanded to individual normative clauses and
 closed with executed evidence and production review before mission completion.
+
+
+A narrower [scalar source review](research/scalar-production-review.md) now
+maps WC-LEDGER arithmetic/reset/snapshot and historical repetition/reversal
+predicates to the exact latest production source, including admitted arithmetic
+bounds. This closes that source-review subset only; mandatory scalar DIAG and
+all charging, observation, lifecycle and interruption consumers remain open.
