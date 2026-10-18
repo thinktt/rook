@@ -27,6 +27,7 @@ mod positions;
 mod relations;
 mod scores;
 mod supplied;
+mod threat;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -102,6 +103,7 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "evaluation.materialThreat" | "search.fastThreat" => threat::dispatch(operation, input),
         "evaluation.pawnRaceBounds"
         | "evaluation.endgameAdjust"
         | "evaluation.fortressBounds"

@@ -7,7 +7,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current57 operations cover time schedule/allowance, parameters and output
+The current59 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -18,7 +18,8 @@ king pressure and guarded fast cutoff; opaque/produced-history admission and
 local move extensions; pawn spread, pawnless potential, minor mating geometry,
 composed endgame material and pawn-race classification; fresh personality
 coefficient conversion/central balance and ordinary/final score finishing;
-selected pawn-race/fortress bounds, rook reductions and full endgame adjustment.
+selected pawn-race/fortress bounds, rook reductions and full endgame adjustment;
+material-threat production and board-derived pressure/threat/cutoff composition.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -42,12 +43,12 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current2868-case external result comprises47 complete fixture files plus
-25 unchanged selected cases from two partially supported files. All42 adapter
+The current3236-case external result comprises49 complete fixture files plus
+25 unchanged selected cases from two partially supported files. All49 adapter
 unit tests pass. Frozen adapter SHA256 is
-`e31263ac39c03020b47189eb285ae08656380c3428db50c8aae46318eba3e4a5`.
-See `evidence/diagnostic-activity-specialization-20261018/`; this identical
-frontend is freshly linked against the canonical static-kind activity source,
+`ef406db79b7e3f270250fc6be0bc146160208c5b8f1bd9ccd2dc7b585f95e3e7`.
+See `evidence/diagnostic-threats-20261018/`; this expanded
+frontend is linked against the canonical static-kind activity source,
 with both source closures and all declared dependencies verified unchanged. The original25-case selection provenance
 remains in `diagnostic-positions-20261018-02/`.
 
@@ -99,3 +100,13 @@ external cases; every original exit/report/source dependency is independently
 reconciled. The priorf8e0b7b0 observation stays attached to its older native
 source. No missing operation or production qualification claim is closed by
 this relink.
+
+Two threat routes now add368 cases and seven admission/composition units. They
+validate all supplied values/adjustments before lazy gates, preserve Black/White
+ownership, distinguish queried zero from absence, retain estimator charges
+after failed final cutoff and repeat per-call work exactly. Pressure uses current
+king neighbors and evaluation influence, including transparency. Native owners
+perform every formula; current production43 source is unchanged. Frozenef406db7
+passes3236 unique cases/49 units across59 operations. Shelter raw observation
+transport is deferred; no proposed native visibility change or Cargo feature
+was introduced.

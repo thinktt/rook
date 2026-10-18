@@ -351,3 +351,17 @@ PGO artifact915f83e4 also passes54 replays/eight interruption fixtures and its
 own60-lifetime pilot(3.13% lower summed medians; one case's ranges overlap).
 No trial result is transferred to final
 54/12 performance qualification.
+
+The next cold diagnostic expansion adds material-threat production and composed
+fast-threat work without changing native production source. Frozenef406db7
+passes49 adapter units and3236 unique cases across59 operations, including
+49 complete fixture files plus the unchanged25 selected cases. Full mandatory
+transport remains incomplete. No prototype performance result transfers here.
+
+An isolated destination-table generation prototype125d7446 preserves runtime
+piece-kind dispatch and changes only non-pawn pseudo-destination traversal.
+It passes134 native tests, including independent prior coordinate/full-projection
+full and capped ordered comparisons, and54 strict replays. Generic control
+c946104a is the identical already-validated activity-specialized artifact; its
+prior54 replay is explicitly reused. The prototype is not adopted and has no
+performance claim before its balanced pilot.

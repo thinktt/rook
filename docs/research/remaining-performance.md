@@ -214,3 +214,15 @@ and production review remain requirements alongside optimization.
     no reuse benefit. No cache/reuse is implemented or CPU gain inferred.
     The probe is tied to8c source, not a timing artifact for new specialization.
     See `evidence/null-influence-opportunity-20261018/`.
+
+13. **Destination-table non-pawn generation: validated hypothesis.**
+    Current pieces() repeatedly derives coordinates for each candidate. An
+    isolated source uses existing ordered knight destinations and attack rays,
+    preserving runtime kind dispatch, occupied-square stops, king-victim
+    exclusion, chronological lists, caps and all special/pawn routes. It changes
+    only movegen.rs, with the prior coordinate producer retained under cfg(test)
+    for independent full/capped ordered comparisons. All134 native tests and54
+    strict replays pass on generic125d7446. Exact generic controlc946104a already
+    has its own54 pass, explicitly reused. Table loads/slices can offset saved
+    coordinate operations; no benefit, PGO result or adoption is claimed.
+    See `evidence/generation-rays-preparation-20261018/`.

@@ -6,14 +6,14 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements57 native-backed operations,
+  The separate `diagnostic/` crate now implements59 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
   supplied candidate/priority/capture order, root randomization/aspiration,
   quiescence capture policy/PV line length, material balance, capture exception/
   defense/allowance, frontier estimate, king pressure and guarded fast cutoff,
   plus opaque/produced-history admission, local move extensions and five endgame
   components, plus fresh personality weights/central balance and score finishing:
-  selected/full endgame bounds:2868 external cases and42 adapter units pass. Every other mandatory operation still needs
+  selected/full endgame bounds plus material/fast-threat composition:3236 external cases and49 adapter units pass. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
