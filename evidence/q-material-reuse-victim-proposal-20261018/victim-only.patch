@@ -1,0 +1,43 @@
+--- A/src/quiescence_policy.rs
++++ C/src/quiescence_policy.rs
+@@ -3,7 +3,7 @@
+ use crate::evaluation::RootContext;
+ use crate::influence::{profile_sum, Influence};
+ use crate::position::Position;
+-use crate::types::{Color, Move, MoveKind, PieceKind, Square};
++use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub struct CaptureContext {
+@@ -64,7 +64,7 @@
+     let mut after = *parent;
+     after.counts[victim.color().index()][victim.kind().index()] -= 1;
+     let after = root.material(&after);
+-    finish_allowance(parent, movement, retained_positional, pawn_progress, before, after)
++    finish_allowance(parent, victim, movement, retained_positional, pawn_progress, before, after)
+ }
+ 
+ /// One immutable parent/root within a single Q candidate loop.
+@@ -107,6 +107,7 @@
+         }
+         finish_allowance(
+             parent,
++            victim,
+             movement,
+             retained_positional,
+             pawn_progress,
+@@ -119,13 +120,13 @@
+ /// Shared native finishing rule; material endpoints are complete adjusted scores.
+ fn finish_allowance(
+     parent: &Position,
++    victim: Piece,
+     movement: &Move,
+     retained_positional: i32,
+     pawn_progress: i32,
+     before: i32,
+     after: i32,
+ ) -> i32 {
+-    let victim = parent.board[movement.to().0 as usize];
+     let sign = if victim.color() == Color::White {
+         1
+     } else {

@@ -1,0 +1,72 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -521,7 +521,7 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
+-        self.select_noncheck_detailed_observed(
++        self.select_noncheck_impl::<false, _, _>(
+             node, lower, upper, capture_exception, scratch, |_| {}, |_| {},
+         )
+     }
+@@ -530,6 +530,27 @@
+     /// refresh ordering, lazy influence, or the ordinary result/state layouts.
+     /// A refresh emits fast details first and full details second.
+     pub fn select_noncheck_detailed_observed<F, G>(
++        &mut self,
++        node: &mut Node,
++        lower: i32,
++        upper: i32,
++        capture_exception: bool,
++        scratch: &mut Option<Influence>,
++        full_observer: F,
++        fast_observer: G,
++    ) -> Selection
++    where
++        F: FnMut(FullDetails),
++        G: FnMut(FastDetails),
++    {
++        self.select_noncheck_impl::<true, _, _>(
++            node, lower, upper, capture_exception, scratch, full_observer, fast_observer,
++        )
++    }
++
++    // Only stage call wrappers differ. The ordinary instantiation retains its
++    // original full/fast call sites; every selection condition stays shared.
++    fn select_noncheck_impl<const OBSERVE: bool, F, G>(
+         &mut self,
+         node: &mut Node,
+         lower: i32,
+@@ -555,17 +576,29 @@
+         if sparse {
+             let influence = self.ensure_influence(&node.position, scratch);
+             return Selection {
+-                evaluation: self.full_detailed_observed(node, influence, false, |details| full_observer(details)),
++                evaluation: if OBSERVE {
++                    self.full_detailed_observed(node, influence, false, |details| full_observer(details))
++                } else {
++                    self.full(node, influence, false)
++                },
+                 initially_full: true,
+                 fast_score: None,
+                 refreshed: false,
+             };
+         }
+-        let fast = self.fast_detailed_observed(node, false, |details| fast_observer(details));
++        let fast = if OBSERVE {
++            self.fast_detailed_observed(node, false, |details| fast_observer(details))
++        } else {
++            self.fast(node, false)
++        };
+         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
+         let evaluation = if refresh {
+             let influence = self.ensure_influence(&node.position, scratch);
+-            self.full_detailed_observed(node, influence, false, |details| full_observer(details))
++            if OBSERVE {
++                self.full_detailed_observed(node, influence, false, |details| full_observer(details))
++            } else {
++                self.full(node, influence, false)
++            }
+         } else {
+             fast
+         };

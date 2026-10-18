@@ -1,0 +1,510 @@
+--- a/diagnostic/src/evaluation_common.rs
++++ b/diagnostic/src/evaluation_common.rs
+@@ -1,8 +1,10 @@
+ //! Shared cold evaluation admission and native-value record formatting.
+-use super::{integer, object, pawn_progress, scores, Result};
++use super::{integer, object, pawn_progress, positions, scores, text, Result};
+ use rook2::{
+     endgame::Finished,
+-    evaluator::{Evaluator, Parameters, Retained},
++    evaluator::{Evaluator, FastDetails, FullDetails, Node, Parameters, Retained},
++    influence::Influence,
++    movegen,
+     position::Position,
+     types::{Color, PieceKind},
+ };
+@@ -65,3 +67,65 @@
+         "scaledScore":finished.scaled_score,"score":finished.score,
+         "lowerBound":finished.lower,"upperBound":finished.upper})
+ }
++
++#[derive(Clone, Copy, PartialEq, Eq)]
++pub(super) enum Kind {
++    Full,
++    Fast,
++}
++
++impl Kind {
++    pub(super) fn parse(value: &Value) -> Result<Self> {
++        match text(value)? {
++            "full" => Ok(Self::Full),
++            "fast" => Ok(Self::Fast),
++            _ => Err("evaluation kind must be full or fast".into()),
++        }
++    }
++
++    pub(super) fn name(self) -> &'static str {
++        match self {
++            Self::Full => "full",
++            Self::Fast => "fast",
++        }
++    }
++}
++
++/// Evaluate the existing native node once and record its produced state.
++/// The caller owns root/transition/inheritance; this helper never rebuilds it.
++pub(super) fn evaluate(evaluator: &mut Evaluator<true>, node: &mut Node, kind: Kind) -> Value {
++    let checked = movegen::in_check(&node.position, node.position.side);
++    let (evaluation, base, finished, reused) = match kind {
++        Kind::Full => {
++            let influence = Influence::build(&node.position);
++            let mut details = None;
++            let evaluation = evaluator.full_detailed_observed(
++                node, &influence, checked, |value| details = Some(value),
++            );
++            let FullDetails { base, finished, pawn_entry_reused, .. } =
++                details.expect("full evaluation observes one result");
++            (evaluation, base, finished, Some(pawn_entry_reused))
++        }
++        Kind::Fast => {
++            // No influence is constructed, and the native fast owner
++            // performs no pawn selection or mutation of this node.
++            let mut details = None;
++            let evaluation = evaluator.fast_detailed_observed(
++                node, checked, |value| details = Some(value),
++            );
++            let FastDetails { base, finished } =
++                details.expect("fast evaluation observes one result");
++            (evaluation, base, finished, None)
++        }
++    };
++    let mut output = finishing_output(&node.position, evaluator, finished);
++    output["kind"] = json!(kind.name());
++    output["rootPhase"] = positions::phase_value(evaluator.root.phase);
++    output["currentPhase"] = positions::phase_value(node.position.phase());
++    output["inCheck"] = json!(checked);
++    output["baseScore"] = json!(base);
++    output["retained"] = retained_output(node.retained);
++    output["relationQueries"] = json!(evaluation.relation_queries);
++    output["pawnEntryReused"] = json!(reused);
++    output
++}
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -21,6 +21,7 @@
+ mod king_shelter;
+ mod learned;
+ mod ledger;
++mod move_evaluation;
+ mod moves;
+ mod ordering;
+ mod pawn_fresh;
+@@ -122,6 +123,7 @@
+         | "evaluation.endgameAdjust"
+         | "evaluation.fortressBounds"
+         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
++        "evaluation.moveSequence" => move_evaluation::dispatch(input),
+         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
+         "evaluation.freshSubtotal" | "evaluation.freshScore" => {
+             fresh_evaluation::dispatch(operation, input)
+--- /dev/null
++++ b/diagnostic/src/move_evaluation.rs
+@@ -0,0 +1,279 @@
++//! Forward native node transitions through explicitly selected full/fast work.
++use super::{array, evaluation_common::{self as common, Kind}, object, positions, text, Result};
++use rook2::{
++    evaluation::RootContext,
++    evaluator::{Evaluator, Node, Parameters},
++    movegen,
++    position::Position,
++    types::Color,
++};
++use serde_json::{json, Value};
++
++struct Step {
++    movement: Option<String>,
++    kind: Kind,
++}
++
++struct Request {
++    initial: Position,
++    initial_placement: String,
++    parameters: Parameters,
++    steps: Vec<Step>,
++}
++
++impl Request {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["fen", "percentages", "averageDepth", "cfd", "sop", "steps"])?;
++        let fen = text(&input["fen"])?;
++        let initial = positions::sequence_position(fen, true)?;
++        let initial_placement = fen.split(' ').next().unwrap().to_owned();
++        let parameters = common::parameters(input, true)?;
++        // Validate the full schema and every coordinate spelling before native
++        // evaluation. Legality/null admission depends on sequential actual state.
++        let steps = array(&input["steps"], 1, 256)?.iter().map(|value| {
++            object(value, &["move", "kind"])?;
++            let kind = Kind::parse(&value["kind"])?;
++            let movement = if value["move"].is_null() {
++                None
++            } else {
++                let spelling = text(&value["move"])?;
++                positions::coordinate(spelling)?;
++                Some(spelling.to_owned())
++            };
++            Ok(Step { movement, kind })
++        }).collect::<Result<Vec<_>>>()?;
++        Ok(Self { initial, initial_placement, parameters, steps })
++    }
++
++    fn observe(self) -> Result<Value> {
++        let mut evaluator = Evaluator::<true>::new(&self.initial);
++        evaluator.parameters = self.parameters;
++        evaluator.begin_search(&self.initial);
++        let mut node = Node::root(self.initial, &evaluator.root);
++        let mut initial = common::evaluate(&mut evaluator, &mut node, Kind::Full);
++        initial["state"] = positions::state(&node.position);
++        // Match the existing setup-move sequence's initial notation boundary.
++        initial["state"]["placement"] = json!(self.initial_placement);
++        initial["inherited"] = Value::Null;
++        let mut results = Vec::with_capacity(self.steps.len() + 1);
++        results.push(initial);
++        for step in self.steps {
++            node = transition(&node, &evaluator.root, step.movement.as_deref())?;
++            let inherited = common::retained_output(node.retained);
++            let mut output = common::evaluate(&mut evaluator, &mut node, step.kind);
++            output["state"] = positions::state(&node.position);
++            output["inherited"] = inherited;
++            results.push(output);
++        }
++        Ok(json!({"results":results}))
++    }
++}
++
++fn transition(node: &Node, root: &RootContext, spelling: Option<&str>) -> Result<Node> {
++    let child = if let Some(spelling) = spelling {
++        let movement = positions::legal_move(&node.position, spelling)?;
++        node.child(root, movement)
++    } else {
++        if [Color::White, Color::Black].into_iter()
++            .any(|side| movegen::in_check(&node.position, side))
++        {
++            return Err("null evaluation transition requires neither king in check".into());
++        }
++        node.null_child()
++    };
++    positions::bounded_material(&child.position)?;
++    Ok(child)
++}
++
++pub(super) fn dispatch(input: &Value) -> Result<Value> {
++    Request::parse(input)?.observe()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use super::super::scores;
++
++    const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++    const EMPTY: &str = "7k/8/8/8/8/8/8/K7 w - - 0 1";
++
++    fn request(fen: &str, steps: Vec<Value>) -> Value {
++        let percentages: serde_json::Map<String, Value> = scores::NAMES.iter()
++            .map(|name| (name.to_string(), json!(100))).collect();
++        json!({"fen":fen,"percentages":{"own":percentages.clone(),"opponent":percentages},
++            "averageDepth":0,"cfd":0,"sop":100,"steps":steps})
++    }
++
++    fn ordinary(movement: &str, kind: &str) -> Value {
++        json!({"move":movement,"kind":kind})
++    }
++
++    fn null(kind: &str) -> Value {
++        json!({"move":null,"kind":kind})
++    }
++
++    #[test]
++    fn mixed_moves_null_and_refresh_expose_actual_pre_and_post_evaluation_state() {
++        let input = request(START, vec![ordinary("e2e4","fast"),null("fast"),
++            ordinary("g1f3","full"),null("full"),ordinary("f1c4","fast"),ordinary("g8f6","full")]);
++        let out = dispatch(&input).unwrap();
++        let r = &out["results"];
++        assert_eq!(r.as_array().unwrap().len(), 7);
++        assert!(r[0]["inherited"].is_null());
++        assert_eq!(r[0]["relationQueries"], 10);
++        assert_eq!(r[1]["baseScore"], 14);
++        assert_eq!(r[2]["baseScore"], 26);
++        assert_eq!(r[3]["baseScore"], 82);
++        assert_eq!(r[3]["inherited"]["evaluationAge"], 3);
++        assert_eq!(r[3]["retained"]["evaluationAge"], 0);
++        assert_eq!(r[3]["retained"]["positionalSubtotal"], 42);
++        assert_eq!(r[4]["baseScore"], 96);
++        assert_eq!(r[4]["inherited"]["positionalSubtotal"], 42);
++        assert_eq!(r[4]["inherited"]["evaluationAge"], 1);
++        assert_eq!(r[4]["retained"]["evaluationAge"], 0);
++        assert_eq!(r[4]["pawnEntryReused"], true);
++        assert_eq!(r[3]["identity"], r[4]["identity"]);
++        assert_eq!(r[1]["relationQueries"], 0);
++        assert!(r[1]["pawnEntryReused"].is_null());
++        assert_eq!(r[6]["rootPhase"], r[0]["rootPhase"]);
++        assert_eq!(dispatch(&input).unwrap(), out);
++    }
++
++    #[test]
++    fn pawn_and_capture_counter_resets_preserve_inherited_age_and_chronology() {
++        let fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 255 1";
++        let out = dispatch(&request(fen,vec![ordinary("e2e4","fast"),ordinary("d7d5","fast"),
++            ordinary("e4d5","full"),ordinary("g8f6","fast")])).unwrap();
++        let r = &out["results"];
++        assert_eq!(r[1]["state"]["halfmoveClock"], 0);
++        assert_eq!(r[1]["inherited"]["evaluationAge"], 1);
++        assert_eq!(r[2]["state"]["halfmoveClock"], 0);
++        assert_eq!(r[2]["inherited"]["evaluationAge"], 2);
++        assert_eq!(r[3]["state"]["halfmoveClock"], 0);
++        assert_eq!(r[3]["inherited"]["evaluationAge"], 3);
++        assert_eq!(r[3]["retained"]["evaluationAge"], 0);
++        assert_eq!(r[4]["state"]["halfmoveClock"], 1);
++        assert_eq!(r[4]["retained"]["evaluationAge"], 1);
++        assert_eq!(r[3]["state"]["pieceOrder"]["white"]["pawn"], json!(["a2","b2","c2","d2","d5","f2","g2","h2"]));
++        assert_eq!(r[3]["state"]["pieceOrder"]["black"]["pawn"], json!(["a7","b7","c7","e7","f7","g7","h7"]));
++        assert_eq!(r[2]["inherited"]["positionalSubtotal"], r[0]["retained"]["positionalSubtotal"]);
++        assert_eq!(r[2]["inherited"]["pawnProgress"], r[0]["retained"]["pawnProgress"]);
++    }
++
++    #[test]
++    fn null_preserves_placement_order_identity_pair_and_castling_but_clears_ep() {
++        let fen = "r3k2r/8/8/3pP3/8/8/8/R3K2R w KQkq d6 255 1";
++        let out = dispatch(&request(fen,vec![null("fast"),null("full"),null("fast")])).unwrap();
++        let r = &out["results"];
++        assert_eq!(r[0]["state"]["enPassant"], "d6");
++        assert_eq!(r[1]["state"]["enPassant"], "-");
++        assert_eq!(r[1]["state"]["halfmoveClock"], 0);
++        assert_eq!(r[1]["state"]["castling"], "KQkq");
++        for field in ["placement","pieceOrder","identity","phase"] {
++            assert_eq!(r[0]["state"][field], r[1]["state"][field]);
++        }
++        assert_eq!(r[1]["retained"]["positionalSubtotal"], r[0]["retained"]["positionalSubtotal"]);
++        assert_eq!(r[1]["retained"]["pawnProgress"], r[0]["retained"]["pawnProgress"]);
++        assert_eq!(r[2]["inherited"]["evaluationAge"], 2);
++        assert_eq!(r[2]["retained"]["evaluationAge"], 0);
++        assert_eq!(r[3]["inherited"]["evaluationAge"], 1);
++        assert_eq!(r[0]["identity"], r[3]["identity"]);
++    }
++
++    #[test]
++    fn full_length_null_history_wraps_age_and_counter_without_draw_adjudication() {
++        let input = request(EMPTY,vec![null("fast");256]);
++        let out = dispatch(&input).unwrap();
++        let r = &out["results"];
++        assert_eq!(r.as_array().unwrap().len(),257);
++        assert_eq!(r[255]["inherited"]["evaluationAge"],255);
++        assert_eq!(r[256]["inherited"]["evaluationAge"],0);
++        assert_eq!(r[256]["retained"]["evaluationAge"],0);
++        assert_eq!(r[256]["state"]["halfmoveClock"],0);
++        assert_eq!(r[256]["identity"],r[0]["identity"]);
++        assert_eq!(r[100]["score"],0);
++        assert_eq!(r[256]["relationQueries"],0);
++        assert!(Request::parse(&request(EMPTY,vec![null("fast");257])).is_err());
++        assert!(Request::parse(&request(EMPTY,vec![])).is_err());
++    }
++
++    #[test]
++    fn special_children_keep_root_square_invariants_and_promotion_append_order() {
++        for (fen,movement) in [
++            ("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1","e1c1"),
++            ("7k/8/8/3pP3/8/8/8/K7 w - d6 17 1","e5d6"),
++            ("1r5k/P7/8/8/8/8/8/1Q5K w - - 0 1","a7b8n"),
++            ("1q5k/8/8/8/8/8/p7/1R5K b - - 0 1","a2b1q"),
++        ] {
++            let position = positions::sequence_position(fen,true).unwrap();
++            let root = RootContext::neutral(&position);
++            let parent = Node::root(position,&root);
++            let child = transition(&parent,&root,Some(movement)).unwrap();
++            child.position.validate().unwrap();
++            assert_eq!(child.retained.nonking_squares,root.nonking_square_balance(&child.position));
++            assert_eq!(root.square_balance_from(&child.position,child.retained.nonking_squares),root.square_balance(&child.position));
++        }
++        let castle = dispatch(&request("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",vec![ordinary("e1c1","fast")])).unwrap();
++        assert_eq!(castle["results"][1]["state"]["pieceOrder"]["white"]["rook"],json!(["d1","h1"]));
++        assert_eq!(castle["results"][1]["state"]["castling"],"kq");
++        let promotion = dispatch(&request("1q5k/8/8/8/8/8/p7/1R5K b - - 0 1",vec![ordinary("a2b1q","fast")])).unwrap();
++        assert_eq!(promotion["results"][1]["state"]["pieceOrder"]["black"]["queen"],json!(["b8","b1"]));
++        assert_eq!(promotion["results"][1]["state"]["pieceOrder"]["black"]["pawn"],json!([]));
++        let ep = dispatch(&request("7k/8/8/3pP3/8/8/8/K7 w - d6 17 1",vec![ordinary("e5d6","fast")])).unwrap();
++        assert_eq!(ep["results"][1]["state"]["placement"],"7k/8/3P4/8/8/8/8/K7");
++        assert_eq!(ep["results"][1]["retained"]["pawnProgress"],ep["results"][0]["retained"]["pawnProgress"]);
++        assert!(ep["results"][1]["pawnEntryReused"].is_null());
++    }
++
++    #[test]
++    fn null_requires_both_kings_safe_and_ordinary_ep_uses_the_portable_domain() {
++        for fen in [
++            "r6k/8/8/8/8/8/8/K7 w - - 0 1",
++            "7k/8/8/8/8/8/7R/7K w - - 0 1",
++        ] {
++            assert!(dispatch(&request(fen,vec![null("fast")])).is_err());
++        }
++        // Normalized setup admits an initially attacked nonmoving king. A
++        // legal ordinary continuation remains admitted, although null is not.
++        assert!(dispatch(&request("7k/8/8/8/8/8/7R/7K w - - 0 1",vec![ordinary("h2g2","fast")])).is_ok());
++        let constructed = "7k/8/8/3nP3/8/8/8/K7 w - d6 0 1";
++        assert!(dispatch(&request(constructed,vec![ordinary("e5d6","fast")])).is_err());
++        assert!(dispatch(&request(constructed,vec![ordinary("e5e6","fast")])).is_ok());
++        assert!(dispatch(&request(START,vec![ordinary("e1g1","fast")])).is_err());
++    }
++
++    #[test]
++    fn eager_schema_validation_is_separate_from_sequential_legal_admission() {
++        let mut input = request(START,vec![ordinary("e2e5","fast"),ordinary("a1a2","fast")]);
++        input["steps"][1]["kind"] = json!(false);
++        match Request::parse(&input) {
++            Err(error) => assert_eq!(error,"expected string"),
++            Ok(_) => panic!("every step schema must validate before sequential legality"),
++        }
++        for movement in ["A2a3","a2a3u","e2e4xx","é2e4"] {
++            assert!(Request::parse(&request(START,vec![ordinary(movement,"fast")])).is_err());
++        }
++        for field in ["pawnOrder","pieceOrder","phase","reversiblePlies","inherited"] {
++            let mut input = request(START,vec![ordinary("e2e4","fast")]);
++            input["steps"][0][field] = json!(0);
++            assert!(Request::parse(&input).is_err());
++        }
++        let mut ignored = request(START,vec![ordinary("e2e4","fast")]);
++        ignored["percentages"]["opponent"]["king"] = json!(1001);
++        assert!(Request::parse(&ignored).is_err());
++        let normalized = dispatch(&request("7k/8/8/8/8/8/8/K7 w KQ e6 255 1",vec![ordinary("a1b1","fast")])).unwrap();
++        assert_eq!(normalized["results"][0]["state"]["castling"],"-");
++        assert_eq!(normalized["results"][0]["state"]["enPassant"],"-");
++        assert_eq!(normalized["results"][1]["state"]["halfmoveClock"],0);
++    }
++
++    #[test]
++    fn promotion_suffix_and_resulting_piece_capacity_are_checked_on_actual_moves() {
++        let promotion = "7k/P7/8/8/8/8/8/K7 w - - 0 1";
++        assert!(dispatch(&request(promotion,vec![ordinary("a7a8","fast")])).is_err());
++        assert!(dispatch(&request(START,vec![ordinary("e2e4q","fast")])).is_err());
++        let crowded = "7k/P6P/5P2/8/8/QQQQQQQQ/Q7/7K w - - 0 1";
++        assert!(dispatch(&request(crowded,vec![ordinary("a7a8q","fast")])).is_err());
++        assert!(dispatch(&request(crowded,vec![ordinary("a7a8n","fast")])).is_ok());
++    }
++}
+--- a/diagnostic/src/positions.rs
++++ b/diagnostic/src/positions.rs
+@@ -17,7 +17,7 @@
+     Square::parse(text(v)?).ok_or_else(|| "expected lowercase algebraic square".into())
+ }
+ 
+-fn bounded_material(position: &Position) -> Result<()> {
++pub(super) fn bounded_material(position: &Position) -> Result<()> {
+     for counts in position.counts {
+         if counts[1..4].iter().any(|&count| count > 10) || counts[4] > 9 {
+             return Err("placement exceeds bounded diagnostic piece-type counts".into());
+@@ -157,7 +157,8 @@
+     advance_with_move(position, spelling).map(|(child, _)| child)
+ }
+ 
+-pub(super) fn advance_with_move(position: &Position, spelling: &str) -> Result<(Position, Move)> {
++/// Coordinate schema validation is independent of the position's legal moves.
++pub(super) fn coordinate(spelling: &str) -> Result<()> {
+     if !spelling.is_ascii()
+         || !matches!(spelling.len(), 4 | 5)
+         || Square::parse(&spelling[..2]).is_none()
+@@ -166,6 +167,12 @@
+     {
+         return Err("malformed coordinate move".into());
+     }
++    Ok(())
++}
++
++/// Resolve one actual legal native move with the portable EP-domain gate.
++pub(super) fn legal_move(position: &Position, spelling: &str) -> Result<Move> {
++    coordinate(spelling)?;
+     let mut legal = MoveList::new();
+     movegen::generate_legal(position, &mut legal);
+     let movement = legal
+@@ -190,6 +197,11 @@
+             );
+         }
+     }
++    Ok(movement)
++}
++
++pub(super) fn advance_with_move(position: &Position, spelling: &str) -> Result<(Position, Move)> {
++    let movement = legal_move(position, spelling)?;
+     let child = position.played_unchecked(movement);
+     bounded_material(&child)?;
+     Ok((child, movement))
+--- a/diagnostic/src/retained_evaluation.rs
++++ b/diagnostic/src/retained_evaluation.rs
+@@ -1,35 +1,11 @@
+ //! Fixed-root controlled full/fast sequence over one native evaluator lifetime.
+-use super::{array, color, evaluation_common as common, integer, object, positions, text, Result};
++use super::{array, color, evaluation_common as common, integer, object, positions, Result};
++use super::evaluation_common::Kind;
+ use rook2::{
+-    evaluator::{Evaluator, FastDetails, FullDetails, Node, Parameters},
+-    influence::Influence,
+-    movegen,
++    evaluator::{Evaluator, Node, Parameters},
+     position::Position,
+ };
+ use serde_json::{json, Value};
+-
+-#[derive(Clone, Copy, PartialEq, Eq)]
+-enum Kind {
+-    Full,
+-    Fast,
+-}
+-
+-impl Kind {
+-    fn parse(value: &Value) -> Result<Self> {
+-        match text(value)? {
+-            "full" => Ok(Self::Full),
+-            "fast" => Ok(Self::Fast),
+-            _ => Err("evaluation kind must be full or fast".into()),
+-        }
+-    }
+-
+-    fn name(self) -> &'static str {
+-        match self {
+-            Self::Full => "full",
+-            Self::Fast => "fast",
+-        }
+-    }
+-}
+ 
+ struct Step {
+     kind: Kind,
+@@ -80,40 +56,8 @@
+             let mut node = Node::root(step.position, &evaluator.root);
+             node.retained.positional = pair.0;
+             node.retained.pawn_progress = pair.1;
+-            let checked = movegen::in_check(&step.position, step.position.side);
+-            let (evaluation, base, finished, reused) = match step.kind {
+-                Kind::Full => {
+-                    let influence = Influence::build(&step.position);
+-                    let mut details = None;
+-                    let evaluation = evaluator.full_detailed_observed(
+-                        &mut node, &influence, checked, |value| details = Some(value),
+-                    );
+-                    let FullDetails { base, finished, pawn_entry_reused, .. } =
+-                        details.expect("full evaluation observes one result");
+-                    (evaluation, base, finished, Some(pawn_entry_reused))
+-                }
+-                Kind::Fast => {
+-                    // No influence is constructed, and the native fast owner
+-                    // performs no pawn selection or mutation of this node.
+-                    let mut details = None;
+-                    let evaluation = evaluator.fast_detailed_observed(
+-                        &node, checked, |value| details = Some(value),
+-                    );
+-                    let FastDetails { base, finished } =
+-                        details.expect("fast evaluation observes one result");
+-                    (evaluation, base, finished, None)
+-                }
+-            };
++            let output = common::evaluate(&mut evaluator, &mut node, step.kind);
+             pair = (node.retained.positional, node.retained.pawn_progress);
+-            let mut output = common::finishing_output(&step.position, &evaluator, finished);
+-            output["kind"] = json!(step.kind.name());
+-            output["rootPhase"] = positions::phase_value(evaluator.root.phase);
+-            output["currentPhase"] = positions::phase_value(step.position.phase());
+-            output["inCheck"] = json!(checked);
+-            output["baseScore"] = json!(base);
+-            output["retained"] = common::retained_output(node.retained);
+-            output["relationQueries"] = json!(evaluation.relation_queries);
+-            output["pawnEntryReused"] = json!(reused);
+             results.push(output);
+         }
+         json!({"results":results})

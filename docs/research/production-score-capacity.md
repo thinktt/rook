@@ -56,3 +56,15 @@ functions are byte-identical to frozen79 generic. The separate
 [82-operation delta binding](../../evidence/retained-evaluation-integration-20261018/numeric-proof-delta-binding.json)
 retains the preceding bounded proof premises and limits; no broader arithmetic
 or performance conclusion is inferred from the observer seams.
+
+The85-operation source adds move/null transports, a const-gated Q selector
+observer and extraction of the existing ordered evaluation-return policy.
+Ordinary arithmetic, transition/retained ownership, layouts and admitted input
+domains are unchanged. The false selector specialization uses the preceding
+full/fast wrappers; its focused codegen scope is restored. Exact source equality,
+142 native tests,117 adapter units/5289 cases and54/eight-wire regressions bind
+the new named artifacts. The
+[85-operation delta binding](../../evidence/move-q-evaluation-integration-20261018/numeric-proof-delta-binding.json)
+retains the preceding bounded numerical premises and unresolved composition
+limits. Neither source transport nor finite static comparison is a broader
+arithmetic, whole-behavior or CPU-neutrality proof.

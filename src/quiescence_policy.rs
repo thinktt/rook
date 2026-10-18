@@ -24,6 +24,43 @@ pub struct CaptureDecision {
     pub defense_queried: bool,
 }
 
+/// Ordered static return from an admitted, non-check evaluation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EvaluationReturn {
+    LowerBound(i32),
+    UpperBound(i32),
+    StandPat(i32),
+}
+
+impl EvaluationReturn {
+    pub fn score(self) -> i32 {
+        match self {
+            Self::LowerBound(score) | Self::UpperBound(score) | Self::StandPat(score) => score,
+        }
+    }
+}
+
+/// Consume bounds before standing score, using the incoming alpha unchanged.
+/// None continues to tactical generation. Checked nodes bypass this policy.
+#[inline]
+pub fn evaluation_return(
+    lower_bound: i32,
+    upper_bound: i32,
+    score: i32,
+    alpha: i32,
+    beta: i32,
+) -> Option<EvaluationReturn> {
+    if lower_bound >= beta {
+        Some(EvaluationReturn::LowerBound(lower_bound))
+    } else if upper_bound <= alpha {
+        Some(EvaluationReturn::UpperBound(upper_bound))
+    } else if score >= beta {
+        Some(EvaluationReturn::StandPat(score))
+    } else {
+        None
+    }
+}
+
 pub fn capture_exception(parent: &Position, movement: &Move) -> bool {
     if matches!(movement.kind(), MoveKind::Promotion(_)) {
         return true;
@@ -175,6 +212,16 @@ mod tests {
     }
     fn pos(fen: &str) -> Position {
         Position::from_fen(fen).unwrap()
+    }
+
+    #[test]
+    fn static_evaluation_returns_preserve_priority_equality_and_unclipped_values() {
+        assert_eq!(evaluation_return(10, -10, 20, 0, 10), Some(EvaluationReturn::LowerBound(10)));
+        assert_eq!(evaluation_return(-100, 0, 20, 0, 10), Some(EvaluationReturn::UpperBound(0)));
+        assert_eq!(evaluation_return(-100, 100, 10, 0, 10), Some(EvaluationReturn::StandPat(10)));
+        assert_eq!(evaluation_return(-100, 100, 9, 0, 10), None);
+        assert_eq!(evaluation_return(1000, 2000, 900, 0, 10).unwrap().score(), 1000);
+        assert_eq!(evaluation_return(-1000, -500, 900, 0, 10).unwrap().score(), -500);
     }
 
     #[test]

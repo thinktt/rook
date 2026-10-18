@@ -17,7 +17,7 @@ pub(super) fn square(v: &Value) -> Result<Square> {
     Square::parse(text(v)?).ok_or_else(|| "expected lowercase algebraic square".into())
 }
 
-fn bounded_material(position: &Position) -> Result<()> {
+pub(super) fn bounded_material(position: &Position) -> Result<()> {
     for counts in position.counts {
         if counts[1..4].iter().any(|&count| count > 10) || counts[4] > 9 {
             return Err("placement exceeds bounded diagnostic piece-type counts".into());
@@ -157,7 +157,8 @@ fn advance(position: &Position, spelling: &str) -> Result<Position> {
     advance_with_move(position, spelling).map(|(child, _)| child)
 }
 
-pub(super) fn advance_with_move(position: &Position, spelling: &str) -> Result<(Position, Move)> {
+/// Coordinate schema validation is independent of the position's legal moves.
+pub(super) fn coordinate(spelling: &str) -> Result<()> {
     if !spelling.is_ascii()
         || !matches!(spelling.len(), 4 | 5)
         || Square::parse(&spelling[..2]).is_none()
@@ -166,6 +167,12 @@ pub(super) fn advance_with_move(position: &Position, spelling: &str) -> Result<(
     {
         return Err("malformed coordinate move".into());
     }
+    Ok(())
+}
+
+/// Resolve one actual legal native move with the portable EP-domain gate.
+pub(super) fn legal_move(position: &Position, spelling: &str) -> Result<Move> {
+    coordinate(spelling)?;
     let mut legal = MoveList::new();
     movegen::generate_legal(position, &mut legal);
     let movement = legal
@@ -190,6 +197,11 @@ pub(super) fn advance_with_move(position: &Position, spelling: &str) -> Result<(
             );
         }
     }
+    Ok(movement)
+}
+
+pub(super) fn advance_with_move(position: &Position, spelling: &str) -> Result<(Position, Move)> {
+    let movement = legal_move(position, spelling)?;
     let child = position.played_unchecked(movement);
     bounded_material(&child)?;
     Ok((child, movement))

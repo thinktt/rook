@@ -266,7 +266,7 @@ and production review remain requirements alongside optimization.
     combined with profile_sum results. See
     `evidence/pressure-value-cpu-pilot-20261018/`.
 
-16. **Repeated capture material endpoints: census supports a Q-only trial.**
+16. **Repeated capture material endpoints: measured and parked.**
     The frozen79 diagnostic derivative passes54 unchanged strict replays and
     independently reconciles163,583,266 segment material source demands.
     An invocation-local1+K model avoids32,274,602 demands (19.7298%) across
@@ -278,3 +278,13 @@ and production review remain requirements alongside optimization.
     code remain costs to measure. Counts are source opportunities, not emitted
     calls or CPU savings. See
     `evidence/material-allowance-census-20261018/RESULTS.md`.
+
+    The invocation-local Q-only candidate21daa966 then passes138 native tests,
+    all54 strict replays and eight interruption fixtures/24 searches. Its frame
+    grows96 bytes and Q code277 bytes. The balanced generic60-lifetime pilot
+    independently reconciles14.683823s root79 control9709f8e9 versus14.682551s
+    reuse in summed medians,0.008663% lower. Three medians improve and three
+    increase; every observed range overlaps. Park A and its two bounded codegen
+    variants without PGO or adoption. Source opportunities did not become a
+    useful measured CPU gain. See
+    `evidence/q-material-reuse-cpu-pilot-20261018/README.md`.

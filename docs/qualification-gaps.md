@@ -6,7 +6,7 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements82 native-backed operations,
+  The separate `diagnostic/` crate now implements85 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
   supplied candidate/priority/capture order, root randomization/aspiration,
   quiescence capture policy/PV line length, material balance, capture exception/
@@ -15,9 +15,10 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   components, plus fresh personality weights/central balance and score finishing:
   selected/full endgame bounds plus material/fast-threat composition, root/square/
   shelter and score contexts, fresh/retained pawn observations and subtotals,
-  complete forced-fresh subtotal/score and controlled full/fast sequences:
-  4721 unique cases/76 complete fixture files and99 adapter units pass after139
-  native tests. Remaining mandatory inventory is35 operations/2952 cases. Every other mandatory operation still needs
+  complete forced-fresh subtotal/score, controlled full/fast and actual move/null
+  sequences, and Q-entry/disposition observations:
+  5289 unique cases/79 complete fixture files and117 adapter units pass after142
+  native tests. Remaining mandatory inventory is32 operations/2384 cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -138,11 +139,19 @@ canonical generic9709f8e9 also passes54 strict replays/eight interruption fixtur
 existing arithmetic and miss-only cache construction without layout changes,
 but final canonical own-PGO/cost/gameplay evidence must use its exact new source.
 
-Current82-operation source now exactly matches the tested retained full/fast
+Previous82-operation source exactly matched the tested retained full/fast
 proposal's43-file native and28-file adapter closures. Its named ordinary
 c6839096 passes139 native tests,54 strict replays/eight interruption fixtures;
 adapterbf4c0150 passes4721 cases/99 units. This source promotion retains those
 frozen artifact identities and does not imply a canonical-path rebuild or
-transfer the old8d PGO/cost/gameplay observations. The remaining35 mandatory
-operations/2952 cases include the next move/quiescence stage transports and
-wider complete-search/session traces.
+transfer the old8d PGO/cost/gameplay observations.
+
+Current85-operation source exactly matches the combined30-file frontend and
+corrected43-file native closure. Named ordinary d38ff037 passes142 native tests,
+54 strict replays and eight interruption fixtures/24 searches; adapter7dd00a43
+passes5289 cases/117 units. The default evaluation call scope is restored after
+the first observer proposal's code expansion. Original failed metadata-stability
+evidence and stable replay retry are preserved. This is exact source promotion
+with frozen artifacts, not a canonical-path rebuild or new PGO/cost/gameplay
+qualification. The remaining32 mandatory operations/2384 cases include recursive
+quiescence, wider complete-search/session traces and remaining pawn sequences.

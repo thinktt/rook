@@ -206,14 +206,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
             if DIAGNOSTICS {
                 self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
             }
-            if value.lower >= entry.upper {
-                return Ok(value.lower);
-            }
-            if value.upper <= lower {
-                return Ok(value.upper);
-            }
-            if value.score >= entry.upper {
-                return Ok(value.score);
+            if let Some(returned) = policy::evaluation_return(
+                value.lower, value.upper, value.score, lower, entry.upper,
+            ) {
+                return Ok(returned.score());
             }
             lower = lower.max(value.score);
             (value.score, value.score, value.upper)

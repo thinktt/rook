@@ -1,0 +1,208 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -521,6 +521,28 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
++        self.select_noncheck_detailed_observed(
++            node, lower, upper, capture_exception, scratch, |_| {}, |_| {},
++        )
++    }
++
++    /// Observe actual selected stages without changing sparse admission, strict
++    /// refresh ordering, lazy influence, or the ordinary result/state layouts.
++    /// A refresh emits fast details first and full details second.
++    pub fn select_noncheck_detailed_observed<F, G>(
++        &mut self,
++        node: &mut Node,
++        lower: i32,
++        upper: i32,
++        capture_exception: bool,
++        scratch: &mut Option<Influence>,
++        mut full_observer: F,
++        mut fast_observer: G,
++    ) -> Selection
++    where
++        F: FnMut(FullDetails),
++        G: FnMut(FastDetails),
++    {
+         let sparse = node.position.counts.iter().all(|c| {
+             (c[1] as u16
+                 + c[2] as u16
+@@ -533,17 +555,17 @@
+         if sparse {
+             let influence = self.ensure_influence(&node.position, scratch);
+             return Selection {
+-                evaluation: self.full(node, influence, false),
++                evaluation: self.full_detailed_observed(node, influence, false, |details| full_observer(details)),
+                 initially_full: true,
+                 fast_score: None,
+                 refreshed: false,
+             };
+         }
+-        let fast = self.fast(node, false);
++        let fast = self.fast_detailed_observed(node, false, |details| fast_observer(details));
+         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
+         let evaluation = if refresh {
+             let influence = self.ensure_influence(&node.position, scratch);
+-            self.full(node, influence, false)
++            self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+         } else {
+             fast
+         };
+@@ -621,6 +643,71 @@
+         assert_eq!(sibling.retained.positional, parent.retained.positional);
+         assert_eq!(sibling.retained.age, 1);
+         assert_eq!(parent, saved);
++    }
++
++    #[test]
++    fn detailed_noncheck_observes_real_stages_and_preserves_default_state_and_charges() {
++        use std::cell::{Cell, RefCell};
++        for (offset_alpha, offset_beta, exception, refreshed) in [
++            (250, 251, false, false),
++            (-251, -250, false, false),
++            (-1, 1, false, true),
++            (250, 251, true, true),
++        ] {
++            let (mut ordinary, parent) = initialized();
++            let (mut observed, same_parent) = initialized();
++            let mut a = parent.null_child();
++            let mut b = same_parent.null_child();
++            let score = ordinary.fast(&a, false).score;
++            assert_eq!(observed.fast(&b, false).score, score);
++            let before = b.retained;
++            let (mut scratch_a, mut scratch_b) = (None, None);
++            let expected = ordinary.select_noncheck(&mut a, score + offset_alpha,
++                score + offset_beta, exception, &mut scratch_a);
++            let stages = RefCell::new(Vec::new());
++            let full = Cell::new(None);
++            let fast = Cell::new(None);
++            let selected = observed.select_noncheck_detailed_observed(&mut b,
++                score + offset_alpha, score + offset_beta, exception, &mut scratch_b,
++                |details| { stages.borrow_mut().push("full"); full.set(Some(details)); },
++                |details| { stages.borrow_mut().push("fast"); fast.set(Some(details)); });
++            assert_eq!(selected, expected);
++            assert_eq!(a, b);
++            assert_eq!(ordinary.stats, observed.stats);
++            assert_eq!(scratch_a.is_some(), scratch_b.is_some());
++            assert_eq!(selected.refreshed, refreshed);
++            assert_eq!(selected.fast_score, Some(fast.get().unwrap().finished.score));
++            if refreshed {
++                assert_eq!(*stages.borrow(), vec!["fast", "full"]);
++                let details = full.get().unwrap();
++                assert!(details.pawn_entry_reused);
++                assert_eq!(details.finished.score, selected.evaluation.score);
++                assert_eq!(b.retained.age, 0);
++            } else {
++                assert_eq!(*stages.borrow(), vec!["fast"]);
++                assert!(full.get().is_none());
++                assert_eq!(selected.evaluation.relation_queries, 0);
++                assert_eq!(b.retained, before);
++                assert!(scratch_b.is_none());
++            }
++        }
++    }
++
++    #[test]
++    fn detailed_sparse_selection_has_no_fast_stage_even_with_capture_exception() {
++        let position = Position::from_fen("7k/8/8/8/8/8/P7/K7 w - - 0 1").unwrap();
++        let mut evaluator = Evaluator::<true>::new(&position);
++        let mut node = Node::root(position, &evaluator.root);
++        let mut scratch = None;
++        let mut details = None;
++        let selected = evaluator.select_noncheck_detailed_observed(&mut node,
++            9000, 9001, true, &mut scratch, |value| details = Some(value),
++            |_| panic!("sparse admission must not produce a preliminary fast result"));
++        assert!(selected.initially_full && !selected.refreshed);
++        assert_eq!(selected.fast_score, None);
++        assert_eq!(details.unwrap().finished.score, selected.evaluation.score);
++        assert_eq!(evaluator.stats.fast, 0);
++        assert!(scratch.is_some());
+     }
+ 
+     #[test]
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -206,14 +206,10 @@
+             if DIAGNOSTICS {
+                 self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
+             }
+-            if value.lower >= entry.upper {
+-                return Ok(value.lower);
+-            }
+-            if value.upper <= lower {
+-                return Ok(value.upper);
+-            }
+-            if value.score >= entry.upper {
+-                return Ok(value.score);
++            if let Some(returned) = policy::evaluation_return(
++                value.lower, value.upper, value.score, lower, entry.upper,
++            ) {
++                return Ok(returned.score());
+             }
+             lower = lower.max(value.score);
+             (value.score, value.score, value.upper)
+--- a/src/quiescence_policy.rs
++++ b/src/quiescence_policy.rs
+@@ -22,6 +22,43 @@
+     pub best: i32,
+     pub force_search: bool,
+     pub defense_queried: bool,
++}
++
++/// Ordered static return from an admitted, non-check evaluation.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum EvaluationReturn {
++    LowerBound(i32),
++    UpperBound(i32),
++    StandPat(i32),
++}
++
++impl EvaluationReturn {
++    pub fn score(self) -> i32 {
++        match self {
++            Self::LowerBound(score) | Self::UpperBound(score) | Self::StandPat(score) => score,
++        }
++    }
++}
++
++/// Consume bounds before standing score, using the incoming alpha unchanged.
++/// None continues to tactical generation. Checked nodes bypass this policy.
++#[inline]
++pub fn evaluation_return(
++    lower_bound: i32,
++    upper_bound: i32,
++    score: i32,
++    alpha: i32,
++    beta: i32,
++) -> Option<EvaluationReturn> {
++    if lower_bound >= beta {
++        Some(EvaluationReturn::LowerBound(lower_bound))
++    } else if upper_bound <= alpha {
++        Some(EvaluationReturn::UpperBound(upper_bound))
++    } else if score >= beta {
++        Some(EvaluationReturn::StandPat(score))
++    } else {
++        None
++    }
+ }
+ 
+ pub fn capture_exception(parent: &Position, movement: &Move) -> bool {
+@@ -178,6 +215,16 @@
+     }
+ 
+     #[test]
++    fn static_evaluation_returns_preserve_priority_equality_and_unclipped_values() {
++        assert_eq!(evaluation_return(10, -10, 20, 0, 10), Some(EvaluationReturn::LowerBound(10)));
++        assert_eq!(evaluation_return(-100, 0, 20, 0, 10), Some(EvaluationReturn::UpperBound(0)));
++        assert_eq!(evaluation_return(-100, 100, 10, 0, 10), Some(EvaluationReturn::StandPat(10)));
++        assert_eq!(evaluation_return(-100, 100, 9, 0, 10), None);
++        assert_eq!(evaluation_return(1000, 2000, 900, 0, 10).unwrap().score(), 1000);
++        assert_eq!(evaluation_return(-1000, -500, 900, 0, 10).unwrap().score(), -500);
++    }
++
++    #[test]
+     fn capture_exception_uses_promotion_destination_color_and_pre_capture_population() {
+         let mut parent = pos("7k/8/8/8/3r4/8/P7/K7 w - - 0 1");
+         let capture = ordinary("a2", "d4");

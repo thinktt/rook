@@ -1,35 +1,11 @@
 //! Fixed-root controlled full/fast sequence over one native evaluator lifetime.
-use super::{array, color, evaluation_common as common, integer, object, positions, text, Result};
+use super::{array, color, evaluation_common as common, integer, object, positions, Result};
+use super::evaluation_common::Kind;
 use rook2::{
-    evaluator::{Evaluator, FastDetails, FullDetails, Node, Parameters},
-    influence::Influence,
-    movegen,
+    evaluator::{Evaluator, Node, Parameters},
     position::Position,
 };
 use serde_json::{json, Value};
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Kind {
-    Full,
-    Fast,
-}
-
-impl Kind {
-    fn parse(value: &Value) -> Result<Self> {
-        match text(value)? {
-            "full" => Ok(Self::Full),
-            "fast" => Ok(Self::Fast),
-            _ => Err("evaluation kind must be full or fast".into()),
-        }
-    }
-
-    fn name(self) -> &'static str {
-        match self {
-            Self::Full => "full",
-            Self::Fast => "fast",
-        }
-    }
-}
 
 struct Step {
     kind: Kind,
@@ -80,40 +56,8 @@ impl Request {
             let mut node = Node::root(step.position, &evaluator.root);
             node.retained.positional = pair.0;
             node.retained.pawn_progress = pair.1;
-            let checked = movegen::in_check(&step.position, step.position.side);
-            let (evaluation, base, finished, reused) = match step.kind {
-                Kind::Full => {
-                    let influence = Influence::build(&step.position);
-                    let mut details = None;
-                    let evaluation = evaluator.full_detailed_observed(
-                        &mut node, &influence, checked, |value| details = Some(value),
-                    );
-                    let FullDetails { base, finished, pawn_entry_reused, .. } =
-                        details.expect("full evaluation observes one result");
-                    (evaluation, base, finished, Some(pawn_entry_reused))
-                }
-                Kind::Fast => {
-                    // No influence is constructed, and the native fast owner
-                    // performs no pawn selection or mutation of this node.
-                    let mut details = None;
-                    let evaluation = evaluator.fast_detailed_observed(
-                        &node, checked, |value| details = Some(value),
-                    );
-                    let FastDetails { base, finished } =
-                        details.expect("fast evaluation observes one result");
-                    (evaluation, base, finished, None)
-                }
-            };
+            let output = common::evaluate(&mut evaluator, &mut node, step.kind);
             pair = (node.retained.positional, node.retained.pawn_progress);
-            let mut output = common::finishing_output(&step.position, &evaluator, finished);
-            output["kind"] = json!(step.kind.name());
-            output["rootPhase"] = positions::phase_value(evaluator.root.phase);
-            output["currentPhase"] = positions::phase_value(step.position.phase());
-            output["inCheck"] = json!(checked);
-            output["baseScore"] = json!(base);
-            output["retained"] = common::retained_output(node.retained);
-            output["relationQueries"] = json!(evaluation.relation_queries);
-            output["pawnEntryReused"] = json!(reused);
             results.push(output);
         }
         json!({"results":results})

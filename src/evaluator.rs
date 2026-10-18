@@ -521,6 +521,49 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         capture_exception: bool,
         scratch: &mut Option<Influence>,
     ) -> Selection {
+        self.select_noncheck_impl::<false, _, _>(
+            node, lower, upper, capture_exception, scratch, |_| {}, |_| {},
+        )
+    }
+
+    /// Observe actual selected stages without changing sparse admission, strict
+    /// refresh ordering, lazy influence, or the ordinary result/state layouts.
+    /// A refresh emits fast details first and full details second.
+    pub fn select_noncheck_detailed_observed<F, G>(
+        &mut self,
+        node: &mut Node,
+        lower: i32,
+        upper: i32,
+        capture_exception: bool,
+        scratch: &mut Option<Influence>,
+        full_observer: F,
+        fast_observer: G,
+    ) -> Selection
+    where
+        F: FnMut(FullDetails),
+        G: FnMut(FastDetails),
+    {
+        self.select_noncheck_impl::<true, _, _>(
+            node, lower, upper, capture_exception, scratch, full_observer, fast_observer,
+        )
+    }
+
+    // Only stage call wrappers differ. The ordinary instantiation retains its
+    // original full/fast call sites; every selection condition stays shared.
+    fn select_noncheck_impl<const OBSERVE: bool, F, G>(
+        &mut self,
+        node: &mut Node,
+        lower: i32,
+        upper: i32,
+        capture_exception: bool,
+        scratch: &mut Option<Influence>,
+        mut full_observer: F,
+        mut fast_observer: G,
+    ) -> Selection
+    where
+        F: FnMut(FullDetails),
+        G: FnMut(FastDetails),
+    {
         let sparse = node.position.counts.iter().all(|c| {
             (c[1] as u16
                 + c[2] as u16
@@ -533,17 +576,29 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         if sparse {
             let influence = self.ensure_influence(&node.position, scratch);
             return Selection {
-                evaluation: self.full(node, influence, false),
+                evaluation: if OBSERVE {
+                    self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+                } else {
+                    self.full(node, influence, false)
+                },
                 initially_full: true,
                 fast_score: None,
                 refreshed: false,
             };
         }
-        let fast = self.fast(node, false);
+        let fast = if OBSERVE {
+            self.fast_detailed_observed(node, false, |details| fast_observer(details))
+        } else {
+            self.fast(node, false)
+        };
         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
         let evaluation = if refresh {
             let influence = self.ensure_influence(&node.position, scratch);
-            self.full(node, influence, false)
+            if OBSERVE {
+                self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+            } else {
+                self.full(node, influence, false)
+            }
         } else {
             fast
         };
@@ -621,6 +676,71 @@ mod tests {
         assert_eq!(sibling.retained.positional, parent.retained.positional);
         assert_eq!(sibling.retained.age, 1);
         assert_eq!(parent, saved);
+    }
+
+    #[test]
+    fn detailed_noncheck_observes_real_stages_and_preserves_default_state_and_charges() {
+        use std::cell::{Cell, RefCell};
+        for (offset_alpha, offset_beta, exception, refreshed) in [
+            (250, 251, false, false),
+            (-251, -250, false, false),
+            (-1, 1, false, true),
+            (250, 251, true, true),
+        ] {
+            let (mut ordinary, parent) = initialized();
+            let (mut observed, same_parent) = initialized();
+            let mut a = parent.null_child();
+            let mut b = same_parent.null_child();
+            let score = ordinary.fast(&a, false).score;
+            assert_eq!(observed.fast(&b, false).score, score);
+            let before = b.retained;
+            let (mut scratch_a, mut scratch_b) = (None, None);
+            let expected = ordinary.select_noncheck(&mut a, score + offset_alpha,
+                score + offset_beta, exception, &mut scratch_a);
+            let stages = RefCell::new(Vec::new());
+            let full = Cell::new(None);
+            let fast = Cell::new(None);
+            let selected = observed.select_noncheck_detailed_observed(&mut b,
+                score + offset_alpha, score + offset_beta, exception, &mut scratch_b,
+                |details| { stages.borrow_mut().push("full"); full.set(Some(details)); },
+                |details| { stages.borrow_mut().push("fast"); fast.set(Some(details)); });
+            assert_eq!(selected, expected);
+            assert_eq!(a, b);
+            assert_eq!(ordinary.stats, observed.stats);
+            assert_eq!(scratch_a.is_some(), scratch_b.is_some());
+            assert_eq!(selected.refreshed, refreshed);
+            assert_eq!(selected.fast_score, Some(fast.get().unwrap().finished.score));
+            if refreshed {
+                assert_eq!(*stages.borrow(), vec!["fast", "full"]);
+                let details = full.get().unwrap();
+                assert!(details.pawn_entry_reused);
+                assert_eq!(details.finished.score, selected.evaluation.score);
+                assert_eq!(b.retained.age, 0);
+            } else {
+                assert_eq!(*stages.borrow(), vec!["fast"]);
+                assert!(full.get().is_none());
+                assert_eq!(selected.evaluation.relation_queries, 0);
+                assert_eq!(b.retained, before);
+                assert!(scratch_b.is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn detailed_sparse_selection_has_no_fast_stage_even_with_capture_exception() {
+        let position = Position::from_fen("7k/8/8/8/8/8/P7/K7 w - - 0 1").unwrap();
+        let mut evaluator = Evaluator::<true>::new(&position);
+        let mut node = Node::root(position, &evaluator.root);
+        let mut scratch = None;
+        let mut details = None;
+        let selected = evaluator.select_noncheck_detailed_observed(&mut node,
+            9000, 9001, true, &mut scratch, |value| details = Some(value),
+            |_| panic!("sparse admission must not produce a preliminary fast result"));
+        assert!(selected.initially_full && !selected.refreshed);
+        assert_eq!(selected.fast_score, None);
+        assert_eq!(details.unwrap().finished.score, selected.evaluation.score);
+        assert_eq!(evaluator.stats.fast, 0);
+        assert!(scratch.is_some());
     }
 
     #[test]

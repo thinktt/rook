@@ -8,11 +8,15 @@ persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT
 learned state and specified root scheduling. Ordinary `Session<false>` excludes
 development tracing; cold JSON is a separate adapter package. Position160/Node176
 now owns exact placement attack planes while retaining copied-child ownership.
-Current source implements82 mandatory diagnostic operations and passes4721
-unique cases/99 adapter units plus139 native tests. Source promotion exactly
-matches both tested proposal closures; frozenc6839096 passes54 strict replays
-and eight interruption fixtures, and adapterbf4c0150 owns the component result.
+Current source implements85 mandatory diagnostic operations and passes5289
+unique cases/117 adapter units plus142 native tests. Source promotion exactly
+matches both tested proposal closures; frozend38ff037 passes54 strict replays
+and eight interruption fixtures, and adapter7dd00a43 owns the component result.
 These new source/artifact observations have no own-PGO/cost/gameplay result.
+The corrected Q observer restores default evaluation call scope and stack size;
+its disposition extraction retains a small code difference. The original
+metadata-instability failure and stable replay retry remain preserved. See
+[85-operation integration](evidence/move-q-evaluation-integration-20261018/README.md).
 The matched storage experiments and independent PGO trial support this source
 integration. Canonical915f83e4 passes54 strict replays, eight interruption
 fixtures and its own six-case timing pilot; final qualification remains.
@@ -49,6 +53,13 @@ A reproducible generic x86-64 compiler-PGO build is available
 through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
+
+- The Q-local material endpoint cache trial is parked. Its balanced generic
+  60-lifetime pilot independently reconciles0.008663% lower summed medians,
+  with three cases lower, three higher and all six sample ranges overlapping.
+  The source-demand census does not establish a useful CPU gain. No cache
+  variant is integrated or advanced to PGO. See
+  [cache pilot](evidence/q-material-reuse-cpu-pilot-20261018/README.md).
 
 - Canonical8d9dddc5 now independently reconciles216 full54 CPU lifetimes,
   summing81.131004s in case medians versus81.828432s previous8c:0.852305%

@@ -1,0 +1,2786 @@
+--- retained82
++++ qnative
+@@ -4,113 +4,111 @@
+ push %r13
+ push %r12
+ push %rbx
+-sub $0x4a8,%rsp
++sub $0x508,%rsp
+ mov %r9d,%ebx
+-mov %r8,%r15
++mov %r8,%r12
+ mov %rcx,%rbp
+-mov %rdx,%r13
++mov %rdx,%r15
+ mov %rsi,%r14
+-mov %rdi,%r12
+-lea 0x80(%rsp),%rdi
++mov %rdi,%r13
++lea 0xd0(%rsp),%rdi
+ mov %rcx,%rdx
+ call TARGET<rook2::engine::Search<_,H>::charge_node>
+-movzbl 0x80(%rsp),%eax
++movzbl 0xd0(%rsp),%eax
+ cmp $0x5,%al
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x135>
+-mov (%r15),%rdi
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x136>
++mov (%r12),%rdi
+ cmp $0x40,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1c01>
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x25a1>
+ mov %rdi,0x8(%rsp)
+ movq $0x0,0x2db0(%r14,%rdi,8)
+-lea 0x10(%r13),%rsi
+-lea 0x2a0(%rsp),%rdi
++mov %r15,(%rsp)
++add $0x10,%r15
++lea 0x300(%rsp),%rdi
+ mov $0xa0,%edx
+-mov %rsi,0x30(%rsp)
++mov %r15,%rsi
+ call *RIP_REFERENCE
+ cmp $0x2,%bl
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x99>
+-movzbl 0x318(%rsp),%esi
+-lea 0x2a0(%rsp),%rdi
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x9c>
++movzbl 0x378(%rsp),%esi
++lea 0x300(%rsp),%rdi
+ call TARGET<rook2::movegen::in_check>
+ mov %eax,%ebx
+-mov %ebx,0x1c(%rsp)
++mov %ebx,0x14(%rsp)
+ movzbl %bl,%ebx
+-mov %ebx,0x7c(%rsp)
++mov %ebx,0x8c(%rsp)
+ and $0x1,%ebx
+ mov %rbp,%rdi
+ mov %ebx,%esi
+ call *RIP_REFERENCE
+-mov 0x18(%r15),%ecx
++mov 0x18(%r12),%ecx
+ test %eax,%eax
+ mov 0x8(%rsp),%rdi
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xce>
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xd5>
+ cmp $0x2,%eax
+-ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x127>
++ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x129>
+ cmp $0x2,%rdi
+-ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x127>
++ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x129>
+ test %ecx,%ecx
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x127>
+-mov %rbp,0x60(%rsp)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x129>
++mov %ebx,0x50(%rsp)
++mov %rbp,0x80(%rsp)
+ movl $0x0,0x6314(%r14,%rdi,4)
+-mov 0x14(%r15),%ebp
++mov 0x14(%r12),%ebp
+ test %ebp,%ebp
+-jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x158>
+-mov 0x60(%rsp),%rdi
+-mov %r14,0x40(%rsp)
+-mov %ebx,%r14d
++jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x157>
++mov 0x80(%rsp),%rdi
+ mov %r13,%rbx
+-mov %r12,%r13
++mov %r15,%r13
++mov %r12,%r15
++mov %rbp,%r12
++mov %ecx,%ebp
++call *RIP_REFERENCE
++mov %ebp,%ecx
++mov %r12,%rbp
+ mov %r15,%r12
+-mov %rbp,%r15
+-mov %ecx,%ebp
+-call *RIP_REFERENCE
+-mov %ebp,%ecx
+-mov %r15,%rbp
+-mov %r12,%r15
+-mov %r13,%r12
++mov %r13,%r15
+ mov %rbx,%r13
+-mov %r14d,%ebx
+-mov 0x40(%rsp),%r14
+ mov 0x8(%rsp),%rdi
+ test %al,%al
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x158>
+-movl $0x0,0x4(%r12)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ac2>
+-mov 0x81(%rsp),%rcx
+-mov 0x88(%rsp),%rdx
+-mov %rdx,0x8(%r12)
+-mov %rcx,0x1(%r12)
+-mov %al,(%r12)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ac7>
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x157>
++movl $0x0,0x4(%r13)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2446>
++mov 0xd1(%rsp),%rcx
++mov 0xd8(%rsp),%rdx
++mov %rdx,0x8(%r13)
++mov %rcx,0x1(%r13)
++mov %al,0x0(%r13)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x244b>
+ cmp $0x3f,%rdi
+-mov %r12,0x58(%rsp)
+-mov %r13,(%rsp)
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x4c6>
+-cmpb $0x0,0x88(%r13)
++mov %r13,0x60(%rsp)
++mov (%rsp),%rbx
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x4b6>
++cmpb $0x0,0x88(%rbx)
+ mov $0x6,%eax
+ mov $0xfffffffa,%ebp
+ cmove %eax,%ebp
+ xor %r12d,%r12d
+-testb $0x1,0x1c(%rsp)
++testb $0x1,0x14(%rsp)
+ cmovne %r12d,%ebp
+ lea 0x50f0(%r14),%rdi
+-mov 0x30(%rsp),%rsi
++mov %r15,%rsi
+ call *RIP_REFERENCE
+ mov %eax,0x8(%rsp)
+-movzbl 0x79(%r13),%eax
+-movzbl 0x73(%r13),%ecx
++movzbl 0x79(%rbx),%eax
++movzbl 0x73(%rbx),%ecx
+ add %eax,%ecx
+-movzbl 0x78(%r13),%eax
+-movzbl 0x72(%r13),%edx
++movzbl 0x78(%rbx),%eax
++movzbl 0x72(%rbx),%edx
+ add %eax,%edx
+-movzbl 0x77(%r13),%eax
+-movzbl 0x71(%r13),%esi
++movzbl 0x77(%rbx),%eax
++movzbl 0x71(%rbx),%esi
+ add %eax,%esi
+-movzbl 0x76(%r13),%edi
+-movzbl 0x70(%r13),%eax
++movzbl 0x76(%rbx),%edi
++movzbl 0x70(%rbx),%eax
+ add %edi,%eax
+-movzbl 0x7a(%r13),%edi
+-add 0x74(%r13),%edi
++movzbl 0x7a(%rbx),%edi
++add 0x74(%rbx),%edi
+ mov %esi,%r8d
+ shr $0x4,%r8d
+ add %edx,%r8d
+@@ -129,7 +127,7 @@
+ add %eax,%esi
+ lea (%rsi,%rdx,4),%eax
+ lea (%rax,%rcx,8),%edx
+-movzbl 0x8c(%r13),%ecx
++movzbl 0x8c(%rbx),%ecx
+ shl $0x4,%ecx
+ cmp $0x140,%ecx
+ mov $0x140,%r13d
+@@ -140,28 +138,29 @@
+ add $0xffffffc0,%ecx
+ cmp $0x21,%edx
+ cmovb %r12d,%ecx
+-mov $0x100,%edi
++mov $0x100,%ebx
+ mov $0x100,%eax
+ sub %ecx,%eax
+ shl $0x3,%edx
+-mov $0x180,%esi
+-sub %edx,%esi
+-cmp $0x100,%esi
+-cmovge %edi,%esi
++mov $0x180,%edi
++sub %edx,%edi
++cmp $0x100,%edi
++cmovge %ebx,%edi
+ mov (%rsp),%rdx
+ mov 0x8(%rdx),%edx
+-test %esi,%esi
+-cmovle %r12d,%esi
++test %edi,%edi
++cmovle %r12d,%edi
++mov %r15,%rsi
+ mov %r14,%r15
+ mov $0x180,%r14d
+-imul %eax,%esi
+-shr $0x8,%esi
+-sub %esi,%eax
+-shl $0x20,%rsi
++imul %eax,%edi
++shr $0x8,%edi
++sub %edi,%eax
++shl $0x20,%rdi
+ shl $0x10,%eax
+-or %rsi,%rcx
++or %rdi,%rcx
+ add %rax,%rcx
+-mov 0x30(%rsp),%rsi
++mov %rsi,0x38(%rsp)
+ call *RIP_REFERENCE
+ mov (%rsp),%rcx
+ movzbl 0x79(%rcx),%ecx
+@@ -222,8 +221,7 @@
+ mov $0x100,%edx
+ sub %ecx,%edx
+ cmp $0x100,%r14d
+-mov $0x100,%esi
+-cmovge %esi,%r14d
++cmovge %ebx,%r14d
+ mov 0x0(%r13),%esi
+ test %r14d,%r14d
+ cmovle %r12d,%r14d
+@@ -236,16 +234,17 @@
+ shl $0x10,%edx
+ add %rdx,%rcx
+ mov 0x56ec(%r15),%edi
+-movzbl 0x562e(%r15),%r9d
++movzbl 0x562e(%r15),%ebx
+ mov 0x56f0(%r15),%r10d
+ shr $0x20,%rcx
+ test %r10,%r10
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x3e3>
++mov 0x50(%rsp),%r9d
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x3d7>
+ mov 0x7c(%r13),%r12d
+ xor 0x80(%r13),%r12d
+ lea 0x1(%r10),%r11
+ cmp %r11,%r12
+-jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x3dd>
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x3d1>
+ mov %eax,%r14d
+ mov %r12d,%eax
+ xor %edx,%edx
+@@ -256,7 +255,7 @@
+ sub %r10d,%r12d
+ mov %edi,%edx
+ neg %edx
+-test %r9b,%r9b
++test %bl,%bl
+ cmove %edi,%edx
+ add 0x8(%rsp),%ebp
+ add %esi,%ebp
+@@ -266,17 +265,16 @@
+ add %eax,%ebp
+ movzwl %cx,%eax
+ cmp $0xc0,%eax
+-jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x434>
+-lea 0x80(%rsp),%rdi
+-mov 0x30(%rsp),%rsi
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x424>
++lea 0xd0(%rsp),%rdi
++mov 0x38(%rsp),%rsi
+ mov %ebp,%edx
+-mov %ebx,%r9d
+ push $0x2710
+ push $0xffffffffffffd8f0
+ call *RIP_REFERENCE
+ add $0x10,%rsp
+-mov 0x80(%rsp),%ebp
+-mov 0x58(%rsp),%rsi
++mov 0xd0(%rsp),%ebp
++mov 0x60(%rsp),%rsi
+ cmp $0x1edc,%ebp
+ mov $0x1edc,%ecx
+ cmovl %ebp,%ecx
+@@ -285,7 +283,7 @@
+ cmovge %ecx,%eax
+ movzbl 0x8b(%r13),%ecx
+ cmp $0xc,%rcx
+-jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x4ac>
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x49c>
+ mov $0x64,%edx
+ sub %rcx,%rdx
+ lea (%rdx,%rdx,2),%rcx
+@@ -313,191 +311,54 @@
+ cmove %eax,%ecx
+ mov %ecx,0x4(%rsi)
+ movb $0x5,(%rsi)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ac7>
+-movb $0x0,0x21f(%rsp)
+-mov 0x10(%r15),%eax
+-mov %rax,0x20(%rsp)
+-mov 0x1c(%rsp),%ebx
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x244b>
++movb $0x0,0x27f(%rsp)
++mov 0x10(%r12),%eax
++mov %rax,0x58(%rsp)
++mov 0x14(%rsp),%ebx
+ test $0x1,%bl
+-mov %r14,0x40(%rsp)
+-mov %ecx,0x16c(%rsp)
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x7cb>
+-movl $0xffffd8f0,0x48(%rsp)
+-mov $0x2710,%edx
+-cmpb $0x0,0x4e0(%rsp)
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x541>
+-mov 0x198(%r14),%rsi
+-cmp %rsi,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1cf3>
+-mov %rdi,%rax
+-shl $0xa,%rax
+-lea (%rax,%rdi,8),%rsi
+-add 0x190(%r14),%rsi
+-lea 0x2a0(%rsp),%rdi
+-call *RIP_REFERENCE
+-mov 0x8(%rsp),%rdi
+-mov $0x2710,%edx
+-mov 0x198(%r14),%rsi
+-cmp %rsi,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x19d3>
+-mov 0x190(%r14),%rcx
+-mov %rdi,%rax
+-shl $0xa,%rax
+-lea (%rax,%rdi,8),%rax
+-mov %rax,0x68(%rsp)
+-mov 0x400(%rcx,%rax,1),%rax
+-mov %rax,0x1e8(%rsp)
+-test %rax,%rax
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x16e3>
+-test $0x1,%bl
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x594>
+-lea -0x270e(%rdi),%eax
+-cmp %ebp,%eax
+-jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1abd>
+-mov %edx,0x14(%rsp)
+-lea 0x5710(%r14),%rdx
+-lea 0x50f0(%r14),%rsi
+-add 0x68(%rsp),%rcx
+-lea 0x1b0(%r14),%r8
+-lea 0x2a0(%rsp),%rdi
+-mov %rsi,0x150(%rsp)
+-call *RIP_REFERENCE
+-mov 0x60(%rsp),%rax
+-mov 0x28(%rax),%rax
+-test %rax,%rax
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1b75>
+-movzbl 0x318(%rsp),%ecx
+-mov %rcx,0x158(%rsp)
+-add %ecx,%ecx
+-lea (%rcx,%rcx,2),%rdx
+-movd 0x300(%rsp,%rdx,1),%xmm0
+-movzbl 0x304(%rsp,%rdx,1),%esi
+-pxor %xmm1,%xmm1
+-punpcklbw %xmm1,%xmm0
+-pshufd $0x55,%xmm0,%xmm1
+-paddw %xmm0,%xmm1
+-movdqa %xmm1,%xmm0
+-psrld $0x10,%xmm0
+-paddw %xmm1,%xmm0
+-pextrw $0x0,%xmm0,%ecx
+-add %rsi,%rcx
+-movzbl 0x305(%rsp,%rdx,1),%edx
+-lea (%rcx,%rdx,1),%rdi
+-cmp $0x11,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1b1a>
+-test %dl,%dl
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1cd1>
+-lea 0x300(%rsp),%rsi
+-mov 0x158(%rsp),%rdx
+-xor $0x1,%dl
+-movzbl %dl,%edx
+-mov %rdx,0x1e0(%rsp)
+-lea (%rdx,%rdx,2),%rdi
+-movd (%rsi,%rdi,2),%xmm0
+-movzbl 0x4(%rsi,%rdi,2),%r8d
+-pxor %xmm1,%xmm1
+-punpcklbw %xmm1,%xmm0
+-pshufd $0x55,%xmm0,%xmm1
+-paddw %xmm0,%xmm1
+-movdqa %xmm1,%xmm0
+-psrld $0x10,%xmm0
+-paddw %xmm1,%xmm0
+-pextrw $0x0,%xmm0,%edx
+-add %r8,%rdx
+-movzbl 0x5(%rsi,%rdi,2),%esi
+-lea (%rdx,%rsi,1),%rdi
+-cmp $0x11,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1b1a>
+-test %sil,%sil
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ce2>
+-mov 0x8(%rsp),%rdi
+-lea 0x1(%rdi),%r8
+-mov 0x60(%rsp),%r10
+-mov 0x20(%r10),%rsi
+-movzwl -0x4(%rsi,%rax,4),%r9d
+-mov %r9w,0x70(%rsp)
+-movzwl -0x2(%rsi,%rax,4),%eax
+-mov %eax,0x4c(%rsp)
+-lea 0x2e0(%rsp),%rax
+-mov 0x158(%rsp),%rsi
+-shl $0x4,%esi
+-add %rax,%rsi
+-movzbl (%rcx,%rsi,1),%ecx
+-mov %cl,0x1a(%rsp)
+-mov 0x1e0(%rsp),%rcx
+-shl $0x4,%ecx
+-add %rax,%rcx
+-movzbl (%rdx,%rcx,1),%eax
+-mov %al,0x1b(%rsp)
+-mov 0x8(%r15),%eax
+-mov 0xc(%r15),%edx
+-lea (%rdx,%rax,1),%ecx
+-mov %ecx,0x30(%rsp)
+-lea -0x1(%rdx),%ecx
+-shr $0x1f,%ecx
+-mov %rdx,0x210(%rsp)
+-add %edx,%ecx
+-dec %ecx
+-sar $1,%ecx
+-add %eax,%ecx
+-mov %ecx,0x164(%rsp)
+-add %eax,0x7c(%rsp)
+-mov %rbp,0x1d0(%rsp)
+-mov %ebp,%eax
+-neg %eax
+-mov %eax,0x168(%rsp)
+-mov %rdi,%rax
+-shl $0x7,%rax
+-lea (%r14,%rax,1),%rcx
+-add $0xdb0,%rcx
+-mov %rcx,0x200(%rsp)
+-mov %r8,0x1d8(%rsp)
+-mov %r8,%rcx
+-shl $0x7,%rcx
+-add %r14,%rcx
+-add $0xdb0,%rcx
+-mov %rcx,0x1f8(%rsp)
+-lea 0xdb2(%r14,%rax,1),%rax
+-mov %rax,0x1f0(%rsp)
+-lea 0x50fc(%r14),%rax
+-mov %rax,0x208(%rsp)
+-lea 0x18(%r10),%rax
+-mov %rax,0x1c8(%rsp)
+-xor %ebp,%ebp
+-mov 0x48(%rsp),%eax
+-mov %eax,0x10(%rsp)
+-mov 0x14(%rsp),%edx
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb06>
++mov %r14,0x28(%rsp)
++mov %ecx,0x1b8(%rsp)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x509>
++mov $0xffffd8f0,%eax
++mov %rax,0x40(%rsp)
++movl $0x2710,0x88(%rsp)
++cmpb $0x0,0x540(%rsp)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x84c>
++mov (%rsp),%r15
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x885>
+ lea 0x30f0(%r14),%rax
+-mov %rax,0x70(%rsp)
+-movzbl 0x1c(%r15),%esi
+-movzbl 0x71(%r13),%eax
+-movzbl 0x72(%r13),%ecx
+-movzbl 0x73(%r13),%edx
++mov %rax,0x18(%rsp)
++movzbl 0x1c(%r12),%edi
++mov (%rsp),%rsi
++movzbl 0x71(%rsi),%eax
++movzbl 0x72(%rsi),%ecx
++movzbl 0x73(%rsi),%edx
+ add %eax,%edx
+ mov %edx,%eax
+ shr $0x4,%eax
+ add %ecx,%edx
+-add 0x74(%r13),%edx
++add 0x74(%rsi),%edx
+ add %eax,%edx
+ test $0xe,%dl
+-mov %r15,0x28(%rsp)
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x82b>
+-movzbl 0x77(%r13),%eax
+-movzbl 0x79(%r13),%ecx
++mov %r15,0x38(%rsp)
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x566>
++movzbl 0x77(%rsi),%eax
++movzbl 0x79(%rsi),%ecx
+ add %eax,%ecx
+-movzbl 0x7a(%r13),%eax
++movzbl 0x7a(%rsi),%eax
+ mov %ecx,%edx
+ shr $0x4,%edx
+ add %eax,%edx
+-add 0x78(%r13),%ecx
++add 0x78(%rsi),%ecx
+ add %edx,%ecx
+ test $0xe,%cl
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x19ea>
+-mov %sil,0x68(%rsp)
+-movzbl 0x88(%r13),%ebx
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x204e>
++mov %dil,0x30(%rsp)
++mov %r12,0x50(%rsp)
++movzbl 0x88(%rsi),%ebx
+ lea 0x50f0(%r14),%rdi
+-mov 0x30(%rsp),%r15
++mov %rdi,0x48(%rsp)
+ mov %r15,%rsi
+ call *RIP_REFERENCE
+ mov %eax,%r13d
+@@ -551,50 +412,50 @@
+ movzbl 0x8c(%rax),%ecx
+ shl $0x4,%ecx
+ cmp $0x140,%ecx
+-mov $0x140,%r12d
+-cmovae %r12d,%ecx
++mov $0x140,%eax
++cmovae %eax,%ecx
+ cmp $0x41,%ecx
+-mov $0x40,%eax
+-cmovb %eax,%ecx
++mov $0x40,%r12d
++cmovb %r12d,%ecx
+ add $0xffffffc0,%ecx
+ xor %ebx,%ebx
+ cmp $0x21,%edx
+ cmovb %ebx,%ecx
+-mov $0x100,%edi
++mov $0x100,%r8d
+ mov $0x100,%eax
+ sub %ecx,%eax
+ shl $0x3,%edx
+-mov $0x180,%esi
+-sub %edx,%esi
+-cmp $0x100,%esi
+-cmovge %edi,%esi
++mov $0x180,%edi
++sub %edx,%edi
++cmp $0x100,%edi
++cmovge %r8d,%edi
+ mov (%rsp),%rdx
+ mov 0x8(%rdx),%edx
+-test %esi,%esi
+-cmovle %ebx,%esi
++test %edi,%edi
++cmovle %ebx,%edi
+ mov $0x180,%r14d
+-imul %eax,%esi
+-shr $0x8,%esi
+-sub %esi,%eax
+-shl $0x20,%rsi
++imul %eax,%edi
++shr $0x8,%edi
++sub %edi,%eax
++shl $0x20,%rdi
+ shl $0x10,%eax
+-or %rsi,%rcx
++or %rdi,%rcx
+ add %rax,%rcx
+ mov %r15,%rsi
+ call *RIP_REFERENCE
+ add %r13d,%eax
+-mov (%rsp),%r13
+-movzbl 0x79(%r13),%ecx
+-movzbl 0x73(%r13),%edx
++mov (%rsp),%r9
++movzbl 0x79(%r9),%ecx
++movzbl 0x73(%r9),%edx
+ add %ecx,%edx
+-movzbl 0x78(%r13),%ecx
+-movzbl 0x72(%r13),%esi
++movzbl 0x78(%r9),%ecx
++movzbl 0x72(%r9),%esi
+ add %ecx,%esi
+-movzbl 0x77(%r13),%ecx
+-movzbl 0x71(%r13),%edi
++movzbl 0x77(%r9),%ecx
++movzbl 0x71(%r9),%edi
+ add %ecx,%edi
+-movzbl 0x76(%r13),%r8d
+-movzbl 0x70(%r13),%ecx
++movzbl 0x76(%r9),%r8d
++movzbl 0x70(%r9),%ecx
+ add %r8d,%ecx
+ mov %edi,%r8d
+ shr $0x4,%r8d
+@@ -602,8 +463,8 @@
+ mov %r8d,%esi
+ shr $0x4,%esi
+ add %edx,%esi
+-movzbl 0x7a(%r13),%edx
+-add 0x74(%r13),%edx
++movzbl 0x7a(%r9),%edx
++add 0x74(%r9),%edx
+ and $0xf,%edi
+ and $0xf,%r8d
+ add %edi,%r8d
+@@ -612,20 +473,21 @@
+ add %edx,%edi
+ lea (%r8,%r8,2),%edx
+ add %ecx,%edx
+-mov 0x4(%r13),%r8d
+-add 0x0(%r13),%eax
++mov 0x4(%r9),%r8d
++add (%r9),%eax
+ add %r8d,%eax
+ and $0xf,%esi
+ and $0xf,%edi
+ lea (%rdx,%rsi,4),%edx
+-movzbl 0x8c(%r13),%ecx
++mov %r9,%r15
++movzbl 0x8c(%r9),%ecx
+ shl $0x4,%ecx
+ cmp $0x140,%ecx
+-cmovae %r12d,%ecx
++mov $0x140,%esi
++cmovae %esi,%ecx
+ lea (%rdx,%rdi,8),%edx
+ cmp $0x41,%ecx
+-mov $0x40,%esi
+-cmovb %esi,%ecx
++cmovb %r12d,%ecx
+ add $0xffffffc0,%ecx
+ cmp $0x21,%edx
+ cmovb %ebx,%ecx
+@@ -643,20 +505,20 @@
+ sub %r14d,%edx
+ shl $0x20,%r14
+ or %r14,%rcx
+-mov 0x40(%rsp),%r14
+-mov 0x56ec(%r14),%esi
+-movzbl 0x562e(%r14),%edi
++mov 0x28(%rsp),%r9
++mov 0x56ec(%r9),%esi
++movzbl 0x562e(%r9),%edi
+ shl $0x10,%edx
+ add %rdx,%rcx
+-mov 0x56f0(%r14),%r9d
++mov 0x56f0(%r9),%r9d
+ shr $0x20,%rcx
+ test %r9,%r9
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xaa4>
+-mov 0x7c(%r13),%ebx
+-xor 0x80(%r13),%ebx
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x7e7>
++mov 0x7c(%r15),%ebx
++xor 0x80(%r15),%ebx
+ lea 0x1(%r9),%r10
+ cmp %r10,%rbx
+-jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xa9e>
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x7e1>
+ mov %eax,%r11d
+ mov %ebx,%eax
+ xor %edx,%edx
+@@ -673,62 +535,206 @@
+ add %edx,%eax
+ movzwl %cx,%edx
+ cmp $0xbf,%edx
+-jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1632>
+-lea 0x80(%rsp),%rdi
+-mov 0x30(%rsp),%rsi
++jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x163a>
++lea 0xd0(%rsp),%rdi
++mov 0x38(%rsp),%r14
++mov %r14,%rsi
+ mov %eax,%edx
+ xor %r9d,%r9d
+ push $0x2710
+ push $0xffffffffffffd8f0
+ call *RIP_REFERENCE
+ add $0x10,%rsp
+-mov 0x80(%rsp),%eax
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1644>
+-cmp 0x1e8(%rsp),%rbp
+-mov 0x40(%rsp),%r14
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x161f>
+-test $0x1,%bl
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe71>
++mov 0xd0(%rsp),%eax
++mov 0x60(%rsp),%r13
++mov 0x8(%rsp),%rdi
++mov 0x14(%rsp),%ebx
++mov 0x50(%rsp),%r12
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1664>
+ mov 0x198(%r14),%rsi
+ cmp %rsi,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1bf4>
++mov (%rsp),%r15
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x26a0>
++mov %rdi,%rax
++shl $0xa,%rax
++lea (%rax,%rdi,8),%rsi
++add 0x190(%r14),%rsi
++lea 0x300(%rsp),%rdi
++call *RIP_REFERENCE
++mov 0x8(%rsp),%rdi
++mov 0x198(%r14),%rsi
++cmp %rsi,%rdi
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x25b3>
++mov 0x190(%r14),%rcx
++mov %rdi,%rax
++shl $0xa,%rax
++lea (%rax,%rdi,8),%r13
++mov 0x400(%rcx,%r13,1),%rax
++mov %rax,0x30(%rsp)
++test %rax,%rax
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1714>
++test $0x1,%bl
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x8d0>
++lea -0x270e(%rdi),%eax
++cmp %ebp,%eax
++jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x162a>
++lea 0x5710(%r14),%rdx
++lea 0x50f0(%r14),%rsi
++add %r13,%rcx
++lea 0x1b0(%r14),%r8
++lea 0x300(%rsp),%rdi
++mov %rsi,0x1a0(%rsp)
++call *RIP_REFERENCE
++mov 0x80(%rsp),%rax
++mov 0x28(%rax),%rax
++test %rax,%rax
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x24ee>
++movzbl 0x378(%rsp),%ecx
++mov %rcx,0x1a8(%rsp)
++add %ecx,%ecx
++lea (%rcx,%rcx,2),%rdx
++movd 0x360(%rsp,%rdx,1),%xmm0
++movzbl 0x364(%rsp,%rdx,1),%esi
++pxor %xmm1,%xmm1
++punpcklbw %xmm1,%xmm0
++pshufd $0x55,%xmm0,%xmm1
++paddw %xmm0,%xmm1
++movdqa %xmm1,%xmm0
++psrld $0x10,%xmm0
++paddw %xmm1,%xmm0
++pextrw $0x0,%xmm0,%ecx
++add %rsi,%rcx
++movzbl 0x365(%rsp,%rdx,1),%edx
++lea (%rcx,%rdx,1),%rdi
++cmp $0x11,%rdi
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2493>
++test %dl,%dl
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x267e>
++lea 0x360(%rsp),%rsi
++mov 0x1a8(%rsp),%rdx
++xor $0x1,%dl
++movzbl %dl,%edx
++mov %rdx,0x1e8(%rsp)
++lea (%rdx,%rdx,2),%rdi
++movd (%rsi,%rdi,2),%xmm0
++movzbl 0x4(%rsi,%rdi,2),%r8d
++pxor %xmm1,%xmm1
++punpcklbw %xmm1,%xmm0
++pshufd $0x55,%xmm0,%xmm1
++paddw %xmm0,%xmm1
++movdqa %xmm1,%xmm0
++psrld $0x10,%xmm0
++paddw %xmm1,%xmm0
++pextrw $0x0,%xmm0,%edx
++add %r8,%rdx
++movzbl 0x5(%rsi,%rdi,2),%esi
++lea (%rdx,%rsi,1),%rdi
++cmp $0x11,%rdi
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2493>
++test %sil,%sil
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x268f>
++mov 0x8(%rsp),%rdi
++lea 0x1(%rdi),%r8
++mov 0x80(%rsp),%r10
++mov 0x20(%r10),%rsi
++movzwl -0x4(%rsi,%rax,4),%r9d
++mov %r9w,0x50(%rsp)
++movzwl -0x2(%rsi,%rax,4),%eax
++mov %eax,0x6c(%rsp)
++lea 0x340(%rsp),%rax
++mov 0x1a8(%rsp),%rsi
++shl $0x4,%esi
++add %rax,%rsi
++movzbl (%rcx,%rsi,1),%ecx
++mov %cl,0x26(%rsp)
++mov 0x1e8(%rsp),%rcx
++shl $0x4,%ecx
++add %rax,%rcx
++movzbl (%rdx,%rcx,1),%eax
++mov %al,0x27(%rsp)
++mov 0x8(%r12),%eax
++mov 0xc(%r12),%edx
++lea (%rdx,%rax,1),%ecx
++mov %ecx,0x38(%rsp)
++lea -0x1(%rdx),%ecx
++shr $0x1f,%ecx
++mov %rdx,0x250(%rsp)
++add %edx,%ecx
++dec %ecx
++sar $1,%ecx
++add %eax,%ecx
++mov %ecx,0x1b0(%rsp)
++add %eax,0x8c(%rsp)
++mov %rbp,0x78(%rsp)
++mov %ebp,%eax
++neg %eax
++mov %eax,0x1b4(%rsp)
++mov %rdi,%rax
++shl $0x7,%rax
++lea (%r14,%rax,1),%rcx
++add $0xdb0,%rcx
++mov %rcx,0x240(%rsp)
++mov %r8,0x1e0(%rsp)
++mov %r8,%rcx
++shl $0x7,%rcx
++add %r14,%rcx
++add $0xdb0,%rcx
++mov %rcx,0x238(%rsp)
++lea 0xdb2(%r14,%rax,1),%rax
++mov %rax,0x230(%rsp)
++lea 0x50fc(%r14),%rax
++mov %rax,0x248(%rsp)
++lea 0x18(%r10),%rax
++mov %rax,0x1d8(%rsp)
++xor %ebp,%ebp
++mov 0x40(%rsp),%rax
++mov %eax,0x20(%rsp)
++mov %r13,0x1f0(%rsp)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb1b>
++cmp 0x30(%rsp),%rbp
++mov 0x28(%rsp),%r14
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x161a>
++test $0x1,%bl
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe75>
++mov 0x198(%r14),%rsi
++cmp %rsi,%rdi
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2594>
+ cmp $0x1ff,%rbp
+-ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1cb7>
++ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2664>
+ mov 0x190(%r14),%rax
+-add 0x68(%rsp),%rax
++add %r13,%rax
+ movzwl (%rax,%rbp,2),%ecx
+ inc %rbp
+-mov %cx,0x18(%rsp)
+-movb $0x2,0x50(%rsp)
+-xor %r15d,%r15d
+-mov %r15d,0x38(%rsp)
+-lea 0x80(%rsp),%rdi
+-mov %r13,%rsi
+-mov 0x150(%rsp),%rdx
+-mov %ecx,0x28(%rsp)
+-call *RIP_REFERENCE
+-lea 0x2a0(%rsp),%rdi
+-lea 0x18(%rsp),%rsi
+-call *RIP_REFERENCE
+-mov %eax,%esi
+-mov 0xfc(%rsp),%ecx
+-mov 0x108(%rsp),%r15d
+-movzbl 0x109(%rsp),%r14d
+-movzbl 0x10a(%rsp),%ebx
+-movzbl 0x10b(%rsp),%eax
+-mov 0x60(%rsp),%r13
++mov %cx,0x24(%rsp)
++movb $0x2,0x70(%rsp)
++movl $0x0,0x48(%rsp)
++lea 0xd0(%rsp),%rdi
++mov %r15,%rsi
++mov 0x1a0(%rsp),%rdx
++mov %ecx,0x18(%rsp)
++call *RIP_REFERENCE
++lea 0x300(%rsp),%rdi
++lea 0x24(%rsp),%rsi
++call *RIP_REFERENCE
++mov %eax,%edx
++mov 0x14c(%rsp),%ecx
++mov 0x158(%rsp),%r15d
++movzbl 0x159(%rsp),%r14d
++movzbl 0x15a(%rsp),%ebx
++movzbl 0x15b(%rsp),%eax
++mov 0x80(%rsp),%r13
+ mov 0x10(%r13),%r12
+ cmp 0x0(%r13),%r12
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xbfa>
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xc0f>
+ mov %r13,%rdi
+-mov %sil,0x148(%rsp)
+ lea RIP_REFERENCE,%rsi
+-mov %rax,0x140(%rsp)
+-mov %rcx,0x138(%rsp)
+-call *RIP_REFERENCE
+-mov 0x138(%rsp),%rcx
+-mov 0x140(%rsp),%rax
+-movzbl 0x148(%rsp),%esi
++mov %dl,0x198(%rsp)
++mov %rax,0x190(%rsp)
++mov %rcx,0x188(%rsp)
++call *RIP_REFERENCE
++mov 0x188(%rsp),%rcx
++mov 0x190(%rsp),%rax
++movzbl 0x198(%rsp),%edx
+ shl $0x38,%r15
+ or %rcx,%r15
+ shl $0x30,%rax
+@@ -744,43 +750,43 @@
+ mov 0x28(%r13),%rbx
+ cmp 0x18(%r13),%rbx
+ mov %r13,%r14
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xc4d>
+-mov 0x1c8(%rsp),%rdi
+-mov %esi,%r15d
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xc62>
++mov 0x1d8(%rsp),%rdi
+ lea RIP_REFERENCE,%rsi
+-call *RIP_REFERENCE
+-mov %r15d,%esi
++mov %edx,%r15d
++call *RIP_REFERENCE
++mov %r15d,%edx
+ xor %eax,%eax
+-mov 0x28(%rsp),%edx
+-test %dx,%dx
++mov 0x18(%rsp),%r12d
++test %r12w,%r12w
+ setne %al
+ mov 0x20(%r14),%rcx
+ mov %ax,(%rcx,%rbx,4)
+-mov %dx,0x2(%rcx,%rbx,4)
++mov %r12w,0x2(%rcx,%rbx,4)
+ inc %rbx
+ mov %rbx,0x28(%r14)
+-mov 0x20(%rsp),%rax
++mov 0x58(%rsp),%rax
+ neg %eax
+-mov 0x1d8(%rsp),%rcx
+-mov %rcx,0x170(%rsp)
+-mov 0x7c(%rsp),%ecx
+-mov %ecx,0x178(%rsp)
+-mov 0x210(%rsp),%rcx
+-mov %ecx,0x17c(%rsp)
+-mov 0x168(%rsp),%ecx
+-mov %ecx,0x180(%rsp)
+-mov %eax,0x184(%rsp)
+-mov 0x16c(%rsp),%eax
+-mov %eax,0x188(%rsp)
+-mov %sil,0x18c(%rsp)
++mov 0x1e0(%rsp),%rcx
++mov %rcx,0x90(%rsp)
++mov 0x8c(%rsp),%ecx
++mov %ecx,0x98(%rsp)
++mov 0x250(%rsp),%rcx
++mov %ecx,0x9c(%rsp)
++mov 0x1b4(%rsp),%ecx
++mov %ecx,0xa0(%rsp)
++mov %eax,0xa4(%rsp)
++mov 0x1b8(%rsp),%eax
++mov %eax,0xa8(%rsp)
++mov %dl,0xac(%rsp)
+ sub $0x8,%rsp
+-movzbl 0x40(%rsp),%eax
+-movzbl 0x58(%rsp),%r9d
+-lea 0x1c0(%rsp),%rdi
+-mov 0x48(%rsp),%rsi
+-lea 0x88(%rsp),%rdx
++movzbl 0x50(%rsp),%eax
++movzbl 0x78(%rsp),%r9d
++lea 0x1d0(%rsp),%rdi
++mov 0x30(%rsp),%rsi
++lea 0xd8(%rsp),%rdx
+ mov %r14,%rcx
+-lea 0x178(%rsp),%r8
++lea 0x98(%rsp),%r8
+ push %rax
+ call TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q>
+ add $0x10,%rsp
+@@ -788,110 +794,107 @@
+ mov 0x30(%r14),%rcx
+ inc %rcx
+ cmp %rcx,%rax
+-mov 0x58(%rsp),%r12
+-mov (%rsp),%r13
+-jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1b2c>
++mov (%rsp),%r15
++mov 0x1f0(%rsp),%r13
++jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x24a5>
+ dec %rax
+ mov %rax,0x10(%r14)
+ mov 0x28(%r14),%rax
+ test %rax,%rax
+ mov 0x8(%rsp),%rdi
+-mov 0x1c(%rsp),%ebx
+-mov 0x14(%rsp),%edx
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xd43>
++mov 0x14(%rsp),%ebx
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xd5c>
+ dec %rax
+ mov %rax,0x28(%r14)
+-movzbl 0x1b8(%rsp),%eax
++movzbl 0x1c8(%rsp),%eax
+ cmp $0x5,%al
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ae0>
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x245d>
+ xor %r14d,%r14d
+-sub 0x1bc(%rsp),%r14d
+-cmp %r14d,0x10(%rsp)
+-jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xdef>
++sub 0x1cc(%rsp),%r14d
+ cmp %r14d,0x20(%rsp)
++jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xdfa>
++cmp %r14d,0x58(%rsp)
+ setl %al
+-cmp %r14d,0x1d0(%rsp)
++cmp %r14d,0x78(%rsp)
+ setg %cl
+-mov %r14d,0x10(%rsp)
++mov %r14d,0x20(%rsp)
+ test %cl,%al
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xdef>
+-mov 0x200(%rsp),%rax
+-mov 0x28(%rsp),%ecx
+-mov %cx,(%rax)
+-mov 0x40(%rsp),%rax
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xdfa>
++mov 0x240(%rsp),%rax
++mov %r12w,(%rax)
++mov 0x28(%rsp),%rax
+ mov 0x2db8(%rax,%rdi,8),%rdx
+ mov %rdx,%rbx
+ inc %rbx
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1bcb>
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x256b>
+ cmp $0x40,%rbx
+-ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1bdf>
++ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x257f>
+ add %rdx,%rdx
+-mov 0x1f0(%rsp),%rdi
+-mov 0x1f8(%rsp),%rsi
+-call *RIP_REFERENCE
+-mov 0x40(%rsp),%rax
++mov 0x230(%rsp),%rdi
++mov 0x238(%rsp),%rsi
++call *RIP_REFERENCE
++mov 0x28(%rsp),%rax
+ mov 0x8(%rsp),%rdi
+ mov %rbx,0x2db0(%rax,%rdi,8)
+-mov %r14d,0x10(%rsp)
+-mov 0x1c(%rsp),%ebx
+-mov 0x14(%rsp),%edx
+-cmp %r14d,0x20(%rsp)
+-jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xaf3>
++mov %r14d,0x20(%rsp)
++mov 0x14(%rsp),%ebx
++cmp %r14d,0x58(%rsp)
++jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb0b>
+ mov %r14d,%eax
+-mov %rax,0x20(%rsp)
+-cmp %r14d,0x1d0(%rsp)
+-jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xaf3>
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x161f>
+-movzbl 0x1a(%rsp),%eax
++mov %rax,0x58(%rsp)
++cmp %r14d,0x78(%rsp)
++jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb0b>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x161a>
++movzbl 0x26(%rsp),%eax
+ mov %eax,%r13d
+ movzbl %r13b,%edx
+-lea 0x80(%rsp),%rdi
+-lea 0x170(%rsp),%rsi
+-mov 0x1e0(%rsp),%rcx
++lea 0xd0(%rsp),%rdi
++lea 0x90(%rsp),%rsi
++mov 0x1e8(%rsp),%rcx
+ call TARGET<rook2::movegen::find_attackers>
+-cmpq $0x0,0x80(%rsp)
++cmpq $0x0,0xd0(%rsp)
+ mov 0x8(%rsp),%rdi
+-mov 0x14(%rsp),%edx
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x15a3>
+-mov 0x58(%rsp),%r12
+-mov 0x40(%rsp),%r14
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x159e>
++mov 0x28(%rsp),%r14
++mov 0x1f0(%rsp),%r13
+ inc %rbp
+-cmp 0x1e8(%rsp),%rbp
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x161f>
++cmp 0x30(%rsp),%rbp
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x161a>
+ mov 0x198(%r14),%rsi
+ cmp %rsi,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1bf4>
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2594>
+ cmp $0x200,%rbp
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1cbc>
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2669>
+ mov 0x190(%r14),%rax
+-add 0x68(%rsp),%rax
+-movzwl (%rax,%rbp,2),%r8d
+-mov %r8w,0x18(%rsp)
+-cmpb $0x0,0x70(%rsp)
++add %r13,%rax
++movzwl (%rax,%rbp,2),%esi
++mov %si,0x24(%rsp)
++cmpb $0x0,0x50(%rsp)
+ je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xed0>
+-mov 0x4c(%rsp),%esi
+-test %si,%si
++mov 0x6c(%rsp),%edx
++test %dx,%dx
+ setne %al
+-mov %r8d,%ecx
+-xor %esi,%ecx
++mov %esi,%ecx
++xor %edx,%ecx
+ test $0xfc0,%ecx
+ sete %r15b
+ and %al,%r15b
+-cmp %edi,0x30(%rsp)
++cmp %edi,0x38(%rsp)
+ jl TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xed9>
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xee2>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xede>
++nop
+ xor %r15d,%r15d
+-cmp %edi,0x30(%rsp)
+-jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xee2>
++cmp %edi,0x38(%rsp)
++jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xede>
+ test %r15b,%r15b
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe60>
+-mov %r8d,0x28(%rsp)
+-movzwl %r8w,%edi
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe67>
++mov %esi,0x18(%rsp)
++movzwl %si,%edi
+ mov %edi,%r12d
+ shr $0x6,%r12d
+ mov %r12d,%r13d
+ and $0x3f,%r13d
+-movzbl 0x2a0(%rsp,%r13,1),%eax
++movzbl 0x300(%rsp,%r13,1),%eax
+ mov %edi,%ebx
+ shr $0xc,%ebx
+ and $0x7,%ebx
+@@ -900,21 +903,21 @@
+ add %rdx,%rcx
+ jmp *%rcx
+ mov $0x6,%cl
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf3c>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf36>
+ mov $0x4,%cl
+ mov $0x1,%dl
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf3e>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf38>
+ mov $0x2,%cl
+ mov $0x1,%dl
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf3e>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf38>
+ mov $0x3,%cl
+ mov $0x1,%dl
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf3e>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf38>
+ mov $0x1,%dl
+ mov $0x1,%cl
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf3e>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf38>
+ mov $0x8,%cl
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf3c>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf36>
+ mov $0x9,%cl
+ xor %edx,%edx
+ lea -0x7(%rcx),%esi
+@@ -922,122 +925,121 @@
+ setb %r14b
+ or %dl,%r14b
+ test %al,%al
+-mov %rdi,0x38(%rsp)
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf6f>
++mov %rdi,0x48(%rsp)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf69>
+ cmp $0x8,%cl
+ ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x11d0>
+ movzbl %cl,%eax
+ mov $0x1be,%ecx
+ bt %eax,%ecx
+ jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x11d0>
+-movups 0x2a0(%rsp),%xmm0
+-movups 0x2b0(%rsp),%xmm1
+-movups 0x2c0(%rsp),%xmm2
+-movups 0x2d0(%rsp),%xmm3
+-movaps %xmm3,0xb0(%rsp)
+-movaps %xmm2,0xa0(%rsp)
+-movaps %xmm1,0x90(%rsp)
+-movaps %xmm0,0x80(%rsp)
++movups 0x300(%rsp),%xmm0
++movups 0x310(%rsp),%xmm1
++movups 0x320(%rsp),%xmm2
++movups 0x330(%rsp),%xmm3
++movaps %xmm3,0x100(%rsp)
++movaps %xmm2,0xf0(%rsp)
++movaps %xmm1,0xe0(%rsp)
++movaps %xmm0,0xd0(%rsp)
+ mov %edi,%eax
+ and $0x3f,%eax
+-movzbl 0x80(%rsp,%rax,1),%ecx
+-movb $0x0,0x80(%rsp,%rax,1)
+-mov %cl,0x80(%rsp,%r13,1)
++movzbl 0xd0(%rsp,%rax,1),%ecx
++movb $0x0,0xd0(%rsp,%rax,1)
++mov %cl,0xd0(%rsp,%r13,1)
+ movzwl %bx,%ebx
+ lea RIP_REFERENCE,%rcx
+ movslq (%rcx,%rbx,4),%rax
+ add %rcx,%rax
+ jmp *%rax
+ mov $0x2,%al
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xfed>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xfe7>
+ mov $0x5,%al
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xfed>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xfe7>
+ mov $0x3,%al
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xfed>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xfe7>
+ mov $0x4,%al
+-movzbl 0x318(%rsp),%ecx
++movzbl 0x378(%rsp),%ecx
+ shl $0x3,%cl
+ or %al,%cl
+-mov %cl,0x80(%rsp,%r13,1)
+-movdqa 0x80(%rsp),%xmm0
+-movdqa 0x90(%rsp),%xmm1
+-movaps 0xa0(%rsp),%xmm2
+-movaps 0xb0(%rsp),%xmm3
+-movaps %xmm3,0x1a0(%rsp)
+-movaps %xmm2,0x190(%rsp)
+-movdqa %xmm1,0x180(%rsp)
+-movdqa %xmm0,0x170(%rsp)
+-movzbl 0x1b(%rsp),%edx
+-lea 0x80(%rsp),%rdi
+-lea 0x170(%rsp),%rsi
+-mov 0x158(%rsp),%rcx
++mov %cl,0xd0(%rsp,%r13,1)
++movdqa 0xd0(%rsp),%xmm0
++movdqa 0xe0(%rsp),%xmm1
++movaps 0xf0(%rsp),%xmm2
++movaps 0x100(%rsp),%xmm3
++movaps %xmm3,0xc0(%rsp)
++movaps %xmm2,0xb0(%rsp)
++movdqa %xmm1,0xa0(%rsp)
++movdqa %xmm0,0x90(%rsp)
++movzbl 0x27(%rsp),%edx
++lea 0xd0(%rsp),%rdi
++lea 0x90(%rsp),%rsi
++mov 0x1a8(%rsp),%rcx
+ call TARGET<rook2::movegen::find_attackers>
+-mov 0x80(%rsp),%rsi
+-cmp $0x2,%rsi
++mov 0xd0(%rsp),%rdx
++cmp $0x2,%rdx
+ jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x10a0>
+ mov $0x1,%al
+-cmp %r13b,0x88(%rsp)
++cmp %r13b,0xd8(%rsp)
+ mov 0x8(%rsp),%rdi
+-mov 0x14(%rsp),%edx
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1096>
+-cmp %r13b,0x89(%rsp)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x108c>
++cmp %r13b,0xd9(%rsp)
+ sete %al
+ dec %ebx
+ cmp $0x4,%bx
+-ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x10b3>
++ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x10af>
+ jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x10d0>
++cs nopw 0x0(%rax,%rax,1)
+ xor %eax,%eax
+ mov 0x8(%rsp),%rdi
+-mov 0x14(%rsp),%edx
+ dec %ebx
+ cmp $0x4,%bx
+ jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x10d0>
+-test %rsi,%rsi
++test %rdx,%rdx
+ jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x10d0>
+ and $0x3f,%r12d
+-cmpb $0x0,0x2a0(%rsp,%r12,1)
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe56>
+-nopl 0x0(%rax,%rax,1)
+-cmp %edi,0x30(%rsp)
++cmpb $0x0,0x300(%rsp,%r12,1)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe5a>
++nopw 0x0(%rax,%rax,1)
++cmp %edi,0x38(%rsp)
+ jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1110>
+-cmpb $0x0,0x70(%rsp)
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe56>
+-cmpw $0x0,0x4c(%rsp)
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe56>
+-mov 0x28(%rsp),%ecx
+-xor 0x4c(%rsp),%ecx
++cmpb $0x0,0x50(%rsp)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe5a>
++cmpw $0x0,0x6c(%rsp)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe5a>
++mov 0x18(%rsp),%ecx
++xor 0x6c(%rsp),%ecx
+ and $0xfc0,%ecx
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe56>
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe5a>
+ data16 data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+ mov $0x2,%r12b
+ test %r14b,%r14b
+ jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x112a>
+-test %rsi,%rsi
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe56>
++test %rdx,%rdx
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe5a>
+ or %al,%r15b
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1231>
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1237>
+ xor %r15d,%r15d
+-mov 0x38(%rsp),%rax
++mov 0x48(%rsp),%rax
+ and $0x3f,%eax
+-movzbl 0x2a0(%rsp,%rax,1),%eax
++movzbl 0x300(%rsp,%rax,1),%eax
+ and $0x7,%eax
+ lea -0x1(%rax),%ecx
+-mov %rsi,%rbx
++mov %rdx,%rbx
+ cmp $0x5,%ecx
+-jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe15>
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe1d>
+ cmp $0x6,%eax
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe1d>
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1c6e>
+-movzbl 0x318(%rsp),%eax
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe25>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x261b>
++movzbl 0x378(%rsp),%eax
+ shl $0x4,%al
+ add %r13b,%al
+ add $0xf8,%al
+ movzbl %al,%edi
+ cmp $0x40,%dil
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1c5c>
+-movb $0x0,0x80(%rsp,%rdi,1)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1002>
+-mov 0x28(%rsp),%eax
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2609>
++movb $0x0,0xd0(%rsp,%rdi,1)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xffc>
++mov 0x18(%rsp),%eax
+ and $0x38,%al
+ mov %r12d,%ecx
+ and $0x7,%cl
+@@ -1051,57 +1053,59 @@
+ or %dl,%al
+ movzbl %cl,%ecx
+ movzbl %al,%eax
+-movzbl 0x80(%rsp,%rcx,1),%edx
+-lea 0x80(%rsp),%rsi
++movzbl 0xd0(%rsp,%rcx,1),%edx
++lea 0xd0(%rsp),%rsi
+ mov %dl,0x3(%rax,%rsi,1)
+-movb $0x0,0x80(%rsp,%rcx,1)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1002>
++movb $0x0,0xd0(%rsp,%rcx,1)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xffc>
+ mov (%rsp),%rax
+ mov (%rax),%ecx
+ mov 0x4(%rax),%r8d
+-mov 0x150(%rsp),%rdi
+-lea 0x2a0(%rsp),%rsi
+-lea 0x18(%rsp),%rdx
+-call *RIP_REFERENCE
+-mov 0x38(%rsp),%rcx
++mov %rdi,%r14
++mov 0x1a0(%rsp),%rdi
++lea 0x300(%rsp),%rsi
++lea 0x24(%rsp),%rdx
++call *RIP_REFERENCE
++mov %r14d,%ecx
+ and $0x3f,%ecx
+-movzbl 0x2a0(%rsp,%rcx,1),%ecx
++movzbl 0x300(%rsp,%rcx,1),%ecx
+ mov %ecx,%edx
+ and $0x7,%edx
+ dec %edx
+ cmp $0x5,%edx
+-ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1c6e>
++ja TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x261b>
+ lea RIP_REFERENCE,%rsi
+ movslq (%rsi,%rdx,4),%rdx
+ add %rsi,%rdx
+ mov 0x8(%rsp),%rsi
++mov 0x40(%rsp),%rdi
+ jmp *%rdx
+ xor %edx,%edx
+ jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1451>
+-mov %rsi,0x50(%rsp)
+-lea 0x370(%rsp),%rdi
++mov %rdx,0x70(%rsp)
++lea 0x3d0(%rsp),%rdi
+ mov (%rsp),%rsi
+-mov 0x150(%rsp),%rdx
+-mov 0x28(%rsp),%ecx
+-call *RIP_REFERENCE
+-mov 0x3ec(%rsp),%edx
+-mov 0x3f8(%rsp),%r15d
+-movzbl 0x3f9(%rsp),%ebx
+-movzbl 0x3fa(%rsp),%ecx
+-movzbl 0x3fb(%rsp),%eax
+-mov 0x60(%rsp),%r14
++mov 0x1a0(%rsp),%rdx
++mov 0x18(%rsp),%ecx
++call *RIP_REFERENCE
++mov 0x44c(%rsp),%edx
++mov 0x458(%rsp),%r15d
++movzbl 0x459(%rsp),%ebx
++movzbl 0x45a(%rsp),%ecx
++movzbl 0x45b(%rsp),%eax
++mov 0x80(%rsp),%r14
+ mov 0x10(%r14),%r12
+ cmp (%r14),%r12
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x12c9>
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x12d2>
+ mov %r14,%rdi
+ lea RIP_REFERENCE,%rsi
+-mov %rax,0x148(%rsp)
+-mov %rcx,0x140(%rsp)
+-mov %rdx,0x138(%rsp)
+-call *RIP_REFERENCE
+-mov 0x138(%rsp),%rdx
+-mov 0x140(%rsp),%rcx
+-mov 0x148(%rsp),%rax
++mov %rax,0x198(%rsp)
++mov %rcx,0x190(%rsp)
++mov %rdx,0x188(%rsp)
++call *RIP_REFERENCE
++mov 0x188(%rsp),%rdx
++mov 0x190(%rsp),%rcx
++mov 0x198(%rsp),%rax
+ shl $0x38,%r15
+ or %rdx,%r15
+ shl $0x30,%rax
+@@ -1116,12 +1120,12 @@
+ mov %r12,0x10(%r14)
+ mov 0x28(%r14),%rbx
+ cmp 0x18(%r14),%rbx
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1313>
+-mov 0x1c8(%rsp),%rdi
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x131c>
++mov 0x1d8(%rsp),%rdi
+ lea RIP_REFERENCE,%rsi
+ call *RIP_REFERENCE
+ xor %eax,%eax
+-mov 0x28(%rsp),%edx
++mov 0x18(%rsp),%edx
+ test %dx,%dx
+ setne %al
+ mov 0x20(%r14),%rcx
+@@ -1134,52 +1138,50 @@
+ call *RIP_REFERENCE
+ test %eax,%eax
+ sete %r15b
+-mov 0x40(%rsp),%rcx
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x13a3>
++mov 0x28(%rsp),%rcx
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x13a8>
+ mov 0x198(%rcx),%rsi
+-mov 0x1d8(%rsp),%rdi
++mov 0x1e0(%rsp),%rdi
+ cmp %rsi,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1d00>
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x26ad>
+ mov %rdi,%rax
+ shl $0xa,%rax
+ lea (%rax,%rdi,8),%rsi
+ add 0x190(%rcx),%rsi
+-lea 0x380(%rsp),%rdi
++lea 0x3e0(%rsp),%rdi
+ call *RIP_REFERENCE
+ cmp $0x1,%rax
+-jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x13a3>
++jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x13a8>
+ mov %r14,%rdi
+ call *RIP_REFERENCE
+ mov 0x8(%rsp),%rdi
+-mov 0x14(%rsp),%edx
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe56>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xe5a>
+ mov 0x10(%r14),%rax
+ mov 0x30(%r14),%rcx
+ inc %rcx
+ cmp %rcx,%rax
+-jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1b82>
++jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x24fb>
+ dec %rax
+ mov %rax,0x10(%r14)
+ mov 0x28(%r14),%rax
+ test %rax,%rax
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x13ce>
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x13d3>
+ dec %rax
+ mov %rax,0x28(%r14)
+ mov $0x88,%edx
+-lea 0x420(%rsp),%rdi
+-lea 0x370(%rsp),%rsi
+-call *RIP_REFERENCE
+-movzbl 0x3f8(%rsp),%r12d
+-lea 0x380(%rsp),%rax
++lea 0x480(%rsp),%rdi
++lea 0x3d0(%rsp),%rsi
++call *RIP_REFERENCE
++movzbl 0x458(%rsp),%r12d
++lea 0x3e0(%rsp),%rax
+ movdqu 0x79(%rax),%xmm0
+ movdqu 0x89(%rax),%xmm1
+-movdqa %xmm0,0x340(%rsp)
+-movdqa %xmm1,0x350(%rsp)
++movdqa %xmm0,0x3a0(%rsp)
++movdqa %xmm1,0x3b0(%rsp)
+ mov 0x98(%rax),%rax
+-mov %rax,0x35f(%rsp)
+-mov 0x38(%rsp),%rax
+-mov 0x50(%rsp),%rsi
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1132>
++mov %rax,0x3bf(%rsp)
++mov 0x70(%rsp),%rdx
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x112d>
+ mov $0x4,%edx
+ jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1451>
+ mov $0x2,%edx
+@@ -1190,332 +1192,877 @@
+ shr $0x3,%ecx
+ and $0x1,%ecx
+ lea (%rcx,%rcx,4),%rcx
+-mov 0x208(%rsp),%rdi
+-lea (%rdi,%rcx,4),%rcx
++mov 0x248(%rsp),%r8
++lea (%r8,%rcx,4),%rcx
+ mov (%rcx,%rdx,4),%ecx
+-mov 0x10(%rsp),%edi
+-mov %edi,%edx
+-cmp 0x20(%rsp),%edi
+-jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x147b>
+-mov 0x20(%rsp),%rdx
+-add 0x48(%rsp),%eax
+-cmp %esi,0x164(%rsp)
+-mov 0x38(%rsp),%rdi
+-jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1499>
++mov 0x20(%rsp),%r8d
++mov %r8d,%edx
++cmp 0x58(%rsp),%r8d
++jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x147e>
++mov 0x58(%rsp),%rdx
++add %edi,%eax
++cmp %esi,0x1b0(%rsp)
++jg TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1495>
+ cmp %eax,%edx
+-jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1499>
++jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1495>
+ mov %eax,%esi
+ sub %ecx,%esi
+ cmp %edx,%esi
+-jle TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x14a9>
++jle TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x14b6>
+ mov $0x1,%r14b
+ cmp %eax,%edx
+-jl TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf6f>
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1574>
+-mov %esi,0x50(%rsp)
+-cmpb $0x0,0x21f(%rsp)
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1544>
+-lea 0x80(%rsp),%rdi
+-lea 0x2a0(%rsp),%rsi
+-call *RIP_REFERENCE
+-movb $0x1,0x21f(%rsp)
+-movups 0xf0(%rsp),%xmm0
+-lea 0x220(%rsp),%rax
++jl TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x14ac>
++mov 0x20(%rsp),%ecx
++cmp %eax,%ecx
++cmovle %eax,%ecx
++mov %ecx,0x20(%rsp)
++xor %r14d,%r14d
++mov 0x48(%rsp),%rdi
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf69>
++mov %esi,0x70(%rsp)
++cmpb $0x0,0x27f(%rsp)
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1551>
++lea 0xd0(%rsp),%rdi
++lea 0x300(%rsp),%rsi
++call *RIP_REFERENCE
++movb $0x1,0x27f(%rsp)
++movups 0x140(%rsp),%xmm0
++lea 0x280(%rsp),%rax
+ movups %xmm0,0x70(%rax)
+-movups 0xe0(%rsp),%xmm0
++movups 0x130(%rsp),%xmm0
+ movups %xmm0,0x60(%rax)
+-movups 0xd0(%rsp),%xmm0
++movups 0x120(%rsp),%xmm0
+ movups %xmm0,0x50(%rax)
+-movups 0xc0(%rsp),%xmm0
++movups 0x110(%rsp),%xmm0
+ movups %xmm0,0x40(%rax)
+-movdqu 0x80(%rsp),%xmm0
+-movdqu 0x90(%rsp),%xmm1
+-movups 0xa0(%rsp),%xmm2
+-movups 0xb0(%rsp),%xmm3
++movdqu 0xd0(%rsp),%xmm0
++movdqu 0xe0(%rsp),%xmm1
++movups 0xf0(%rsp),%xmm2
++movups 0x100(%rsp),%xmm3
+ movups %xmm3,0x30(%rax)
+ movups %xmm2,0x20(%rax)
+ movdqu %xmm1,0x10(%rax)
+ movdqu %xmm0,(%rax)
+ movzbl %r13b,%edx
+-lea 0x2a0(%rsp),%rdi
+-lea 0x220(%rsp),%rsi
++lea 0x300(%rsp),%rdi
++lea 0x280(%rsp),%rsi
+ call *RIP_REFERENCE
+ mov %eax,%ecx
+ mov $0x1,%r14b
+-mov 0x50(%rsp),%eax
++mov 0x70(%rsp),%eax
+ test %cl,%cl
+-mov 0x38(%rsp),%rdi
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf6f>
+-mov 0x10(%rsp),%ecx
+-cmp %eax,%ecx
+-cmovle %eax,%ecx
+-mov %ecx,0x10(%rsp)
+-xor %r14d,%r14d
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xf6f>
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x149c>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x14ac>
+ mov $0x32,%ecx
+-mov 0x10(%rsp),%edi
+-mov %edi,%edx
+-cmp 0x20(%rsp),%edi
+-jle TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1476>
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x147b>
++mov 0x20(%rsp),%r8d
++mov %r8d,%edx
++cmp 0x58(%rsp),%r8d
++jle TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1479>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x147e>
++mov %r15d,0x48(%rsp)
+ test %rbx,%rbx
+ setne %al
+ inc %rbp
+ cmp $0x2,%r12b
+-mov %al,0x50(%rsp)
++mov %al,0x70(%rsp)
+ jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x15c3>
+-mov (%rsp),%r13
+-mov 0x28(%rsp),%ecx
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb4c>
+-mov %r15d,0x38(%rsp)
++mov (%rsp),%r15
++mov 0x18(%rsp),%ecx
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb64>
+ mov $0x88,%edx
+-lea 0x80(%rsp),%rdi
+-lea 0x420(%rsp),%rsi
+-call *RIP_REFERENCE
+-movdqa 0x340(%rsp),%xmm0
+-movdqa 0x350(%rsp),%xmm1
+-lea 0x109(%rsp),%rcx
++lea 0xd0(%rsp),%rdi
++lea 0x480(%rsp),%rsi
++call *RIP_REFERENCE
++movdqa 0x3a0(%rsp),%xmm0
++movdqa 0x3b0(%rsp),%xmm1
++lea 0x159(%rsp),%rcx
+ movdqu %xmm0,(%rcx)
+ movdqu %xmm1,0x10(%rcx)
+-mov 0x35f(%rsp),%rax
++mov 0x3bf(%rsp),%rax
+ mov %rax,0x1f(%rcx)
+-mov %r12b,0x108(%rsp)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb6e>
+-mov 0x10(%rsp),%eax
+-cmp %edx,%eax
+-cmovl %eax,%edx
+-mov %edx,0x4(%r12)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ac2>
++mov %r12b,0x158(%rsp)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0xb81>
++mov 0x88(%rsp),%eax
++mov 0x20(%rsp),%ecx
++cmp %eax,%ecx
++cmovl %ecx,%eax
++mov 0x60(%rsp),%rcx
++mov %eax,0x4(%rcx)
++movb $0x5,(%rcx)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x244b>
+ movabs $0x2710ffffd8f0,%rcx
+-mov %rcx,0x84(%rsp)
+-mov 0x58(%rsp),%r12
+-mov 0x1c(%rsp),%ebx
++mov %rcx,0xd4(%rsp)
++mov 0x60(%rsp),%r13
++mov 0x8(%rsp),%rdi
++mov 0x14(%rsp),%ebx
++mov 0x50(%rsp),%r12
++mov 0x38(%rsp),%r14
++movzbl 0x30(%rsp),%esi
+ cmp $0x1edc,%eax
+ mov $0x1edc,%ecx
+ cmovl %eax,%ecx
+ cmp $0xffffe125,%ecx
+-mov $0xffffe124,%eax
+-cmovge %ecx,%eax
+-movzbl 0x8b(%r13),%ecx
+-cmp $0xc,%rcx
+-jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x16bf>
+-mov $0x64,%edx
+-sub %rcx,%rdx
+-lea (%rdx,%rdx,2),%rcx
+-shl $0x3,%rcx
+-sub %rdx,%rcx
+-xor %edx,%edx
+-test %rcx,%rcx
+-cmovg %rcx,%rdx
+-imul %edx,%eax
+-lea 0x400(%rax),%ecx
+-lea 0xbff(%rax),%edx
+-test %ecx,%ecx
+-cmovns %ecx,%edx
+-mov %edx,%ecx
+-sar $0xb,%ecx
+-and $0xfffff800,%edx
+-neg %edx
+-add %edx,%eax
+-add $0x400,%eax
+-sar $0x1f,%eax
+-add %ecx,%eax
+-cmpb $0x0,0x88(%r13)
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x16f8>
++mov $0xffffe124,%edx
++cmovge %ecx,%edx
++movzbl 0x8b(%r15),%eax
++cmp $0xc,%rax
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x16dc>
++mov $0x64,%ecx
++sub %rax,%rcx
++lea (%rcx,%rcx,2),%rax
++shl $0x3,%rax
++sub %rcx,%rax
++xor %ecx,%ecx
++test %rax,%rax
++cmovg %rax,%rcx
++imul %ecx,%edx
++lea 0x400(%rdx),%eax
++lea 0xbff(%rdx),%ecx
++test %eax,%eax
++cmovns %eax,%ecx
++mov %ecx,%eax
++sar $0xb,%eax
++and $0xfffff800,%ecx
++neg %ecx
++add %ecx,%edx
++add $0x400,%edx
++sar $0x1f,%edx
++add %eax,%edx
++mov %rdx,0x40(%rsp)
++cmpb $0x0,0x88(%r15)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1735>
++mov 0x40(%rsp),%rax
+ neg %eax
+-movq 0x84(%rsp),%xmm0
++mov %rax,0x40(%rsp)
++movq 0xd4(%rsp),%xmm0
+ pshufd $0xe1,%xmm0,%xmm1
+ pxor %xmm0,%xmm0
+ psubd %xmm1,%xmm0
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1701>
++test %sil,%sil
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1743>
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x176a>
+ add $0xffffd8f0,%edi
+ test $0x1,%bl
+-mov 0x48(%rsp),%eax
++mov 0x40(%rsp),%rax
+ cmovne %edi,%eax
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1abd>
+-movq 0x84(%rsp),%xmm0
++mov 0x60(%rsp),%rcx
++mov %eax,0x4(%rcx)
++movb $0x5,(%rcx)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x244b>
++movq 0xd4(%rsp),%xmm0
++test %sil,%sil
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x176a>
++mov 0x58(%rsp),%rax
++add $0xffffff06,%eax
++mov 0x40(%rsp),%rdx
++cmp %edx,%eax
++setge %al
++lea 0xfa(%rbp),%ecx
++cmp %ecx,%edx
++setge %cl
++or %al,%cl
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x23cb>
++lea 0xd0(%rsp),%rdi
++mov %r14,%rsi
++call *RIP_REFERENCE
++movb $0x1,0x27f(%rsp)
++movups 0xd0(%rsp),%xmm0
++movups 0xe0(%rsp),%xmm1
++movups 0xf0(%rsp),%xmm2
++movups 0x100(%rsp),%xmm3
++movups %xmm0,0x280(%rsp)
++movups %xmm1,0x290(%rsp)
++movups %xmm2,0x2a0(%rsp)
++movups %xmm3,0x2b0(%rsp)
++movups 0x110(%rsp),%xmm0
++movups %xmm0,0x2c0(%rsp)
++movups 0x120(%rsp),%xmm0
++movups %xmm0,0x2d0(%rsp)
++movups 0x130(%rsp),%xmm0
++movups %xmm0,0x2e0(%rsp)
++movzbl 0x79(%r15),%eax
++movzbl 0x73(%r15),%ecx
++add %eax,%ecx
++movzbl 0x78(%r15),%eax
++movzbl 0x72(%r15),%edx
++add %eax,%edx
++movzbl 0x77(%r15),%eax
++movzbl 0x71(%r15),%esi
++add %eax,%esi
++movzbl 0x76(%r15),%edi
++movzbl 0x70(%r15),%eax
++add %edi,%eax
++movzbl 0x7a(%r15),%edi
++add 0x74(%r15),%edi
++mov %esi,%r8d
++shr $0x4,%r8d
++add %edx,%r8d
++and $0xf,%esi
++mov %r8d,%edx
++shr $0x4,%edx
++add %ecx,%edx
++and $0xf,%r8d
++add %esi,%r8d
++mov %edx,%ecx
++shr $0x4,%ecx
++add %edi,%ecx
++and $0xf,%edx
++and $0xf,%ecx
++lea (%r8,%r8,2),%esi
++add %eax,%esi
++lea (%rsi,%rdx,4),%eax
++lea (%rax,%rcx,8),%eax
++movzbl 0x8c(%r15),%ecx
++shl $0x4,%ecx
++cmp $0x140,%ecx
++mov $0x140,%edx
++cmovb %ecx,%edx
++cmp $0x41,%edx
++mov %r14,%rsi
++mov %r15,%r13
++mov $0x40,%r15d
++cmovae %edx,%r15d
++add $0xffffffc0,%r15d
++xor %ecx,%ecx
++cmp $0x21,%eax
++cmovb %ecx,%r15d
++movups 0x140(%rsp),%xmm0
++mov $0x100,%r14d
++shl $0x3,%eax
++mov $0x180,%ebx
++sub %eax,%ebx
++cmp $0x100,%ebx
++cmovge %r14d,%ebx
++movups %xmm0,0x2f0(%rsp)
++test %ebx,%ebx
++cmovle %ecx,%ebx
++mov 0x48(%rsp),%rdi
++call *RIP_REFERENCE
++mov 0x84(%r13),%r12d
++mov %r12d,%esi
++and $0x7f,%esi
++shl $0x6,%esi
++mov %r13,%rdx
++mov 0x18(%rsp),%rcx
++lea (%rcx,%rsi,1),%r13
++cmp %r12d,0x3c(%rcx,%rsi,1)
++mov %rbp,0x78(%rsp)
++mov %eax,0x30(%rsp)
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1945>
++movups 0x0(%r13),%xmm0
++movdqu 0x10(%r13),%xmm1
++movups 0x20(%r13),%xmm2
++movups 0x2c(%r13),%xmm3
++movups %xmm3,0xfc(%rsp)
++movaps %xmm2,0xf0(%rsp)
++movdqa %xmm1,0xe0(%rsp)
++movaps %xmm0,0xd0(%rsp)
++mov $0x1,%al
++lea 0x280(%rsp),%rbp
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1a35>
++movzbl 0x70(%rdx),%edi
++cmp $0x11,%rdi
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2544>
++movzbl 0x76(%rdx),%eax
++cmp $0x11,%rax
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2556>
++lea 0x50(%rdx),%rcx
++add $0x60,%rdx
++mov %rcx,0xd0(%rsp)
++mov %rdi,0xd8(%rsp)
++mov %rdx,0xe0(%rsp)
++mov %rax,0xe8(%rsp)
++lea 0x90(%rsp),%rdi
++lea 0xd0(%rsp),%rcx
++movabs $0x40000000400,%r8
++mov 0x38(%rsp),%rsi
++lea 0x280(%rsp),%rbp
++mov %rbp,%rdx
++call *RIP_REFERENCE
++movups 0x90(%rsp),%xmm0
++movups 0xa0(%rsp),%xmm1
++movups 0xb0(%rsp),%xmm2
++movups 0xbc(%rsp),%xmm3
++movups %xmm3,0x2c(%r13)
++movups %xmm2,0x20(%r13)
++movups %xmm1,0x10(%r13)
++movups %xmm0,0x0(%r13)
++mov %r12d,0x3c(%r13)
++movups 0x90(%rsp),%xmm0
++movdqu 0xa0(%rsp),%xmm1
++movups 0xb0(%rsp),%xmm2
++movups 0xbc(%rsp),%xmm3
++movups %xmm3,0xfc(%rsp)
++movaps %xmm2,0xf0(%rsp)
++movdqa %xmm1,0xe0(%rsp)
++movaps %xmm0,0xd0(%rsp)
++xor %eax,%eax
++sub %r15d,%r14d
++imul %r14d,%ebx
++shr $0x8,%ebx
++sub %ebx,%r14d
++shl $0x20,%rbx
++shl $0x10,%r14d
++or %r15,%rbx
++add %r14,%rbx
++movabs $0xffffffff0000,%r12
++and %rbx,%r12
++shr $0x10,%r12
++mov %al,0x10c(%rsp)
++lea 0x258(%rsp),%rdi
++lea 0xd0(%rsp),%rcx
++mov %r15,0x48(%rsp)
++mov 0x38(%rsp),%r15
++mov %r15,%rsi
++mov %rbp,%rdx
++call *RIP_REFERENCE
++mov 0x28(%rsp),%r14
++mov 0x5648(%r14),%r8
++lea 0x210(%rsp),%rdi
++mov %r15,%rsi
++mov %rbp,%rdx
++mov 0x30(%rsp),%r13d
++mov %r13d,%ecx
++call *RIP_REFERENCE
++mov 0x218(%rsp),%rcx
++mov 0x5650(%r14),%r9
++lea 0x1f8(%rsp),%rdi
++mov %r15,%rsi
++mov 0x48(%rsp),%r15
++mov %rbp,%rdx
++mov %r13d,%r8d
++call *RIP_REFERENCE
++mov 0x258(%rsp),%rcx
++mov 0x268(%rsp),%rdx
++mov %rbp,%r13
++mov %r14,%rbp
++mov 0x5630(%r14),%rsi
++mov %rbx,%rax
++shr $0x20,%rax
++movzwl %ax,%eax
++mov %rdx,%rdi
++shr $0x20,%rdi
++mov %ecx,%r8d
++sub %edi,%r8d
++movslq %r8d,%rdi
++movslq %esi,%r8
++imul %rdi,%r8
++shl $0x20,%rdx
++sub %rdx,%rcx
++sar $0x20,%rcx
++sar $0x20,%rsi
++imul %rcx,%rsi
++sub %rsi,%r8
++lea 0x200(%r8),%rcx
++lea 0x5ff(%r8),%rdx
++test %rcx,%rcx
++cmovns %rcx,%rdx
++mov %rdx,%rcx
++sar $0xa,%rcx
++and $0xfffffffffffffc00,%rdx
++neg %rdx
++add %r8,%rdx
++add $0x200,%rdx
++sar $0x3f,%rdx
++add %rcx,%rdx
++lea (%r15,%r15,2),%rcx
++lea (%r15,%rcx,4),%rsi
++movzwl %r12w,%ecx
++mov %ecx,%r8d
++shl $0x4,%r8d
++sub %rcx,%r8
++sub %rcx,%r8
++lea (%rax,%rax,8),%rdi
++lea (%rax,%rdi,2),%rdi
++add %rsi,%rdi
++add %r8,%rdi
++imul %rdx,%rdi
++lea 0x800(%rdi),%rdx
++lea 0x17ff(%rdi),%rsi
++test %rdx,%rdx
++cmovns %rdx,%rsi
++mov %rsi,%rdx
++sar $0xc,%rdx
++and $0xfffffffffffff000,%rsi
++neg %rsi
++lea (%rdi,%rsi,1),%r14
++add $0x800,%r14
++sar $0x3f,%r14
++add %edx,%r14d
++test %cx,%cx
++sete %cl
++test %rax,%rax
++sete %al
++mov $0x0,%edx
++test %al,%cl
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1c1f>
++sub $0x8,%rsp
++lea 0x98(%rsp),%rdi
++lea 0xd8(%rsp),%rcx
++mov 0x40(%rsp),%rsi
++mov %r13,%rdx
++mov %rbx,%r8
++mov 0x38(%rsp),%r9d
++push 0x5638(%rbp)
++call *RIP_REFERENCE
++add $0x10,%rsp
++mov 0xb4(%rsp),%edx
++mov %edx,0x18(%rsp)
++mov 0x5640(%rbp),%rcx
++lea 0x204(%rsp),%rdi
++mov %r13,%rsi
++mov %rbx,%rdx
++call *RIP_REFERENCE
++lea 0x1bc(%rsp),%rdi
++mov 0x38(%rsp),%rsi
++call *RIP_REFERENCE
++mov (%rsp),%r13
++movzbl 0x88(%r13),%eax
++movslq 0x210(%rsp,%rax,4),%rcx
++add $0x8c,%rcx
++lea (%r15,%r15,4),%rdx
++movzwl %r12w,%esi
++shr $0x1f,%rbx
++and $0xfffe,%ebx
++add %rdx,%rbx
++lea (%rbx,%rsi,4),%rdx
++imul %rcx,%rdx
++add $0x4000,%rdx
++shr $0xf,%rdx
++mov %edx,%ebx
++neg %ebx
++test %eax,%eax
++cmove %edx,%ebx
++movzbl 0x79(%r13),%eax
++movzbl 0x73(%r13),%ecx
++add %eax,%ecx
++movzbl 0x78(%r13),%eax
++movzbl 0x72(%r13),%edx
++add %eax,%edx
++movzbl 0x77(%r13),%eax
++movzbl 0x71(%r13),%esi
++add %eax,%esi
++movzbl 0x76(%r13),%edi
++movzbl 0x70(%r13),%eax
++add %edi,%eax
++movzbl 0x7a(%r13),%edi
++add 0x74(%r13),%edi
++mov %esi,%r8d
++shr $0x4,%r8d
++add %edx,%r8d
++and $0xf,%esi
++mov %r8d,%edx
++shr $0x4,%edx
++add %ecx,%edx
++and $0xf,%r8d
++add %esi,%r8d
++mov %edx,%ecx
++shr $0x4,%ecx
++add %edi,%ecx
++and $0xf,%edx
++and $0xf,%ecx
++lea (%r8,%r8,2),%esi
++add %eax,%esi
++lea (%rsi,%rdx,4),%eax
++lea (%rax,%rcx,8),%edx
++movzbl 0x8c(%r13),%ecx
++shl $0x4,%ecx
++cmp $0x140,%ecx
++mov $0x140,%eax
++cmovae %eax,%ecx
++cmp $0x41,%ecx
++mov $0x40,%r12d
++cmovb %r12d,%ecx
++add $0xffffffc0,%ecx
++cmp $0x21,%edx
++mov $0x0,%edi
++cmovb %edi,%ecx
++mov $0x100,%r8d
++mov $0x100,%eax
++sub %ecx,%eax
++shl $0x3,%edx
++mov $0x180,%esi
++sub %edx,%esi
++cmp $0x100,%esi
++cmovge %r8d,%esi
++mov 0x8(%r13),%edx
++test %esi,%esi
++cmovle %edi,%esi
++mov $0x180,%r15d
++imul %eax,%esi
++shr $0x8,%esi
++sub %esi,%eax
++shl $0x20,%rsi
++shl $0x10,%eax
++or %rsi,%rcx
++add %rax,%rcx
++mov 0x38(%rsp),%rsi
++call *RIP_REFERENCE
++xor %edx,%edx
++mov 0x18(%rsp),%r8d
++add 0x228(%rsp),%r14d
++add 0x20c(%rsp),%r14d
++add 0x200(%rsp),%r14d
++add 0x1bc(%rsp),%r14d
++add 0x1c4(%rsp),%r14d
++mov 0x220(%rsp),%rcx
++add 0x270(%rsp),%rcx
++mov %r14d,0x0(%r13)
++add %rcx,0x5680(%rbp)
++mov %r8d,0x4(%r13)
++movb $0x0,0xc(%r13)
+ movzbl 0x79(%r13),%ecx
+-movzbl 0x73(%r13),%edx
+-add %ecx,%edx
++movzbl 0x73(%r13),%r10d
++add %ecx,%r10d
+ movzbl 0x78(%r13),%ecx
+ movzbl 0x72(%r13),%esi
+ add %ecx,%esi
+ movzbl 0x77(%r13),%ecx
+ movzbl 0x71(%r13),%edi
+ add %ecx,%edi
+-movzbl 0x76(%r13),%r8d
++movzbl 0x76(%r13),%r9d
+ movzbl 0x70(%r13),%ecx
+-add %r8d,%ecx
+-movzbl 0x7a(%r13),%r8d
+-add 0x74(%r13),%r8d
++add %r9d,%ecx
+ mov %edi,%r9d
+ shr $0x4,%r9d
+ add %esi,%r9d
+-and $0xf,%edi
+ mov %r9d,%esi
+ shr $0x4,%esi
+-add %edx,%esi
++add %r10d,%esi
++movzbl 0x7a(%r13),%r10d
++add 0x74(%r13),%r10d
++and $0xf,%edi
+ and $0xf,%r9d
+ add %edi,%r9d
+-mov %esi,%edx
+-shr $0x4,%edx
+-add %r8d,%edx
++mov %esi,%edi
++shr $0x4,%edi
++add %r10d,%edi
++lea (%r9,%r9,2),%r9d
++add %ecx,%r9d
++mov 0x30(%rsp),%r11d
++add %r8d,%r11d
+ and $0xf,%esi
+-and $0xf,%edx
+-lea (%r9,%r9,2),%edi
+-add %ecx,%edi
+-lea (%rdi,%rsi,4),%ecx
+-lea (%rcx,%rdx,8),%edx
++and $0xf,%edi
++lea (%r9,%rsi,4),%esi
+ movzbl 0x8c(%r13),%ecx
+ shl $0x4,%ecx
+ cmp $0x140,%ecx
+-mov $0x140,%esi
+-cmovb %ecx,%esi
+-cmp $0x41,%esi
+-mov $0x40,%ecx
+-cmovae %esi,%ecx
++mov $0x140,%r9d
++cmovae %r9d,%ecx
++lea (%rsi,%rdi,8),%esi
++cmp $0x41,%ecx
++cmovb %r12d,%ecx
+ add $0xffffffc0,%ecx
+-xor %esi,%esi
+-cmp $0x21,%edx
+-cmovb %esi,%ecx
+-mov $0x100,%edi
+-mov $0x100,%r8d
+-sub %ecx,%r8d
+-shl $0x3,%edx
+-mov $0x180,%r9d
+-sub %edx,%r9d
+-cmp $0x100,%r9d
+-cmovge %edi,%r9d
+-test %r9d,%r9d
+-cmovle %esi,%r9d
+-imul %r8d,%r9d
+-shr $0x8,%r9d
+-sub %r9d,%r8d
+-shl $0x20,%r9
+-shl $0x10,%r8d
+-or %r9,%rcx
+-add %r8,%rcx
++cmp $0x21,%esi
++cmovb %edx,%ecx
++shl $0x3,%esi
++sub %esi,%r15d
++mov $0x100,%r9d
++sub %ecx,%r9d
++cmp $0x100,%r15d
++mov $0x100,%esi
++cmovge %esi,%r15d
++test %r15d,%r15d
++cmovle %edx,%r15d
++imul %r9d,%r15d
++shr $0x8,%r15d
++sub %r15d,%r9d
++shl $0x20,%r15
++or %r15,%rcx
++mov 0x56ec(%rbp),%esi
++movzbl 0x562e(%rbp),%edi
++shl $0x10,%r9d
++add %r9,%rcx
++mov 0x56f0(%rbp),%r15d
+ shr $0x20,%rcx
+-movzwl %cx,%ecx
+-cmp $0xc0,%ecx
+-setae %cl
+-cmpb $0x0,0x68(%rsp)
+-jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1821>
+-mov 0x20(%rsp),%rdx
+-add $0xffffff06,%edx
+-cmp %eax,%edx
+-setl %dl
+-lea 0xfa(%rbp),%esi
+-cmp %esi,%eax
+-setl %sil
+-test %sil,%dl
+-je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x18e2>
+-lea 0x80(%rsp),%rdi
+-mov 0x30(%rsp),%rsi
+-call *RIP_REFERENCE
+-movb $0x1,0x21f(%rsp)
+-lea 0x220(%rsp),%rcx
+-movups 0x80(%rsp),%xmm0
+-movdqu 0x90(%rsp),%xmm1
+-movups 0xa0(%rsp),%xmm2
+-movups 0xb0(%rsp),%xmm3
+-movups %xmm0,0x220(%rsp)
+-movdqu %xmm1,0x230(%rsp)
+-movups %xmm2,0x240(%rsp)
+-movups %xmm3,0x250(%rsp)
+-movups 0xc0(%rsp),%xmm0
+-movups %xmm0,0x260(%rsp)
++test %r15,%r15
++mov 0x60(%rsp),%r13
++mov 0x50(%rsp),%r12
++mov 0x78(%rsp),%rbp
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1f24>
++mov (%rsp),%r9
++mov 0x7c(%r9),%edx
++xor 0x80(%r9),%edx
++lea 0x1(%r15),%r9
++cmp %r9,%rdx
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1f1e>
++mov %eax,%r10d
++mov %edx,%eax
++xor %edx,%edx
++div %r9d
++mov %r10d,%eax
++mov 0x18(%rsp),%r8d
++shr $1,%r15d
++sub %r15d,%edx
++mov %esi,%r9d
++neg %r9d
++test %dil,%dil
++cmove %esi,%r9d
++add %ebx,%r11d
++add %eax,%r11d
++add %r9d,%r11d
++add %edx,%r11d
++add %r14d,%r11d
++movzwl %cx,%eax
++cmp $0xbf,%eax
++jbe TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1f7b>
++lea 0x90(%rsp),%rdi
++mov 0x38(%rsp),%rsi
++mov %r11d,%edx
++xor %r9d,%r9d
++push $0x2710
++push $0xffffffffffffd8f0
++call *RIP_REFERENCE
++add $0x10,%rsp
++mov 0x90(%rsp),%r11d
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1f8d>
++movabs $0x2710ffffd8f0,%rax
++mov %rax,0x94(%rsp)
++mov (%rsp),%r15
++mov 0x8(%rsp),%rdi
++mov 0x14(%rsp),%ebx
++cmp $0x1edc,%r11d
++mov $0x1edc,%eax
++cmovl %r11d,%eax
++cmp $0xffffe125,%eax
++mov $0xffffe124,%edx
++cmovge %eax,%edx
++movzbl 0x8b(%r15),%eax
++cmp $0xc,%rax
++jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x200f>
++mov $0x64,%ecx
++sub %rax,%rcx
++lea (%rcx,%rcx,2),%rax
++shl $0x3,%rax
++sub %rcx,%rax
++xor %ecx,%ecx
++test %rax,%rax
++cmovg %rax,%rcx
++imul %ecx,%edx
++lea 0x400(%rdx),%eax
++lea 0xbff(%rdx),%ecx
++test %eax,%eax
++cmovns %eax,%ecx
++mov %ecx,%eax
++sar $0xb,%eax
++and $0xfffff800,%ecx
++neg %ecx
++add %ecx,%edx
++add $0x400,%edx
++sar $0x1f,%edx
++add %eax,%edx
++cmpb $0x0,0x88(%r15)
++je TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x203b>
++neg %edx
++mov %rdx,0x40(%rsp)
++movq 0x94(%rsp),%xmm0
++pshufd $0xe1,%xmm0,%xmm1
++pxor %xmm0,%xmm0
++psubd %xmm1,%xmm0
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x23cb>
++mov %rdx,0x40(%rsp)
++movq 0x94(%rsp),%xmm0
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x23cb>
++mov %rbp,0x78(%rsp)
++lea 0xd0(%rsp),%rdi
++mov %r15,%rsi
++call *RIP_REFERENCE
++movb $0x1,0x27f(%rsp)
++lea 0x280(%rsp),%r13
+ movups 0xd0(%rsp),%xmm0
+-movups %xmm0,0x270(%rsp)
+-movups 0xe0(%rsp),%xmm0
++movdqu 0xe0(%rsp),%xmm1
++movups 0xf0(%rsp),%xmm2
++movups 0x100(%rsp),%xmm3
+ movups %xmm0,0x280(%rsp)
+-movdqu 0xf0(%rsp),%xmm0
+-movdqu %xmm0,0x290(%rsp)
+-lea 0x170(%rsp),%rdi
+-mov 0x70(%rsp),%rsi
++movdqu %xmm1,0x290(%rsp)
++movups %xmm2,0x2a0(%rsp)
++movups %xmm3,0x2b0(%rsp)
++movups 0x110(%rsp),%xmm0
++movups %xmm0,0x2c0(%rsp)
++movups 0x120(%rsp),%xmm0
++movups %xmm0,0x2d0(%rsp)
++movups 0x130(%rsp),%xmm0
++movups %xmm0,0x2e0(%rsp)
++movups 0x140(%rsp),%xmm0
++movups %xmm0,0x2f0(%rsp)
++mov %r15,%rdi
++call *RIP_REFERENCE
++mov %rax,%rbx
++movabs $0xffffffffffff,%r14
++and %rax,%r14
++mov %r14,%rax
++shr $0x10,%rax
++mov %rax,0x50(%rsp)
++mov 0x28(%rsp),%rax
++lea 0x50f0(%rax),%rdi
++mov %rdi,0x48(%rsp)
++mov %r15,%rsi
++call *RIP_REFERENCE
++mov %eax,%ebp
++lea 0xd0(%rsp),%rdi
++mov 0x18(%rsp),%rsi
++mov %r15,%rdx
++mov %r13,%rcx
++call *RIP_REFERENCE
++lea 0x258(%rsp),%rdi
++mov %r15,%rsi
+ mov %r13,%rdx
+-xor %r8d,%r8d
+-call TARGET<rook2::evaluator::Evaluator<_>::full_impl>
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1905>
+-movq $0x0,0x170(%rsp)
+-mov %eax,0x178(%rsp)
+-movq %xmm0,0x17c(%rsp)
+-mov %cl,0x184(%rsp)
++lea 0xd0(%rsp),%rcx
++call *RIP_REFERENCE
++mov 0x28(%rsp),%rax
++mov 0x5648(%rax),%r8
++lea 0x210(%rsp),%rdi
++mov %r15,%rsi
++mov %r13,%rdx
++mov %ebp,%ecx
++call *RIP_REFERENCE
++mov 0x218(%rsp),%rcx
++mov 0x28(%rsp),%rax
++mov 0x5650(%rax),%r9
++lea 0x1f8(%rsp),%rdi
++mov %r15,%rsi
++mov %r13,%rdx
++mov %ebp,0x30(%rsp)
++mov %ebp,%r8d
++call *RIP_REFERENCE
++mov 0x258(%rsp),%rsi
++mov 0x268(%rsp),%rdx
++mov 0x28(%rsp),%rax
++mov 0x5630(%rax),%rcx
++mov %rbx,%rdi
++call *RIP_REFERENCE
++mov %eax,%r13d
++cmpw $0x0,0x50(%rsp)
++sete %al
++shr $0x20,%r14
++mov %r15,%r14
++mov 0x28(%rsp),%r15
++sete %cl
++xor %ebp,%ebp
++test %cl,%al
++jne TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2242>
++sub $0x8,%rsp
++lea 0x98(%rsp),%rdi
++lea 0xd8(%rsp),%rcx
++mov %r14,%rsi
++lea 0x288(%rsp),%rdx
++mov %rbx,%r8
++mov 0x38(%rsp),%r9d
++push 0x5638(%r15)
++call *RIP_REFERENCE
++add $0x10,%rsp
++mov 0xb4(%rsp),%ebp
++mov 0x5640(%r15),%rcx
++lea 0x204(%rsp),%rdi
++lea 0x280(%rsp),%rsi
++mov %rbx,%rdx
++call *RIP_REFERENCE
++lea 0x1bc(%rsp),%rdi
++mov %r14,%rsi
++call *RIP_REFERENCE
++mov %r14,%rsi
++mov (%rsp),%r14
++movzbl 0x88(%r14),%eax
++movslq 0x210(%rsp,%rax,4),%rcx
++add $0x8c,%rcx
++movzwl %bx,%edx
++lea (%rdx,%rdx,4),%rdx
++movzwl 0x50(%rsp),%edi
++shr $0x1f,%rbx
++and $0x1fffe,%ebx
++add %rdx,%rbx
++lea (%rbx,%rdi,4),%rdx
++imul %rcx,%rdx
++add $0x4000,%rdx
++shr $0xf,%rdx
++mov %edx,%ebx
++neg %ebx
++test %eax,%eax
++cmove %edx,%ebx
++mov 0x8(%r14),%edx
++mov 0x48(%rsp),%rdi
++call *RIP_REFERENCE
++add 0x228(%rsp),%r13d
++add 0x20c(%rsp),%r13d
++add 0x200(%rsp),%r13d
++add 0x1bc(%rsp),%r13d
++add 0x1c4(%rsp),%r13d
++mov 0x220(%rsp),%rcx
++add 0x270(%rsp),%rcx
++mov %r13d,(%r14)
++add %rcx,0x5680(%r15)
++mov %ebp,0x4(%r14)
++movb $0x0,0xc(%r14)
++mov %rbp,%rcx
++mov %rbp,0x18(%rsp)
++mov 0x30(%rsp),%ebp
++add %ecx,%ebp
++add %eax,%ebp
++add %ebx,%ebp
++add %r13d,%ebp
++movzbl 0x562e(%r15),%eax
++mov %eax,0x50(%rsp)
++mov 0x56ec(%r15),%r13d
++mov 0x56f0(%r15),%eax
++mov %eax,0x30(%rsp)
++mov 0x80(%r14),%r15d
++xor 0x7c(%r14),%r15d
++mov 0x38(%rsp),%rbx
++mov %rbx,%rdi
++call *RIP_REFERENCE
++shr $0x20,%rax
++movzwl %ax,%eax
++lea 0x90(%rsp),%rdi
++mov %rbx,%rsi
++mov %ebp,%edx
++mov %r13d,%ecx
++mov 0x50(%rsp),%r8d
++mov 0x30(%rsp),%r9d
++push 0x18(%rsp)
++push $0x0
++push %rax
++push %r15
++mov %r14,%r15
++call *RIP_REFERENCE
++add $0x20,%rsp
++mov 0x9c(%rsp),%eax
++mov %rax,0x40(%rsp)
++movq 0xa0(%rsp),%xmm0
+ mov 0x8(%rsp),%rdi
+-mov 0x180(%rsp),%rax
+-mov %rax,0x98(%rsp)
+-mov 0x170(%rsp),%rax
+-mov %rax,0x88(%rsp)
+-mov 0x178(%rsp),%eax
+-mov %eax,0x90(%rsp)
+-mov 0x17c(%rsp),%eax
+-mov %eax,0x94(%rsp)
+-mov 0x94(%rsp),%eax
++mov 0x14(%rsp),%ebx
++mov 0x78(%rsp),%rbp
++mov 0x60(%rsp),%r13
++movd %xmm0,%ecx
++cmp %ebp,%ecx
++jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2442>
++pshufd $0x55,%xmm0,%xmm0
++movd %xmm0,%ecx
++cmp 0x58(%rsp),%ecx
++jle TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2442>
++mov 0x40(%rsp),%rax
+ cmp %ebp,%eax
+-jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1abd>
+-mov 0x98(%rsp),%r15d
+-cmp 0x20(%rsp),%r15d
+-jle TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x19e0>
+-mov 0x90(%rsp),%ecx
+-cmp %ebp,%ecx
+-jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ad9>
++jge TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x2440>
++mov %ecx,0x88(%rsp)
++mov 0x28(%rsp),%r14
+ mov 0x198(%r14),%rsi
+ cmp %rsi,%rdi
+-jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1d0d>
+-mov 0x20(%rsp),%rax
++jae TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x26ba>
++mov 0x58(%rsp),%rax
++mov 0x40(%rsp),%rcx
+ cmp %ecx,%eax
+-mov %ecx,0x48(%rsp)
+ cmovle %ecx,%eax
+-mov %rax,0x20(%rsp)
++mov %rax,0x58(%rsp)
+ mov %rdi,%rax
+ shl $0xa,%rax
+ lea (%rax,%rdi,8),%rsi
+ add 0x190(%r14),%rsi
+-lea 0x2a0(%rsp),%rdi
+-call *RIP_REFERENCE
+-mov 0x8(%rsp),%rdi
+-mov %r15d,%edx
+-mov 0x28(%rsp),%r15
+-mov 0x198(%r14),%rsi
+-cmp %rsi,%rdi
+-jb TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x551>
+-lea RIP_REFERENCE,%rdx
+-call *RIP_REFERENCE
+-mov %r15d,0x4(%r12)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ac2>
+-lea 0x80(%rsp),%rdi
+-mov 0x30(%rsp),%rsi
+-call *RIP_REFERENCE
+-movb $0x1,0x21f(%rsp)
+-lea 0x220(%rsp),%rcx
+-movups 0x80(%rsp),%xmm0
+-movdqu 0x90(%rsp),%xmm1
+-movups 0xa0(%rsp),%xmm2
+-movups 0xb0(%rsp),%xmm3
+-movups %xmm0,0x220(%rsp)
+-movdqu %xmm1,0x230(%rsp)
+-movups %xmm2,0x240(%rsp)
+-movups %xmm3,0x250(%rsp)
+-movups 0xc0(%rsp),%xmm0
+-movups %xmm0,0x260(%rsp)
+-movups 0xd0(%rsp),%xmm0
+-movups %xmm0,0x270(%rsp)
+-movups 0xe0(%rsp),%xmm0
+-movups %xmm0,0x280(%rsp)
+-movdqu 0xf0(%rsp),%xmm0
+-movdqu %xmm0,0x290(%rsp)
+-lea 0x88(%rsp),%rdi
+-mov 0x70(%rsp),%rsi
+-mov %r13,%rdx
+-xor %r8d,%r8d
+-call TARGET<rook2::evaluator::Evaluator<_>::full_impl>
+-mov 0x8(%rsp),%rdi
+-mov 0x94(%rsp),%eax
+-cmp %ebp,%eax
+-jl TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1955>
+-mov %eax,0x4(%r12)
+-movb $0x5,(%r12)
+-add $0x4a8,%rsp
++lea 0x300(%rsp),%rdi
++call *RIP_REFERENCE
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x880>
++mov %eax,%ecx
++mov %ecx,0x4(%r13)
++movb $0x5,0x0(%r13)
++add $0x508,%rsp
+ pop %rbx
+ pop %r12
+ pop %r13
+@@ -1523,40 +2070,46 @@
+ pop %r15
+ pop %rbp
+ ret
+-mov %ecx,0x4(%r12)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ac2>
+-movzbl 0x1bb(%rsp),%ecx
+-mov %cl,0x3(%r12)
+-movzwl 0x1b9(%rsp),%ecx
+-mov %cx,0x1(%r12)
+-mov 0x1bc(%rsp),%ecx
+-mov 0x1c0(%rsp),%rdx
+-mov %al,(%r12)
+-mov %ecx,0x4(%r12)
+-mov %rdx,0x8(%r12)
+-jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x1ac7>
++movzbl 0x1cb(%rsp),%ecx
++mov 0x60(%rsp),%rsi
++mov %cl,0x3(%rsi)
++movzwl 0x1c9(%rsp),%ecx
++mov %cx,0x1(%rsi)
++mov 0x1cc(%rsp),%ecx
++mov 0x1d0(%rsp),%rdx
++mov %al,(%rsi)
++mov %ecx,0x4(%rsi)
++mov %rdx,0x8(%rsi)
++jmp TARGET<rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q+0x244b>
+ lea RIP_REFERENCE,%rdx
+ mov $0x10,%esi
+ call *RIP_REFERENCE
+ lea RIP_REFERENCE,%rax
+-mov %rax,0x170(%rsp)
+-movq $0x1,0x178(%rsp)
+-movq $0x8,0x180(%rsp)
++mov %rax,0x90(%rsp)
++movq $0x1,0x98(%rsp)
++movq $0x8,0xa0(%rsp)
+ pxor %xmm0,%xmm0
+-movdqu %xmm0,0x188(%rsp)
++movdqu %xmm0,0xa8(%rsp)
+ lea RIP_REFERENCE,%rsi
+-lea 0x170(%rsp),%rdi
++lea 0x90(%rsp),%rdi
+ call *RIP_REFERENCE
+ lea RIP_REFERENCE,%rdi
+ call *RIP_REFERENCE
+ lea RIP_REFERENCE,%rax
+-mov %rax,0x80(%rsp)
+-movq $0x1,0x88(%rsp)
+-movq $0x8,0x90(%rsp)
++mov %rax,0xd0(%rsp)
++movq $0x1,0xd8(%rsp)
++movq $0x8,0xe0(%rsp)
+ pxor %xmm0,%xmm0
+-movdqu %xmm0,0x98(%rsp)
++movdqu %xmm0,0xe8(%rsp)
+ lea RIP_REFERENCE,%rsi
+-lea 0x80(%rsp),%rdi
++lea 0xd0(%rsp),%rdi
++call *RIP_REFERENCE
++lea RIP_REFERENCE,%rdx
++mov $0x10,%esi
++call *RIP_REFERENCE
++lea RIP_REFERENCE,%rdx
++mov $0x10,%esi
++mov %rax,%rdi
+ call *RIP_REFERENCE
+ lea RIP_REFERENCE,%rdx
+ mov $0x1,%edi
+@@ -1571,26 +2124,28 @@
+ lea RIP_REFERENCE,%rdx
+ mov $0x40,%esi
+ call *RIP_REFERENCE
++lea RIP_REFERENCE,%rdx
++call *RIP_REFERENCE
+ lea RIP_REFERENCE,%rax
+-mov %rax,0x80(%rsp)
+-movq $0x1,0x88(%rsp)
+-movq $0x8,0x90(%rsp)
++mov %rax,0xd0(%rsp)
++movq $0x1,0xd8(%rsp)
++movq $0x8,0xe0(%rsp)
+ pxor %xmm0,%xmm0
+-movdqu %xmm0,0x98(%rsp)
++movdqu %xmm0,0xe8(%rsp)
+ lea RIP_REFERENCE,%rsi
+-lea 0x80(%rsp),%rdi
++lea 0xd0(%rsp),%rdi
+ call *RIP_REFERENCE
+ lea RIP_REFERENCE,%rdx
+ mov $0x40,%esi
+ call *RIP_REFERENCE
+ lea RIP_REFERENCE,%rax
+-mov %rax,0x80(%rsp)
+-movq $0x1,0x88(%rsp)
+-movq $0x8,0x90(%rsp)
++mov %rax,0xd0(%rsp)
++movq $0x1,0xd8(%rsp)
++movq $0x8,0xe0(%rsp)
+ pxor %xmm0,%xmm0
+-movdqu %xmm0,0x98(%rsp)
++movdqu %xmm0,0xe8(%rsp)
+ lea RIP_REFERENCE,%rsi
+-lea 0x80(%rsp),%rdi
++lea 0xd0(%rsp),%rdi
+ call *RIP_REFERENCE
+ mov $0x200,%ebp
+ lea RIP_REFERENCE,%rdx

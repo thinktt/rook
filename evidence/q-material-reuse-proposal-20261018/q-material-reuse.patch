@@ -1,0 +1,214 @@
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -248,6 +248,7 @@
+             &mut self.ordering,
+         );
+ 
++        let mut allowance_material = None;
+         let previous = history.previous_move();
+         let king = position.piece_squares(position.side, PieceKind::King)[0];
+         let enemy_king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
+@@ -272,13 +273,17 @@
+                 let mut forced = special;
+                 if !special && !victim.is_empty() {
+                     let estimate = standing
+-                        + policy::allowance(
+-                            &self.evaluator.root,
+-                            &position,
+-                            &movement,
+-                            node.retained.positional,
+-                            node.retained.pawn_progress,
+-                        );
++                        + allowance_material
++                            .get_or_insert_with(|| {
++                                policy::AllowanceMaterial::new(&self.evaluator.root, &position)
++                            })
++                            .allowance(
++                                &self.evaluator.root,
++                                &position,
++                                &movement,
++                                node.retained.positional,
++                                node.retained.pawn_progress,
++                            );
+                     let moving_value =
+                         policy::moving_value(&self.evaluator.root, &position, &movement);
+                     let decision = policy::capture_policy(
+--- a/src/quiescence_policy.rs
++++ b/src/quiescence_policy.rs
+@@ -64,6 +64,68 @@
+     let mut after = *parent;
+     after.counts[victim.color().index()][victim.kind().index()] -= 1;
+     let after = root.material(&after);
++    finish_allowance(parent, movement, retained_positional, pawn_progress, before, after)
++}
++
++/// One immutable parent/root within a single Q candidate loop.
++/// Constructed lazily at the first admitted ordinary-capture allowance request.
++pub(crate) struct AllowanceMaterial {
++    before: i16,
++    after: [i16; 10],
++    seen: u16,
++}
++
++impl AllowanceMaterial {
++    pub(crate) fn new(root: &RootContext, parent: &Position) -> Self {
++        Self {
++            // RootContext::material always clamps to -7000..=7000.
++            before: root.material(parent) as i16,
++            after: [0; 10],
++            seen: 0,
++        }
++    }
++
++    pub(crate) fn allowance(
++        &mut self,
++        root: &RootContext,
++        parent: &Position,
++        movement: &Move,
++        retained_positional: i32,
++        pawn_progress: i32,
++    ) -> i32 {
++        debug_assert_eq!(movement.kind(), MoveKind::Ordinary);
++        let victim = parent.board[movement.to().0 as usize];
++        debug_assert!(!victim.is_empty() && victim.kind() != PieceKind::King);
++        let tag = victim.color().index() * 5 + victim.kind().index();
++        let bit = 1u16 << tag;
++        if self.seen & bit == 0 {
++            // Only counts are hypothetical, exactly as in the uncached helper.
++            let mut after = *parent;
++            after.counts[victim.color().index()][victim.kind().index()] -= 1;
++            self.after[tag] = root.material(&after) as i16;
++            self.seen |= bit;
++        }
++        finish_allowance(
++            parent,
++            movement,
++            retained_positional,
++            pawn_progress,
++            self.before as i32,
++            self.after[tag] as i32,
++        )
++    }
++}
++
++/// Shared native finishing rule; material endpoints are complete adjusted scores.
++fn finish_allowance(
++    parent: &Position,
++    movement: &Move,
++    retained_positional: i32,
++    pawn_progress: i32,
++    before: i32,
++    after: i32,
++) -> i32 {
++    let victim = parent.board[movement.to().0 as usize];
+     let sign = if victim.color() == Color::White {
+         1
+     } else {
+@@ -201,6 +263,107 @@
+         ));
+         let pawn = pos("7k/8/8/8/3p4/8/Q7/K7 w - - 0 1");
+         assert!(capture_exception(&pawn, &ordinary("a2", "d4")));
++    }
++
++    fn compare_cached_allowances(
++        parent: &Position,
++        root: &RootContext,
++        source: &str,
++        destinations: &[&str],
++    ) {
++        let saved = *parent;
++        let mut material = AllowanceMaterial::new(root, parent);
++        // Repeat in reverse order with different retained terms: only material
++        // endpoints, not whole allowances, may be reused by victim tuple.
++        for reverse in [false, true] {
++            for index in 0..destinations.len() {
++                let index = if reverse {
++                    destinations.len() - 1 - index
++                } else {
++                    index
++                };
++                let capture = ordinary(source, destinations[index]);
++                for (positional, progress) in [(0, 0), (19, 31), (-19, -31), (127, -317)] {
++                    assert_eq!(
++                        material.allowance(root, parent, &capture, positional, progress),
++                        allowance(root, parent, &capture, positional, progress),
++                        "destination {} retained {positional}/{progress}",
++                        destinations[index],
++                    );
++                }
++            }
++        }
++        assert_eq!(*parent, saved);
++    }
++
++    #[test]
++    fn q_material_reuse_matches_uncached_across_victim_types_roots_and_rounding() {
++        for (fen, destinations) in [
++            (
++                "7k/8/8/2npb3/3Q1r2/8/3q4/K7 w - - 0 1",
++                ["c5", "d5", "e5", "f4", "d2"],
++            ),
++            (
++                "7k/8/8/2NPB3/3q1R2/8/3Q4/K7 b - - 0 1",
++                ["c5", "d5", "e5", "f4", "d2"],
++            ),
++        ] {
++            let parent = pos(fen);
++            for root_side in [Color::White, Color::Black] {
++                for average_depth in [-99, -1, 0, 1, 99] {
++                    let mut root_position = pos("7k/8/8/8/8/8/P7/K7 w - - 0 1");
++                    root_position.side = root_side;
++                    let root = RootContext::new(
++                        &root_position,
++                        [[73, 211, 37, 155, 1000], [183, 19, 317, 67, 11]],
++                        average_depth,
++                    );
++                    compare_cached_allowances(&parent, &root, "d4", &destinations);
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn q_material_reuse_shares_same_type_destinations_without_caching_retained_terms() {
++        let parent = pos("7k/8/8/2n1n3/2rQ1r2/8/8/K7 w - - 0 1");
++        for root_side in [Color::White, Color::Black] {
++            for queen_value in [49, 50, 51, 99, 100, 101, 151, 152, 153] {
++                let mut root = RootContext::neutral(&parent);
++                root.side = root_side;
++                root.values = [[0; 5]; 2];
++                root.values[0][PieceKind::Queen.index()] = queen_value;
++                root.values[1][PieceKind::Knight.index()] = 0;
++                root.values[1][PieceKind::Rook.index()] = 51;
++                for average_depth in [-1, 0, 1] {
++                    root.average_depth = average_depth;
++                    compare_cached_allowances(&parent, &root, "d4", &["c4", "f4", "c5", "e5"]);
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn q_material_reuse_keeps_clipped_endpoints_and_zero_value_nonpawn_presence() {
++        for fen in [
++            "7k/8/8/8/2n5/QQQQQQQ1/QQQQQQQQ/K7 w - - 0 1",
++            "7k/8/8/8/2N5/qqqqqqq1/qqqqqqqq/K7 b - - 0 1",
++        ] {
++            let parent = pos(fen);
++            let root = RootContext::neutral(&parent);
++            assert_eq!(root.material(&parent).abs(), 7000);
++            compare_cached_allowances(&parent, &root, "c3", &["c4"]);
++        }
++        let parent = pos("7k/8/8/8/3n4/2P5/8/K7 w - - 0 1");
++        let mut root = RootContext::neutral(&parent);
++        root.values = [[0; 5]; 2];
++        root.values[0][PieceKind::Pawn.index()] = 200;
++        let before = root.material(&parent);
++        let mut removed = parent;
++        removed.counts[1][PieceKind::Knight.index()] -= 1;
++        // Removing a zero-valued last nonpawn still changes the advantage gate.
++        assert_ne!(before, root.material(&removed));
++        compare_cached_allowances(&parent, &root, "c3", &["d4"]);
+     }
+ 
+     #[test]

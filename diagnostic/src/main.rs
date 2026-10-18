@@ -21,6 +21,7 @@ mod fresh_evaluation;
 mod king_shelter;
 mod learned;
 mod ledger;
+mod move_evaluation;
 mod moves;
 mod ordering;
 mod pawn_fresh;
@@ -30,6 +31,7 @@ mod pawn_subtotals;
 mod policies;
 mod position_terms;
 mod positions;
+mod quiescence_evaluation;
 mod relations;
 mod retained_evaluation;
 mod root_context;
@@ -122,7 +124,11 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         | "evaluation.endgameAdjust"
         | "evaluation.fortressBounds"
         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
+        "evaluation.moveSequence" => move_evaluation::dispatch(input),
         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
+        "evaluation.quiescenceEntry" | "evaluation.quiescenceDisposition" => {
+            quiescence_evaluation::dispatch(operation, input)
+        }
         "evaluation.freshSubtotal" | "evaluation.freshScore" => {
             fresh_evaluation::dispatch(operation, input)
         }

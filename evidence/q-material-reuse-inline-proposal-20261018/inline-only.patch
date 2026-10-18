@@ -1,0 +1,18 @@
+--- A/src/quiescence_policy.rs
++++ B/src/quiescence_policy.rs
+@@ -76,6 +76,7 @@
+ }
+ 
+ impl AllowanceMaterial {
++    #[inline(always)]
+     pub(crate) fn new(root: &RootContext, parent: &Position) -> Self {
+         Self {
+             // RootContext::material always clamps to -7000..=7000.
+@@ -117,6 +118,7 @@
+ }
+ 
+ /// Shared native finishing rule; material endpoints are complete adjusted scores.
++#[inline(always)]
+ fn finish_allowance(
+     parent: &Position,
+     movement: &Move,

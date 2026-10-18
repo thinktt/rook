@@ -7,7 +7,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current82 operations cover time schedule/allowance, parameters and output
+The current85 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -22,7 +22,8 @@ selected pawn-race/fortress bounds, rook reductions and full endgame adjustment;
 material-threat production and board-derived pressure/threat/cutoff composition;
 root material/square and raw shelter observations; score-context production;
 fresh/retained pawn structure/candidates and fresh phase/subtotals; complete
-forced-fresh subtotal/score and controlled retained full/fast sequences.
+forced-fresh subtotal/score, controlled retained full/fast sequences, actual
+move/null evaluation sequences and admitted Q entry/disposition.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -46,14 +47,14 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current4721-case external result comprises76 complete released fixture
-files with no partial selection or duplicate cases. All99 adapter unit tests
-pass after139 native tests. Frozen adapter SHA256 is
-`bf4c0150a146f2111ec4f8b7552375b6a034cd4b9198ef7ee2187a63f03e6d3d`.
-See `evidence/diagnostic-retained-evaluation-20261018/`; both the28-file frontend
+The current5289-case external result comprises79 complete released fixture
+files with no partial selection or duplicate cases. All117 adapter unit tests
+pass after142 native tests. Frozen adapter SHA256 is
+`7dd00a4337b01a5e33ff6ac29a20f8d8af608bcf90d36af2afd23d04b58cfcd6`.
+See `evidence/diagnostic-move-q-evaluation-20261018/`; both the30-file frontend
 and43-file native closure are stable and independently reconciled. Integration
 independently matches both source closures to the exact tested proposal in
-`evidence/retained-evaluation-integration-20261018/`. This is source promotion
+`evidence/move-q-evaluation-integration-20261018/`. This is source promotion
 with named frozen artifacts, without a canonical-path rebuild claim. Native
 observation helpers share production arithmetic and retain state/layout/charge
 ownership. This does not transfer timing or gameplay from prior8d artifacts.
@@ -141,5 +142,17 @@ root for artificial placements. Produced finishing values come from one native
 call and do not acquire the standalone supplied-input score restriction. The
 frozen ordinary c6839096 passes54 strict replays/eight interruption fixtures;
 focused static comparison finds unchanged ordinary full/fast code at its main
-callers. No CPU result follows. Complete mandatory acceptance now needs35
-operations/2952 cases and wider production/gameplay qualification.
+callers. No CPU result follows. At that82-operation checkpoint, mandatory
+acceptance still needed35 operations/2952 cases.
+
+The next move sequence and two Q-entry/disposition routes add568 cases. Actual
+child/null inheritance and selected fast/full stages retain native ownership.
+The private const-default selector keeps ordinary full/fast wrappers while
+sharing all sparse/refresh conditions with the observer. Q disposition shares
+the native ordered return policy. The corrected ordinary d38ff037 passes142
+native tests,54 strict replays/eight interruption fixtures; combined adapter
+7dd00a43 passes5289 cases/117 units. Its bounded default codegen review restores
+the prior evaluation call scope and stack size, without a CPU-neutrality claim.
+The original metadata-stability failure and clean replay retry are preserved.
+Complete mandatory acceptance now needs32 operations/2384 cases, followed by
+wider production/gameplay/performance qualification.
