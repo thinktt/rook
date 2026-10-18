@@ -4,8 +4,10 @@ Current117 integrates activity destination values after178 native/209 diagnostic
 units and fresh7673-case/117-operation success. Own-PGOd5ee1f3f passes its own
 54/eight-wire and a matched seven-case pilot1.309570% lower in summed medians;
 final-artifact full54/12 costs and12-game pre-gate remain. The separate pawn
-fusion541d324c passes178/54/eight-wire with independent closure but has no CPU
-measurement or adoption yet. See [decision0012](../decisions/0012-activity-destination-values.md).
+fusion541d324c passes178/54/eight-wire with independent closure; its fixed
+seven-case generic pilot is0.210939% lower in summed medians, missing both
+predeclared advancement branches. It is parked without own-PGO or composition.
+See [decision0012](../decisions/0012-activity-destination-values.md).
 
 Previous complete117 has mandatory7673-case/117-operation success and a generic12-game
 pre-gate pass. Its own-PGO6a5ce6e2 also passes its own fresh54/eight-wire and12-game
@@ -425,3 +427,24 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     fusion is prepared from the original117 basis and remains unbuilt.
     See `evidence/activity-value-inputs-pgo-cpu-reconciliation-20261018-01/README.md`
     and `evidence/pawn-forward-scan-fusion-parent-review-20261018/review.md`.
+
+
+22. **Pawn forward-scan fusion: parked after fixed generic pilot.** The isolated
+    one-file source shares the candidate path/protection traversal with raw
+    progress, retaining the backward scan and public scalar domain. Independent
+    verification binds178 native tests (including an old-scan/coordinate-path
+    differential),54 original strict replays and eight-wire24. Actual generic
+    lowering removes the duplicate loop and raw call, with candidates local
+    frame+48B and combined emitted text-209B. There is no persistent state.
+    The fixed seven-case70-lifetime pilot retains14 excluded warmups and56
+    measured samples, summing14.5281365s control39cadc62 versus14.497491s
+    trial541d324c:ratio0.9978906104 (0.210939% lower). Six medians decrease;
+    profile05 increases0.274293%. Only02/08 ranges separate; the other five
+    overlap. Whole-suite CPU15 has one nonidle tick and15703 idle ticks, without
+    pervariant attribution. Independent original70/accounting/source checks pass.
+    The common5-of7/no-ratio>1.02 gate passes, but aggregate misses<=0.995 and
+    profile08ratio0.983282196 misses<=0.97. Both predeclared branches fail.
+    Park without a favorable-case/normal-variability rerun, own-PGO or activity
+    composition. Root remains adopted activity sourceed85b6dd. Exact evidence is
+    in [the trial checkpoint](../../evidence/pawn-forward-scan-fusion-trial-checkpoint-20261018/README.md).
+    This result does not establish neutrality, significance or full54/12 cost.

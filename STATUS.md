@@ -26,8 +26,13 @@ The latest full54/12 costs and12-game pre-gate still belong to previous6a5ce6e2.
 Repeat final-artifact qualification after selecting further changes. The separate
 pawn forward-scan fusion541d324c passes178 native tests,54 strict replays and
 eight-wire24 with independent source/raw verification. Its backend removes the
-duplicate walk and old raw call, while growing the candidates local frame48B;
-its CPU benefit remains unmeasured. It is not composed with activity.
+duplicate walk and old raw call, while growing the candidates local frame48B.
+Its fixed70-lifetime generic pilot is independently reconciled:14.5281365s
+control versus14.497491s trial,0.210939% lower summed medians. Six of seven
+medians improve; profile08 improves1.671780%, below the required3% targeted
+branch, and the aggregate misses the0.5% branch. Both frozen advancement
+branches fail. The experiment is parked without own-PGO, retry or composition.
+See [pawn trial checkpoint](evidence/pawn-forward-scan-fusion-trial-checkpoint-20261018/README.md).
 
 ## Previous complete117 checkpoint and history
 
