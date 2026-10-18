@@ -1,0 +1,1 @@
+Prepared only. The matched generic pilot is gated on independent validation and backend closure. Parent launch clearance is required; no timing has been run. See plan.json for frozen case/schedule/scope and advancement rule.

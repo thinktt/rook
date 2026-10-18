@@ -384,3 +384,37 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     cost/gameplay qualification remains open. See
     `evidence/ordered-q-bitview-phase2-cpu-pilot-20261018/README.md` and
     `evidence/pgo-ordered-q-bitview-phase2-cpu-pilot-20261018/README.md`.
+
+
+21. **Stateless activity destination values: select for integration validation.**
+    The isolated one-file change derives an immutable256-byte physical-square
+    table from the original value constants and selects the same eligible-rook
+    variant before target traversal. No persistent field/cache, ownership,
+    arithmetic width, charge, traversal or mark semantics changes. Native178,
+    strict54 and eight-wire24 pass with independent source/archive/raw closure.
+    Generic7cf39800 versus exact11739cadc62 independently reconciles70 lifetimes
+    on the fixed custom seven cases01/02/04/05/29/35/08:14.5346415s versus
+    14.4387960s summed medians,0.659428% lower, all seven medians lower and
+    ranges separated for05/35 only. This is a development set, not the released
+    pilot/full54 acceptance schedule.
+
+    Fresh own54 training and independent byte-identical profile remerge produce
+    d5ee1f3f; its fresh54/eight-wire24 and independent raw reconciliation pass
+    with zero missing/stale-profile warnings. Its separate fixed70-lifetime
+    own-PGO comparison to6a5ce6e2 independently reconciles13.344343s versus
+    13.1695895s,1.309570% lower. Six medians are lower; profile29 is0.4075%
+    higher with overlapping ranges.04/05/35 favor candidate with separated
+    ranges; the other four overlap. Both whole-suite observations show zero
+    CPU15 nonidle ticks, without continuous exclusivity or per-variant attribution.
+    The original predeclared advancement rules pass; no favorable-case reruns,
+    outlier deletion, confidence claim or generic-to-PGO timing transfer occurs.
+
+    Generic activity shrinks563bytes with unchanged frame; own-PGO shrinks393
+    and its frame16bytes. Scoped caller sizes/frames/call boundaries show no
+    new growth. These are static observations, not dynamic retired work or
+    cache/spill-neutrality proof. Select for fresh full117 diagnostic validation
+    before source promotion. Current root/native and full54/12 costs remain
+    exact117/6a; final qualification stays open. The separate pawn-forward-scan
+    fusion is prepared from the original117 basis and remains unbuilt.
+    See `evidence/activity-value-inputs-pgo-cpu-reconciliation-20261018-01/README.md`
+    and `evidence/pawn-forward-scan-fusion-parent-review-20261018/review.md`.

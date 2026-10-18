@@ -1,0 +1,206 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -25,45 +25,6 @@
+     [7, 10, 12, 13, 13, 12, 10, 7],
+ ];
+ const ROOK_SEVENTH: [u8; 8] = [40, 43, 45, 47, 47, 45, 43, 40];
+-
+-// Physical-square indexed views: ordinary destinations, then the eligible
+-// rook's seventh-rank row. Construction is compile-time only.
+-type DestinationValues = [[u8; 64]; 2];
+-static DESTINATION_VALUES: [DestinationValues; 2] = oriented_destination_values();
+-
+-const fn oriented_destination_values() -> [DestinationValues; 2] {
+-    let mut values = [[[0; 64]; 2]; 2];
+-    let mut color = 0;
+-    while color < 2 {
+-        let mut square = 0;
+-        while square < 64 {
+-            let rank = if color == 0 { square / 8 } else { 7 - square / 8 };
+-            let file = square % 8;
+-            let ordinary = DESTINATION_VALUE[rank][file];
+-            values[color][0][square] = ordinary;
+-            values[color][1][square] = if rank == 6 { ROOK_SEVENTH[file] } else { ordinary };
+-            square += 1;
+-        }
+-        color += 1;
+-    }
+-    values
+-}
+-
+-#[inline]
+-fn piece_destination_values<const KIND: usize>(
+-    position: &Position,
+-    color: Color,
+-    values: &'static DestinationValues,
+-) -> &'static [u8; 64] {
+-    let seventh = if KIND == PieceKind::Rook.index() {
+-        let king = position.piece_squares(color.opponent(), PieceKind::King)[0];
+-        let rank = relative_rank(color, king);
+-        rank == 7 || (rank == 6 && king.file() >= 6)
+-    } else {
+-        false
+-    };
+-    &values[usize::from(seventh)]
+-}
+ const LOW_MOBILITY: [[u8; 8]; 8] = [
+     [2, 1, 0, 0, 0, 0, 1, 2],
+     [3, 2, 1, 1, 1, 1, 2, 3],
+@@ -103,12 +64,10 @@
+     let mut raw_scores = [0i64; 2];
+     let mut relation_queries = 0;
+     for color in [Color::White, Color::Black] {
+-        let values = &DESTINATION_VALUES[color.index()];
+         accumulate_kind::<1>(
+             position,
+             influence,
+             color,
+-            values,
+             &mut marks,
+             phase.endgame,
+             &mut raw_scores[color.index()],
+@@ -118,7 +77,6 @@
+             position,
+             influence,
+             color,
+-            values,
+             &mut marks,
+             phase.endgame,
+             &mut raw_scores[color.index()],
+@@ -128,7 +86,6 @@
+             position,
+             influence,
+             color,
+-            values,
+             &mut marks,
+             phase.endgame,
+             &mut raw_scores[color.index()],
+@@ -138,7 +95,6 @@
+             position,
+             influence,
+             color,
+-            values,
+             &mut marks,
+             phase.endgame,
+             &mut raw_scores[color.index()],
+@@ -162,7 +118,6 @@
+     position: &Position,
+     influence: &Influence,
+     color: Color,
+-    values: &'static DestinationValues,
+     marks: &mut Marks,
+     endgame: u16,
+     score: &mut i64,
+@@ -170,8 +125,7 @@
+ ) {
+     let kind = PieceKind::ALL[KIND];
+     for &source in position.piece_squares(color, kind) {
+-        let values = piece_destination_values::<KIND>(position, color, values);
+-        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
++        let mobility = destinations_kind::<KIND>(position, influence, color, source, marks);
+         let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+         *score += piece;
+         *queries += work;
+@@ -271,7 +225,6 @@
+     influence: &Influence,
+     color: Color,
+     source: Square,
+-    values: &[u8; 64],
+     marks: &mut Marks,
+ ) -> Mobility {
+     let kind = PieceKind::ALL[KIND];
+@@ -287,11 +240,16 @@
+             }
+             let category = direct_category(influence, color, kind, target, victim);
+             result.categories += category;
+-            result.total += category * values[target.0 as usize] as i64;
++            result.total += category
++                * DESTINATION_VALUE[relative_rank(color, target)][target.file() as usize] as i64;
+             mark(marks, color, kind, target, category);
+         }
+         return result;
+     }
++    let enemy_king = position.piece_squares(color.opponent(), PieceKind::King)[0];
++    let king_rank = relative_rank(color, enemy_king);
++    let rook_seventh =
++        kind == PieceKind::Rook && (king_rank == 7 || (king_rank == 6 && enemy_king.file() >= 6));
+     let directions = match kind {
+         PieceKind::Bishop => 0..4,
+         PieceKind::Rook => 4..8,
+@@ -325,7 +283,12 @@
+                     mark(marks, color, kind, target, category);
+                     category
+                 };
+-                let value = values[target.0 as usize];
++                let rank = relative_rank(color, target);
++                let value = if rook_seventh && rank == 6 {
++                    ROOK_SEVENTH[target.file() as usize]
++                } else {
++                    DESTINATION_VALUE[rank][target.file() as usize]
++                };
+                 let vertical = if kind == PieceKind::Rook && step.0 == 0 {
+                     2
+                 } else {
+@@ -396,14 +359,10 @@
+     marks: &mut Marks,
+ ) -> Mobility {
+     match kind {
+-        PieceKind::Knight => destinations_kind::<1>(position, influence, color, source,
+-            piece_destination_values::<1>(position, color, &DESTINATION_VALUES[color.index()]), marks),
+-        PieceKind::Bishop => destinations_kind::<2>(position, influence, color, source,
+-            piece_destination_values::<2>(position, color, &DESTINATION_VALUES[color.index()]), marks),
+-        PieceKind::Rook => destinations_kind::<3>(position, influence, color, source,
+-            piece_destination_values::<3>(position, color, &DESTINATION_VALUES[color.index()]), marks),
+-        PieceKind::Queen => destinations_kind::<4>(position, influence, color, source,
+-            piece_destination_values::<4>(position, color, &DESTINATION_VALUES[color.index()]), marks),
++        PieceKind::Knight => destinations_kind::<1>(position, influence, color, source, marks),
++        PieceKind::Bishop => destinations_kind::<2>(position, influence, color, source, marks),
++        PieceKind::Rook => destinations_kind::<3>(position, influence, color, source, marks),
++        PieceKind::Queen => destinations_kind::<4>(position, influence, color, source, marks),
+         _ => unreachable!("non-activity piece"),
+     }
+ }
+@@ -504,43 +463,6 @@
+     fn empty_influence() -> Influence {
+         Influence {
+             profiles: [[0; 64]; 2],
+-        }
+-    }
+-
+-    #[test]
+-    fn destination_views_preserve_coordinates_and_both_rook_gate_boundaries() {
+-        for color in [Color::White, Color::Black] {
+-            let views = &DESTINATION_VALUES[color.index()];
+-            for rank in 0..8 {
+-                for file in 0..8 {
+-                    let physical_rank = if color == Color::White { rank } else { 7 - rank };
+-                    let square = 8 * physical_rank + file;
+-                    assert_eq!(views[0][square], DESTINATION_VALUE[rank][file]);
+-                    let expected = if rank == 6 { ROOK_SEVENTH[file] }
+-                                   else { DESTINATION_VALUE[rank][file] };
+-                    assert_eq!(views[1][square], expected);
+-                }
+-            }
+-        }
+-        // Relative f7/g7 is the file boundary; h8/h6 brackets the rank gate.
+-        // The second four positions reflect rank and color, retaining files.
+-        for (placement, color, seventh) in [
+-            ("8/5k2/8/8/3R4/8/8/K7", Color::White, false),
+-            ("8/6k1/8/8/3R4/8/8/K7", Color::White, true),
+-            ("7k/8/8/8/3R4/8/8/K7", Color::White, true),
+-            ("8/8/7k/8/3R4/8/8/K7", Color::White, false),
+-            ("k7/8/8/3r4/8/8/5K2/8", Color::Black, false),
+-            ("k7/8/8/3r4/8/8/6K1/8", Color::Black, true),
+-            ("k7/8/8/3r4/8/8/8/7K", Color::Black, true),
+-            ("k7/8/8/3r4/8/7K/8/8", Color::Black, false),
+-        ] {
+-            let pos = position(placement);
+-            let views = &DESTINATION_VALUES[color.index()];
+-            assert_eq!(piece_destination_values::<3>(&pos, color, views),
+-                       &views[usize::from(seventh)]);
+-            assert_eq!(piece_destination_values::<1>(&pos, color, views), &views[0]);
+-            assert_eq!(piece_destination_values::<2>(&pos, color, views), &views[0]);
+-            assert_eq!(piece_destination_values::<4>(&pos, color, views), &views[0]);
+         }
+     }
+ 

@@ -42,6 +42,26 @@ a qualified verdict. Historical timings remain bound to their older images.
 Production audits retain explicit conditional obligations. The full3288-game
 gate is assigned to an external system; prepare its exact artifact handoff.
 
+The isolated activity destination-value candidate7cf39800 passes178 native tests,
+54 strict replays and eight interruption fixtures/24 searches, independently
+reconciled with its exact source/archive/build identities. Its fixed seven-case
+70-lifetime generic pilot sums14.5346415s control39cadc62 versus14.4387960s,
+0.659428% lower; all seven medians are lower, with separated ranges for05/35
+and overlapping ranges for the other five. Its fresh own-source PGO artifact
+d5ee1f3f passes54-case training/independent byte-identical profile remerge,
+54 post-use strict replays and eight-wire24, with independent raw reconciliation.
+Its matched own-PGO70-lifetime pilot independently reconciles13.344343s for
+control6a5ce6e2 versus13.1695895s,1.309570% lower. Six medians improve;
+profile29 rises0.4075% with overlapping ranges. Profiles04/05/35 have separated
+ranges and the other four overlap. The predeclared rule supports selecting this
+source for fresh full117 diagnostic validation before promotion. Production117
+and its current6a full54/12 cost/pre-gate evidence are unchanged; no trial timing
+transfers to full-corpus qualification. The next pawn forward-scan fusion is a
+separate, unbuilt one-file prototype. See
+[activity generic comparison](evidence/activity-value-inputs-cpu-reconciliation-20261018-01/README.md),
+[activity own-PGO comparison](evidence/activity-value-inputs-pgo-cpu-reconciliation-20261018-01/README.md)
+and [pawn fusion source review](evidence/pawn-forward-scan-fusion-parent-review-20261018/review.md).
+
 The preceding105 source passed7519 cases/182 adapter units and158 native tests.
 Its matched generic comparison to95 was2.373051% lower in summed CPU medians,
 with all six ranges separated. That historical timing remains artifact-specific.

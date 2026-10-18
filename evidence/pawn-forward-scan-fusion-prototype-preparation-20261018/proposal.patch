@@ -1,0 +1,223 @@
+--- a/src/pawn_progress.rs
++++ b/src/pawn_progress.rs
+@@ -11,6 +11,18 @@
+ }
+ 
+ pub fn raw(position: &Position, map: &Influence, pawn: Square) -> i32 {
++    raw_and_path::<false>(position, map, pawn).0
++}
++
++// Raw-only callers retain their scalar API; path collection is statically absent.
++// Current selected candidates have the pawn's own color, so their two forward
++// traversals can share each square's occupancy and normalized influence reads.
++#[inline]
++fn raw_and_path<const WITH_PATH: bool>(
++    position: &Position,
++    map: &Influence,
++    pawn: Square,
++) -> (i32, i32, bool) {
+     const COEFFICIENT: [[i32; 8]; 6] = [
+         [55, 60, 55, 50, 50, 55, 60, 55],
+         [55, 60, 55, 50, 50, 55, 60, 55],
+@@ -46,6 +58,8 @@
+         }
+         next = square.offset(0, -forward);
+     }
++    let mut path = 0;
++    let mut protected = true;
+     let mut next = pawn.offset(0, forward);
+     while let Some(square) = next {
+         let piece = position.board[square.0 as usize];
+@@ -54,6 +68,10 @@
+         }
+         let own = map.code(side, square);
+         let other = map.code(side.opponent(), square);
++        if WITH_PATH {
++            path += if piece.is_empty() { 1 } else { 2 };
++            protected &= piece == Piece::new(side, PieceKind::King) || own != 0;
++        }
+         if own > other {
+             measure += if square.rank() == 0 || square.rank() == 7 {
+                 2
+@@ -76,13 +94,14 @@
+     }
+     let preliminary =
+         COEFFICIENT[rank as usize - 2][pawn.file() as usize] * (measure.max(-2) + 4) * 11 / 64;
+-    if map.code(side, pawn) >> 6 != 0 {
++    let raw = if map.code(side, pawn) >> 6 != 0 {
+         preliminary * 11 / 8
+     } else if map.code(side, pawn.offset(0, forward).unwrap()) >> 6 != 0 {
+         preliminary * 10 / 8
+     } else {
+         preliminary
+-    }
++    };
++    (raw, path, protected)
+ }
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+@@ -119,15 +138,7 @@
+             8 - pawn.rank()
+         };
+         let terminal = Square(pawn.file() + if side == Color::White { 56 } else { 0 });
+-        let mut path = 0;
+-        let mut protected = true;
+-        let mut next = pawn.offset(0, forward);
+-        while let Some(square) = next {
+-            let piece = position.board[square.0 as usize];
+-            path += if piece.is_empty() { 1 } else { 2 };
+-            protected &= piece == Piece::new(side, PieceKind::King) || map.code(side, square) != 0;
+-            next = square.offset(0, forward);
+-        }
++        let (raw, path, protected) = raw_and_path::<true>(position, map, pawn);
+         let adjusted = 2 * path - if rank == 2 { 2 } else { 0 } - turn;
+         let relation = 2 * distance(terminal, enemy_king) - adjusted - 2;
+         let (multiplier, offset) = match relation {
+@@ -138,7 +149,7 @@
+             2 => (76, 960),
+             _ => (83, 1440),
+         };
+-        let intermediate = (raw(position, map, pawn) * multiplier + offset) / 64;
++        let intermediate = (raw * multiplier + offset) / 64;
+         let king_distance =
+             (2 * distance(king, pawn.offset(0, forward).unwrap()) - turn).clamp(1, 8);
+         let mut score = (76 - 3 * king_distance) * intermediate / 64;
+@@ -361,3 +372,138 @@
+         (w * scores[0] as i64 - b * scores[1] as i64 + 512).div_euclid(1024) + ending as i64;
+     (balance * (phase.middlegame as i64 + 2 * phase.endgame as i64) + 256).div_euclid(512) as i32
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn separate_raw_reference(position: &Position, map: &Influence, pawn: Square) -> i32 {
++        const COEFFICIENT: [[i32; 8]; 6] = [
++            [55, 60, 55, 50, 50, 55, 60, 55],
++            [55, 60, 55, 50, 50, 55, 60, 55],
++            [72, 78, 72, 65, 65, 72, 78, 72],
++            [88, 96, 88, 80, 80, 88, 96, 88],
++            [105, 114, 105, 95, 95, 105, 114, 105],
++            [110, 120, 110, 100, 100, 110, 120, 110],
++        ];
++        let side = position.board[pawn.0 as usize].color();
++        let forward = if side == Color::White { 1 } else { -1 };
++        let rank = if side == Color::White {
++            pawn.rank() + 1
++        } else {
++            8 - pawn.rank()
++        };
++        let mut measure = rank as i32 - 4;
++        let mut next = pawn.offset(0, -forward);
++        while let Some(square) = next {
++            let piece = position.board[square.0 as usize];
++            if !piece.is_empty() {
++                measure += if piece.kind() == PieceKind::Rook {
++                    if piece.color() == side {
++                        2
++                    } else {
++                        -2
++                    }
++                } else if piece.kind() == PieceKind::Queen && piece.color() != side {
++                    -1
++                } else {
++                    0
++                };
++                break;
++            }
++            next = square.offset(0, -forward);
++        }
++        let mut next = pawn.offset(0, forward);
++        while let Some(square) = next {
++            let piece = position.board[square.0 as usize];
++            if !piece.is_empty() && piece.kind() == PieceKind::Rook {
++                measure += if piece.color() == side { -2 } else { 2 };
++            }
++            let own = map.code(side, square);
++            let other = map.code(side.opponent(), square);
++            if own > other {
++                measure += if square.rank() == 0 || square.rank() == 7 {
++                    2
++                } else {
++                    1
++                };
++            } else {
++                if own < other {
++                    measure -= 1;
++                }
++                if !piece.is_empty() && piece.color() != side {
++                    measure -= if square == pawn.offset(0, forward).unwrap() {
++                        2
++                    } else {
++                        1
++                    };
++                }
++            }
++            next = square.offset(0, forward);
++        }
++        let preliminary =
++            COEFFICIENT[rank as usize - 2][pawn.file() as usize] * (measure.max(-2) + 4) * 11 / 64;
++        if map.code(side, pawn) >> 6 != 0 {
++            preliminary * 11 / 8
++        } else if map.code(side, pawn.offset(0, forward).unwrap()) >> 6 != 0 {
++            preliminary * 10 / 8
++        } else {
++            preliminary
++        }
++    }
++    // Coordinate-indexed path oracle: independent of the fused offset loop.
++    fn separate_path_reference(position: &Position, map: &Influence, pawn: Square) -> (i32, bool) {
++        let side = position.board[pawn.0 as usize].color();
++        let mut path = 0;
++        let mut protected = true;
++        for rank in 0..8 {
++            let ahead = if side == Color::White { rank > pawn.rank() }
++                        else { rank < pawn.rank() };
++            if !ahead { continue; }
++            let square = Square(8 * rank + pawn.file());
++            let piece = position.board[square.0 as usize];
++            path += if piece.is_empty() { 1 } else { 2 };
++            protected &= piece == Piece::new(side, PieceKind::King) || map.code(side, square) != 0;
++        }
++        (path, protected)
++    }
++
++    #[test]
++    fn shared_scan_matches_separate_raw_and_coordinate_path_across_both_colors() {
++        // Occupied forward squares never stop either scan, own kings protect
++        // without influence, and the nearer knight hides the backward rook.
++        // Relative ranks2,4,7 cover the long path and immediate promotion edge.
++        for (placement, pawn) in [
++            ("3K3k/3r4/3R4/3p4/3P4/8/3R4/8", "d4"),
++            ("3K3k/3r4/3R4/3p4/3P4/3N4/3R4/8", "d4"),
++            ("8/3r4/8/3p4/3P4/3r4/3R4/3k3K", "d5"),
++            ("8/3r4/3n4/3p4/3P4/3r4/3R4/3k3K", "d5"),
++            ("K6k/r7/8/R7/8/p7/P7/R7", "a2"),
++            ("5r1k/5P2/8/8/8/8/8/5K2", "f7"),
++            ("5k2/8/8/8/8/8/5p2/5R1K", "f2"),
++        ] {
++            let position = Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();
++            let pawn = Square::parse(pawn).unwrap();
++            let check = |map: &Influence| {
++                let raw = separate_raw_reference(&position, map, pawn);
++                let (path, protected) = separate_path_reference(&position, map, pawn);
++                assert_eq!(raw_and_path::<true>(&position, map, pawn), (raw, path, protected));
++                assert_eq!(super::raw(&position, map, pawn), raw);
++            };
++            check(&Influence::build(&position));
++            // Exercise all normalized profile byte values, including carries,
++            // equality, both ordinal comparisons and current/front pawn bits.
++            // These are internal pure-producer witnesses, not admission claims
++            // that every constructed map is placement-derived.
++            for value in 0..=255u16 {
++                let mut map = Influence { profiles: [[0; 64]; 2] };
++                for square in 0..64 {
++                    map.profiles[0][square] = (value as u8).wrapping_add((37 * square) as u8);
++                    map.profiles[1][square] = (value as u8).wrapping_mul(73)
++                        .wrapping_add((13 * square) as u8);
++                }
++                check(&map);
++            }
++        }
++    }
++}
