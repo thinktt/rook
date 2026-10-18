@@ -1,8 +1,12 @@
-# Matched bitplane storage experiments — source preparation only
+# Matched bitplane storage experiments — preparation and completed generic trial
 
-No variant has been compiled, tested, replayed or measured. Native production
-source and the running1dc996b2 game collection remain unchanged. These cold
-helper-affined source preparations run no engine. `prepared.json` binds the
+The original preparation ran no engine while the1dc996b2 game collection was
+live. After its actual terminal result, both variants passed133 native tests
+and all54 strict replays. The independent90-lifetime generic reconciliation in
+`../bitplanes-20261018/` reports persistent summed medians2.13% lower and this
+local supply strategy0.48% higher. Persistent advances to its own PGO trial;
+no production layout is adopted yet. Native production source remains unchanged.
+`prepared.json` binds the
 unchanged generic baseline source and both exact variant source maps. The
 compressed archive was independently read back against every source/tool hash;
 it is a preparation archive, not a successful-build receipt.
@@ -36,13 +40,11 @@ Prepared checks cover all13 valid tags at every square/replacement,10000
 broad constructed positions queried on every square/color, projected boards
 and actual transitions, plus castling/promotion and joined EP non-pawn/king
 victims. The existing forced-projection generation oracle explicitly retains
-the old mailbox Boolean route. All these checks are unexecuted at this stage.
-After the live collection terminates, compile/test both variants, retain
-any failures, run all54 exact replays, then use balanced whole-native generic
-comparisons with current baseline. A selected PGO candidate needs its own
+the old mailbox Boolean route. All these preparation-time checks have now
+executed successfully, followed by the matched generic trial. A PGO candidate needs its own
 training/build/replay and CPU evidence; no generic/PGO inference is authorized.
 
-`verify_after_collection.py` is prepared but unexecuted. It refuses the live
+`verify_after_collection.py` completed after the original collection. It refuses the live
 collector/native process, checks the archived source/tool closure for both
 variants, freezes the actual compiled library/CLI test images, and requires
 133 native tests plus54 exact replays per variant before the three-variant

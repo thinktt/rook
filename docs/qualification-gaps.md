@@ -72,8 +72,10 @@ the disclosed inherited-affinity helper limitation recorded under
 
 The corrected fresh diagnostic attempt passes23 units and1130 cases across27
 operations. Its first attempt and12 missing-transport failures remain preserved;
-native production source is unchanged. Matched local/persistent bitplane
-verification is running; the compact relation-state lookup remains unexecuted.
-Neither is selected for production. The original CPU collection is terminal,
+native production source is unchanged. Both matched bitplane variants pass133
+tests and54 replays; their90-lifetime generic pilot favors persistent by2.13%
+over baseline, while local is0.48% higher. Persistent advances to a separate PGO
+trial; no production layout is adopted. The compact relation-state lookup
+remains unexecuted. The original CPU collection is terminal,
 and all57 verified own lead/client threads are now confined to housekeeping
 CPUs. This later correction does not qualify the prior measurements.

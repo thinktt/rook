@@ -42,7 +42,7 @@ Function attribution changed through inlining, so source-line evidence matters.
    The generator uses the general formula, never fixture answers. Source/archive
    preparation is complete under `evidence/relation-states-preparation-20261018/`;
    compilation, the existing exhaustive digit-model oracle, all54 replays and
-   a matched generic CPU pilot wait for the live game collection. It has no
+   a matched generic CPU pilot await a separate bounded experiment. It has no
    measured benefit yet; two dependent class loads can offset lower footprint.
 
 4. **Placement bitplanes/other representations.** A private four-u64 bit-sliced
@@ -54,9 +54,11 @@ Function attribution changed through inlining, so source-line evidence matters.
    the mailbox or justify its larger state. First determine the remaining true
    attack opportunity after inlining and local summaries.
 
-The full12 game-unit cost collection, newer-artifact focused gameplay, mandatory
-external diagnostics and production review remain live requirements alongside
-optimization. None of these hypotheses changes KingRE behavior or the mission.
+The reported-only full12 collection on1dc996b2 now reconciles48 lifetimes/
+2528 searches, summing941.928787s in game CPU medians (raw uncalibrated
+ratio1.462116). Its helper-affinity limitation remains disclosed. Final qualified
+54/12 costs, newer-artifact focused gameplay, remaining mandatory diagnostics
+and production review remain requirements alongside optimization.
 
 5. **Pure inputs within one evaluation invocation.** An isolated prototype at
    `/tmp/imp2-evaluation-inputs-20261018` reuses current phase and root-valued
@@ -85,17 +87,20 @@ optimization. None of these hypotheses changes KingRE behavior or the mission.
    change. See `evidence/king-square-cache-cpu-pilot-20261018/`.
 
 
-7. **Matched derived-bitplane storage experiment: prepared, unexecuted.**
-   An identical Boolean kernel is prepared with persistent Position160/Node176
+7. **Matched derived-bitplane storage experiment: generic trial complete.**
+   An identical Boolean kernel was tested with persistent Position160/Node176
    versus local Position128/Node144 supply. The initial consumer scope leaves
    ordered checker identities and quiescence mailbox reuse intact. Constructors,
    reflection/recompute and all copied placements are part of the invariant/cost
    audit. A bounded architectural critique prompted a matched local comparison
    before choosing storage; ownership and final decisions remain Imp2's.
-   Source/archive and planned checks are in
-   `evidence/bitplane-preparation-20261018/`. No compile, correctness, timing or
-   adoption claim follows from this preparation. The live full12 CPU collection
-   must finish before native tests/builds or another engine measurement starts.
+   Both pass133 native tests and all54 strict replays. The independent90-lifetime
+   six-case generic pilot sums16.7270585s baseline,16.3704720s persistent and
+   16.8066150s local: persistent/base0.978682, local/base1.004756. All six persistent
+   medians are lower, with substantial overlap in profile04. Persistent advances
+   to its own PGO training/build/regression and pilot; this explicit local
+   strategy is parked. No production adoption or PGO inference follows yet.
+   See `evidence/bitplanes-20261018/` and its exact preparation/source archives.
 
 8. **Counts-guided mailbox Boolean attacks: alternative kernel hypothesis.**
    The old Boolean query always walks potential pawn/knight/king/slider routes;
