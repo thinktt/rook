@@ -42,6 +42,16 @@ any failures, run all54 exact replays, then use balanced whole-native generic
 comparisons with current baseline. A selected PGO candidate needs its own
 training/build/replay and CPU evidence; no generic/PGO inference is authorized.
 
+`verify_after_collection.py` is prepared but unexecuted. It refuses the live
+collector/native process, checks the archived source/tool closure for both
+variants, freezes the actual compiled library/CLI test images, and requires
+133 native tests plus54 exact replays per variant before the three-variant
+six-case generic pilot. Outputs use a fresh attempt label; failures remain.
+It builds the exact archived, currently unformatted source rather than silently
+changing that identity before validation. Formatting can be recorded separately
+if the experiment is adopted. The pilot uses the existing four-round alternating
+order with one excluded warmup per variant; it is development evidence only.
+
 The bounded advisor critique supports ownership coherence but specifically
 required matched consumer scope, accounting for all copied placements and
 constructor/recompute audit. Imp2 owns the experiment and adoption decisions;
