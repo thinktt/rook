@@ -7,7 +7,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current53 operations cover time schedule/allowance, parameters and output
+The current57 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -17,7 +17,8 @@ material balance, capture exception/defense/allowance, frontier estimate,
 king pressure and guarded fast cutoff; opaque/produced-history admission and
 local move extensions; pawn spread, pawnless potential, minor mating geometry,
 composed endgame material and pawn-race classification; fresh personality
-coefficient conversion/central balance and ordinary/final score finishing.
+coefficient conversion/central balance and ordinary/final score finishing;
+selected pawn-race/fortress bounds, rook reductions and full endgame adjustment.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -41,11 +42,11 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current2496-case external result comprises44 complete fixture files plus
-25 unchanged selected cases from two partially supported files. All39 adapter
+The current2868-case external result comprises47 complete fixture files plus
+25 unchanged selected cases from two partially supported files. All42 adapter
 unit tests pass. Frozen adapter SHA256 is
-`9c8780c92888d676a2be24b4759f3dea827facefcc4b0af49971a318a4e793f8`.
-See `evidence/diagnostic-scores-20261018/`; linked native source and all
+`f8e0b7b0d73b1024984731e60fe44fbd958762db034e7e7de8b02d44da80cf12`.
+See `evidence/diagnostic-endgame-bounds-20261018/`; linked native source and all
 declared dependencies remain unchanged. The original25-case selection provenance
 remains in `diagnostic-positions-20261018-02/`.
 
@@ -82,3 +83,11 @@ including ignored king fields. The first offline reconciler had an incorrect
 case-count literal; its source/failure are preserved, and corrected
 `reconcile-02.py` independently verifies all original2496 results without
 rerunning any engine.
+
+The four selected/full endgame-bound routes add372 cases and three units.
+They preserve independent White-relative endpoints, including contradictory
+intervals, and validate strict selected material before calling native geometry.
+They do not infer legal ancestry, score favor, check state or phase from the
+supplied placement. Full stage clipping remains lower-then-upper; selected
+consumers preserve their distinct score/bound outputs. Frozenf8e0b7b0 passes
+all2868 cases/42 units against unchanged canonical native source.

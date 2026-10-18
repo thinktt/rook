@@ -68,7 +68,7 @@ Function attribution changed through inlining, so source-line evidence matters.
 The reported-only full12 collection on1dc996b2 now reconciles48 lifetimes/
 2528 searches, summing941.928787s in game CPU medians (raw uncalibrated
 ratio1.462116). Its helper-affinity limitation remains disclosed. Final qualified
-54/12 costs, newer-artifact focused gameplay, remaining mandatory diagnostics
+54/12 costs, full gameplay, remaining mandatory diagnostics
 and production review remain requirements alongside optimization.
 
 5. **Pure inputs within one evaluation invocation.** An isolated prototype at
@@ -174,3 +174,24 @@ and production review remain requirements alongside optimization.
     has overlapping observed ranges and three medians increase. This does not
     support adoption or a further PGO trial. Canonical8c source remains unchanged.
     See `evidence/activity-widths-preparation-20261018/`.
+
+11. **Static piece-kind activity traversal: prepared hypothesis.**
+    The next isolated candidate exposes fixed Knight/Bishop/Rook/Queen kinds to
+    destination and piece-score kernels through four private instantiations.
+    Currenti64/u64 arithmetic, per-type chronology, mark/charge order and all
+    outer ownership remain unchanged. The current source-line simulation makes
+    activity a material target, but does not predict this transformation's gain.
+    Branch simplification may be offset by additional machine-code size.
+    Candidatec946104a now passes134 native tests,10,000 coordinate-oracle
+    placements and all54 strict replays. Control e7168491 is the identical
+    already-validated generic source/artifact; its previous replay is explicitly
+    reused. The candidate compute symbol grows from4890 to8975 bytes; whole
+    text grows4120 bytes. This is static size evidence, not a timing prediction.
+    The fixed60-lifetime matched CPU pilot independently reconciles all original
+    samples, strict results, exits and hashes after other native work terminates.
+    Summed medians are15.0116965s control versus14.605204s candidate, ratio
+    0.972921615(2.707839% lower). All six medians are lower; four observed ranges
+    are disjoint, with profile02/29 overlapping. It advances to an isolated
+    own-profile PGO trial; canonical source is unchanged and no PGO benefit
+    is inferred from generic timing.
+    See `evidence/activity-specialization-preparation-20261018/`.

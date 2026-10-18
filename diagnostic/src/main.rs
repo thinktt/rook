@@ -14,6 +14,7 @@ use std::{
 
 mod admission;
 mod candidate_order;
+mod endgame_bounds;
 mod endings;
 mod learned;
 mod ledger;
@@ -101,6 +102,10 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "evaluation.pawnRaceBounds"
+        | "evaluation.endgameAdjust"
+        | "evaluation.fortressBounds"
+        | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
         "evaluation.scoreFinish"
         | "evaluation.finalScore"
         | "evaluation.personalityWeights"

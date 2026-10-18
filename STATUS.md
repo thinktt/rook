@@ -13,8 +13,10 @@ integration. Canonical915f83e4 passes54 strict replays, eight interruption
 fixtures and its own six-case timing pilot; final qualification remains.
 Compact relation tables and typed-list influence are now also integrated,
 passing134 canonical native tests and the49-operation adapter regression.
-The subsequent cold score/weight expansion passes53 operations/2496 cases and
-39 adapter units against unchanged canonical native source.
+The subsequent cold score/weight and endgame-bound expansions pass57
+operations/2868 cases and42 adapter units against unchanged canonical native
+source. Canonical8c4619a7 also passes all12 focused games/632 searches, the
+eight-search continuity check and both released seed controls.
 Fresh canonical8c4619a7 passes all54 strict replays and eight interruption
 fixtures/24 searches. Its own complete54 CPU collection is recorded below.
 
@@ -78,10 +80,14 @@ Current artifact-specific evidence:
   continuity control. The released collector reports complete focused replay,
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
-  This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapter9c8780c9 implements53 operations and passes2496
-  cases across44 complete fixture files plus25 unchanged selected cases
-  from two partially supported files. All39 adapter unit tests pass. The first
+  This older observation is not transferred. Canonical8c4619a7 now owns a
+  fresh complete12/632 focused replay, eight-search continuity check and both
+  released seed controls. All13 focused/continuous native lifetimes exit
+  normally; the released collector reports completeFocusedReplay=true and
+  completeGameplayQualification=false. See [current focused replay](evidence/focused-eval-kernels-20261018/README.md).
+- The separate external DIAG adapterf8e0b7b0 implements57 operations and passes2868
+  cases across47 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All42 adapter unit tests pass. The first
   expanded attempt and its12 unsupported ordering failures remain retained;
   prior attempts and their source links remain preserved. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
@@ -123,8 +129,8 @@ After actual termination, all57 verified own lead/client threads were restricted
 to housekeeping CPUs; this does not retroactively qualify existing samples. See
 [game collection](evidence/production12-cpu-20261018-pgo/README.md).
 
-Mandatory diagnostics, production review, the full3288-game gate, the newer
-artifact's full focused replay and final performance qualification remain open. The [production map](docs/production-map.md) is an initial ownership map,
+Mandatory diagnostics, production review, the full3288-game gate, current-artifact
+full12 CPU costs and final performance qualification remain open. The [production map](docs/production-map.md) is an initial ownership map,
 not a completed normative audit. The last retained disabled PMU self-open returned EACCES with
 UID1000/zero effective capabilities/paranoid3/seccomp0; no security setting was
 changed. Clock sampling was unreliable and its percentages are unused.
@@ -140,6 +146,11 @@ position coordinate-oracle comparison and both generic artifacts'54 replays.
 Its independently reconciled60-lifetime pilot is0.261914% lower in summed
 medians, with all six ranges overlapping and three increased medians. It is
 parked; no source adoption or PGO benefit is inferred.
+The isolated static-kind activity trial passes134 native tests,10,000 coordinate
+oracle placements and54 strict replays on genericc946104a. Its independently
+reconciled60-lifetime pilot is2.707839% lower in summed medians, with all six
+medians lower and four disjoint observed ranges(profile02/29 overlap). A separate
+own-profile PGO trial is underway; canonical native source remains unchanged.
 Earlier partial timings below are historical development checkpoints.
 
 The isolated compact relation kernel now passes133 native tests and all54
@@ -163,10 +174,15 @@ transfers to this artifact or completes qualification.
 ## Runtime policy
 
 Lead and implementation subagents use Normal speed under the owner's latest
-`/fast off`. The gate verified the lead's Normal footer. All three native
+`/fast off`. The gate verified the lead's Normal footer. The three original native
 implementation subagents are completed and remain stopped; their runtime tiers
 have no exposed read/set control, so no conversion is claimed and no child is
-resumed without a route that can verify Normal. A quota reset does not change
+resumed without a route that can verify Normal. One new Sol6.1 High subagent
+completed a bounded cold score-range review; its Normal request had no exposed
+speed readback, so actual runtime speed was reported as unknown. No native
+subagent remains running. The operational gate target is absent in the current
+Herdr instance, and the current pane has no centrally assigned name; no new
+live-agent prompt is sent under an inferred identity. A quota reset does not change
 the engine objective. The guiding mission remains `/home/legolas/imp-perf-mission.md`.
 
 ## Earlier native/development checkpoints
