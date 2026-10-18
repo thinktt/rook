@@ -1,5 +1,5 @@
 //! Supplied candidate ordering transport; native policy owns priorities/order.
-use super::{array, color, integer, moves, object, positions, Result};
+use super::{array, color, integer, moves, object, positions, unsigned32, Result};
 use rook2::{
     evaluation::RootContext,
     influence::Influence,
@@ -17,14 +17,6 @@ fn pair(value: &Value) -> Result<[Move; 2]> {
         moves::movement(&values[0])?.unwrap_or(Move::NONE),
         moves::movement(&values[1])?.unwrap_or(Move::NONE),
     ])
-}
-
-fn history_value(value: &Value) -> Result<u32> {
-    let value = value.as_f64().ok_or("expected unsigned history integer")?;
-    if !value.is_finite() || value.fract() != 0.0 || !(0.0..=u32::MAX as f64).contains(&value) {
-        return Err("history value outside unsigned32 domain".into());
-    }
-    Ok(value as u32)
 }
 
 pub(super) fn dispatch(input: &Value) -> Result<Value> {
@@ -84,7 +76,7 @@ pub(super) fn dispatch(input: &Value) -> Result<Value> {
             return Err("duplicate history key".into());
         }
         learning.history[side.index()][kind.index()][square.0 as usize] =
-            history_value(&entry["value"])?;
+            unsigned32(&entry["value"])?;
     }
     // Ordering consumes supplied synthetic entries without learning or summing
     // them; unlike cutoffMemory, there is no10000 total restriction here.

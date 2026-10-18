@@ -16,6 +16,7 @@ mod candidate_order;
 mod learned;
 mod ledger;
 mod moves;
+mod ordering;
 mod pawn_progress;
 mod position_terms;
 mod positions;
@@ -54,6 +55,13 @@ fn integer(v: &Value, minimum: i32, maximum: i32) -> Result<i32> {
     }
     Ok(number as i32)
 }
+fn unsigned32(v: &Value) -> Result<u32> {
+    let number = v.as_f64().ok_or("expected unsigned integer")?;
+    if !number.is_finite() || number.fract() != 0.0 || !(0.0..=u32::MAX as f64).contains(&number) {
+        return Err("integer outside unsigned32 domain".into());
+    }
+    Ok(number as u32)
+}
 fn color(v: &Value) -> Result<Color> {
     match text(v)? {
         "white" => Ok(Color::White),
@@ -88,6 +96,9 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "ordering.prioritySequence" | "tactics.capturePreferenceOrder" => {
+            ordering::dispatch(operation, input)
+        }
         "search.orderCandidates" => candidate_order::dispatch(input),
         "clock.workSequence" => ledger::dispatch(input),
         "search.cutoffMemory" | "search.rememberedResults" => learned::dispatch(operation, input),

@@ -51,3 +51,9 @@ unsigned32 synthetic history without applying cutoff learning's total limit.
 All priorities and their final permutation call native policy. Relation encoding,
 charge counts and retained-state changes likewise retain their native owners;
 neither fixtures nor expected answers are read at runtime.
+
+Current cold source additionally prepares `ordering.prioritySequence` and
+`tactics.capturePreferenceOrder`, with a planned25-unit/1214-case regression in
+`evidence/diagnostic-ordering-preparation-20261018/`. These two routes remain
+uncompiled/unverified while the PGO timing pilot runs; the accepted coverage
+above belongs to frozen c4cd8566.
