@@ -54,3 +54,12 @@ Function attribution changed through inlining, so source-line evidence matters.
 The full12 game-unit cost collection, newer-artifact focused gameplay, mandatory
 external diagnostics and production review remain live requirements alongside
 optimization. None of these hypotheses changes KingRE behavior or the mission.
+
+5. **Pure inputs within one evaluation invocation.** An isolated prototype at
+   `/tmp/imp2-evaluation-inputs-20261018` reuses current phase and root-valued
+   material between fast evaluation and its full refresh, and passes the same
+   phase into king-square balance/finishing. Position and root context are
+   unchanged throughout that call; PawnCache activity and R charges remain live.
+   No persistent cache or mutable key is added. All130 native tests pass; the
+   frozen generic build/check is under `evidence/evaluation-inputs-*20261018/`.
+   Full54 replay and whole-native CPU evidence must select it before adoption.
