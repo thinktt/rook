@@ -515,3 +515,21 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     composition or promotion; full117 preparation remains unexecuted. Production
     source/full54/12 qualification are unchanged. See
     [decision0014](../decisions/0014-pure-component-cache-trial.md).
+
+25. **Ordinary projected Boolean checks: generic pass, own-PGO preparation.**
+    Current79d instruction simulation independently maps the two ordinary
+    mailbox finder/projection packets to2.893823%/3.001704% of whole-lifetime
+    simulated Ir in35/08. Unresolved line0 stays separate; no CPU or saved-work
+    prediction follows. A four-line trial replaces only those Ordinary-kind
+    Boolean producers with existing AttackBits projection/query, retaining
+    operands, consumers, state and charges. Generic2940 passes178 native,
+    strict54 and eight-wire24 with independent exact source/raw/compiler closure.
+    Actual ordinary reservation falls16 bytes, but Q grows32 bytes and adds an
+    outlined projection call with surviving input/return copies. Its one fixed70
+    pilot independently sums14.3280115s control948c versus14.1333645s candidate:
+    ratio0.9864149327 (1.358507% lower),7/7 lower, worst0.9898415571 and all
+    observed ranges separated. CPU15 records15426 idle/zero nonidle/iowait
+    ticks, without continuous exclusivity. The frozen rule passes to consider
+    fresh own-source PGO only; production remains unchanged. The separate PGO
+    rule/cases/schedule are frozen before training. See
+    [decision0015](../decisions/0015-ordinary-projected-bit-checks.md).

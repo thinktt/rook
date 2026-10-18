@@ -1,0 +1,3 @@
+Inert own-source PGO preparation for the tested ordinary projected-bit candidate. Parent review and a new explicit execution-clearance.json are required before any stage. No executable clearance is present. The immutable pretraining CPU declaration remains external and unchanged. Future image/profile/proof identities are null.
+
+Start with review.md, helper-adaptation.patch, plan.json and commands.md. Nine runtime helpers retain the accepted six-stage fullbyte pipeline; build_stage.py, check.py, raw_model.py and recheck.mjs are byte-identical. No native178 or full117 repetition is planned. No timing/backend/CPU helper is supplied.

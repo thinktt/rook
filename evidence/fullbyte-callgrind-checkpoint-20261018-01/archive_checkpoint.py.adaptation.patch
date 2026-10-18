@@ -1,0 +1,137 @@
+--- /home/legolas/rook2/evidence/placement-pure-cache-pgo-checkpoint-20261018-01/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/fullbyte-callgrind-checkpoint-20261018-01/archive_checkpoint.py
+@@ -6,7 +6,7 @@
+ SCOPE=json.loads((HERE/'included-scope.json').read_text())
+ ROOTS=[Path(name) for name in SCOPE['directories']]
+ EXTRAS=[Path(name) for name in SCOPE['explicit_extra_files']]
+-ARCHIVE=HERE/'closed-placement-pure-cache-own-pgo.tar.gz'
++ARCHIVE=HERE/'closed-fullbyte-callgrind.tar.gz'
+ def sha(path):
+  h=hashlib.sha256()
+  with path.open('rb') as f:
+@@ -16,8 +16,9 @@
+ def write(name,value):
+  with (HERE/name).open('x') as f:json.dump(value,f,separators=(',',':'));f.write('\n')
+ def member_name(path):
+- try:name=path.relative_to(REPO).as_posix()
+- except ValueError:name='external/'+path.as_posix().lstrip('/')
++ private=Path('/home/legolas/rook2-private')
++ if private in path.parents:name='private/'+path.relative_to(private).as_posix()
++ else:name=path.relative_to(REPO).as_posix()
+  assert name and not Path(name).is_absolute() and all(x not in ['.','..'] for x in Path(name).parts)
+  return name
+ def symlink_components(path):
+@@ -55,91 +56,37 @@
+   chunk=self.file.read(size);self.hash.update(chunk);self.bytes+=len(chunk);return chunk
+ 
+ def coverage(rows):
+- by_path={row['source_path']:row for row in rows};E=REPO/'evidence'
++ by_path={row['source_path']:row for row in rows};E=REPO/'evidence';private=Path('/home/legolas/rook2-private/fullbyte-callgrind-20261018-01')
+  def included(path,digest=None):
+-  path=Path(path);resolved=path.resolve(strict=True);row=by_path[str(resolved)]
++  path=Path(path);assert path.resolve(strict=True)==path
++  row=by_path[str(path)]
+   if digest is not None:assert row['sha256']==digest,str(path)
+   return row
+- for ref in SCOPE['reference_dependencies']:
+-  path=Path(ref['path']);assert path.resolve(strict=True)==Path(ref['resolved_regular_source'])
+-  assert symlink_components(path)==ref['symlink_components']
+-  assert included(path,ref['sha256'])['archive_member']==ref['archive_member']
++ assert len(ROOTS)==3 and not EXTRAS and SCOPE['explicit_extra_files']==[]
+  assert sha(Path(SCOPE['preservation_plan']))==SCOPE['preservation_plan_sha256']
+  approval=load(HERE/'parent-whitelist-approval.json');assert approval['parent_approved'] is True
+  assert approval['included_scope_sha256']==sha(HERE/'included-scope.json')
+  assert approval['preflight_member_manifest_sha256']==sha(HERE/'preflight-member-manifest.json')
+  assert approval['archive_writer_sha256']==sha(Path(__file__))
+- preflight=load(HERE/'preflight-summary.json')
+- assert preflight['complete'] and not preflight['archive_created']
+- assert (len(ROOTS),len(rows),sum(row['bytes'] for row in rows),len(EXTRAS))==(14,preflight['regular_members'],preflight['source_bytes'],preflight['explicit_extra_regular_payloads'])
+  assert rows==load(HERE/'preflight-member-manifest.json')['members']
+- manifest=load(E/'placement-pure-cache-proposal-20261018-01/source-manifest.json')
+- assert manifest['graph_sha256']=='e784334543d6045f6952ce5d2b636b6e185705ebfbcf633bdb499e5549996937'
+- source=manifest['files'];assert len(source)==69
+- generic=E/'placement-pure-cache-independent-preparation-20261018-01/independent-verification.json';included(generic)
+- assert load(generic)['complete'] and load(generic)['native_tests']==184
+- native_path=E/'placement-pure-cache-native-validation-20261018-01/result.json';included(native_path);native=load(native_path)
+- assert native['complete'] and native['total_tests']==184 and native['tests']['lib']['passed']==182 and native['tests']['dev']['passed']==2
+- for item in native['tests'].values():included(item['executable'],item['sha256'])
+- prep=E/'placement-pure-cache-pgo-preparation-20261018-01';plan=load(prep/'plan.json')
+- tr=Path(plan['training']);ib=Path(plan['instrumented_build']);ub=Path(plan['use_build']);check=Path(plan['use_check']);wire=Path(plan['wire']);reconciliation=Path(plan['reconciliation'])
+- for directory in [ib,tr,ub,check,reconciliation]:
+-  actual=load(directory/'tool-terminal.json');assert actual['actual_tool_terminal_observed'] and actual['exit_code']==0
+- verifier=load(tr/'verify-tool-terminal.json');assert verifier['actual_tool_terminal_observed'] and verifier['exit_code']==0
+- for directory in [ib,ub]:
+-  receipt=load(directory/'receipt.json')
+-  assert receipt['source_sha256_before']==receipt['source_sha256_after']==plan['engine_source_sha256']
+-  assert receipt['tool_sha256_before']==receipt['tool_sha256_after']==plan['tool_source_sha256']
+-  included(directory/'rook2-exact',receipt['binary_output']['sha256'])
+-  for name,h in source.items():included(directory/'source-before'/name,h)
+-  ar=load(directory/'archive-receipt.json');assert ar['files']==69;included(directory/ar['archive'],ar['sha256'])
+-  with tarfile.open(directory/ar['archive'],'r:gz') as archive:
+-   nested={}
+-   for member in archive:
+-    assert member.isfile() and member.name in source and member.name not in nested
+-    nested[member.name]=hashlib.sha256(archive.extractfile(member).read()).hexdigest()
+-   assert nested==source
+- training=load(tr/'training.json');verified=load(tr/'verification.json');raws=training['raw_profiles_sha256']
+- assert training['complete'] and len(raws)==54 and verified['complete'] and verified['independent_remerge_byte_identical']
+- assert verified['strict_replays']==verified['raw_profiles_independently_hashed']==54
+- for path,h in raws.items():included(path,h)
+- included(tr/'merged.profdata',training['profile_sha256'])
+- assert training['profile_sha256']=='42d43e87b27660a6626c44048c95c00cfce0e1012b92165ec4d97f3adfa8528c'
+- assert training['profile_sha256']==verified['merged_profile_sha256']
+- proof=load(reconciliation/'independent-verification.json');assert proof['complete'] and proof['own_profile_only'] and proof['strict_training54'] and proof['fresh_strict54'] and proof['wire8_searches24']
+- assert set(proof['variants'])=={'placement-pure-cache'};row=proof['variants']['placement-pure-cache']
+- assert row['artifact_sha256']=='abe793bbd11c1c24c020f8f9ba6af44f1e1f4ca0f62244481820804b546ed5ab'
+- assert row['profile_sha256']==training['profile_sha256'] and row['profile_independently_remerged']
+- assert row['training_strict_replays']==row['post_use_strict_replays']==row['raw_profiles']==54
+- original=load(reconciliation/'original-checkReplay.stdout');assert original['offlineOnly'] and original['originalCheckReplayCount']==108
+- strict=load(check/'profile-all.stdout');assert strict['status']=='pass' and len(strict['results'])==54
+- wr=load(wire/'receipt.json');assert wr['pass'] and len(wr['results'])==8 and sum(len(x['searches']) for x in wr['results'])==24
+- for case in wr['results']:
+-  for name,item in case['raw'].items():included(wire/case['id']/(name+'.raw'),item['sha256'])
+- pilot=E/'placement-pure-cache-pgo-cpu-pilot-20261018-01';cpuplan=load(pilot/'plan.json')
+- independent=E/'placement-pure-cache-pgo-cpu-independent-preparation-20261018-01/independent-reconciliation.json';ind=load(independent)
+- included(independent,'587ca7a3d6d40882a5b1ca4376d7e53a146479ece7315340f36160e37d592c9c')
+- assert ind['complete'] and ind['normal_lifetimes']==ind['original_checkReplay']==70 and ind['warmups_excluded']==14 and ind['measured']==56
+- assert not ind['advance_rule_satisfied'] and ind['aggregate_ratio']>0.995 and ind['lower_case_medians']==5 and ind['worst_case_ratio']<=1.02
+- assert ind['frozen_rule']==cpuplan['advance_rule']
+- for variant in cpuplan['variants'].values():included(variant['path'],variant['sha256'])
+- assert cpuplan['variants']['baseline']['sha256']=='79d19ebe1b01fbe94dbf03025140b292807ecf6acdc181a52a5d1849bbc478df'
+- assert cpuplan['variants']['candidate']['sha256']==row['artifact_sha256']
+- actual=load(pilot/'tool-terminal.json');assert actual['actual_tool_terminal_observed'] and actual['exit_code']==0 and actual['session_id']==10663 and actual['terminal_chunk_id']=='a247d8'
+- ia=load(independent.parent/'tool-terminal.json');assert ia['actual_tool_terminal_observed'] and ia['exit_code']==0 and ia['session_id']==92206 and ia['terminal_chunk_id']=='228361'
+- records=sorted(pilot.glob('profile-*/*/native.json'));assert len(records)==70
+- for record in records:
+-  data=load(record);assert data['native_exit_code']==0 and data['exec_error'] is None and data['failure'] is None
+-  assert data['engine_sha256_before']==data['engine_sha256_after']==cpuplan['variants']['baseline' if record.parent.name.endswith('baseline') else 'candidate']['sha256']
+-  included(record);included(record.parent/'comparator.stdout');included(record.parent/'comparator.stderr')
+- assert load(independent.parent/'original-checkReplay70-result.json')['original_oracle_calls']==70
+- decision_path=E/'placement-pure-cache-pgo-decision-20261018-01/decision.json';included(decision_path,'ee540633465f55db8e14d25ff1e73a46d36b0047030cba8903884fc33dae292b');decision=load(decision_path)
+- assert decision['decision']=='park' and not decision['source_promotion'] and decision['no_resize_retry_relaxation_or_composition']
+- assert decision['full117_preparation_unexecuted_and_unapproved'] and decision['full117_execution_copy_absent']
+- future=E/'placement-pure-cache-complete117-preparation-20261018-01'
+- selected_future={path for path in by_path if future in Path(path).parents}
+- assert selected_future=={str(future/'execution-clearance.json'),str(future/'validation-plan.json')}
+- return dict(whole_closed_trial_trees=14,reference_dependency_paths=len(SCOPE['reference_dependencies']),external_regular_payloads=len(EXTRAS),explicit_symlink_resolutions=SCOPE['explicit_symlink_resolutions'],native184_generic_proof_and_images_included=True,own54_raw_profiles_PIDs_remerge_use54_wire24_original108_included=True,both_source69_build_archives_reopened=True,pilot_actual=actual,independent_actual=ia,all70_lifetimes_14warmups_56measured_preserved=True,decision='PARK: own-PGO aggregate ratio misses frozen .995; no full117 execution/retry/promotion',aggregate_ratio=ind['aggregate_ratio'],lower_case_medians=ind['lower_case_medians'],worst_case_ratio=ind['worst_case_ratio'],control79d_and_candidateabe_included=cpuplan['variants'],failures_and_real_terminals_all_in_closed_trees=True,full117_whole_preparation_omitted_only_two_inert_inputs_individual=True,all_regular_files_in_selected_trees=True,no_unrelated_whole_tree_or_opaque_census_root_git=True,parent_whitelist_approval_sha256=sha(HERE/'parent-whitelist-approval.json'),qualification=False)
++ actual_analysis=load(Path(SCOPE['analysis_terminal_path']))
++ included(SCOPE['analysis_terminal_path'],SCOPE['analysis_terminal_sha256'])
++ assert actual_analysis==SCOPE['analysis_actual_terminal'] and actual_analysis['actual_tool_terminal_observed'] is True and actual_analysis['exit_code']==0
++ prep=E/'fullbyte-callgrind-preparation-20261018-01';summary=load(prep/'execution-summary.json')
++ assert summary['complete'] and summary['native_lifetimes']==2 and summary['first_failed_launch_native_lifetimes']==0
++ assert summary['artifact_sha256']=='79d19ebe1b01fbe94dbf03025140b292807ecf6acdc181a52a5d1849bbc478df'
++ assert summary['source69_graph']=='6aa2f8a1f81bc9c6b6f4ba26b987a259bca648a61a7b052f7d1166fcb1ea9b50'
++ assert summary['independent_input_output_source_tool_profile_closure_passed'] and summary['original_replay_and_raw_bytes_match'] and summary['no_CPU_or_PMU_or_qualification_claim']
++ profile_actual=load(private/'tool-terminal.json');verify_actual=load(private/'independent-verification-tool-terminal.json')
++ assert profile_actual['actual_tool_terminal_observed'] and profile_actual['exit_code']==0 and profile_actual['session_id']==55574 and profile_actual['terminal_chunk_id']=='4840bb'
++ assert verify_actual['actual_tool_terminal_observed'] and verify_actual['exit_code']==0 and verify_actual['terminal_chunk_id']=='f6056e'
++ proof=load(private/'independent-verification.json');included(private/'independent-verification.json','65beaabeb6ce47cbcde3599333501aebcf93e02b7c0d1e82e90fa7e60a67a2e9')
++ assert proof['complete'] and proof['all_original_inputs_unchanged'] and proof['original_checkReplay_exit_code']==0 and proof['original_checkReplay_cases']==2 and proof['native_engine_runs']==0 and not proof['qualification']
++ provenance=load(private/'provenance.json');assert provenance['complete'] and provenance['failure'] is None and provenance['one_fixed_lifetime_per_case'] and not provenance['performance_claim']
++ private_rows=[row for row in rows if private in Path(row['source_path']).parents]
++ assert len(private_rows)==113 and sum(row['bytes'] for row in private_rows)==1668656
++ assert SCOPE['external_payload_omissions']['not_self_contained'] is True
++ return dict(complete_closed_trees=3,external_payloads=0,private_raw_output_files=113,private_raw_output_bytes=1668656,profile_actual=profile_actual,independent_actual=verify_actual,analysis_actual=actual_analysis,all_regular_files_without_omission=True,external_runtime_image_source_payloads_not_bundled=SCOPE['external_payload_omissions'],self_contained_runtime_bundle=False,event_scope='Whole-lifetime simulated user Ir diagnostic only; no PMU/CPU/qualification',parent_whitelist_approval_sha256=sha(HERE/'parent-whitelist-approval.json'))
+ 
+ def main():
+  result=dict(complete=False,failure=None,affinity=sorted(os.sched_getaffinity(0)),no_native_compiler_profiler_timing_git_subprocesses=True)

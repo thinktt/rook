@@ -1,0 +1,17 @@
+--- /home/legolas/rook2/evidence/placement-pure-cache-pgo-checkpoint-20261018-01/prepare_scope.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-generic-checkpoint-20261018-01/prepare_scope.py
+@@ -1,4 +1,4 @@
+-"""Whitelist only: closed14 own-PGO pure-cache trees plus explicit dependency bytes; no native runs."""
++"""Whitelist only: closed14 ordinary projected-bit generic trees plus explicit dependency bytes; no native runs."""
+ from pathlib import Path
+ import hashlib,json,os,stat,traceback
+ HERE=Path(__file__).resolve().parent;REPO=Path('/home/legolas/rook2');E=REPO/'evidence'
+@@ -95,7 +95,7 @@
+  files=originals|extra;members={member(p):str(p) for p in files};assert len(members)==len(files)
+  assert not any(HERE==p or HERE in p.parents for p in files)
+  assert all(Path(row['resolved_regular_source']) in files for row in refs)
+- scope=dict(directories=[str(p) for p in roots],explicit_extra_files=[str(p) for p in sorted(extra)],external_logical_reference_paths=[row['path'] for row in refs if not inside(Path(row['path']))],reference_dependencies=refs,explicit_symlink_resolutions=aliases,preservation_plan=str(PLAN),preservation_plan_sha256=sha(PLAN),closed_tree_regular_files=sorted(str(p) for p in originals),closed_tree_directories=sorted(dirs),unsupported_nonregular_closed_tree_entries=[],archive_mapping='repository-relative paths; external/absolute-path-without-leading-slash for outside repository; explicit symlink aliases map to included canonical regular payload bytes',no_silent_exclusions=True,excluded_checkpoint=str(HERE),excluded_active_or_future_scope='No whole unrun cache full117 or unrelated trial/root/Git/opaque/calibration/census tree; only consumed external regular payloads, including two inert117 decision inputs and prior production promotion individually',overlap='No timing active; all selected PGO/decision trees closed; any unrelated source-only work has no timing interpretation.')
++ scope=dict(directories=[str(p) for p in roots],explicit_extra_files=[str(p) for p in sorted(extra)],external_logical_reference_paths=[row['path'] for row in refs if not inside(Path(row['path']))],reference_dependencies=refs,explicit_symlink_resolutions=aliases,preservation_plan=str(PLAN),preservation_plan_sha256=sha(PLAN),closed_tree_regular_files=sorted(str(p) for p in originals),closed_tree_directories=sorted(dirs),unsupported_nonregular_closed_tree_entries=[],archive_mapping='repository-relative paths; external/absolute-path-without-leading-slash for outside repository; explicit symlink aliases map to included canonical regular payload bytes',no_silent_exclusions=True,excluded_checkpoint=str(HERE),excluded_active_or_future_scope='No whole current-profile/private/census/opaque/calibration/PGO/root/Git/unrelated trial tree; individual consumed files only, including immutable PGO declaration',overlap='No timing active; all selected generic/decision trees closed; separate PGO text preparation has no timing interpretation.')
+  write('included-scope.json',scope)
+  write('preflight-verification.json',dict(complete=True,closed_trial_trees=14,whole_trees=14,reference_union_paths=len(refs),external_logical_paths=len(scope['external_logical_reference_paths']),explicit_extra_regular_payloads=len(extra),explicit_symlink_resolutions=aliases,unsupported_entries=[],duplicate_members=0,all_reference_hashes_equal=True,prospective_regular_members=len(files),source_bytes=sum(p.stat().st_size for p in files),no_native_execution=True))
+  ROOTS=roots;EXTRAS=sorted(extra);SCOPE=scope

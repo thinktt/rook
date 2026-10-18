@@ -61,6 +61,21 @@ and final qualification are unchanged. The
 [closed own-PGO checkpoint](evidence/placement-pure-cache-pgo-checkpoint-20261018-01/README.md)
 preserves2577 members, both own-PGO images and the complete trial evidence.
 
+A fresh instruction simulation on production79d passes original cases35/08 and
+independent replay/source/output checks. Directly mapped ordinary mailbox
+checking/projection work represents2.894%/3.002% of simulated instructions,
+with unresolved line0 kept separate. This is no PMU or CPU attribution. The
+[diagnostic checkpoint](evidence/fullbyte-callgrind-checkpoint-20261018-01/README.md)
+preserves all raw profiles and annotations; external runtime payloads are not
+bundled. A separate four-line ordinary-search trial uses the existing projected
+bit-plane Boolean query at those two sites, without adding state. Generic2940ae5c
+passes178 native tests, original54/eight-wire24 and independent raw/source
+closure. Its frozen70 pilot sums14.3280115s control948c versus14.1333645s,
+ratio0.9864149327 (1.358507% lower), with7/7 lower medians. It advances only
+to fresh own-source PGO preparation under
+[decision0015](docs/decisions/0015-ordinary-projected-bit-checks.md).
+Production and final qualification remain unchanged.
+
 ## Previous activity destination checkpoint
 
 The exact validated activity destination-value source is now integrated. Root
