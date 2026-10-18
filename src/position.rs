@@ -1,4 +1,5 @@
 //! Compact placement and chronology kernel. Move geometry is caller-validated.
+use crate::attacks::AttackBits;
 use crate::identity::{self, Fingerprints};
 use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
 
@@ -31,6 +32,7 @@ pub struct Position {
     pub halfmove: u8,
     /// Raw starting-square occupancy measure, before the phase M<=32 gate.
     pub starting_units: u8,
+    attack_bits: AttackBits,
 }
 
 const KINDS: [PieceKind; 6] = [
@@ -69,6 +71,7 @@ impl Position {
             ep: NO_SQUARE,
             halfmove: parse_number(fields[4], 0, 255)? as u8,
             starting_units: 0,
+            attack_bits: AttackBits::empty(),
         };
         parse_number(fields[5], 1, 1_000_000)?;
         let ranks: Vec<&str> = fields[0].split('/').collect();
@@ -165,6 +168,11 @@ impl Position {
     }
 
     #[inline]
+    pub(crate) fn attack_view(&self) -> AttackBits {
+        self.attack_bits
+    }
+
+    #[inline]
     fn group_start(&self, color: Color, kind: PieceKind) -> usize {
         self.counts[color.index()][..kind.index()]
             .iter()
@@ -229,6 +237,7 @@ impl Position {
         }
         self.starting_units =
             self.starting_units - starting_credit(square, old) + starting_credit(square, piece);
+        self.attack_bits.replace(square, old, piece);
         self.board[square.0 as usize] = piece;
     }
 
@@ -411,6 +420,7 @@ impl Position {
         self.secondary = identity.secondary;
         self.pawn = identity.pawn;
         self.starting_units = self.recomputed_starting_units();
+        self.attack_bits = AttackBits::from_board(&self.board);
     }
     pub fn validate(&self) -> Result<(), String> {
         let mut board = [Piece::EMPTY; 64];
@@ -441,6 +451,9 @@ impl Position {
         }
         if board != self.board {
             return Err("mailbox/list disagreement".into());
+        }
+        if !self.attack_bits.matches_board(&self.board) {
+            return Err("attack planes/mailbox disagreement".into());
         }
         let hashes = self.recomputed_identity();
         if [self.primary, self.secondary, self.pawn]
@@ -557,8 +570,8 @@ mod tests {
 
     #[test]
     fn compact_layout_and_broad_setup_capacity() {
-        assert_eq!(std::mem::size_of::<Position>(), 128);
-        assert_eq!(std::mem::align_of::<Position>(), 4);
+        assert_eq!(std::mem::size_of::<Position>(), 160);
+        assert_eq!(std::mem::align_of::<Position>(), 8);
         for letter in ['N', 'B', 'R', 'Q'] {
             let placement = "7k/8/8/8/8/QQQQQQQ1/QQQQQQQQ/K7".replace('Q', &letter.to_string());
             let pos = Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();

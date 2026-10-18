@@ -531,7 +531,7 @@ mod tests {
                 child.position.validate().unwrap();
             }
         }
-        assert_eq!(std::mem::size_of::<Node>(), 144);
+        assert_eq!(std::mem::size_of::<Node>(), 176);
     }
 
     #[test]

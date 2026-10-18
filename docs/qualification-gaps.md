@@ -6,9 +6,9 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements27 native-backed operations,
+  The separate `diagnostic/` crate now implements29 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
-  supplied candidate order, with1130 external cases. Every other mandatory operation still needs
+  supplied candidate/priority/capture order, with1214 external cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -35,8 +35,8 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   posts. Exceptional king-victim and zero-root fatal exits have literal
   process-level controls. None of these replaces full gameplay qualification.
 - Continue measured representation/restoration work at suitable fidelity.
-  A local generation-summary/evasion algorithm now retains the existing Position
-  layout and copy-child ownership, with all54 replay regression and a four-case
+  The generation-summary/evasion algorithm retains copied-child ownership, with
+  its original all54 replay regression and four-case
   whole-native CPU pilot. That decision is documented in
   [decision0002](decisions/0002-geometric-legality.md); it does not close full
   performance collection, production mapping/review or mandatory conformance.
@@ -70,12 +70,16 @@ qualification transfers to it. The collection remains reported-only, including
 the disclosed inherited-affinity helper limitation recorded under
 `evidence/production12-cpu-analysis-preparation-20261018/`.
 
-The corrected fresh diagnostic attempt passes23 units and1130 cases across27
-operations. Its first attempt and12 missing-transport failures remain preserved;
-native production source is unchanged. Both matched bitplane variants pass133
+The integrated fresh diagnostic attempt passes25 units and1214 cases across29
+operations. Prior attempts and12 missing-transport failures remain preserved.
+Both matched bitplane variants pass133
 tests and54 replays; their90-lifetime generic pilot favors persistent by2.13%
-over baseline, while local is0.48% higher. Persistent advances to a separate PGO
-trial; no production layout is adopted. The compact relation-state lookup
+over baseline, while local is0.48% higher. Persistent's independently trained
+PGO trial passes54 replays/eight interruption fixtures and its60-lifetime pilot
+is3.21% lower in summed medians. Persistent160/176 source is now integrated and
+passes133 canonical native tests plus the29-operation adapter regression.
+Canonical repository PGO uses its own source/crate profile identity and still
+needs exact binary replay/timing evidence. The compact relation-state lookup
 remains unexecuted. The original CPU collection is terminal,
 and all57 verified own lead/client threads are now confined to housekeeping
 CPUs. This later correction does not qualify the prior measurements.

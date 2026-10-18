@@ -6,8 +6,10 @@ The independent native engine serves the live King XBoard stream, including
 work-timed recursive search, actual publication and one-command-per-poll input,
 persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT/
 learned state and specified root scheduling. Ordinary `Session<false>` excludes
-development tracing; cold JSON is a separate adapter package. Position/Node
-layout and copied-child ownership remain the provisional architecture.
+development tracing; cold JSON is a separate adapter package. Position160/Node176
+now owns exact placement attack planes while retaining copied-child ownership.
+The matched storage experiments and independent PGO trial support this source
+integration; canonical binary validation/timing and final qualification remain.
 
 A generation-local pin summary and necessary check-evasion screen now avoid
 redundant full projection under explicit geometric conditions; king/EP/uncertain
@@ -25,13 +27,22 @@ through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
 
-- Latest PGO ordinary artifact `1dc996b2a78854f7138142eff62cbc16cbbbb051ab9f0b8d74ea0b82d6584a89`
+- Integrated persistent-bitplane source passes131 native library tests and two
+  development-CLI tests. Adapterfab90bb7 passes25 units and1214 cases/29 operations
+  against that source. The isolated PGO trialf4a2f8bf passes54 strict replays and
+  eight interruption fixtures/24 searches; its independently reconciled60-lifetime
+  pilot sums14.805304s versus15.296771s baseline1dc996b2(ratio0.967871193).
+  Canonical repository training/build uses its own source/crate profile identity;
+  trial timings do not transfer to a different binary. See
+  [decision0004](docs/decisions/0004-persistent-attack-planes.md).
+
+- Previous PGO ordinary artifact `1dc996b2a78854f7138142eff62cbc16cbbbb051ab9f0b8d74ea0b82d6584a89`
   passes all54 strict profiling replays and all eight wire interruption fixtures
   (24 searches). Its compiler profile was trained on54 unchanged ordinary
   replays; raw process identities, source, merge and profile inputs are verified,
   archived and bound to the build. No missing-function warnings were emitted.
   See [PGO build](evidence/pgo-eval-geometry-use-build-20261018/README.md).
-- The same native source's generic artifact
+- The earlier generic baseline artifact
   `e734494836337f86d84fe166ae4952d192f3dc07346d482d5ecbb3a22831260c`
   passes all54 strict replays and130 native unit tests. Tests compare ordered
   inventories with full-projection admission over10,000 constructed setups;
@@ -45,11 +56,11 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapter c4cd8566 implements27 operations and passes1130
-  cases across22 complete fixture files plus25 unchanged selected cases
-  from two partially supported files. All23 adapter unit tests pass. The first
+- The separate external DIAG adapterfab90bb7 implements29 operations and passes1214
+  cases across23 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All25 adapter unit tests pass. The first
   expanded attempt and its12 unsupported ordering failures remain retained;
-  native production source is unchanged. Other mandatory operations
+  prior attempts and their source links remain preserved. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
 - A balanced four-anchor pilot selected the generation-summary/evasion
   algorithm: all80 lifetimes passed the strict oracle, and the sum of four
@@ -234,12 +245,12 @@ adoption is rejected. Both frozen experiments and all attempted samples are
 retained; production native source remains unchanged by them.
 
 
-The twelve added native-backed diagnostic routes (placement terms, ordered pawn
+The fourteen added native-backed diagnostic routes (placement terms, ordered pawn
 progress/endings, work ledger, cutoff learning, retained results and supplied
-candidate order) now pass the23-unit/1130-case regression in frozen c4cd8566.
+candidate/priority/capture ordering) now pass25 units/1214 cases in frozenfab90bb7.
 The first1022-case attempt passed1010 and exposed12 missing candidate-order
 transport calls; it remains preserved with its original source/build/report.
-Native production source is unchanged. See
+The identical frontend also passes against the integrated persistent source. See
 [deferred verification](evidence/diagnostic-placement-preparation-20261018/README.md).
 
 Both matched bitplane variants pass133 native tests and54 strict replays. Their
@@ -247,6 +258,7 @@ complete90-lifetime generic pilot favors persistent Position160/Node176 by2.13%
 in summed case medians, while this local Position128/Node144 strategy is0.48%
 higher. The independent raw reconciliation and all samples are retained in
 [matched trial](evidence/bitplanes-20261018/README.md). Persistent advances to a
-separate PGO training/build/regression and pilot; production keeps its current
-layout pending that evidence. No generic result is transferred to PGO or final
+separate PGO training/build/regression and pilot, which finds3.21% lower summed
+medians across60 lifetimes. Persistent source is integrated; its canonical root
+PGO artifact remains under validation. No trial result is transferred to final
 54/12 performance qualification.

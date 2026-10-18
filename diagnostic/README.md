@@ -7,11 +7,12 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current27 operations cover time schedule/allowance, parameters and output
+The current29 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
-candidate ordering. Other operations fail explicitly until implemented. This
+candidate ordering, priority-sequence permutation and capture preference.
+Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
 ```sh
@@ -34,11 +35,11 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current1130-case external result comprises22 complete fixture files plus
-25 unchanged selected cases from two partially supported files. All23 adapter
+The current1214-case external result comprises23 complete fixture files plus
+25 unchanged selected cases from two partially supported files. All25 adapter
 unit tests pass. Frozen adapter SHA256 is
-`c4cd856638cbaa8ed4ef1408ab1478f02ab58fa60fc79e920292a2e73cfe1924`.
-See `evidence/diagnostic-placement-20261018-02/`; linked native source and all
+`fab90bb7c2a7dc6cc16b6dd7dc666537ebabf2d8849784a807545244cacbb7c6`.
+See `evidence/diagnostic-bitplanes-20261018/`; linked native source and all
 declared dependencies remain unchanged. The original25-case selection provenance
 remains in `diagnostic-positions-20261018-02/`.
 
@@ -52,8 +53,9 @@ All priorities and their final permutation call native policy. Relation encoding
 charge counts and retained-state changes likewise retain their native owners;
 neither fixtures nor expected answers are read at runtime.
 
-Current cold source additionally prepares `ordering.prioritySequence` and
-`tactics.capturePreferenceOrder`, with a planned25-unit/1214-case regression in
-`evidence/diagnostic-ordering-preparation-20261018/`. These two routes remain
-uncompiled/unverified while the PGO timing pilot runs; the accepted coverage
-above belongs to frozen c4cd8566.
+`ordering.prioritySequence` and `tactics.capturePreferenceOrder` first passed
+with the previous native layout in frozen4d07ce08. The same unchanged frontend
+then passed25 units/1214 cases against the integrated persistent-bitplane native
+source in frozenfab90bb7. Both attempts and source archives remain. This is
+component transport acceptance, without whole-production or complete mandatory
+qualification.

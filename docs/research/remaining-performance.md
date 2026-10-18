@@ -97,9 +97,13 @@ and production review remain requirements alongside optimization.
    Both pass133 native tests and all54 strict replays. The independent90-lifetime
    six-case generic pilot sums16.7270585s baseline,16.3704720s persistent and
    16.8066150s local: persistent/base0.978682, local/base1.004756. All six persistent
-   medians are lower, with substantial overlap in profile04. Persistent advances
-   to its own PGO training/build/regression and pilot; this explicit local
-   strategy is parked. No production adoption or PGO inference follows yet.
+   medians are lower, with substantial overlap in profile04. Its own PGO trial
+   then passes54 replays/eight interruption fixtures and60 CPU lifetimes:
+   trial14.805304s versus baseline1dc996b2 sum15.296771s, ratio0.967871193.
+   Persistent source is integrated after133 native tests and25 adapter units/
+   1214 cases; this explicit local strategy is parked. Canonical repository
+   PGO has its own training/build identity and still needs artifact-specific
+   replay/timing validation. No final54/12 qualification follows yet.
    See `evidence/bitplanes-20261018/` and its exact preparation/source archives.
 
 8. **Counts-guided mailbox Boolean attacks: alternative kernel hypothesis.**

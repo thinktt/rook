@@ -14,10 +14,15 @@ tactical search, a work-timed root controller and persistent ordinary session.
 The `rook2` executable serves the live King XBoard byte stream, including
 search-time controls/status, natural seed acquisition, gate seed commands and
 fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implements
-eleven mandatory operations so far. Complete diagnostics, full gameplay and
+29 mandatory operations with1214 external cases so far. Complete diagnostics, full gameplay and
 performance qualification remain outstanding. Current generation reuse and
 compiler-PGO experiments retain exact builds, strict replay results and balanced
 whole-native CPU pilots; see [STATUS.md](STATUS.md) for their distinct scopes.
+
+Placement now includes exact attack planes owned by Position160/Node176,
+retaining copied-child state and independent retained evaluation. The measured
+storage/kernel decision and its validation boundaries are recorded in
+[decision0004](docs/decisions/0004-persistent-attack-planes.md).
 
 Build the ordinary executable with retained settings and identity:
 

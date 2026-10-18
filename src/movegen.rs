@@ -1,6 +1,6 @@
 //! Ordinary legal inventory in KingRE generation order.
 //!
-//! Legality projects only the mailbox. Chronology, fingerprints and evaluation
+//! Legality projects placement for geometric safety. Chronology, fingerprints and evaluation
 //! state are updated only when a caller actually plays an admitted move.
 
 use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KNIGHT, KNIGHT_SOURCES};
@@ -135,7 +135,7 @@ pub fn attacked(board: &[Piece; 64], square: Square, by: Color) -> bool {
 #[inline]
 pub fn in_check(position: &Position, side: Color) -> bool {
     let king = position.piece_squares(side, PieceKind::King)[0];
-    attacked(&position.board, king, side.opponent())
+    position.attack_view().attacked(king, side.opponent())
 }
 
 /// Project just the fields needed for geometric king safety, not a semantic
@@ -175,8 +175,8 @@ pub(crate) fn projected_board(position: &Position, mv: Move) -> [Piece; 64] {
     board
 }
 
-#[inline]
-fn legal_after(position: &Position, mv: Move, king: Square) -> bool {
+#[cfg(test)]
+fn mailbox_legal_after(position: &Position, mv: Move, king: Square) -> bool {
     let board = projected_board(position, mv);
     let king = if position.board[mv.from().0 as usize].kind() == PieceKind::King {
         mv.to()
@@ -184,6 +184,32 @@ fn legal_after(position: &Position, mv: Move, king: Square) -> bool {
         king
     };
     !attacked(&board, king, position.side.opponent())
+}
+
+#[inline]
+fn legal_after_bits(
+    position: &Position,
+    mv: Move,
+    king: Square,
+    bits: crate::attacks::AttackBits,
+) -> bool {
+    let king = if position.board[mv.from().0 as usize].kind() == PieceKind::King {
+        mv.to()
+    } else {
+        king
+    };
+    !bits
+        .projected(position, mv)
+        .attacked(king, position.side.opponent())
+}
+
+#[inline]
+fn legal_after(position: &Position, mv: Move, king: Square) -> bool {
+    #[cfg(test)]
+    if FORCE_PROJECTION.with(|forced| forced.get()) {
+        return mailbox_legal_after(position, mv, king);
+    }
+    legal_after_bits(position, mv, king, position.attack_view())
 }
 
 /// The tactical caller supplies a projected board from an initially legal

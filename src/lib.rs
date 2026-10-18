@@ -5,6 +5,7 @@
 //! behavioral and performance qualification is still pending.
 
 pub mod activity;
+mod attacks;
 pub mod clock;
 pub mod development;
 pub mod endgame;

@@ -9,7 +9,7 @@ agreement is not a proof over every admitted setup or a full gameplay pass.
 | Contract responsibility | Native owner | Existing evidence and remaining review |
 | --- | --- | --- |
 | Placement/chronology, FEN admission, rights/EP, local transition, phase and identities | `position`, `types`, `identity` | Native special-move/ordering/derived-field tests and component projections. Audit every broader ordinary-ingress clause, including exceptional king-victim continuation in `session`. |
-| Geometric attacks and ordered ordinary legal candidates | `movegen` | Native perft/order/EP tests; all54 ordinary replays. Generation-summary experiments add differential ordered-inventory checks on constructed setups. Preserve projection fallback and bounded reply semantics. [Capacity/source review](decisions/0002-geometric-legality.md#source-review-production-capacity-and-bounded-lists) proves a conservative417-slot ordinary bound within512; the shared-producer oracle does not independently prove pseudo-candidate completeness. |
+| Geometric attacks and ordered ordinary legal candidates | `attacks`, `movegen`, placement setters/recompute | Integrated persistent planes pass133 native tests; independent tag/query/projection and broad-generation comparisons support the new Boolean kernel. Ordered checker identities and quiescence mailbox reuse remain separate. [Decision0004](decisions/0004-persistent-attack-planes.md) retains matched generic/PGO evidence and limits. [Capacity/source review](decisions/0002-geometric-legality.md#source-review-production-capacity-and-bounded-lists) proves a conservative417-slot ordinary bound within512; the shared-producer oracle does not independently prove pseudo-candidate completeness. |
 | Influence radix, relations and semantic charging | `influence`, consuming evaluators | Exhaustive normalized-code relation checks and external native evaluation fixtures. Confirm every consumer owns its charge even when computation is reused; geometric legality must never use evaluation influence. |
 | Frozen root context, material, square values, full/fast retained state and age | `evaluation`, `evaluator` | External native full/fast and composed-root checks, plus ordinary replay anchors. Complete mandatory adapter evaluation operations and review branch ownership through retries/null/IIO. |
 | Pawn structure/retention/collisions, progress/race, subtotals and current penalties | `pawn_structure`, `pawn_terms`, `pawn_progress`, `evaluator` | External native evaluation/lifetime sequences and unit checks. Verify admitted collision/initial-zero behavior and all ordered reuse seams through mandatory DIAG. |
@@ -21,7 +21,7 @@ agreement is not a proof over every admitted setup or a full gameplay pass.
 | N/R charges, natural4096 polls, captures, terminal work and publication | `work_clock`, `engine`, `timed`, `host`, `session` | External native timing fixtures, active-time native tests, all54 work-post replays and eight literal interruption fixtures. Review every pre/post-capture interrupted ownership boundary. |
 | Persistent game/clock/parameters/seed lifetime and ordinary command meaning | `session`, `clock`, `parameters`, `timing` | Persistent native sequences, literal seed controls, same-artifact focused12/632 plus continuity. Full3288-game gate and admitted command-domain audit remain. |
 | Framing, nonblocking queue/polls, live records, result/fatal exits, PV/score spelling | `wire`, `host`, `output`, `bin/rook2` | Literal process controls, eight wire interruption fixtures, complete all54 and focused replay. Full ordinary protocol requirement review remains. |
-| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozen c4cd8566 passes27 operations/1130 cases across22 complete files plus25 selected cases from two partial files, with23 adapter units. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
+| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozenfab90bb7 passes29 operations/1214 cases across23 complete files plus25 selected cases from two partial files, with25 adapter units, linked to integrated native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
 | Owned whole-engine cost, repeatability, cross-host calibration and final performance | External measurement tools and frozen build artifacts | Direct wait4 controls, balanced local pilots and a complete54-case local CPU collection; PMU unavailable through disabled self-opens. Final measurement profile, calibration and complete54/12 collections remain separate obligations. |
 
 Production search uses static generic diagnostic/host specialization. Ordinary
@@ -42,16 +42,16 @@ closed with executed evidence and production review before mission completion.
 
 A narrower [scalar source review](research/scalar-production-review.md) now
 maps WC-LEDGER arithmetic/reset/snapshot and historical repetition/reversal
-predicates to the exact latest production source, including admitted arithmetic
-bounds. This closes that source-review subset only; mandatory scalar DIAG and
+predicates to the exact1dc996b2 source at that review checkpoint, including
+admitted arithmetic bounds. This closes that source-review subset only; remaining scalar DIAG and
 all charging, observation, lifecycle and interruption consumers remain open.
 
 A separate [depth/history range review](research/depth-range-review.md) binds
 ordinary recursive depth/target and learned-history capacity to this same native
 source. It proves those arithmetic ranges without closing score storage or
-uncertified-hint eligibility. Frozen adapter c4cd8566 now verifies twelve more
+uncertified-hint eligibility. Frozen adapterfab90bb7 now verifies fourteen more
 native-backed routes, including ledger, placement/pawn terms, learned/table
-sequences and supplied candidate order:23 units and1130 external cases pass.
+sequences and supplied candidate/priority/capture ordering:25 units and1214 external cases pass.
 That closes the transport subset that was still pending at the scalar review's
 original checkpoint; its immutable source-review receipt remains historical.
 The first1022-case attempt and its12 unsupported ordering failures are retained.
