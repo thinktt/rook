@@ -10,8 +10,11 @@ when the owner changes it, rather than on every task.
 Start from a coherent efficient architecture and measurable integrated search.
 Progressively tighten fidelity and conformance. Prototype timings must identify
 omitted behavior; approximate search is not a qualified KingRE comparison.
-Completion requires exact mandatory conformance, production review, gameplay
-qualification and performance qualification under the released policies.
+Vic's local qualification scope is exact mandatory conformance, production
+review and the regular12-game pre-gate. The owner assigned the full3288-game
+gate to an external system with more resources; do not run that gate on Vic.
+Prepare the exact artifact/evidence handoff for that external gate. Performance
+work and the released measurement/qualification policies remain applicable.
 
 ## Independence
 
@@ -66,3 +69,49 @@ reset and interruption semantics. Semantic work is independent of actual CPU wor
 Run checks appropriate to each change; do not build a complete fixture adapter
 before integrated search is measurable. Record architectural decisions and
 evidence, and replace failed approaches instead of accumulating patches.
+
+## Commit attribution
+
+Every commit created for this repository must end with the following commit
+trailers in this order:
+
+```text
+Co-authored-by: Codex GPT-<current Sol model version> Sol <codex@openai.com>
+Co-authored-by: Codex GPT-6 Astra <codex@openai.com>
+Directed-by: Tobias Toland <github@thinktt.e4ward.com>
+```
+
+These trailers are required on every commit, regardless of which agent performs
+the implementation, review, testing, documentation, or commit operation.
+
+For the first trailer, replace `<current Sol model version>` with the model
+version running the Sol implementation owner when the commit is created. Use
+the active session's model information or an explicit model assignment from the
+user; do not infer the model from the agent name or tab label. If the model
+cannot be established, ask the user rather than copying a previous commit's
+version. For example, when running GPT-6.1, use:
+
+```text
+Co-authored-by: Codex GPT-6.1 Sol <codex@openai.com>
+```
+
+The Sol model version is dynamic. Keep the Sol name and email, the Astra
+trailer, the director trailer, and their order exactly as shown. Place all
+three trailers at the end of the commit message, after the summary and any
+explanatory body.
+
+Use this commit-message structure:
+
+```text
+<short imperative summary>
+
+<optional explanatory body>
+
+Co-authored-by: Codex GPT-<current Sol model version> Sol <codex@openai.com>
+Co-authored-by: Codex GPT-6 Astra <codex@openai.com>
+Directed-by: Tobias Toland <github@thinktt.e4ward.com>
+```
+
+Before completing a commit, verify that all three trailers are present at the
+end of the message in the required order, with the Sol model version matching
+the active model at commit time.
