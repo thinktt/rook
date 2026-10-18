@@ -12,6 +12,8 @@ use std::{
     process::ExitCode,
 };
 
+mod positions;
+
 type Result<T> = std::result::Result<T, String>;
 
 fn object<'a>(v: &'a Value, keys: &[&str]) -> Result<&'a Map<String, Value>> {
@@ -79,6 +81,11 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "position.setup"
+        | "position.setupMoveSequence"
+        | "position.moveSequence"
+        | "position.identity"
+        | "evaluation.phase" => positions::dispatch(operation, input),
         "time.schedule" => {
             object(input, &["stages", "moveIndex"])?;
             let seconds = schedule(&input["stages"])?

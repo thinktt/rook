@@ -154,3 +154,12 @@ the instrumented artifact, merge profiles with the matching LLVM tool, then
 rebuild using that profile and regress the new production artifact. The public54
 inputs also trained the approved reference. PGO does not close behavioral,
 hardware, uncertainty, or whole-engine performance qualification.
+
+`collect_ordinary.py --engine ENGINE --build-record BUILD/receipt.json --output
+evidence/FRESH` freezes the complete54-case stored corpus order, with one
+excluded warmup and three measured fresh native lifetimes per case. Every
+run uses the unmodified strict replay checker and direct wait4 supervisor.
+The manifest freezes deadlines, byte guards, identities and accounting scope;
+first failure stops later launches. Before/after local resource snapshots and
+all samples are retained. This development collection is reported-only; it
+does not claim compatible reference resources, calibration or final uncertainty.

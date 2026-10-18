@@ -37,9 +37,11 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapter passes246 cases across five complete
-  fixture files/six operations. Other mandatory operations remain explicitly
-  unsupported. See [diagnostic scope](diagnostic/README.md).
+- The separate external DIAG adapter implements11 operations and passes416
+  cases across eight complete fixture files plus25 unchanged selected cases
+  from two partially supported files. Seven adapter unit tests cover admission,
+  setup/raw-state distinction and sequence boundaries. Other mandatory operations
+  remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
 - A balanced four-anchor pilot selected the generation-summary/evasion
   algorithm: all80 lifetimes passed the strict oracle, and the sum of four
   case medians was12.3% lower than its baseline. A separate40-lifetime
@@ -54,9 +56,16 @@ Current artifact-specific evidence:
   This is a simulated diagnostic, with no PMU instructions/cycles claim.
   [Profile evidence](evidence/callgrind-pgo-20261018/README.md).
 
+A complete local54 CPU collection now retains216 normal, strict-oracle lifetimes
+(one excluded warmup and three measured per case). Its sum of case medians is
+97.685122s, with all raw receipts independently revalidated. The raw published
+reference sum is63.431779s (uncalibrated planning ratio1.5400); this is not a
+qualified performance pass/fail. See
+[whole-native54 collection](evidence/production54-cpu-20261018-pgo/README.md).
+
 Mandatory diagnostics, production review, the full3288-game gate, the newer
-artifact's full focused replay and complete54/12 performance collections remain
-open. The [production map](docs/production-map.md) is an initial ownership map,
+artifact's full focused replay, full12 CPU collection and final performance
+qualification remain open. The [production map](docs/production-map.md) is an initial ownership map,
 not a completed normative audit. The current PMU probe still returns EACCES with
 UID1000/zero effective capabilities/paranoid3/seccomp0; no security setting was
 changed. Clock sampling was unreliable and its percentages are unused.

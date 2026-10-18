@@ -6,8 +6,8 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now begins that surface with native-backed
-  arithmetic/command operations. Every other mandatory operation still needs
+  The separate `diagnostic/` crate now implements11 native-backed arithmetic,
+  command and position/history operations with416 selected external cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -38,7 +38,8 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   [decision0002](decisions/0002-geometric-legality.md); it does not close full
   performance collection, production mapping/review or mandatory conformance.
 - Establish scoped PMU/calibration capabilities and qualified measurement
-  boundaries, then run both complete whole-engine performance collections.
+  boundaries. Qualify the complete local54 CPU collection and run the complete
+  12-game CPU collection under that final profile.
   The first CPU pilot used a selected-move/checkpoint endpoint. A new direct
   wait4 supervisor includes native startup, setup, execution and destruction,
   with independent strict-oracle supervision. Its initial control tests do not
@@ -52,3 +53,8 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
 
 These open items permit substantial local progress while PMU support is
 investigated. No hardware limitation currently blocks engine implementation.
+
+The latest complete local54 collection retains216 normal strict-oracle/native
+lifetimes and all per-case samples; its sum of54 case medians is97.685122s.
+The raw uncalibrated reference planning ratio is1.5400. This changes optimization
+priorities and does not close final comparison or uncertainty requirements.

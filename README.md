@@ -14,7 +14,7 @@ tactical search, a work-timed root controller and persistent ordinary session.
 The `rook2` executable serves the live King XBoard byte stream, including
 search-time controls/status, natural seed acquisition, gate seed commands and
 fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implements
-six mandatory operations so far. Complete diagnostics, full gameplay and
+eleven mandatory operations so far. Complete diagnostics, full gameplay and
 performance qualification remain outstanding. Current generation reuse and
 compiler-PGO experiments retain exact builds, strict replay results and balanced
 whole-native CPU pilots; see [STATUS.md](STATUS.md) for their distinct scopes.
