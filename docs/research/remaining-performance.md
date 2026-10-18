@@ -449,3 +449,41 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     composition. Root remains adopted activity sourceed85b6dd. Exact evidence is
     in [the trial checkpoint](../../evidence/pawn-forward-scan-fusion-trial-checkpoint-20261018/README.md).
     This result does not establish neutrality, significance or full54/12 cost.
+
+23. **Remembered group reciprocal: parked after the fixed generic pilot.**
+    Replacing repeated unsigned remainder with a constructor-owned exact
+    reciprocal passes179 native tests,54 strict replays and eight-wire24,
+    with independent source/raw closure. The emitted query division disappears,
+    but ownership reorders embedded search fields and grows the root frame32B.
+    The single fixed70-lifetime generic comparison against full-byte948c sums
+    14.375005s versus14.368978s:ratio0.9995807306 (0.041927% lower),4/7 lower
+    medians, worst1.00276197 and all seven observed ranges overlapping. It fails
+    aggregate<=0.995 AND>=5 lower AND worst<=1.02. Park without own-PGO, retry,
+    enlargement or composition; production retains remainder. The complete
+    [TT checkpoint](../../evidence/fullbyte-remembered-reciprocal-trial-checkpoint-20261018-01/README.md)
+    preserves740 members, both images, original raw measurements and all
+    consumed dependencies. Static division removal did not predict useful
+    whole-engine CPU improvement.
+
+24. **Placement transpositions: one bounded pure-component trial.**
+    A logging-only derivative retains all real producers and passes the original
+    strict54. Offline reconstruction reconciles37,094,875 full encounters,
+    115,801,445 activity relation queries and108 epochs, with zero resident-key
+    payload mismatches. A1024-slot direct-map model has4,819,294 exact-board hits
+    (12.9918% of encounters), representing8.0924% of activity R. Profile35 hits
+    only4.3017%; profile08 hits16.9337%. Larger models add hits but do not
+    establish any CPU benefit. This is a different opportunity from item2's
+    rejected same-produced-node cache. No influence construction, pawn effect
+    or semantic relation charge can be removed by these hits.
+
+    After a bounded independent architectural critique, select one1024-slot
+    activity/shelter scalar cache prototype. Enforce production-influence
+    provenance throughout Search's full and selector call graph, including
+    observed paths; public selectors with prefilled custom maps remain uncached.
+    Preserve one shared numerical composition, exact placement admission and
+    existing new-search clearing, without Position/Node growth. Use one fixed
+    seven-case70-lifetime generic pilot including adverse profile35, advancing
+    only at aggregate<=0.995 AND>=5 lower AND worst<=1.02. Failure parks it
+    without resizing, relaxing the rule or retrying normal variability.
+    Source preparation is authorized; no cache is adopted or timed yet. See
+    [decision0014](../decisions/0014-pure-component-cache-trial.md).
