@@ -96,3 +96,20 @@ optimization. None of these hypotheses changes KingRE behavior or the mission.
    `evidence/bitplane-preparation-20261018/`. No compile, correctness, timing or
    adoption claim follows from this preparation. The live full12 CPU collection
    must finish before native tests/builds or another engine measurement starts.
+
+8. **Counts-guided mailbox Boolean attacks: alternative kernel hypothesis.**
+   The old Boolean query always walks potential pawn/knight/king/slider routes;
+   the bitplane kernel can stop when a slider class is absent. A separate
+   layout-preserving control could supply the existing opponent counts to a
+   Boolean mailbox query, check king neighbors directly, and skip absent knight,
+   diagonal or orthogonal classes. Original counts remain a conservative
+   absence guide after an own-move safety projection: ordinary moves, promotions,
+   castling and joined EP cannot create an opposing piece. Removing any actual
+   victim only makes a nonzero count overestimate possible presence. All actual
+   geometric matches would still read the projected board, including a removed
+   king victim; no enemy-king coordinate or legal-ancestry shortcut is implied.
+   Ordered capped checker identities and quiescence's existing mailbox reuse
+   would retain their current owners. This differs from the common bitplane
+   query kernel and cannot isolate storage cost. It is unimplemented/unmeasured;
+   investigate only after the matched bitplane results, with broad independent
+   Boolean/projection comparisons and whole-native timing before adoption.
