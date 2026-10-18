@@ -106,3 +106,36 @@ Integrated artifact `670b965a29c063e1849eb0d790ba33dfb792fff2a13370b467f1235acf0
 passed all54 strict replays,130 native unit tests and the eight wire interruption
 fixtures under its own retained build/check receipts. It has not inherited
 the older baseline's full focused-game result or the prototype's CPU samples.
+
+
+## Source review: production capacity and bounded lists
+
+A later read-only review binds the current source to artifact1dc996b2 in
+`evidence/candidate-capacity-review-20261018/`. Ordinary ingress admits one
+king and at most15 other pieces per color; it does not inherit the standalone
+diagnostic's230-descriptor ceiling. Real captures reduce population, promotion
+replaces one pawn, castling/null preserve population, and exceptional king
+removal remains a terminal ingress continuation.
+
+Each non-king piece has at most27 standard non-EP descriptors: a queen has at
+most27 destinations, rook14, bishop13, knight8, and a promotion pawn at most
+three destinations with four choices each. With15 non-kings, add at most8 king
+moves,2 castlings and2 moves to the single EP target. The deliberately loose
+upper bound is15*27+8+2+2=417, below the native512-slot capacity. This holds for
+broader constructed placements and includes EP separately; it does not assume
+legal ancestry, nonmoving-king safety or ordinary pawn-victim EP. Nothing is
+silently truncated at the narrower diagnostic limit.
+
+Bounded reply generation returns as soon as two admitted replies exist. Its
+caller consumes min(2,full count), and only a result below2 is a complete list
+eligible for reuse. Early return before the full checked-pawn prefix permutation
+therefore does not promise an exact first-two sequence; exact order/list equality
+is required below2. The existing differential checks retain precisely this
+scope. No new bounded-list or generation behavior was changed in this review.
+
+This capacity argument and the local safety proof do not independently prove
+all pseudo-candidate geometry, natural/checked prefix order or caller lifetime
+rules. The forced-projection oracle shares pseudo-candidate production, so its
+10000-placement success proves admission agreement over that producer, rather
+than independent completeness of the whole legal generator. Those broader
+normative reviews and mandatory candidate transport remain separate obligations.
