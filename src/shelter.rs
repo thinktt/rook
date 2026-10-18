@@ -16,11 +16,11 @@ enum Wing {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Components {
-    ring: i32,
-    files: i32,
-    screen: i32,
-    shelter: i32,
+pub struct Components {
+    pub ring: i32,
+    pub files: i32,
+    pub screen: i32,
+    pub shelter: i32,
 }
 
 const ROOK_FILE: [[u8; 3]; 7] = [
@@ -99,7 +99,7 @@ fn home_wing(color: Color, king: Square) -> Option<Wing> {
     }
 }
 
-fn components(position: &Position, influence: &Influence, color: Color) -> Components {
+pub fn components(position: &Position, influence: &Influence, color: Color) -> Components {
     let king = position.piece_squares(color, PieceKind::King)[0];
     let wing = home_wing(color, king);
     Components {

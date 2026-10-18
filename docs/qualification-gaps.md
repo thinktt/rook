@@ -6,14 +6,17 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements59 native-backed operations,
+  The separate `diagnostic/` crate now implements79 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
   supplied candidate/priority/capture order, root randomization/aspiration,
   quiescence capture policy/PV line length, material balance, capture exception/
   defense/allowance, frontier estimate, king pressure and guarded fast cutoff,
   plus opaque/produced-history admission, local move extensions and five endgame
   components, plus fresh personality weights/central balance and score finishing:
-  selected/full endgame bounds plus material/fast-threat composition:3236 external cases and49 adapter units pass. Every other mandatory operation still needs
+  selected/full endgame bounds plus material/fast-threat composition, root/square/
+  shelter and score contexts, fresh/retained pawn observations and subtotals:
+  4521 unique cases/73 complete fixture files and86 adapter units pass after135
+  native tests. Remaining mandatory inventory is38 operations/3152 cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -126,3 +129,10 @@ lifetimes and sums81.131004s in case medians,0.852305% lower than frozen8c.
 Forty-one case medians are lower and thirteen higher; raw uncalibrated reference
 ratio is1.279027725. This updates the local cost checkpoint without closing
 measurement/calibration, current-artifact gameplay or mandatory conformance.
+
+The79-operation observation source is now integrated and its fresh canonical
+adapter a9f6e9f6 passes4521 cases/86 units after135 native tests. Isolated native
+1bce8aea also passes54 strict replays/eight interruption fixtures; fresh
+canonical generic9709f8e9 also passes54 strict replays/eight interruption fixtures. Source changes share
+existing arithmetic and miss-only cache construction without layout changes,
+but final canonical own-PGO/cost/gameplay evidence must use its exact new source.

@@ -1,0 +1,23 @@
+# Score-context batch 1 — source proposal, 2026-10-18
+
+Prepared by `/root/score_context_transport` for `/root`. Requested Sol6.1 High / Normal; native speed controls/readback unavailable. No Herdr, Imp1/Rook source, subagents, builds, tests, rustc, engines or profilers used. All shell commands used affinity `0-5,8-13`. This is an unexecuted proposal, not acceptance evidence.
+
+## Ownership and handoff
+
+Base: `/tmp/imp2-eval-observers-20261018`. Isolated proposal: `/tmp/imp2-score-context-proposal-20261018-xg9nv__v`. Writes are confined to that unique copy and this evidence directory. No live root native or diagnostic source was edited. The copy excludes targets/evidence. Exact patch is `proposal.patch`; per-change predecessor/proposal SHA-256 and complete proposed Rust source manifest are in `source-hashes.json`. `plan.json` records all predecessor fixtures plus the six proposed additions, exact released hashes and case IDs. Parent integrates, reviews, formats if desired, and executes validation.
+
+## Implementation and reasoning
+
+The new cold `diagnostic/src/score_context.rs` implements only `evaluation.scoreContext`, `evaluation.personalityScore`, and `evaluation.positionScore`; `diagnostic/src/main.rs` routes them. Every object has exact-key validation; admitted scalar/array/placement bounds use existing frontend validators. All queries are parsed before any late-phase adjusted-subtotal admission gate. Supplied dependencies are validated even when a later ordinary-phase or disabled-variation branch ignores their numerical effect. No legality/history requirement is added to the broad placement domain.
+
+Native `evaluation::draw_preference` produces effective root preference. A small `evaluation::variation_range` helper extracts the unchanged formula from `evaluator::Parameters::bind`, whose production caller now uses it. `Position::phase` produces both placement phases for positionScore, preserving starting-square occupancy, thresholds and promotion carry. PersonalityScore preserves its explicit rootPhase and current endgameWeight. Root/current contexts remain independent; phase has no side dependency. A per-query struct carries supplied current side, reversible count, check, pawn balance, and full unsigned variation identity into `endgame::finish`; it never substitutes placement fingerprints or recomputed check.
+
+Native `endgame::adjusted_subtotal` extracts the unchanged pre-endgame producer from `finish`. Both the new transport admission and existing `diagnostic/src/scores.rs` admission use it, removing the existing copied admission formula. Inputs remain far inside i32 arithmetic for all admitted diagnostics; the producer's production arithmetic/order is unchanged. Admission rejects outside +/-10000 only for the supplied/derived current endgame weight >=192, after produced preference/range and root ownership are applied. Native finish still owns all endgame rules, score clipping, reversible rounding, bound handling and final side orientation. No evaluator/cache construction or work-ledger calls are introduced. Exact outputs contain only the contract fields; these contracts add no charge fields.
+
+Five focused diagnostic unit tests are added as source and NOT RUN. They cover negative half rounding and root-color independence, disabled/full/odd ranges, supplied identity periodicity and ordinary phase independent of bare placement, late admission affected by root ownership and variation, independently derived root/current phases and promotion carry, repeated-query independence, schema rejection before semantic gates, and validation of numerically ignored fields.
+
+## Proposed selection and remaining validation
+
+Three new routes add 439 released cases: score-context 14, personalityScore 188, positionScore 237 (234 main + 3 phase-carry). Existing-route closure adds learned-reset 24 (cutoffMemory 20/orderCandidates 4), quiescence-evasion-permutation 1 (prioritySequence), allowance-capture-boundaries 4 (allowance 3/capturePolicy 1). Proposed total is 67 routes / 3938 cases / 63 diagnostic unit tests, versus parent-reported 64 / 3470 / 58. Counts are inventory, not passes. No closure route implementation was changed; their complete fixtures require parent validation.
+
+Parent should validate new 439 and closure 29 separately from baseline rechecks, run all 63 diagnostic units, and recheck native production because two pure native producers were extracted. Although source arithmetic is unchanged, code generation/performance is unmeasured. The broader production/session reset, complete evaluation and performance qualification obligations remain outside this bounded proposal. No optional operations or unrelated routes were added.

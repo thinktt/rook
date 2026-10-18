@@ -1,0 +1,53 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -384,12 +384,23 @@
+     }
+ }
+ 
++const PRESSURE_VALUES: [u8; 256] = {
++    let mut values = [0; 256];
++    let mut mark = 0;
++    while mark < values.len() {
++        let value = mark as u8;
++        values[mark] = (value & 1 != 0) as u8 * 16
++            + (value & 2 != 0) as u8 * 24
++            + (value & 0x54).count_ones() as u8 * 8
++            + (value & 0xa8).count_ones() as u8 * 16;
++        mark += 1;
++    }
++    values
++};
++
+ #[inline]
+ fn pressure_value(mark: u8) -> i32 {
+-    i32::from(mark & 1 != 0) * 16
+-        + i32::from(mark & 2 != 0) * 24
+-        + (mark & 0x54).count_ones() as i32 * 8
+-        + (mark & 0xa8).count_ones() as i32 * 16
++    i32::from(PRESSURE_VALUES[mark as usize])
+ }
+ 
+ fn king_pressure(position: &Position, defender: Color, marks: &Marks) -> i32 {
+@@ -463,6 +474,22 @@
+     fn empty_influence() -> Influence {
+         Influence {
+             profiles: [[0; 64]; 2],
++        }
++    }
++
++    #[test]
++    fn pressure_values_match_independent_bit_weights_for_every_mark() {
++        let weights = [16i32, 24, 8, 16, 8, 16, 8, 16];
++        for mark in 0..=u8::MAX {
++            let mut remaining = mark;
++            let mut expected = 0;
++            for weight in weights {
++                if remaining % 2 != 0 {
++                    expected += weight;
++                }
++                remaining /= 2;
++            }
++            assert_eq!(pressure_value(mark), expected, "mark {mark:#04x}");
+         }
+     }
+ 

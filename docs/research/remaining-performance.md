@@ -1,14 +1,16 @@
 # Remaining performance investigations
 
 Date: 2026-10-18. Statuses below distinguish adopted experiments from hypotheses; none promises
-a qualified speedup. Current canonical8c4619a7 full local54 PGO CPU costs total
-81.828432s versus the published63.431779s sum(raw uncalibrated ratio1.290023).
+a qualified speedup. Current canonical8d9dddc5 full local54 PGO CPU costs total
+81.131004s versus the published63.431779s sum(raw uncalibrated ratio1.279028).
+Previous8c4619a7 totals81.828432s; the new sum is0.852305% lower, with41
+case medians lower and13 higher in this sequential historical comparison.
 The previous915f83e4 collection totals88.486549s; all54 new medians are lower,
 with a7.524440% lower aggregate in this sequential historical comparison.
 The earlier3660 collection totaled97.685122s. Calibration/profile differences
-remain unresolved. The current8c4619a7 profile-01 simulated total is12.027B Ir, versus13.607B
-on earlier3660fecf; activity remains prominent after the adopted evaluation
-kernels. This is whole-lifetime instruction simulation, not PMU counting.
+remain unresolved. The current8d9dddc5 profile-01 simulated total is11.604B Ir, versus12.027B
+on previous8c and13.607B on earlier3660fecf; activity remains prominent after
+the adopted kernels. This is whole-lifetime instruction simulation, not PMU counting.
 Function attribution changed through inlining, so source-line evidence matters.
 
 1. **Shared immutable evaluation geometry.** An isolated prototype moves the
@@ -232,3 +234,30 @@ and production review remain requirements alongside optimization.
     profile05 increases, and all six sample ranges overlap. Symbols grow
     1817/1856 bytes and total text3656 bytes. This is insufficient evidence
     for PGO or adoption; preserve canonical8d source unchanged.
+
+14. **Exact uncapped influence profile sums: generic pilot positive; own PGO pending.**
+    A private immutable256-byte table replaces only profile_sum arithmetic for
+    all256 normalized byte inputs; public const API, relation cap tables, charge
+    sites, state/layout and consumers remain unchanged. Native134 tests include
+    the independent full-byte digit oracle. A strengthened10000-position own
+    coordinate activity/influence oracle,54 strict replays and eight interruption
+    fixtures also pass. Generic09d7e067 contains one complete table payload.
+    Its balanced60-lifetime pilot independently reconciles14.690910s control
+    c946104a versus14.527878s lookup,1.109747% lower. Five medians improve,
+    profile29 increases, and all six sample ranges overlap. This is a modest
+    finite observation without a confidence/qualification claim. An own-profile
+    PGO comparison is warranted before source selection; no adoption follows yet.
+    See `evidence/profile-sum-cpu-pilot-20261018/`.
+
+15. **Exact activity pressure-mark values: measured and parked.**
+    A different private immutable256-byte table replaces only pressure_value
+    weighted-popcount arithmetic; all masked callers, marks, charge sites and
+    profile_sum remain unchanged. The independent full-byte per-bit test, all135
+    native tests,10000 strengthened coordinate placements,54 strict replays and
+    eight interruption fixtures pass. Frozen41300b67 contains one complete table
+    payload. Its balanced60-lifetime generic pilot independently reconciles
+    14.6522095s controlc946104a versus14.6978770s lookup,0.311677% higher.
+    Three medians decrease and three increase; all six sample ranges overlap.
+    Park this candidate without PGO or integration. It neither inherits nor is
+    combined with profile_sum results. See
+    `evidence/pressure-value-cpu-pilot-20261018/`.

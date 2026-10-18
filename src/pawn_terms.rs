@@ -156,6 +156,33 @@ fn occupied_pressure(
     }
 }
 
+/// Local native contributors, observed independently of structural selection.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PawnPressure {
+    pub advance: i32,
+    pub occupied: i32,
+    pub rook_line: i32,
+}
+
+/// The caller supplies a present pawn on ranks 2–7. This diagnostic seam uses
+/// the same pressure producers as selected structural penalties; it does not
+/// change which contributors ordinary evaluation selects or charges.
+pub fn pressure_observed(
+    position: &Position,
+    influence: &Influence,
+    square: Square,
+) -> PawnPressure {
+    let pawn = position.board[square.0 as usize];
+    debug_assert!(!pawn.is_empty() && pawn.kind() == PieceKind::Pawn);
+    debug_assert!((1..=6).contains(&square.rank()));
+    let side = pawn.color();
+    PawnPressure {
+        advance: advance_pressure(position, influence, side, square),
+        occupied: occupied_pressure(position, influence, side, square),
+        rook_line: rook_line(position, influence, side, square),
+    }
+}
+
 fn structural_penalty(
     position: &Position,
     influence: &Influence,

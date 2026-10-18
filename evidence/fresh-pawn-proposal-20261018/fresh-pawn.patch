@@ -1,0 +1,301 @@
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -21,6 +21,7 @@
+ mod ledger;
+ mod moves;
+ mod ordering;
++mod pawn_fresh;
+ mod pawn_progress;
+ mod policies;
+ mod position_terms;
+@@ -145,6 +146,10 @@
+         "search.orderCandidates" => candidate_order::dispatch(input),
+         "clock.workSequence" => ledger::dispatch(input),
+         "search.cutoffMemory" | "search.rememberedResults" => learned::dispatch(operation, input),
++        "evaluation.pawnStructure"
++        | "evaluation.pawnPressure"
++        | "evaluation.pawnStructureScore"
++        | "evaluation.pawnPiece" => pawn_fresh::dispatch(operation, input),
+         "evaluation.pawnProgress"
+         | "evaluation.pawnCandidates"
+         | "evaluation.pawnCandidateEnding"
+--- /dev/null
++++ b/diagnostic/src/pawn_fresh.rs
+@@ -0,0 +1,241 @@
++//! Fresh pawn observations. Parsing/recording stays outside native evaluation.
++use super::{array, integer, object, positions, Result};
++use rook2::{
++    influence::Influence,
++    pawn_structure::{self, PawnStructure, Weakness},
++    pawn_terms,
++    position::Position,
++    types::{Color, PieceKind, Square},
++};
++use serde_json::{json, Value};
++
++#[derive(Clone, Copy)]
++enum Operation {
++    Structure,
++    Pressure,
++    StructureScore,
++    Piece,
++}
++
++struct Query {
++    position: Position,
++    doubled_weights: [i32; 2],
++    pawn_square: Option<Square>,
++}
++
++/// Validate every supplied field, including later queries, before producing
++/// influence, classification or any selected relation work.
++fn parse(operation: Operation, input: &Value) -> Result<Vec<Query>> {
++    object(input, &["queries"])?;
++    array(&input["queries"], 1, 4096)?
++        .iter()
++        .map(|query| {
++            match operation {
++                Operation::Structure | Operation::StructureScore => {
++                    object(query, &["placement", "doubledWeight"])?;
++                }
++                Operation::Pressure => {
++                    object(query, &["placement", "pawnSquare"])?;
++                }
++                Operation::Piece => {
++                    object(query, &["placement"])?;
++                }
++            }
++            let position = positions::placement(&query["placement"], true)?;
++            let doubled_weights = if matches!(operation, Operation::Structure | Operation::StructureScore) {
++                let weights = &query["doubledWeight"];
++                object(weights, &["white", "black"])?;
++                [
++                    integer(&weights["white"], -10000, 10000)?,
++                    integer(&weights["black"], -10000, 10000)?,
++                ]
++            } else {
++                [1024; 2]
++            };
++            let pawn_square = if matches!(operation, Operation::Pressure) {
++                let square = positions::square(&query["pawnSquare"])?;
++                let piece = position.board[square.0 as usize];
++                if piece.is_empty() || piece.kind() != PieceKind::Pawn {
++                    return Err("pawnSquare must name a present pawn".into());
++                }
++                Some(square)
++            } else {
++                None
++            };
++            Ok(Query { position, doubled_weights, pawn_square })
++        })
++        .collect()
++}
++
++fn weakness_name(weakness: Weakness) -> &'static str {
++    match weakness {
++        Weakness::None => "none",
++        Weakness::Isolated => "isolated",
++        Weakness::BlockedBackward => "blocked-backward",
++        Weakness::ExposedBackward => "exposed-backward",
++        Weakness::ExposedLevel => "exposed-level",
++    }
++}
++
++/// Canonical output is a copy; the native descriptor chronology remains intact.
++fn structure_output(structure: &PawnStructure, side: Color, score: Option<i32>) -> Value {
++    let mut pawns = structure.pawn_slice(side).to_vec();
++    pawns.sort_by_key(|pawn| (pawn.square.file(), pawn.square.rank()));
++    let descriptors: Vec<_> = pawns.iter().map(|pawn| {
++        json!({"square":pawn.square.to_string(),"candidate":pawn.candidate,
++            "weakness":weakness_name(pawn.weakness)})
++    }).collect();
++    let mut output = json!({"baseScore":structure.base_score[side.index()],"pawns":descriptors});
++    if let Some(score) = score {
++        output["structureScore"] = json!(score);
++        output["candidates"] = json!(pawns.iter().filter(|pawn| pawn.candidate)
++            .map(|pawn| pawn.square.to_string()).collect::<Vec<_>>());
++    }
++    output
++}
++
++pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
++    let operation = match operation {
++        "evaluation.pawnStructure" => Operation::Structure,
++        "evaluation.pawnPressure" => Operation::Pressure,
++        "evaluation.pawnStructureScore" => Operation::StructureScore,
++        "evaluation.pawnPiece" => Operation::Piece,
++        _ => return Err("unsupported fresh-pawn operation".into()),
++    };
++    let queries = parse(operation, input)?;
++    let mut results = Vec::with_capacity(queries.len());
++    for query in queries {
++        let position = &query.position;
++        let influence = Influence::build(position);
++        if matches!(operation, Operation::Pressure) {
++            let pressure = pawn_terms::pressure_observed(position, &influence, query.pawn_square.unwrap());
++            results.push(json!({"advancePressure":pressure.advance,
++                "occupiedPressure":pressure.occupied,"rookLine":pressure.rook_line}));
++            continue;
++        }
++        let structure = pawn_structure::fresh(position, &influence, query.doubled_weights);
++        let result = match operation {
++            Operation::Structure => json!({
++                "white":structure_output(&structure, Color::White, None),
++                "black":structure_output(&structure, Color::Black, None)}),
++            Operation::StructureScore => {
++                let (scores, queries) = pawn_terms::structure_terms(position, &influence, &structure);
++                json!({"white":structure_output(&structure, Color::White, Some(scores[0])),
++                    "black":structure_output(&structure, Color::Black, Some(scores[1])),
++                    "relationQueries":queries})
++            }
++            Operation::Piece => {
++                // Observe raw activity even when phase gates ordinary subtotals.
++                // Do not invoke structure_terms or compute_with_phase here:
++                // either would perform work beyond this raw observation.
++                let (scores, queries) = pawn_terms::raw_piece_terms(position, &influence, &structure);
++                json!({"white":scores[0],"black":scores[1],"relationQueries":queries})
++            }
++            Operation::Pressure => unreachable!(),
++        };
++        results.push(result);
++    }
++    Ok(json!({"results":results}))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn weighted(placement: &str, white: i32, black: i32) -> Value {
++        json!({"placement":placement,"doubledWeight":{"white":white,"black":black}})
++    }
++
++    #[test]
++    fn canonical_serialization_does_not_reorder_native_descriptors() {
++        let position = positions::placement(&json!("7k/8/8/2P5/3P4/2P5/8/K7"), true).unwrap();
++        let influence = Influence::build(&position);
++        let order = [Square::parse("d4").unwrap(), Square::parse("c5").unwrap(), Square::parse("c3").unwrap()];
++        let structure = pawn_structure::fresh_with_order(&position, &influence, [&order, &[]], [1024; 2]);
++        let output = structure_output(&structure, Color::White, Some(0));
++        assert_eq!(output["pawns"].as_array().unwrap().iter()
++            .map(|pawn| pawn["square"].as_str().unwrap()).collect::<Vec<_>>(), ["c3", "c5", "d4"]);
++        assert_eq!(output["candidates"], json!(["c5", "d4"]));
++        assert_eq!(structure.pawn_slice(Color::White).iter().map(|pawn| pawn.square).collect::<Vec<_>>(), order);
++    }
++
++    #[test]
++    fn signed_doubled_rounding_and_duplicate_fresh_queries_are_preserved() {
++        let query = weighted("7k/8/8/8/8/P7/P7/K7", -39, 513);
++        let output = dispatch("evaluation.pawnStructure", &json!({"queries":[query.clone(),query]})).unwrap();
++        assert_eq!(output["results"][0]["white"]["baseScore"], -5);
++        assert_eq!(output["results"][0], output["results"][1]);
++        assert_eq!(output["results"][0]["black"], json!({"baseScore":0,"pawns":[]}));
++    }
++
++    #[test]
++    fn repeated_exposed_level_queries_keep_their_local_relation_work() {
++        let query = weighted("7k/8/8/5p2/8/3PP3/8/K7", 1024, 1024);
++        let output = dispatch("evaluation.pawnStructureScore", &json!({"queries":[query.clone(),query]})).unwrap();
++        assert_eq!(output["results"][0]["relationQueries"], 1);
++        assert_eq!(output["results"][1]["relationQueries"], 1);
++        assert_eq!(output["results"][0]["white"]["structureScore"], 4);
++        let blocked = weighted("7k/8/8/2Ppp3/3P4/8/8/K7", 1024, 1024);
++        let output = dispatch("evaluation.pawnStructureScore", &json!({"queries":[blocked]})).unwrap();
++        assert_eq!(output["results"][0]["white"]["structureScore"], -5);
++        assert_eq!(output["results"][0]["relationQueries"], 0);
++    }
++
++    #[test]
++    fn raw_piece_route_remains_active_below_ordinary_phase_gate() {
++        let query = json!({"placement":"1r5q/8/8/3R4/8/8/P6P/K6k"});
++        let output = dispatch("evaluation.pawnPiece", &json!({"queries":[query.clone(),query]})).unwrap();
++        assert_eq!(output["results"], json!([
++            {"white":15,"black":0,"relationQueries":1},
++            {"white":15,"black":0,"relationQueries":1}]));
++        let output = dispatch("evaluation.pawnPiece", &json!({"queries":[{"placement":"7k/8/8/8/8/8/8/K7"}]})).unwrap();
++        assert_eq!(output["results"][0], json!({"white":0,"black":0,"relationQueries":0}));
++    }
++
++    #[test]
++    fn pressure_observes_unused_rook_line_and_derives_color_from_board() {
++        let output = dispatch("evaluation.pawnPressure", &json!({"queries":[
++            {"placement":"3r3k/8/8/8/3P3r/2PR4/3N4/K7","pawnSquare":"d4"},
++            {"placement":"7k/8/8/8/8/8/P7/K7","pawnSquare":"a2"}]})).unwrap();
++        assert_eq!(output["results"][0]["rookLine"], 40);
++        assert_eq!(output["results"][0]["occupiedPressure"], 1);
++        assert_eq!(output["results"][1], json!({"advancePressure":0,"occupiedPressure":0,"rookLine":0}));
++        assert!(dispatch("evaluation.pawnPressure", &json!({"queries":[
++            {"placement":"k7/p7/8/8/8/8/8/7K","pawnSquare":"a7"}]})).is_ok());
++    }
++
++    #[test]
++    fn eager_parse_checks_later_queries_and_exact_nested_weight_fields() {
++        let query = weighted("7k/8/8/8/8/8/8/K7", -10000, 10000);
++        assert!(parse(Operation::Structure, &json!({"queries":[query.clone()]})).is_ok());
++        let mut bad = query.clone();
++        bad["doubledWeight"]["unused"] = json!(0);
++        assert!(parse(Operation::Structure, &json!({"queries":[query.clone(),bad]})).is_err());
++        let mut bad = query.clone();
++        bad["doubledWeight"]["black"] = json!(10001);
++        assert!(parse(Operation::StructureScore, &json!({"queries":[query.clone(),bad]})).is_err());
++        let mut bad = query.clone();
++        bad["doubledWeight"]["white"] = json!(-0.5);
++        assert!(parse(Operation::Structure, &json!({"queries":[bad]})).is_err());
++        for field in ["pawnOrder", "phase", "rootPhase", "sideToMove", "identity"] {
++            let mut bad = query.clone();
++            bad[field] = Value::Null;
++            assert!(parse(Operation::StructureScore, &json!({"queries":[bad]})).is_err());
++        }
++        assert!(parse(Operation::Piece, &json!({"queries":[]})).is_err());
++        assert!(parse(Operation::Piece, &json!({"queries":vec![json!({"placement":"7k/8/8/8/8/8/8/K7"});4097]})).is_err());
++    }
++
++    #[test]
++    fn broad_component_placement_domain_and_present_pawn_selection_are_enforced() {
++        assert!(dispatch("evaluation.pawnPiece", &json!({"queries":[{"placement":"8/8/8/8/8/8/k7/K7"}]})).is_ok());
++        for placement in ["7k/8/8/8/8/NNNNNNNN/NNN5/K7", "P6k/8/8/8/8/8/8/K7",
++            "7k/8/8/8/8/8/8/8", "7k/8/8/8/8/8/PPPPPPPP/KP6"] {
++            assert!(dispatch("evaluation.pawnPiece", &json!({"queries":[{"placement":placement}]})).is_err());
++        }
++        for square in ["b2", "a1", "A2"] {
++            assert!(dispatch("evaluation.pawnPressure", &json!({"queries":[
++                {"placement":"7k/8/8/8/8/8/PN6/K7","pawnSquare":square}]})).is_err());
++        }
++    }
++}
+--- a/src/pawn_terms.rs
++++ b/src/pawn_terms.rs
+@@ -153,6 +153,33 @@
+         rook_line(position, influence, side, square)
+     } else {
+         0
++    }
++}
++
++/// Local native contributors, observed independently of structural selection.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub struct PawnPressure {
++    pub advance: i32,
++    pub occupied: i32,
++    pub rook_line: i32,
++}
++
++/// The caller supplies a present pawn on ranks 2–7. This diagnostic seam uses
++/// the same pressure producers as selected structural penalties; it does not
++/// change which contributors ordinary evaluation selects or charges.
++pub fn pressure_observed(
++    position: &Position,
++    influence: &Influence,
++    square: Square,
++) -> PawnPressure {
++    let pawn = position.board[square.0 as usize];
++    debug_assert!(!pawn.is_empty() && pawn.kind() == PieceKind::Pawn);
++    debug_assert!((1..=6).contains(&square.rank()));
++    let side = pawn.color();
++    PawnPressure {
++        advance: advance_pressure(position, influence, side, square),
++        occupied: occupied_pressure(position, influence, side, square),
++        rook_line: rook_line(position, influence, side, square),
+     }
+ }
+ 

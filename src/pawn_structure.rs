@@ -25,7 +25,11 @@ pub struct PawnDescriptor {
 }
 
 impl PawnDescriptor {
-    const EMPTY: Self = Self { square: Square(64), candidate: false, weakness: Weakness::None };
+    const EMPTY: Self = Self {
+        square: Square(64),
+        candidate: false,
+        weakness: Weakness::None,
+    };
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,7 +41,9 @@ pub struct PawnStructure {
 
 impl PawnStructure {
     pub const EMPTY: Self = Self {
-        base_score: [0; 2], pawns: [[PawnDescriptor::EMPTY; 8]; 2], lengths: [0; 2],
+        base_score: [0; 2],
+        pawns: [[PawnDescriptor::EMPTY; 8]; 2],
+        lengths: [0; 2],
     };
 
     #[inline]
@@ -47,7 +53,9 @@ impl PawnStructure {
 }
 
 impl Default for PawnStructure {
-    fn default() -> Self { Self::EMPTY }
+    fn default() -> Self {
+        Self::EMPTY
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,7 +71,10 @@ struct Retained {
 }
 
 impl Retained {
-    const EMPTY: Self = Self { identity: 0, structure: PawnStructure::EMPTY };
+    const EMPTY: Self = Self {
+        identity: 0,
+        structure: PawnStructure::EMPTY,
+    };
 }
 
 pub struct PawnCache {
@@ -71,32 +82,82 @@ pub struct PawnCache {
 }
 
 impl PawnCache {
-    pub const fn new() -> Self { Self { groups: [Retained::EMPTY; 128] } }
+    pub const fn new() -> Self {
+        Self {
+            groups: [Retained::EMPTY; 128],
+        }
+    }
 
-    pub fn clear(&mut self) { self.groups.fill(Retained::EMPTY); }
+    pub fn clear(&mut self) {
+        self.groups.fill(Retained::EMPTY);
+    }
 
     pub fn select(&mut self, position: &Position, influence: &Influence) -> Selection {
-        let retained = &mut self.groups[(position.pawn % 128) as usize];
-        if retained.identity == position.pawn {
-            return Selection { structure: retained.structure, reused: true };
+        // Obtain production pawn chronology only after a full-identity miss.
+        self.select_with_builder(position.pawn, || fresh(position, influence, [1024; 2]))
+    }
+
+    /// Supplied orders must contain every current pawn of their color once.
+    /// Order affects construction only on a full-identity miss; a hit retains
+    /// the selected group's earlier descriptors unchanged, including their order.
+    pub fn select_with_order(
+        &mut self,
+        position: &Position,
+        influence: &Influence,
+        order: [&[Square]; 2],
+    ) -> Selection {
+        self.select_with_builder(position.pawn, || {
+            fresh_with_order(position, influence, order, [1024; 2])
+        })
+    }
+
+    // Static, allocation-free dispatch keeps the probe/store rule shared while
+    // keeping fresh construction, including pawn-list acquisition, on misses.
+    fn select_with_builder<F>(&mut self, identity: u32, build: F) -> Selection
+    where
+        F: FnOnce() -> PawnStructure,
+    {
+        let retained = &mut self.groups[(identity % 128) as usize];
+        if retained.identity == identity {
+            return Selection {
+                structure: retained.structure,
+                reused: true,
+            };
         }
-        let structure = fresh(position, influence, [1024; 2]);
-        *retained = Retained { identity: position.pawn, structure };
-        Selection { structure, reused: false }
+        let structure = build();
+        *retained = Retained {
+            identity,
+            structure,
+        };
+        Selection {
+            structure,
+            reused: false,
+        }
     }
 }
 
 impl Default for PawnCache {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Fresh descriptors in the position's semantic pawn chronology. The diagnostic
 /// canonical file/rank order is a separate output-boundary transformation.
-pub fn fresh(position: &Position, influence: &Influence, doubled_weights: [i32; 2]) -> PawnStructure {
-    fresh_with_order(position, influence, [
-        position.piece_squares(Color::White, PieceKind::Pawn),
-        position.piece_squares(Color::Black, PieceKind::Pawn),
-    ], doubled_weights)
+pub fn fresh(
+    position: &Position,
+    influence: &Influence,
+    doubled_weights: [i32; 2],
+) -> PawnStructure {
+    fresh_with_order(
+        position,
+        influence,
+        [
+            position.piece_squares(Color::White, PieceKind::Pawn),
+            position.piece_squares(Color::Black, PieceKind::Pawn),
+        ],
+        doubled_weights,
+    )
 }
 
 /// `order` must name every current pawn once, for each color. A diagnostic
@@ -119,26 +180,36 @@ pub fn fresh_with_order(
         let own = &files[index];
         let opponent = &files[side.opponent().index()];
         assert!(order[index].len() <= 8, "pawn descriptor capacity exceeded");
-        debug_assert_eq!(order[index].len(), position.counts[index][PieceKind::Pawn.index()] as usize);
+        debug_assert_eq!(
+            order[index].len(),
+            position.counts[index][PieceKind::Pawn.index()] as usize
+        );
         result.lengths[index] = order[index].len() as u8;
         let mut support = 0;
         let mut doubled_penalty = 0;
         for (slot, &square) in order[index].iter().enumerate() {
-            debug_assert_eq!(position.board[square.0 as usize], Piece::new(side, PieceKind::Pawn));
+            debug_assert_eq!(
+                position.board[square.0 as usize],
+                Piece::new(side, PieceKind::Pawn)
+            );
             let file = square.file() as usize;
             let rank = square.rank();
             let rank_bit = 1u8 << rank;
             let near = rank_bit | (rank_bit << 1) | (rank_bit >> 1);
             let above = (0xffu16 << (rank + 1)) as u8;
             let below = ((1u16 << rank) - 1) as u8;
-            let (ahead, behind, step) = if side == Color::White { (above, below, 1) }
-                                      else { (below, above, -1) };
+            let (ahead, behind, step) = if side == Color::White {
+                (above, below, 1)
+            } else {
+                (below, above, -1)
+            };
             let mut adjacent = 0u8;
             let mut occupied_files = 0;
             let mut neighbors = 0;
             let mut opposing_near_files = opponent[file];
             for adjacent_file in [file.checked_sub(1), (file + 1 < 8).then_some(file + 1)]
-                .into_iter().flatten()
+                .into_iter()
+                .flatten()
             {
                 let pawns = own[adjacent_file];
                 adjacent |= pawns;
@@ -146,7 +217,13 @@ pub fn fresh_with_order(
                 neighbors += i32::from(pawns & near != 0) + i32::from(pawns & rank_bit != 0);
                 opposing_near_files |= opponent[adjacent_file];
             }
-            support += if neighbors == 0 { -3 } else if neighbors > 1 { 2 } else { 0 };
+            support += if neighbors == 0 {
+                -3
+            } else if neighbors > 1 {
+                2
+            } else {
+                0
+            };
             let friendly_ahead = own[file] & ahead != 0;
             if friendly_ahead {
                 doubled_penalty += match occupied_files {
@@ -162,7 +239,8 @@ pub fn fresh_with_order(
             let weakness = if adjacent == 0 {
                 Weakness::Isolated
             } else if all_adjacent_ahead
-                && position.board[advance.0 as usize] == Piece::new(side.opponent(), PieceKind::Pawn)
+                && position.board[advance.0 as usize]
+                    == Piece::new(side.opponent(), PieceKind::Pawn)
             {
                 Weakness::BlockedBackward
             } else if all_adjacent_ahead && attacked_advance {
@@ -179,7 +257,8 @@ pub fn fresh_with_order(
             };
         }
         // Mathematical floor is required for negative supplied coefficients.
-        let penalty = (doubled_weights[index] as i64 * doubled_penalty as i64 + 512).div_euclid(1024);
+        let penalty =
+            (doubled_weights[index] as i64 * doubled_penalty as i64 + 512).div_euclid(1024);
         result.base_score[index] = (support as i64 - penalty) as i32;
     }
     result
@@ -195,7 +274,11 @@ mod tests {
 
     fn descriptor(structure: &PawnStructure, side: Color, square: &str) -> PawnDescriptor {
         let square = Square::parse(square).unwrap();
-        *structure.pawn_slice(side).iter().find(|p| p.square == square).unwrap()
+        *structure
+            .pawn_slice(side)
+            .iter()
+            .find(|p| p.square == square)
+            .unwrap()
     }
 
     fn evaluated(placement: &str, weights: [i32; 2]) -> PawnStructure {
@@ -204,21 +287,94 @@ mod tests {
     }
 
     #[test]
+    fn cache_probe_invokes_fresh_builder_only_on_full_identity_miss() {
+        let mut cache = PawnCache::new();
+        assert!(
+            cache
+                .select_with_builder(0, || panic!("zero identity must reuse"))
+                .reused
+        );
+        let mut builds = 0;
+        assert!(
+            !cache
+                .select_with_builder(1, || {
+                    builds += 1;
+                    PawnStructure::EMPTY
+                })
+                .reused
+        );
+        assert!(
+            cache
+                .select_with_builder(1, || panic!("identity hit must reuse"))
+                .reused
+        );
+        assert!(
+            !cache
+                .select_with_builder(2, || {
+                    builds += 1;
+                    PawnStructure::EMPTY
+                })
+                .reused
+        );
+        assert!(
+            cache
+                .select_with_builder(1, || panic!("other group must preserve hit"))
+                .reused
+        );
+        assert!(
+            !cache
+                .select_with_builder(129, || {
+                    builds += 1;
+                    PawnStructure::EMPTY
+                })
+                .reused
+        );
+        assert!(
+            !cache
+                .select_with_builder(1, || {
+                    builds += 1;
+                    PawnStructure::EMPTY
+                })
+                .reused
+        );
+        assert_eq!(builds, 4);
+        cache.clear();
+        assert!(
+            cache
+                .select_with_builder(0, || panic!("clear restores zero reuse"))
+                .reused
+        );
+    }
+
+    #[test]
     fn support_and_per_pawn_doubled_penalties_use_signed_floor() {
         let initial = evaluated("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", [1024; 2]);
         assert_eq!(initial.base_score, [16, 16]);
-        assert!(initial.pawns.iter().flatten().all(|p| !p.candidate && p.weakness == Weakness::None));
+        assert!(initial
+            .pawns
+            .iter()
+            .flatten()
+            .all(|p| !p.candidate && p.weakness == Weakness::None));
 
         let edge = "7k/8/8/8/8/P7/P7/K7";
         assert_eq!(evaluated(edge, [1024; 2]).base_score, [-40, 0]);
         // (-39*34+512)/1024 floors to -1; truncation would incorrectly give 0.
         assert_eq!(evaluated(edge, [-39, 513]).base_score, [-5, 0]);
-        assert_eq!(evaluated("7k/8/8/8/8/1P6/1P6/K7", [1024; 2]).base_score, [-25, 0]);
-        assert_eq!(evaluated("7k/8/8/8/P7/P7/P7/K7", [1024; 2]).base_score, [-77, 0]);
+        assert_eq!(
+            evaluated("7k/8/8/8/8/1P6/1P6/K7", [1024; 2]).base_score,
+            [-25, 0]
+        );
+        assert_eq!(
+            evaluated("7k/8/8/8/P7/P7/P7/K7", [1024; 2]).base_score,
+            [-77, 0]
+        );
 
         // Multiple adjacent-file pawns satisfy existential support tests only
         // once per file; the rear two d-pawns each receive the one-file penalty.
-        assert_eq!(evaluated("7k/8/8/3P4/3PP3/3P4/8/K7", [1024; 2]).base_score, [-22, 0]);
+        assert_eq!(
+            evaluated("7k/8/8/3P4/3PP3/3P4/8/K7", [1024; 2]).base_score,
+            [-22, 0]
+        );
     }
 
     #[test]
@@ -227,7 +383,10 @@ mod tests {
         assert!(!descriptor(&structure, Color::White, "d3").candidate); // Friendly d4 ahead.
         assert!(!descriptor(&structure, Color::White, "d4").candidate); // Opposing e5 ahead.
         assert!(descriptor(&structure, Color::Black, "e3").candidate); // White d3 level, d4 behind Black.
-        assert_eq!(descriptor(&structure, Color::White, "d4").weakness, Weakness::Isolated);
+        assert_eq!(
+            descriptor(&structure, Color::White, "d4").weakness,
+            Weakness::Isolated
+        );
         let level = evaluated("7k/8/8/8/3Pp3/8/8/K7", [1024; 2]);
         assert!(descriptor(&level, Color::White, "d4").candidate);
         assert!(descriptor(&level, Color::Black, "e4").candidate);
@@ -243,12 +402,19 @@ mod tests {
             ("7k/8/8/5p2/8/4P3/3P4/K7", Weakness::None),
         ] {
             let structure = evaluated(placement, [1024; 2]);
-            assert_eq!(descriptor(&structure, Color::White, "e3").weakness, expected, "{placement}");
+            assert_eq!(
+                descriptor(&structure, Color::White, "e3").weakness,
+                expected,
+                "{placement}"
+            );
         }
         // A neighbor more than one rank behind suppresses backward/level
         // weakness, while contributing no support to the e4 pawn.
         let structure = evaluated("7k/8/5p2/8/4P3/8/3P4/K7", [1024; 2]);
-        assert_eq!(descriptor(&structure, Color::White, "e4").weakness, Weakness::None);
+        assert_eq!(
+            descriptor(&structure, Color::White, "e4").weakness,
+            Weakness::None
+        );
         assert_eq!(structure.base_score[0], -6);
     }
 
@@ -264,7 +430,10 @@ mod tests {
         let f3 = fresh(&three, &i3, [1024; 2]);
         let f4 = fresh(&four, &i4, [1024; 2]);
         assert_eq!(descriptor(&f3, Color::White, "e3").weakness, Weakness::None);
-        assert_eq!(descriptor(&f4, Color::White, "e3").weakness, Weakness::ExposedBackward);
+        assert_eq!(
+            descriptor(&f4, Color::White, "e3").weakness,
+            Weakness::ExposedBackward
+        );
         assert!(descriptor(&f4, Color::White, "e3").candidate);
         // Pawn-only identity hits retain prior classification despite the
         // non-pawn influence change, as required by retained structural reuse.
@@ -307,7 +476,11 @@ mod tests {
         assert_eq!(c.pawn % 128, 0);
         assert_eq!(b.pawn % 128, 1);
         assert_ne!(a.pawn, c.pawn);
-        let (ia, ib, ic) = (Influence::build(&a), Influence::build(&b), Influence::build(&c));
+        let (ia, ib, ic) = (
+            Influence::build(&a),
+            Influence::build(&b),
+            Influence::build(&c),
+        );
         let mut cache = PawnCache::new();
         assert!(!cache.select(&a, &ia).reused);
         assert!(!cache.select(&b, &ib).reused);
@@ -346,9 +519,21 @@ mod tests {
         let zero_group = position("7k/8/8/8/6P1/3P4/8/K7");
         let (ie, iz) = (Influence::build(&empty), Influence::build(&zero_group));
         let mut cache = PawnCache::new();
-        assert_eq!(cache.select(&empty, &ie), Selection { structure: PawnStructure::EMPTY, reused: true });
+        assert_eq!(
+            cache.select(&empty, &ie),
+            Selection {
+                structure: PawnStructure::EMPTY,
+                reused: true
+            }
+        );
         assert!(!cache.select(&zero_group, &iz).reused);
-        assert_eq!(cache.select(&empty, &ie), Selection { structure: PawnStructure::EMPTY, reused: false });
+        assert_eq!(
+            cache.select(&empty, &ie),
+            Selection {
+                structure: PawnStructure::EMPTY,
+                reused: false
+            }
+        );
         assert!(cache.select(&empty, &ie).reused);
         cache.clear();
         assert!(cache.select(&empty, &ie).reused);
@@ -362,15 +547,25 @@ mod tests {
         fn reflect(position: &Position) -> Position {
             let mut placement = String::new();
             for rank in (0..8).rev() {
-                if rank != 7 { placement.push('/'); }
+                if rank != 7 {
+                    placement.push('/');
+                }
                 let mut empty = 0u8;
                 for file in 0..8 {
                     let piece = position.board[((rank * 8 + file) ^ 56) as usize];
-                    if piece.is_empty() { empty += 1; continue; }
-                    if empty != 0 { placement.push((b'0' + empty) as char); empty = 0; }
+                    if piece.is_empty() {
+                        empty += 1;
+                        continue;
+                    }
+                    if empty != 0 {
+                        placement.push((b'0' + empty) as char);
+                        empty = 0;
+                    }
                     placement.push(Piece::new(piece.color().opponent(), piece.kind()).fen_char());
                 }
-                if empty != 0 { placement.push((b'0' + empty) as char); }
+                if empty != 0 {
+                    placement.push((b'0' + empty) as char);
+                }
             }
             super::tests::position(&placement)
         }
@@ -388,11 +583,21 @@ mod tests {
             let b = fresh(&mirrored, &Influence::build(&mirrored), [513, -39]);
             for side in [Color::White, Color::Black] {
                 let reflected_side = side.opponent();
-                assert_eq!(a.base_score[side.index()], b.base_score[reflected_side.index()]);
+                assert_eq!(
+                    a.base_score[side.index()],
+                    b.base_score[reflected_side.index()]
+                );
                 for &pawn in a.pawn_slice(side) {
                     let target = Square(pawn.square.0 ^ 56);
-                    let other = b.pawn_slice(reflected_side).iter().find(|p| p.square == target).unwrap();
-                    assert_eq!((pawn.candidate, pawn.weakness), (other.candidate, other.weakness));
+                    let other = b
+                        .pawn_slice(reflected_side)
+                        .iter()
+                        .find(|p| p.square == target)
+                        .unwrap();
+                    assert_eq!(
+                        (pawn.candidate, pawn.weakness),
+                        (other.candidate, other.weakness)
+                    );
                 }
             }
         }

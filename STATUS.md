@@ -376,5 +376,31 @@ fixtures. Its only native changes extract existing material/square interpolation
 and expose existing raw shelter components. Generic2c741929 and adapter1f5a0ceb
 retain separate source/build identities. The first external attempt failed a
 missing fixture version header before external execution; the corrected fresh
-attempt and original failure are both retained. These proposals are not yet
-integrated and carry no new performance result.
+attempt and original failure are both retained. The subsequent79-route source integration is recorded below; these isolated
+observations carry no new performance result.
+
+The79-operation observer source is now integrated. Fresh canonical adapter
+a9f6e9f6 passes4521 unique cases/86 units across73 whole released files after
+135 canonical native tests. Isolated1bce8aea passes54 strict replays/eight wire
+fixtures; fresh canonical generic9709f8e9 also passes54 strict replays/eight wire fixtures.
+Score-context, fresh/retained pawn and phase/subtotal routes share native owners.
+Retained cache construction uses a static miss-only builder, preserving cache-hit
+suppression; no state/layout was added. Remaining mandatory inventory is38
+operations/3152 cases; final own-PGO/cost/gameplay evidence stays separate.
+
+The separate profile_sum lookup prototype passes134 native tests, the exhaustive
+normalized-byte digit model, a strengthened10000-coordinate oracle,54 strict
+replays and eight interruption fixtures. Its generic balanced60-lifetime pilot
+independently reconciles1.109747% lower summed CPU medians (five lower, one
+higher; all six ranges overlap). Own54-case training and strict54/eight-wire regression now pass on
+f3562ff6; its matched PGO CPU comparison remains pending. No table source
+is adopted. The independent pressure-value table passes135 native tests,10000
+coordinate placements and54/eight-wire regression, but its60-lifetime generic
+pilot is0.311677% higher with all six ranges overlapping; it is parked without
+PGO or integration.
+
+The separate detailed forced-fresh proposal now passes137 native tests and
+81-operation/4637-case/92-unit diagnostic regression. Its two new complete
+evaluation routes use a single native finishing result, forced-fresh cache
+bypass and validated supplied pawn chronology. It is not integrated; ordinary
+optimized no-op observation/code-generation and own wire checks remain open.

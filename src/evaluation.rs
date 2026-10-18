@@ -2,7 +2,7 @@
 
 use crate::eval_basis::SQUARE_BASIS;
 use crate::position::{Phase, Position};
-use crate::types::{Color, PieceKind};
+use crate::types::{Color, PieceKind, Square};
 
 const MATERIAL_BASE: [[i32; 5]; 3] = [
     [66, 295, 310, 470, 880],
@@ -16,11 +16,63 @@ pub fn draw_preference(phase: Phase, cfd: i32) -> i32 {
         .div_euclid(1024)) as i32
 }
 
+/// Deterministic variation width from the public opponent-selectivity setting.
+/// The qualified setting domain is 0..=100; no random sequence is consumed.
+#[inline]
+pub fn variation_range(opponent_selectivity: i32) -> u32 {
+    let d = 100 - opponent_selectivity;
+    (d * d * d / 200 + 3 * d) as u32
+}
+
 /// Mathematical floor division, including negative values.
 #[inline]
 pub fn floor_div(value: i64, divisor: i64) -> i64 {
     debug_assert!(divisor > 0);
     value.div_euclid(divisor)
+}
+
+/// Root-phase material values. Percentages are bound to White/Black ownership.
+/// Phase components must be in 0..256 and sum to 256.
+pub fn material_values(phase: Phase, percentages: [[u16; 5]; 2]) -> [[i32; 5]; 2] {
+    assert!(
+        percentages.iter().flatten().all(|&value| value <= 1000),
+        "material percentages must be in 0..1000"
+    );
+    let mut values = [[0; 5]; 2];
+    for kind in 0..5 {
+        let base = blend(
+            phase,
+            [
+                MATERIAL_BASE[0][kind],
+                MATERIAL_BASE[1][kind],
+                MATERIAL_BASE[2][kind],
+            ],
+        );
+        for color in [Color::White, Color::Black] {
+            let c = color.index();
+            let weight = (1024 * percentages[c][kind] as i32 + 50) / 100;
+            values[c][kind] = (weight * base + 512) / 1024;
+        }
+    }
+    values
+}
+
+/// One oriented square adjustment, including king and empty/promotion-rank queries.
+/// Phase components must be in 0..256 and sum to 256; square must be in 0..=63.
+pub fn square_adjustment(phase: Phase, color: Color, kind: PieceKind, square: Square) -> i32 {
+    let oriented = if color == Color::White {
+        square.0 as usize
+    } else {
+        (square.0 ^ 56) as usize
+    };
+    blend(
+        phase,
+        [
+            SQUARE_BASIS[0][kind.index()][oriented] as i32,
+            SQUARE_BASIS[1][kind.index()][oriented] as i32,
+            SQUARE_BASIS[2][kind.index()][oriented] as i32,
+        ],
+    )
 }
 
 #[derive(Clone)]
@@ -36,44 +88,18 @@ pub struct RootContext {
 impl RootContext {
     /// Percentages are already bound to White/Black ownership, not moving side.
     pub fn new(root: &Position, percentages: [[u16; 5]; 2], average_depth: i32) -> Self {
-        assert!(
-            percentages.iter().flatten().all(|&value| value <= 1000),
-            "material percentages must be in 0..1000"
-        );
+        let phase = root.phase();
+        let values = material_values(phase, percentages);
         assert!(
             (-100..=100).contains(&average_depth),
             "average depth must be in -100..100"
         );
-        let phase = root.phase();
-        let mut values = [[0; 5]; 2];
         let mut squares = [[[0; 64]; 5]; 2];
-        for kind in 0..5 {
-            let base = blend(
-                phase,
-                [
-                    MATERIAL_BASE[0][kind],
-                    MATERIAL_BASE[1][kind],
-                    MATERIAL_BASE[2][kind],
-                ],
-            );
+        for kind in &PieceKind::ALL[..5] {
             for color in [Color::White, Color::Black] {
-                let c = color.index();
-                let weight = (1024 * percentages[c][kind] as i32 + 50) / 100;
-                values[c][kind] = (weight * base + 512) / 1024;
                 for square in 0..64 {
-                    let oriented = if color == Color::White {
-                        square
-                    } else {
-                        square ^ 56
-                    };
-                    squares[c][kind][square] = blend(
-                        phase,
-                        [
-                            SQUARE_BASIS[0][kind][oriented] as i32,
-                            SQUARE_BASIS[1][kind][oriented] as i32,
-                            SQUARE_BASIS[2][kind][oriented] as i32,
-                        ],
-                    ) as i16;
+                    squares[color.index()][kind.index()][square] =
+                        square_adjustment(phase, color, *kind, Square(square as u8)) as i16;
                 }
             }
         }
@@ -152,6 +178,17 @@ impl RootContext {
 
     /// Current-phase kings round once; a pawn-only position doubles both terms.
     pub fn square_balance_from(&self, position: &Position, nonking_sum: i32) -> i32 {
+        self.square_balance_from_phase(position, nonking_sum, position.phase())
+    }
+
+    /// Explicit current-phase variant; nonking_sum still belongs to this root.
+    /// Phase components must be in 0..256 and sum to 256.
+    pub fn square_balance_from_phase(
+        &self,
+        position: &Position,
+        nonking_sum: i32,
+        phase: Phase,
+    ) -> i32 {
         let mut king_differences = [0i32; 3];
         for color in [Color::White, Color::Black] {
             let sign = if color == Color::White { 1 } else { -1 };
@@ -165,7 +202,7 @@ impl RootContext {
                 king_differences[phase] += sign * SQUARE_BASIS[phase][5][oriented] as i32;
             }
         }
-        let mut result = nonking_sum + blend(position.phase(), king_differences);
+        let mut result = nonking_sum + blend(phase, king_differences);
         if position
             .counts
             .iter()

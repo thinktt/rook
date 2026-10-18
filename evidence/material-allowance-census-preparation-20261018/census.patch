@@ -1,0 +1,318 @@
+--- /dev/null
++++ b/src/bin/rook2-material-allowance-probe.rs
+@@ -0,0 +1,143 @@
++//! Ordinary King XBoard wire profile. No diagnostic JSON is accepted here.
++use rook2::host::{Command, Host, Record};
++use rook2::quiescence::Limits;
++use rook2::session::{Action, Error, Session};
++use rook2::wire::{self, Input};
++use std::io::{self, Write};
++use std::process::ExitCode;
++use std::time::{SystemTime, UNIX_EPOCH};
++
++struct WireHost<'a, W, E> {
++    input: &'a mut Input,
++    output: &'a mut W,
++    errors: &'a mut E,
++    seed_override: Option<u32>,
++    diagnostic_seed: bool,
++}
++impl<W: Write, E: Write> Host for WireHost<'_, W, E> {
++    fn acquire_seed(&mut self, _supplied: u32, entry: u32) -> io::Result<u32> {
++        if let Some(seed) = self.seed_override {
++            return Ok(seed);
++        }
++        let seconds = SystemTime::now()
++            .duration_since(UNIX_EPOCH)
++            .map_err(io::Error::other)?
++            .as_secs() as u32;
++        Ok(seconds.wrapping_add(entry))
++    }
++    fn started(&mut self, seed: u32) -> io::Result<()> {
++        if self.diagnostic_seed {
++            writeln!(self.errors, "KING_SEARCH_SEED seed={seed}")?;
++            self.errors.flush()?;
++        }
++        Ok(())
++    }
++    fn command(&mut self) -> io::Result<Option<Command>> {
++        self.input
++            .try_line()?
++            .map(|line| wire::search_command(&line))
++            .transpose()
++    }
++    fn publish(&mut self, record: Record) -> io::Result<()> {
++        self.output.write_all(record.wire().as_bytes())?;
++        self.output.flush()
++    }
++}
++
++enum Failure {
++    Fatal,
++    Message(String),
++}
++impl From<io::Error> for Failure {
++    fn from(error: io::Error) -> Self {
++        Self::Message(format!("rook2: {error}\n"))
++    }
++}
++impl From<Error> for Failure {
++    fn from(error: Error) -> Self {
++        match error {
++            Error::FatalEmptyRoot | Error::FatalKingVictim => Self::Fatal,
++            e => Self::Message(format!("rook2: {e:?}\n")),
++        }
++    }
++}
++
++fn run() -> Result<(), Failure> {
++    let mut diagnostic_seed = false;
++    let mut fine_work = false;
++    for option in std::env::args().skip(1) {
++        match option.as_str() {
++            "--diagnostic-seed-command" => diagnostic_seed = true,
++            "--work-clock=kingwcr" => {}
++            "--work-clock-post=work" => fine_work = true,
++            _ => {
++                return Err(Failure::Message(format!(
++                    "rook2: unsupported option: {option}\n"
++                )))
++            }
++        }
++    }
++    let mut input = Input::stdin()?;
++    let mut output = io::stdout().lock();
++    let mut errors = io::stderr().lock();
++    let mut session = Session::<true>::default();
++    while let Some(line) = input.line()? {
++        if diagnostic_seed {
++            if let Some(assignment) = wire::seed_assignment(&line) {
++                let value = assignment.map_err(|_| {
++                    Failure::Message("king-native: invalid diagnostic seed command\n".into())
++                })?;
++                session.seed_override = Some(value);
++                writeln!(output, "king_seed {value}")?;
++                output.flush()?;
++                continue;
++            }
++        }
++        match session.idle(&line)? {
++            Action::Quit => {
++                let (c, tags, evaluations) = session
++                    .diagnostic_material_allowance_census()
++                    .ok_or_else(|| io::Error::other("missing census stats"))?;
++                let path = std::env::var_os("ROOK2_MATERIAL_ALLOWANCE_PROBE")
++                    .ok_or_else(|| io::Error::other("missing private census file"))?;
++                let mut file = std::fs::OpenOptions::new()
++                    .write(true).create_new(true).open(path)?;
++                writeln!(file,
++                    "{{\"schema\":\"rook2-material-allowance-census-v1\",\"q_loops\":{},\"q_checked_loops\":{},\"q_nonempty_loops\":{},\"q_calls\":{},\"q_unique_keys\":{},\"q_old_endpoints\":{},\"q_lazy_endpoints\":{},\"ordinary_loops\":{},\"ordinary_checked_loops\":{},\"ordinary_nonempty_loops\":{},\"ordinary_calls\":{},\"ordinary_unique_keys\":{},\"ordinary_old_endpoints\":{},\"ordinary_lazy_endpoints\":{},\"q_calls_by_victim\":{:?},\"q_unique_by_victim\":{:?},\"ordinary_calls_by_victim\":{:?},\"ordinary_unique_by_victim\":{:?},\"full\":{},\"fast\":{}}}",
++                    c[0],c[1],c[2],c[3],c[4],c[5],c[6],
++                    c[7],c[8],c[9],c[10],c[11],c[12],c[13],
++                    tags[0],tags[1],tags[2],tags[3],evaluations[0],evaluations[1])?;
++                return Ok(());
++            }
++            Action::Reply(replies) => {
++                for reply in replies {
++                    output.write_all(reply.as_bytes())?;
++                }
++                output.flush()?;
++            }
++            Action::Search => {
++                let host = WireHost {
++                    input: &mut input,
++                    output: &mut output,
++                    errors: &mut errors,
++                    seed_override: session.seed_override,
++                    diagnostic_seed,
++                };
++                let (result, _) = session.go_live(host, 0, Limits::default(), 62, fine_work);
++                result?;
++            }
++        }
++    }
++    Ok(())
++}
++
++fn main() -> ExitCode {
++    match run() {
++        Ok(()) => ExitCode::SUCCESS,
++        Err(Failure::Fatal) => ExitCode::from(1),
++        Err(Failure::Message(message)) => {
++            let _ = io::stderr().write_all(message.as_bytes());
++            ExitCode::from(1)
++        }
++    }
++}
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -614,6 +614,10 @@
+ 
+         movegen::generate_legal(&position, &mut self.candidates[p]);
+         let count = self.candidates[p].len;
++        let mut allowance_seen = 0u16;
++        if DIAGNOSTICS {
++            self.stats.allowance_ordinary.begin(checked);
++        }
+         if DIAGNOSTICS {
+             self.stats.generated += count as u64;
+         }
+@@ -735,7 +739,7 @@
+                 } else {
+                     false
+                 };
+-                Some(policy::frontier_estimate(
++                Some(policy::frontier_estimate_observed(
+                     &position,
+                     &self.evaluator.root,
+                     movement,
+@@ -743,6 +747,13 @@
+                     evaluation.score,
+                     node.retained.positional,
+                     node.retained.pawn_progress,
++                    |victim| {
++                        if DIAGNOSTICS {
++                            self.stats
++                                .allowance_ordinary
++                                .observe(&mut allowance_seen, victim);
++                        }
++                    },
+                 ))
+             } else {
+                 None
+--- a/src/ordinary_policy.rs
++++ b/src/ordinary_policy.rs
+@@ -183,10 +183,27 @@
+     positional: i32,
+     progress: i32,
+ ) -> i32 {
++    frontier_estimate_observed(
++        position, root, movement, checking, score, positional, progress, |_| {},
++    )
++}
++
++/// The observer runs only on the original occupied ordinary-capture branch.
++pub(crate) fn frontier_estimate_observed<F: FnOnce(crate::types::Piece)>(
++    position: &Position,
++    root: &RootContext,
++    movement: Move,
++    checking: bool,
++    score: i32,
++    positional: i32,
++    progress: i32,
++    observer: F,
++) -> i32 {
+     if movement.kind() != MoveKind::Ordinary || checking {
+         return 10000;
+     }
+     if !position.board[movement.to().0 as usize].is_empty() {
++        observer(position.board[movement.to().0 as usize]);
+         return score
+             + quiescence_policy::allowance(root, position, &movement, positional, progress);
+     }
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -44,8 +44,51 @@
+     HostIo(std::io::ErrorKind),
+ }
+ 
++/// Diagnostic source-demand counts, never cached material values.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub struct AllowanceLoopStats {
++    pub loops: u64,
++    pub checked_loops: u64,
++    pub nonempty_loops: u64,
++    pub calls: u64,
++    pub unique_keys: u64,
++    pub old_endpoints: u64,
++    pub lazy_endpoints: u64,
++    pub calls_by_victim: [u64; 10],
++    pub unique_by_victim: [u64; 10],
++}
++
++impl AllowanceLoopStats {
++    pub(crate) fn begin(&mut self, checked: bool) {
++        self.loops += 1;
++        self.checked_loops += u64::from(checked);
++    }
++
++    pub(crate) fn observe(&mut self, seen: &mut u16, victim: crate::types::Piece) {
++        // Actual occupied destination: color*5 + Pawn/Knight/Bishop/Rook/Queen.
++        // The original allowance caller excludes empty/king and special moves.
++        let tag = victim.color().index() * 5 + victim.kind().index();
++        let bit = 1u16 << tag;
++        self.calls += 1;
++        self.old_endpoints += 2;
++        self.calls_by_victim[tag] += 1;
++        if *seen == 0 {
++            self.nonempty_loops += 1;
++            self.lazy_endpoints += 1; // One hypothetical lazy parent endpoint.
++        }
++        if *seen & bit == 0 {
++            *seen |= bit;
++            self.unique_keys += 1;
++            self.unique_by_victim[tag] += 1;
++            self.lazy_endpoints += 1; // One hypothetical lazy after endpoint.
++        }
++    }
++}
++
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+ pub struct Stats {
++    pub allowance_q: AllowanceLoopStats,
++    pub allowance_ordinary: AllowanceLoopStats,
+     pub nodes: u64,
+     pub generated: u64,
+     pub examined: u64,
+@@ -231,6 +274,10 @@
+             tactical::generate(&position, &mut self.candidates[ply]);
+         }
+         let count = self.candidates[ply].len;
++        let mut allowance_seen = 0u16;
++        if DIAGNOSTICS {
++            self.stats.allowance_q.begin(checked);
++        }
+         if DIAGNOSTICS {
+             self.stats.generated += count as u64;
+         }
+@@ -271,6 +318,9 @@
+                 );
+                 let mut forced = special;
+                 if !special && !victim.is_empty() {
++                    if DIAGNOSTICS {
++                        self.stats.allowance_q.observe(&mut allowance_seen, victim);
++                    }
+                     let estimate = standing
+                         + policy::allowance(
+                             &self.evaluator.root,
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -135,6 +135,28 @@
+ }
+ 
+ impl<const D: bool> Session<D> {
++    /// Private diagnostic wrapper transport; counts for the last search segment.
++    pub fn diagnostic_material_allowance_census(
++        &self,
++    ) -> Option<([u64; 14], [[u64; 10]; 4], [u64; 2])> {
++        self.search.as_ref().map(|search| {
++            let q = search.stats.allowance_q;
++            let o = search.stats.allowance_ordinary;
++            (
++                [
++                    q.loops, q.checked_loops, q.nonempty_loops, q.calls,
++                    q.unique_keys, q.old_endpoints, q.lazy_endpoints,
++                    o.loops, o.checked_loops, o.nonempty_loops, o.calls,
++                    o.unique_keys, o.old_endpoints, o.lazy_endpoints,
++                ],
++                [
++                    q.calls_by_victim, q.unique_by_victim,
++                    o.calls_by_victim, o.unique_by_victim,
++                ],
++                [search.evaluator.stats.full, search.evaluator.stats.fast],
++            )
++        })
++    }
+     pub fn position(&self) -> Position {
+         *self.states.last().unwrap()
+     }

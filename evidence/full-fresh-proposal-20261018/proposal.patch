@@ -1,0 +1,486 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -229,6 +229,15 @@
+     }
+ }
+ 
++/// Cold full-evaluation details observed from the actual component/finish path.
++/// This record is not stored in nodes or returned by ordinary evaluation.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct FullDetails {
++    pub components: Components,
++    pub base: i32,
++    pub finished: endgame::Finished,
++}
++
+ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
+     pub root: RootContext,
+     pub parameters: Parameters,
+@@ -279,7 +288,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, _>(node, influence, in_check, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -289,7 +298,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _>(node, influence, in_check, observer)
++        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -298,14 +307,26 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _>(node, influence, in_check, observer)
+-    }
+-    fn full_impl<const FRESH: bool, F: FnOnce(Components)>(
++        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
++    }
++    /// Forced-fresh observation includes the single native finishing result.
++    /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
++    pub fn fresh_detailed_observed<F: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+         in_check: bool,
+         observer: F,
++    ) -> Evaluation {
++        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
++    }
++    fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        &mut self,
++        node: &mut Node,
++        influence: &Influence,
++        in_check: bool,
++        observer: F,
++        details: D,
+     ) -> Evaluation {
+         let position = &node.position;
+         let phase = position.phase();
+@@ -393,7 +414,14 @@
+         }
+         self.stats.relation_queries += queries;
+         observer(components);
+-        self.finish(position, components.base(), in_check, progress, queries)
++        let base = components.base();
++        self.finish_observed(position, base, in_check, progress, queries, |finished| {
++            details(FullDetails {
++                components,
++                base,
++                finished,
++            });
++        })
+     }
+     fn finish(
+         &self,
+@@ -402,6 +430,17 @@
+         checked: bool,
+         progress: i32,
+         queries: u64,
++    ) -> Evaluation {
++        self.finish_observed(position, base, checked, progress, queries, |_| {})
++    }
++    fn finish_observed<F: FnOnce(endgame::Finished)>(
++        &self,
++        position: &Position,
++        base: i32,
++        checked: bool,
++        progress: i32,
++        queries: u64,
++        observer: F,
+     ) -> Evaluation {
+         let value = endgame::finish(
+             position,
+@@ -414,6 +453,7 @@
+             checked,
+             progress,
+         );
++        observer(value);
+         Evaluation {
+             score: value.score,
+             lower: value.lower,
+@@ -595,4 +635,71 @@
+         assert_eq!(quiet.stats.full, 0);
+         assert_eq!(quiet.stats.relation_queries, a.relation_queries);
+     }
+-}
++
++    #[test]
++    fn fresh_details_observe_one_native_result_and_preserve_components_apis() {
++        let position = Position::from_fen(START).unwrap();
++        let influence = Influence::build(&position);
++        let mut evaluator = Evaluator::<false>::new(&position);
++        evaluator.parameters.draw = 10000;
++        evaluator.parameters.opponent_selectivity = 49;
++        evaluator.begin_search(&position);
++        let mut node = Node::root(position, &evaluator.root);
++        let mut calls = 0;
++        let mut observed = None;
++        let result = evaluator.fresh_detailed_observed(&mut node, &influence, false, |details| {
++            calls += 1;
++            observed = Some(details);
++        });
++        let details = observed.unwrap();
++        assert_eq!(calls, 1);
++        assert_eq!(details.base, 6);
++        assert_eq!(details.base, details.components.base());
++        assert_eq!((result.score, result.lower, result.upper),
++            (details.finished.score, details.finished.lower, details.finished.upper));
++        assert_eq!(node.retained.positional, details.components.positional());
++        assert_eq!(node.retained.pawn_progress, details.components.pawn_progress);
++        assert_eq!(result.relation_queries, 10);
++        let mut old_node = Node::root(position, &evaluator.root);
++        let mut old_components = None;
++        let old_result = evaluator.fresh_observed(&mut old_node, &influence, false,
++            |components| old_components = Some(components));
++        assert_eq!(old_components, Some(details.components));
++        assert_eq!((old_result, old_node.retained), (result, node.retained));
++        let full_result = evaluator.full_observed(&mut old_node, &influence, false,
++            |components| assert_eq!(components, details.components));
++        assert_eq!(full_result, result);
++    }
++
++    #[test]
++    fn detailed_fresh_bypasses_zero_and_full_identity_matches_without_populating_cache() {
++        let first = Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
++        let collision = Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
++        assert_eq!(first.pawn, collision.pawn);
++        let first_map = Influence::build(&first);
++        let collision_map = Influence::build(&collision);
++        let mut evaluator = Evaluator::<true>::new(&first);
++        let mut first_node = Node::root(first, &evaluator.root);
++        evaluator.full(&mut first_node, &first_map, false);
++        let retained = evaluator.pawns.select(&first, &first_map).structure;
++        let before = evaluator.stats;
++        let mut node = Node::root(collision, &evaluator.root);
++        evaluator.fresh_detailed_observed(&mut node, &collision_map, false, |_| {});
++        assert_eq!(evaluator.stats.pawn_reuses, before.pawn_reuses);
++        assert_eq!(evaluator.stats.pawn_replacements, before.pawn_replacements + 1);
++        let after = evaluator.pawns.select(&collision, &collision_map);
++        assert!(after.reused);
++        assert_eq!(after.structure, retained);
++        assert_ne!(after.structure, pawn_structure::fresh(&collision, &collision_map, [1024; 2]));
++
++        let empty = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        assert_eq!(empty.pawn, 0);
++        let map = Influence::build(&empty);
++        let mut evaluator = Evaluator::<true>::new(&empty);
++        let mut node = Node::root(empty, &evaluator.root);
++        evaluator.fresh_detailed_observed(&mut node, &map, false, |_| {});
++        assert_eq!((evaluator.stats.pawn_reuses, evaluator.stats.pawn_replacements), (0, 1));
++        evaluator.full(&mut node, &map, false);
++        assert_eq!(evaluator.stats.pawn_reuses, 1);
++    }
++}
+--- /dev/null
++++ b/diagnostic/src/fresh_evaluation.rs
+@@ -0,0 +1,282 @@
++//! Forced-fresh evaluation transport. Numerical composition stays native.
++use super::{array, color, integer, object, pawn_progress, positions, scores, Result};
++use rook2::{
++    evaluator::{Components, Evaluator, FullDetails, Node, Parameters},
++    influence::Influence,
++    movegen,
++    position::Position,
++    types::{Color, PieceKind},
++};
++use serde_json::{json, Value};
++
++struct Query {
++    root: Position,
++    current: Position,
++    parameters: Parameters,
++}
++
++fn apply_pawn_order(position: &mut Position, value: &Value) -> Result<()> {
++    let order = pawn_progress::candidates(position, value)?;
++    for side in [Color::White, Color::Black] {
++        let index = side.index();
++        if order[index].len() != position.counts[index][PieceKind::Pawn.index()] as usize {
++            return Err("pawn order must contain every current pawn exactly once".into());
++        }
++    }
++    // Native Position groups P,N,B,R,Q,K. Only the validated current pawn
++    // chronology changes: board, counts, attack planes and identities do not.
++    for side in [Color::White, Color::Black] {
++        let index = side.index();
++        position.squares[index][..order[index].len()].copy_from_slice(&order[index]);
++    }
++    position.validate()
++}
++
++impl Query {
++    fn parse(query: &Value, final_score: bool) -> Result<Self> {
++        let mut fields = vec![
++            "rootPlacement", "placement", "rootSide", "sideToMove",
++            "percentages", "averageDepth", "pawnOrder",
++        ];
++        if final_score {
++            fields.extend(["cfd", "sop", "reversiblePlies"]);
++        }
++        object(query, &fields)?;
++        let mut root = positions::placement(&query["rootPlacement"], true)?;
++        let mut current = positions::placement(&query["placement"], true)?;
++        root.side = color(&query["rootSide"])?;
++        current.side = color(&query["sideToMove"])?;
++        let mut parameters = Parameters::default();
++        parameters.average_depth = integer(&query["averageDepth"], -100, 100)?;
++        let percentages = &query["percentages"];
++        object(percentages, &["own", "opponent"])?;
++        for (owner, target) in [
++            ("own", &mut parameters.own),
++            ("opponent", &mut parameters.opponent),
++        ] {
++            object(&percentages[owner], &scores::NAMES)?;
++            for (index, name) in scores::NAMES.iter().enumerate() {
++                target[index] = integer(&percentages[owner][*name], 0, 1000)?;
++            }
++        }
++        if final_score {
++            parameters.draw = integer(&query["cfd"], -10_000, 10_000)?;
++            parameters.opponent_selectivity = integer(&query["sop"], 0, 100)?;
++            current.halfmove = integer(&query["reversiblePlies"], 0, 255)? as u8;
++        }
++        apply_pawn_order(&mut current, &query["pawnOrder"])?;
++        Ok(Self { root, current, parameters })
++    }
++
++    fn observe(self, final_score: bool) -> Value {
++        let mut evaluator = Evaluator::<true>::new(&self.root);
++        evaluator.parameters = self.parameters;
++        evaluator.begin_search(&self.root);
++        let mut node = Node::root(self.current, &evaluator.root);
++        let checked = movegen::in_check(&self.current, self.current.side);
++        let influence = Influence::build(&self.current);
++        let mut details = None;
++        let evaluation = evaluator.fresh_detailed_observed(
++            &mut node, &influence, checked, |value| details = Some(value),
++        );
++        let FullDetails { components, base, finished } = details.expect("fresh evaluation observes its result once");
++        let subtotal = json!({
++            "rootPhase":positions::phase_value(evaluator.root.phase),
++            "currentPhase":positions::phase_value(self.current.phase()),
++            "inCheck":checked,"components":components_output(components),
++            "positionalSubtotal":node.retained.positional,"baseScore":base,
++            "retained":{"positionalSubtotal":node.retained.positional,
++                "pawnProgress":node.retained.pawn_progress,"evaluationAge":node.retained.age},
++            "relationQueries":evaluation.relation_queries,
++        });
++        if !final_score {
++            return subtotal;
++        }
++        // These values are produced by the actual native finishing call. The
++        // standalone supplied finalScore late-input restriction does not apply.
++        json!({"subtotal":subtotal,
++            "identity":{"primary":self.current.primary,"secondary":self.current.secondary,
++                "pawn":self.current.pawn,"pawnGroup":self.current.pawn % 128},
++            "variationIdentity":self.current.primary ^ self.current.secondary,
++            "drawPreference":evaluator.draw_preference,"variationRange":evaluator.variation_range,
++            "adjustedBase":finished.adjusted_base,"lateEndgame":finished.late_score,
++            "scaledScore":finished.scaled_score,"score":finished.score,
++            "lowerBound":finished.lower,"upperBound":finished.upper})
++    }
++}
++
++fn components_output(components: Components) -> Value {
++    json!({"material":components.material,"squareBalance":components.squares,
++        "pawnStructure":components.pawn_structure,"pawnProgress":components.pawn_progress,
++        "activity":components.activity,"centralInfluence":components.central,
++        "kingShelter":components.shelter,"bishopCoordination":components.bishops,
++        "openingPatterns":components.patterns,"tempo":components.tempo})
++}
++
++pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
++    let final_score = match operation {
++        "evaluation.freshSubtotal" => false,
++        "evaluation.freshScore" => true,
++        _ => return Err(format!("unsupported fresh-evaluation operation: {operation}")),
++    };
++    object(input, &["queries"])?;
++    // No evaluator/cache/influence work starts until every supplied query has
++    // passed its complete schema, percentage and semantic order validation.
++    let queries = array(&input["queries"], 1, 512)?.iter()
++        .map(|query| Query::parse(query, final_score)).collect::<Result<Vec<_>>>()?;
++    let results: Vec<_> = queries.into_iter().map(|query| query.observe(final_score)).collect();
++    Ok(json!({"results":results}))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
++    const TIED: &str = "8/P1P5/8/8/3K3k/8/p7/8";
++
++    fn query(final_score: bool) -> Value {
++        let percentages: serde_json::Map<String, Value> = scores::NAMES.iter()
++            .map(|name| (name.to_string(), json!(100))).collect();
++        let mut query = json!({"rootPlacement":START,"placement":START,
++            "rootSide":"white","sideToMove":"white","averageDepth":0,
++            "percentages":{"own":percentages.clone(),"opponent":percentages},
++            "pawnOrder":{"white":["a2","b2","c2","d2","e2","f2","g2","h2"],
++                "black":["a7","b7","c7","d7","e7","f7","g7","h7"]}});
++        if final_score {
++            query["cfd"] = json!(0);
++            query["sop"] = json!(100);
++            query["reversiblePlies"] = json!(0);
++        }
++        query
++    }
++
++    fn current(query: &mut Value, placement: &str, white: &[&str], black: &[&str]) {
++        query["placement"] = json!(placement);
++        query["pawnOrder"] = json!({"white":white,"black":black});
++    }
++
++    fn result(operation: &str, query: Value) -> Value {
++        dispatch(operation, &json!({"queries":[query]})).unwrap()["results"][0].clone()
++    }
++
++    #[test]
++    fn fresh_subtotal_exposes_all_native_terms_retained_state_and_current_tempo() {
++        let q = query(false);
++        let white = result("evaluation.freshSubtotal", q.clone());
++        assert_eq!(white["components"], json!({"material":0,"squareBalance":0,
++            "pawnStructure":0,"pawnProgress":0,"activity":0,"centralInfluence":0,
++            "kingShelter":0,"bishopCoordination":0,"openingPatterns":0,"tempo":6}));
++        assert_eq!(white["baseScore"], 6);
++        assert_eq!(white["positionalSubtotal"], 0);
++        assert_eq!(white["retained"], json!({"positionalSubtotal":0,"pawnProgress":0,"evaluationAge":0}));
++        assert_eq!(white["relationQueries"], 10);
++        let mut black = q;
++        black["sideToMove"] = json!("black");
++        let black = result("evaluation.freshSubtotal", black);
++        assert_eq!(black["components"]["tempo"], -6);
++        assert_eq!(black["baseScore"], -6);
++        assert_eq!(black["retained"], white["retained"]);
++        assert_eq!(black["relationQueries"], 10);
++    }
++
++    #[test]
++    fn explicit_pawn_order_changes_actual_progress_without_changing_identity_or_root() {
++        let mut q = query(true);
++        current(&mut q, TIED, &["a7","c7"], &["a2"]);
++        let mut reversed = q.clone();
++        reversed["pawnOrder"]["white"] = json!(["c7","a7"]);
++        let out = dispatch("evaluation.freshScore", &json!({"queries":[q.clone(),reversed,q]})).unwrap();
++        let results = &out["results"];
++        assert_eq!(results[0]["identity"], results[1]["identity"]);
++        assert_eq!(results[0]["variationIdentity"], results[1]["variationIdentity"]);
++        assert_eq!(results[0]["subtotal"]["rootPhase"], json!({"opening":256,"middlegame":0,"endgame":0}));
++        assert_eq!(results[0]["subtotal"]["currentPhase"], json!({"opening":0,"middlegame":0,"endgame":256}));
++        assert_eq!(results[0]["subtotal"]["components"]["pawnProgress"].as_i64().unwrap()
++            - results[1]["subtotal"]["components"]["pawnProgress"].as_i64().unwrap(), 300);
++        assert_eq!(results[0]["subtotal"]["positionalSubtotal"], results[1]["subtotal"]["positionalSubtotal"]);
++        assert_eq!(results[0], results[2]);
++    }
++
++    #[test]
++    fn produced_late_base_is_not_rejected_by_the_supplied_final_score_domain() {
++        // Released fresh-score-001: produced late-phase adjusted base is 11742.
++        let mut q = query(true);
++        current(&mut q, TIED, &["a7","c7"], &["a2"]);
++        q["averageDepth"] = json!(-100);
++        q["cfd"] = json!(10000);
++        q["sop"] = json!(49);
++        q["reversiblePlies"] = json!(12);
++        let out = result("evaluation.freshScore", q);
++        assert_eq!(out["subtotal"]["baseScore"], 1914);
++        assert_eq!(out["drawPreference"], 10000);
++        assert_eq!(out["variationRange"], 816);
++        assert_eq!(out["adjustedBase"], 11742);
++        assert_eq!(out["lateEndgame"], 9907);
++        assert_eq!(out["scaledScore"], 7807);
++        assert_eq!(out["score"], 7807);
++        assert_eq!(out["subtotal"]["relationQueries"], 0);
++    }
++
++    #[test]
++    fn geometric_check_and_reversible_zero_keep_produced_retained_pair_and_bounds() {
++        let mut q = query(true);
++        current(&mut q, "7k/8/8/8/8/8/1p6/K7", &[], &["b2"]);
++        q["averageDepth"] = json!(-100);
++        q["cfd"] = json!(101);
++        q["sop"] = json!(99);
++        q["reversiblePlies"] = json!(100);
++        let out = result("evaluation.freshScore", q);
++        assert_eq!(out["subtotal"]["inCheck"], true);
++        assert_eq!(out["subtotal"]["components"]["tempo"], 0);
++        assert_eq!(out["score"], 0);
++        assert_eq!(out["lowerBound"], -10000);
++        assert_eq!(out["upperBound"], 0);
++        assert_eq!(out["subtotal"]["retained"], json!({"positionalSubtotal":10,"pawnProgress":-204,"evaluationAge":0}));
++    }
++
++    #[test]
++    fn schema_validates_ignored_percentages_complete_orders_and_query_limits() {
++        for field in ["phase","rootPhase","inCheck","baseScore","drawPreference","variationIdentity"] {
++            let mut q = query(true);
++            q[field] = json!(0);
++            assert!(dispatch("evaluation.freshScore", &json!({"queries":[q]})).is_err());
++        }
++        for owner in ["own","opponent"] {
++            let mut q = query(false);
++            q["percentages"][owner]["king"] = json!(1001);
++            assert!(dispatch("evaluation.freshSubtotal", &json!({"queries":[q.clone()]})).is_err());
++            q["percentages"][owner]["king"] = json!(1000);
++            assert!(Query::parse(&q, false).is_ok());
++        }
++        let mut invalid = query(true);
++        invalid["pawnOrder"]["white"] = json!(["a2","a2","c2","d2","e2","f2","g2","h2"]);
++        assert!(dispatch("evaluation.freshScore", &json!({"queries":[query(true),invalid]})).is_err());
++        let mut missing = query(false);
++        missing["pawnOrder"]["black"] = json!([]);
++        assert!(dispatch("evaluation.freshSubtotal", &json!({"queries":[missing]})).is_err());
++        assert!(dispatch("evaluation.freshScore", &json!({"queries":[]})).is_err());
++        assert!(dispatch("evaluation.freshScore", &json!({"queries":vec![query(true);513]})).is_err());
++        let mut broad = query(false);
++        current(&mut broad, "8/8/8/8/8/8/k7/K7", &[], &[]);
++        let out = result("evaluation.freshSubtotal", broad);
++        assert_eq!(out["inCheck"], true);
++        assert_eq!(out["components"]["tempo"], 0);
++    }
++
++    #[test]
++    fn identities_come_only_from_current_placement_across_independent_contexts() {
++        let q = query(true);
++        let mut altered = q.clone();
++        altered["rootPlacement"] = json!("7k/8/8/8/8/8/8/K7");
++        altered["rootSide"] = json!("black");
++        altered["sideToMove"] = json!("black");
++        altered["reversiblePlies"] = json!(255);
++        let out = dispatch("evaluation.freshScore", &json!({"queries":[q.clone(),altered,q]})).unwrap();
++        assert_eq!(out["results"][0]["identity"], out["results"][1]["identity"]);
++        assert_eq!(out["results"][0]["variationIdentity"], out["results"][1]["variationIdentity"]);
++        assert_eq!(out["results"][1]["subtotal"]["rootPhase"], json!({"opening":0,"middlegame":0,"endgame":256}));
++        assert_eq!(out["results"][1]["subtotal"]["currentPhase"], out["results"][0]["subtotal"]["currentPhase"]);
++        assert_eq!(out["results"][0], out["results"][2]);
++    }
++}
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -16,6 +16,7 @@
+ mod candidate_order;
+ mod endgame_bounds;
+ mod endings;
++mod fresh_evaluation;
+ mod king_shelter;
+ mod learned;
+ mod ledger;
+@@ -119,6 +120,9 @@
+         | "evaluation.endgameAdjust"
+         | "evaluation.fortressBounds"
+         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
++        "evaluation.freshSubtotal" | "evaluation.freshScore" => {
++            fresh_evaluation::dispatch(operation, input)
++        }
+         "evaluation.scoreContext" | "evaluation.personalityScore" | "evaluation.positionScore" => {
+             score_context::dispatch(operation, input)
+         }

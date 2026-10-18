@@ -1,0 +1,78 @@
+--- a/src/pawn_structure.rs
++++ b/src/pawn_structure.rs
+@@ -76,10 +76,8 @@
+     pub fn clear(&mut self) { self.groups.fill(Retained::EMPTY); }
+ 
+     pub fn select(&mut self, position: &Position, influence: &Influence) -> Selection {
+-        self.select_with_order(position, influence, [
+-            position.piece_squares(Color::White, PieceKind::Pawn),
+-            position.piece_squares(Color::Black, PieceKind::Pawn),
+-        ])
++        // Obtain production pawn chronology only after a full-identity miss.
++        self.select_with_builder(position.pawn, || fresh(position, influence, [1024; 2]))
+     }
+ 
+     /// Supplied orders must contain every current pawn of their color once.
+@@ -91,12 +89,23 @@
+         influence: &Influence,
+         order: [&[Square]; 2],
+     ) -> Selection {
+-        let retained = &mut self.groups[(position.pawn % 128) as usize];
+-        if retained.identity == position.pawn {
++        self.select_with_builder(position.pawn, || {
++            fresh_with_order(position, influence, order, [1024; 2])
++        })
++    }
++
++    // Static, allocation-free dispatch keeps the probe/store rule shared while
++    // keeping fresh construction, including pawn-list acquisition, on misses.
++    fn select_with_builder<F>(&mut self, identity: u32, build: F) -> Selection
++    where
++        F: FnOnce() -> PawnStructure,
++    {
++        let retained = &mut self.groups[(identity % 128) as usize];
++        if retained.identity == identity {
+             return Selection { structure: retained.structure, reused: true };
+         }
+-        let structure = fresh_with_order(position, influence, order, [1024; 2]);
+-        *retained = Retained { identity: position.pawn, structure };
++        let structure = build();
++        *retained = Retained { identity, structure };
+         Selection { structure, reused: false }
+     }
+ }
+@@ -219,6 +228,34 @@
+     }
+ 
+     #[test]
++    fn cache_probe_invokes_fresh_builder_only_on_full_identity_miss() {
++        let mut cache = PawnCache::new();
++        assert!(cache.select_with_builder(0, || panic!("zero identity must reuse")).reused);
++        let mut builds = 0;
++        assert!(!cache.select_with_builder(1, || {
++            builds += 1;
++            PawnStructure::EMPTY
++        }).reused);
++        assert!(cache.select_with_builder(1, || panic!("identity hit must reuse")).reused);
++        assert!(!cache.select_with_builder(2, || {
++            builds += 1;
++            PawnStructure::EMPTY
++        }).reused);
++        assert!(cache.select_with_builder(1, || panic!("other group must preserve hit")).reused);
++        assert!(!cache.select_with_builder(129, || {
++            builds += 1;
++            PawnStructure::EMPTY
++        }).reused);
++        assert!(!cache.select_with_builder(1, || {
++            builds += 1;
++            PawnStructure::EMPTY
++        }).reused);
++        assert_eq!(builds, 4);
++        cache.clear();
++        assert!(cache.select_with_builder(0, || panic!("clear restores zero reuse")).reused);
++    }
++
++    #[test]
+     fn support_and_per_pawn_doubled_penalties_use_signed_floor() {
+         let initial = evaluated("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", [1024; 2]);
+         assert_eq!(initial.base_score, [16, 16]);

@@ -14,10 +14,10 @@ tactical search, a work-timed root controller and persistent ordinary session.
 The `rook2` executable serves the live King XBoard byte stream, including
 search-time controls/status, natural seed acquisition, gate seed commands and
 fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implements
-59 mandatory operations with3236 external cases so far. Complete diagnostics, full gameplay and
+79 mandatory operations with4521 external cases so far. Complete diagnostics, full gameplay and
 performance qualification remain outstanding. Current generation reuse and
 compiler-PGO experiments retain exact builds, strict replay results and balanced
-whole-native CPU pilots. Current canonical8d9dddc5 includes static piece-kind
+whole-native CPU pilots. The latest measured PGO checkpoint8d9dddc5 includes static piece-kind
 activity kernels and passes54 strict replays and eight interruption fixtures.
 Its independently reconciled216-lifetime54 CPU collection totals81.131004s
 in case medians,0.852305% lower than previous8c4619a7. Final qualification remains open.

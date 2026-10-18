@@ -8,7 +8,7 @@ use rook2::{
 };
 use serde_json::{json, Value};
 
-fn candidates(position: &Position, value: &Value) -> Result<[Vec<Square>; 2]> {
+pub(super) fn candidates(position: &Position, value: &Value) -> Result<[Vec<Square>; 2]> {
     object(value, &["white", "black"])?;
     let mut result = [Vec::new(), Vec::new()];
     for (side, name) in [(Color::White, "white"), (Color::Black, "black")] {

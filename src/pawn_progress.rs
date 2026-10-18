@@ -247,6 +247,27 @@ pub struct Progress {
     pub weighted: i32,
 }
 
+/// Select surviving current pawns in retained descriptor order. Missing or
+/// recolored squares are skipped; current pawns absent from the retained entry
+/// are never appended. The fixed buffer covers the native eight-pawn capacity.
+pub fn current_candidates(
+    position: &Position,
+    structure: &PawnStructure,
+    side: Color,
+    selected: &mut [Square; 8],
+) -> usize {
+    let mut len = 0;
+    for descriptor in structure.pawn_slice(side) {
+        if descriptor.candidate
+            && position.board[descriptor.square.0 as usize] == Piece::new(side, PieceKind::Pawn)
+        {
+            selected[len] = descriptor.square;
+            len += 1;
+        }
+    }
+    len
+}
+
 pub fn selected(
     position: &Position,
     map: &Influence,
@@ -259,15 +280,7 @@ pub fn selected(
     let mut lengths = [0; 2];
     for side in [Color::White, Color::Black] {
         let mut selected = [Square(0); 8];
-        let mut len = 0;
-        for descriptor in structure.pawn_slice(side) {
-            if descriptor.candidate
-                && position.board[descriptor.square.0 as usize] == Piece::new(side, PieceKind::Pawn)
-            {
-                selected[len] = descriptor.square;
-                len += 1;
-            }
-        }
+        let len = current_candidates(position, structure, side, &mut selected);
         lengths[side.index()] = len;
         paths[side.index()] = candidates(position, map, side, &selected[..len]);
     }

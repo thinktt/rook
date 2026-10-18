@@ -20,7 +20,7 @@ fn bare() -> Position {
     Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap()
 }
 
-fn counts(value: &Value) -> Result<[[u8; 6]; 2]> {
+pub(super) fn counts(value: &Value) -> Result<[[u8; 6]; 2]> {
     object(value, &moves::COLORS)?;
     let mut result = [[0u8; 6]; 2];
     let mut total = 0u32;

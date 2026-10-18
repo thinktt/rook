@@ -197,9 +197,8 @@ impl Parameters {
             structure: pair(10),
         };
         let draw = crate::evaluation::draw_preference(root.phase, self.draw);
-        let d = 100 - self.opponent_selectivity;
-        let range = d * d * d / 200 + 3 * d;
-        (root, weights, draw, range as u32)
+        let range = crate::evaluation::variation_range(self.opponent_selectivity);
+        (root, weights, draw, range)
     }
 }
 

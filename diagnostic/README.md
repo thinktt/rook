@@ -7,7 +7,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current59 operations cover time schedule/allowance, parameters and output
+The current79 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -19,7 +19,9 @@ local move extensions; pawn spread, pawnless potential, minor mating geometry,
 composed endgame material and pawn-race classification; fresh personality
 coefficient conversion/central balance and ordinary/final score finishing;
 selected pawn-race/fortress bounds, rook reductions and full endgame adjustment;
-material-threat production and board-derived pressure/threat/cutoff composition.
+material-threat production and board-derived pressure/threat/cutoff composition;
+root material/square and raw shelter observations; score-context production;
+fresh/retained pawn structure/candidates and fresh phase/subtotals.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -43,14 +45,15 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current3236-case external result comprises49 complete fixture files plus
-25 unchanged selected cases from two partially supported files. All49 adapter
-unit tests pass. Frozen adapter SHA256 is
-`ef406db79b7e3f270250fc6be0bc146160208c5b8f1bd9ccd2dc7b585f95e3e7`.
-See `evidence/diagnostic-threats-20261018/`; this expanded
-frontend is linked against the canonical static-kind activity source,
-with both source closures and all declared dependencies verified unchanged. The original25-case selection provenance
-remains in `diagnostic-positions-20261018-02/`.
+The current4521-case external result comprises73 complete released fixture
+files with no partial selection or duplicate cases. All86 adapter unit tests
+pass after135 native tests. Frozen canonical adapter SHA256 is
+`a9f6e9f666d476b2a7ef7dcdb33a7acec5b9178d9f43c0f556079853bf7c75b5`.
+See `evidence/diagnostic-production-observers-20261018/`; both the25-file frontend
+and43-file native closure are stable and independently reconciled. Native
+observation helpers share production arithmetic and retain state/layout/charge
+ownership. This does not transfer timing or gameplay from prior8d artifacts.
+Earlier selected-case provenance remains retained with its original attempts.
 
 The retained first expanded attempt passed1010of1022 cases and failed12
 unsupported candidate-order requests bundled with cutoff learning. Adding the
@@ -107,6 +110,21 @@ ownership, distinguish queried zero from absence, retain estimator charges
 after failed final cutoff and repeat per-call work exactly. Pressure uses current
 king neighbors and evaluation influence, including transparency. Native owners
 perform every formula; current production43 source is unchanged. Frozenef406db7
-passes3236 unique cases/49 units across59 operations. Shelter raw observation
-transport is deferred; no proposed native visibility change or Cargo feature
-was introduced.
+passes3236 unique cases/49 units across59 operations. At that59-operation checkpoint, shelter raw observation
+transport was deferred and no native visibility change or Cargo feature was
+introduced. The later79-operation integration below now exposes shared native
+observation seams without a feature switch.
+
+Twenty added routes now cover material/square/root contexts, raw shelter,
+produced score contexts and fresh/retained pawn observations/subtotals. They
+preserve supplied versus derived phase/counts, actual color ownership, zero and
+full-identity collisions, retained pawn chronology, raw ending before fallback,
+ignored-field validation and per-call native relation work. The three old
+identity cases are now included once in the whole identity-retention fixture.
+Existing-route selection closure adds29 previously omitted cases. The first
+64-route preparation omitted a version header and failed before external
+execution; its fresh corrected attempt and all earlier artifacts remain.
+Production cache selection shares a static miss-only builder, so a cache hit
+does not acquire pawn lists or construct descriptors. RootContext/Position/Node
+layout and ordinary ownership remain unchanged. Complete mandatory acceptance
+still needs38 operations/3152 cases and wider production/gameplay qualification.

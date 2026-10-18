@@ -508,6 +508,24 @@ pub struct Finished {
     pub upper: i32,
 }
 
+/// White-relative subtotal after the root-owned preference and supplied identity.
+/// Shared with diagnostic admission so the pre-endgame value has one producer.
+#[inline]
+pub fn adjusted_subtotal(
+    base: i32,
+    preference: i32,
+    root_side: Color,
+    range: u32,
+    identity: u32,
+) -> i32 {
+    let variation = if range == 0 {
+        0
+    } else {
+        (identity as u64 % (range as u64 + 1)) as i32 - (range / 2) as i32
+    };
+    base + sign(root_side) * preference + variation
+}
+
 pub fn finish(
     position: &Position,
     base: i32,
@@ -519,12 +537,7 @@ pub fn finish(
     checked: bool,
     progress: i32,
 ) -> Finished {
-    let variation = if range == 0 {
-        0
-    } else {
-        (identity as u64 % (range as u64 + 1)) as i32 - (range / 2) as i32
-    };
-    let adjusted_base = base + sign(root_side) * preference + variation;
+    let adjusted_base = adjusted_subtotal(base, preference, root_side, range, identity);
     let late = if endgame >= 192 {
         adjust(
             position,

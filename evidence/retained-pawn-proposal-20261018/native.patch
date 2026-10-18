@@ -1,0 +1,77 @@
+--- a/src/pawn_progress.rs
++++ b/src/pawn_progress.rs
+@@ -247,6 +247,27 @@
+     pub weighted: i32,
+ }
+ 
++/// Select surviving current pawns in retained descriptor order. Missing or
++/// recolored squares are skipped; current pawns absent from the retained entry
++/// are never appended. The fixed buffer covers the native eight-pawn capacity.
++pub fn current_candidates(
++    position: &Position,
++    structure: &PawnStructure,
++    side: Color,
++    selected: &mut [Square; 8],
++) -> usize {
++    let mut len = 0;
++    for descriptor in structure.pawn_slice(side) {
++        if descriptor.candidate
++            && position.board[descriptor.square.0 as usize] == Piece::new(side, PieceKind::Pawn)
++        {
++            selected[len] = descriptor.square;
++            len += 1;
++        }
++    }
++    len
++}
++
+ pub fn selected(
+     position: &Position,
+     map: &Influence,
+@@ -259,15 +280,7 @@
+     let mut lengths = [0; 2];
+     for side in [Color::White, Color::Black] {
+         let mut selected = [Square(0); 8];
+-        let mut len = 0;
+-        for descriptor in structure.pawn_slice(side) {
+-            if descriptor.candidate
+-                && position.board[descriptor.square.0 as usize] == Piece::new(side, PieceKind::Pawn)
+-            {
+-                selected[len] = descriptor.square;
+-                len += 1;
+-            }
+-        }
++        let len = current_candidates(position, structure, side, &mut selected);
+         lengths[side.index()] = len;
+         paths[side.index()] = candidates(position, map, side, &selected[..len]);
+     }
+--- a/src/pawn_structure.rs
++++ b/src/pawn_structure.rs
+@@ -76,11 +76,26 @@
+     pub fn clear(&mut self) { self.groups.fill(Retained::EMPTY); }
+ 
+     pub fn select(&mut self, position: &Position, influence: &Influence) -> Selection {
++        self.select_with_order(position, influence, [
++            position.piece_squares(Color::White, PieceKind::Pawn),
++            position.piece_squares(Color::Black, PieceKind::Pawn),
++        ])
++    }
++
++    /// Supplied orders must contain every current pawn of their color once.
++    /// Order affects construction only on a full-identity miss; a hit retains
++    /// the selected group's earlier descriptors unchanged, including their order.
++    pub fn select_with_order(
++        &mut self,
++        position: &Position,
++        influence: &Influence,
++        order: [&[Square]; 2],
++    ) -> Selection {
+         let retained = &mut self.groups[(position.pawn % 128) as usize];
+         if retained.identity == position.pawn {
+             return Selection { structure: retained.structure, reused: true };
+         }
+-        let structure = fresh(position, influence, [1024; 2]);
++        let structure = fresh_with_order(position, influence, order, [1024; 2]);
+         *retained = Retained { identity: position.pawn, structure };
+         Selection { structure, reused: false }
+     }

@@ -1,0 +1,33 @@
+# Full fresh evaluation, batch 1 — unexecuted source proposal
+
+Prepared by `/root/score_context_transport` for `/root`, 2026-10-18. Requested Sol6.1 High / Normal; runtime speed controls/readback unavailable. Source predecessor: `/tmp/imp2-eval-pawn-observers-20261018`. New isolated proposal: `/tmp/imp2-full-fresh-proposal-20261018-92x348cj`. Writes are confined to that new copy and this evidence directory. Completed proposals/review and live root source remain unchanged. No Herdr, advisor, subagents, builds, tests, rustc, engines or profilers; all shell housekeeping ran with affinity `0-5,8-13`.
+
+## Exact scope and artifacts
+
+Only three files differ: native `src/evaluator.rs`, new cold `diagnostic/src/fresh_evaluation.rs`, and `diagnostic/src/main.rs`. Only `evaluation.freshSubtotal` and `evaluation.freshScore` are routed. No retained/move/quiescence routes, selection policy or disposition helper were added.
+
+`proposal.patch` combines `native.patch` then `transport.patch`. `source-hashes.json` records each changed file's before/after SHA-256, the complete proposed Rust-source manifest, individual patch hashes, contract hashes, and byte-identical Evaluation/Retained/Node/Position field declarations. Position's entire source file is unchanged. `plan.json` extends the exact predecessor fixture map and records all selected hashes, new case IDs and query counts. Parent integrates, formats/reviews and runs all validation.
+
+## Native observation seam
+
+New `FullDetails` is a cold value with actual Components, actual computed base, and the single native `endgame::Finished`. It is not added to Evaluator, Evaluation, Retained, Node or Position storage. New `fresh_detailed_observed` calls the existing generic full_impl with FRESH=true. A second generic FnOnce observer carries those details; ordinary callers supply a statically typed zero-sized no-op. Existing `full_observed` and `fresh_observed` retain their signatures, result type, Components value, and callback ordering before finishing.
+
+The shared private `finish_observed` contains the existing, unchanged endgame::finish call exactly once, observes that produced Finished, then constructs ordinary Evaluation from the same result. Existing private finish becomes a no-op-observer wrapper, preserving fast's existing interface. No finishing/base/tempo formula is duplicated or independently recomputed. Existing full_impl still owns component computation, retained assignments, R, and FRESH versus ordinary cache selection. The detailed fresh method always bypasses lookup/replacement through the pre-existing FRESH branch, including cleared zero identities and full-identity collisions; no forced-miss identity modification or new hot cache API is introduced.
+
+## Cold transport semantics
+
+The parser accepts the exact released query objects and 1..512 query cardinality. All supplied fields in all queries are validated before evaluator/cache/influence work. Both placements use the broad bounded domain; root/current side, geometry and phases remain independent. All eleven own/opponent percentages, including ignored king values, are validated in 0..1000. Native Parameters binding produces effective coefficients through 10240 without the narrower direct-weight diagnostic parser. Root context is initialized with native new/parameters/begin_search once per independent query.
+
+Complete pawn-order validation reuses the existing color/membership/uniqueness parser, checks counts, and copies only the current Position pawn prefix. Native Position::validate verifies the resulting invariants; board, counts, attack planes, identities and non-pawn chronology are unchanged. Native fresh classification then consumes this exact supplied order. Node::root computes current nonking square state under fixed root values. Native movegen::in_check supplies geometric check, and actual fresh_detailed_observed supplies all ten terms, base, retained pair/age, R, and final intermediates.
+
+FreshScore reports actual current placement identities and XOR variation identity, native root preference/range and the observed adjusted/late/scaled/final values and bounds. It applies **no** standalone supplied finalScore +/-10000 late-input gate. The released witness with current endgame256 and adjustedBase11742 is explicitly included as an unrun source test. The output retained pair always comes from native subtotal state, never from finished score/bounds. R is the actual per-call native Evaluation.relation_queries, with no added final-stage charge or cumulative stats substitution. Neither route consumes a PRNG/clock or shares state across queries.
+
+## Inventory and unrun tests
+
+Two whole released fixtures add **116 cases / 1131 queries**: evaluation-subtotal-v1.json contributes freshSubtotal54 / 585 queries; fresh-score-v1.json contributes freshScore62 / 546 queries. On the predecessor 79 routes / 4521 cases, the proposed selection is **81 routes / 4637 cases**. Source-declared tests become **137 native / 92 diagnostic**, adding two native and six diagnostic tests. These are inventories, not passes.
+
+Native tests cover exactly-once detail observation, parity with both existing Components APIs under DIAGNOSTICS=false, actual FRESH bypass of zero/full-identity matches, and preserving the warmed ordinary pawn cache. Diagnostic tests cover complete start-position terms/R/current tempo, order-sensitive progress with stable identity and root context, produced late adjustedBase11742 with all finishing intermediates, geometric check/reversible-zero preserving nonzero bounds and retained pair, strict ignored-field/order/cardinality validation and adjacent kings, and identities independent of root/current-side/count changes.
+
+## Production monomorph and cost risks
+
+No native dynamic dispatch, allocation, stored callback or runtime observer flag is added; observers use generic FnOnce monomorphs and details are fixed-size Copy values. Ordinary full and private fast finishing now pass through generic wrappers, so inlining, code layout, stack materialization, code size or register allocation can still change. Elimination of no-op detail construction is an expectation for optimized builds, **not measured evidence**. No ABI/layout change is intended; field declarations were compared as source, not executed layout checks. Parent must run the native/diagnostic suites, compare all 116 new cases separately from baseline rechecks, and review production optimized monomorph/codegen or appropriate existing cost controls before promotion. Existing component/finish numerical code is unchanged, but this source-only proposal cannot establish instruction identity or performance neutrality.

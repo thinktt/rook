@@ -79,7 +79,7 @@ fn piece_order(position: &Position) -> Value {
     Value::Object(result)
 }
 
-fn identity(position: &Position) -> Value {
+pub(super) fn identity(position: &Position) -> Value {
     json!({"primary":position.primary,"secondary":position.secondary,"pawn":position.pawn,"pawnGroup":position.pawn % 128})
 }
 

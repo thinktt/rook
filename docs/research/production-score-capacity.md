@@ -1,6 +1,6 @@
 # Production score capacity review
 
-The current static-kind activity native source has five bounded cold reviews,
+The frozen8d static-kind activity native source has five bounded cold reviews,
 each checked independently by the lead against its source and released inputs.
 The reference receipt is the `12c2af4c` instrumented build; the canonical
 `8d9dddc5` use build records the same43 native source identities. These are
@@ -37,3 +37,12 @@ retention or interruption behavior. Standalone diagnostic/helper inputs have
 separate domains and are not automatically production-reachable. Unrelated
 source arithmetic and a complete normative production audit remain separate.
 No reachable overflow defect or resulting source change was established.
+
+The subsequent79-operation observer integration changes seven source files
+without changing existing arithmetic, admitted production inputs, hot layouts
+or placement/retained ownership. The lead reviewed shared-producer extraction,
+miss-only cache construction and the unchanged candidate filter. Exact old/new
+source matrices and prior proof receipt hashes are retained in
+[delta binding](../../evidence/eval-pawn-observers-integration-20261018/numeric-proof-delta-binding.json).
+Those version-specific proofs retain their original limits; this delta review
+is not a new global arithmetic or whole-engine conformance proof.

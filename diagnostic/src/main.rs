@@ -16,15 +16,21 @@ mod admission;
 mod candidate_order;
 mod endgame_bounds;
 mod endings;
+mod king_shelter;
 mod learned;
 mod ledger;
 mod moves;
 mod ordering;
+mod pawn_fresh;
 mod pawn_progress;
+mod pawn_retained;
+mod pawn_subtotals;
 mod policies;
 mod position_terms;
 mod positions;
 mod relations;
+mod root_context;
+mod score_context;
 mod scores;
 mod supplied;
 mod threat;
@@ -103,11 +109,19 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "evaluation.kingShelter" => king_shelter::run(input),
+        "evaluation.materialValues"
+        | "evaluation.rootMaterial"
+        | "evaluation.squareValues"
+        | "evaluation.squareBalance" => root_context::dispatch(operation, input),
         "evaluation.materialThreat" | "search.fastThreat" => threat::dispatch(operation, input),
         "evaluation.pawnRaceBounds"
         | "evaluation.endgameAdjust"
         | "evaluation.fortressBounds"
         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
+        "evaluation.scoreContext" | "evaluation.personalityScore" | "evaluation.positionScore" => {
+            score_context::dispatch(operation, input)
+        }
         "evaluation.scoreFinish"
         | "evaluation.finalScore"
         | "evaluation.personalityWeights"
@@ -138,6 +152,19 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         "search.orderCandidates" => candidate_order::dispatch(input),
         "clock.workSequence" => ledger::dispatch(input),
         "search.cutoffMemory" | "search.rememberedResults" => learned::dispatch(operation, input),
+        "evaluation.retainedPawnStructure" | "evaluation.retainedPawnCandidates" => {
+            pawn_retained::dispatch(operation, input)
+        }
+        "evaluation.pawnPhase"
+        | "evaluation.positionPawnPhase"
+        | "evaluation.pawnSubtotal"
+        | "evaluation.candidatePawnSubtotal"
+        | "evaluation.freshPawnSubtotal"
+        | "evaluation.contextPawnSubtotal" => pawn_subtotals::dispatch(operation, input),
+        "evaluation.pawnStructure"
+        | "evaluation.pawnPressure"
+        | "evaluation.pawnStructureScore"
+        | "evaluation.pawnPiece" => pawn_fresh::dispatch(operation, input),
         "evaluation.pawnProgress"
         | "evaluation.pawnCandidates"
         | "evaluation.pawnCandidateEnding"

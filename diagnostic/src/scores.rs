@@ -5,7 +5,7 @@ use rook2::{
 };
 use serde_json::{json, Map, Value};
 
-const NAMES: [&str; 11] = [
+pub(super) const NAMES: [&str; 11] = [
     "pawn",
     "knight",
     "bishop",
@@ -120,18 +120,7 @@ fn finish(query: &Value, late: bool) -> Result<Value> {
     position.halfmove = reversible;
     if endgame >= 192 {
         // Admission arithmetic only; the native finisher computes the result.
-        let variation = if range == 0 {
-            0
-        } else {
-            (identity as i64 % (range as i64 + 1)) - (range / 2) as i64
-        };
-        let adjusted = base as i64
-            + if root_side == Color::White {
-                preference as i64
-            } else {
-                -(preference as i64)
-            }
-            + variation;
+        let adjusted = endgame::adjusted_subtotal(base, preference, root_side, range, identity);
         if !(-10_000..=10_000).contains(&adjusted) {
             return Err("late-phase adjusted subtotal outside diagnostic domain".into());
         }
