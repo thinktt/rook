@@ -1,6 +1,6 @@
 # One bounded exact-placement pure-component cache trial
 
-Date: 2026-10-18. Status: generic pilot passed; own-PGO preparation; not adopted.
+Date: 2026-10-18. Status: parked after own-PGO pilot; not adopted.
 
 The full-byte relation table remains production. The separate reciprocal trial
 failed its fixed advancement rule and stays parked. The guiding mission remains
@@ -101,3 +101,46 @@ The immutable pretraining declaration is
 The [closed generic checkpoint](../../evidence/placement-pure-cache-generic-checkpoint-20261018-01/README.md)
 preserves893 members/137,787,595 original bytes in a37,562,957-byte archive,
 SHA256 `987f98ab4fe81079cc3942f20c569b5e94dcf04351766767400711a20841219d`.
+
+Fresh own-source PGO produces candidate
+`abe793bbd11c1c24c020f8f9ba6af44f1e1f4ca0f62244481820804b546ed5ab`.
+Original54 training, independent byte-identical profile remerge, post-use54
+strict replays and eight-wire24 pass with zero stale/missing-profile warnings.
+Independent functional proof
+`1711a8e14eb1812eea4e137ef34cc9e21ddcf4ec946631180893ad53a98ab0b0`
+binds both actual build stages, exact source, own profile and original raw checks.
+
+Actual PGO code supports the intended heap/key/payload/charge paths, but changes
+factoring: ordinary full evaluation moves from inline code to an outlined call.
+Full text grows3298 bytes and its reservation160 bytes; root reservation grows
+48 bytes. Quiescence retains its reservation with changed stack slots. These
+observations establish costs to measure, not the cause of a measured difference.
+
+The separately frozen own-PGO pilot closes session10663,98ea66→a247d8/0;
+offline reconciliation closes session92206,2a7cb1→228361/0 with no new engines.
+All70 lifetimes,14 excluded warmups and56 measured samples remain. Summed
+medians are13.053751s control79d19ebe versus13.007105s candidateabe793bb,
+ratio0.9964266209766066 (0.3573379023% lower). Five of seven medians improve;
+worst ratio1.0043885307 is profile01. Profiles02/05/29/08 have separated
+observed ranges favoring the candidate;01/04/35 overlap. Whole-suite CPU15
+records14221 idle ticks and zero nonidle/iowait ticks, without a continuous
+exclusivity or per-variant attribution claim. Independent original70 replay,
+wait4 arithmetic, schedule, exits, source/artifact and dependency checks pass:
+`evidence/placement-pure-cache-pgo-cpu-independent-preparation-20261018-01/independent-reconciliation.json`,
+SHA256 `587ca7a3d6d40882a5b1ca4376d7e53a146479ece7315340f36160e37d592c9c`.
+
+The aggregate misses the predeclared<=0.995 threshold. Park this cache without
+resizing, another ordinary-variability run, weakening the rule or composition.
+The prepared full117 validation remains unexecuted and unapproved; production
+keeps the full-byte table without this cache. This result does not establish
+neutrality, significance, full54/12 cost or qualification. Final-artifact
+measurement, production review,12-game pre-gate and external full-game handoff
+remain separate obligations.
+
+The [closed own-PGO checkpoint](../../evidence/placement-pure-cache-pgo-checkpoint-20261018-01/README.md)
+preserves2577 regular members/225,584,437 original bytes in a59,647,437-byte
+archive, SHA256
+`2d1193f69de3bfade45da8bc4ba076105efba7324e86e058d383fc2a75e02d07`.
+Every archived member and original reference was checked. The unrun full117
+preparation is omitted except for its two inert JSON inputs consumed by the
+decision; no full117 execution is claimed.

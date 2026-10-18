@@ -9,6 +9,12 @@ has its own profile and strict/wire evidence plus a seven-case pilot; current
 full54/12 performance and12-game pre-gate remain open. See
 [decision0013](decisions/0013-full-byte-relation-table.md).
 
+The isolated pure-component cache is parked after its own-PGO pilot fails the
+frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
+No cache source is promoted and its prepared full117 validation is unexecuted.
+Its generic improvement does not transfer to PGO or final qualification; see
+[decision0014](decisions/0014-pure-component-cache-trial.md).
+
 The complete117 costs and gameplay evidence below belong to previous artifacts;
 they do not transfer to the current source. Generic39cadc62
 also passes the12-game pre-gate/632 searches, continuity8 and required seed

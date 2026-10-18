@@ -465,7 +465,7 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     consumed dependencies. Static division removal did not predict useful
     whole-engine CPU improvement.
 
-24. **Placement transpositions: one bounded pure-component trial.**
+24. **Placement transpositions: pure-component cache parked after own PGO.**
     A logging-only derivative retains all real producers and passes the original
     strict54. Offline reconstruction reconciles37,094,875 full encounters,
     115,801,445 activity relation queries and108 epochs, with zero resident-key
@@ -499,6 +499,19 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     candidate, ratio0.9838574851 (1.614251% lower),7/7 lower medians and worst
     ratio0.991736828 (profile35).01/02/04/05/08 observed ranges separate;
     29/35 overlap. CPU15 whole-suite deltas show15430 idle,3 nonidle and1 iowait
-    tick, without per-variant attribution. The frozen rule passes. Advance to
-    fresh own-source PGO preparation; no cache is adopted. See
+    tick, without per-variant attribution. The generic rule passes and permits
+    fresh own-source PGO, without adoption.
+
+    Own-source training54/profile remerge/use54/eight-wire24 pass independently.
+    The actual own-PGO backend changes ordinary full evaluation from inline
+    code to a cached outlined call; full reservation grows160 bytes and root48.
+    Its separately frozen70-lifetime pilot independently sums13.053751s control
+    79d19ebe versus13.007105s candidateabe793bb: ratio0.9964266210
+    (0.357338% lower),5/7 lower medians, worst1.004388531.02/05/29/08
+    observed ranges separate and01/04/35 overlap. CPU15 whole-suite ticks are
+    14221 idle, zero nonidle/iowait, without continuous exclusivity proof.
+    All original70 replays, native accounting, exits and input identities pass.
+    Aggregate misses the frozen<=0.995 rule. Park without resizing, retry,
+    composition or promotion; full117 preparation remains unexecuted. Production
+    source/full54/12 qualification are unchanged. See
     [decision0014](../decisions/0014-pure-component-cache-trial.md).

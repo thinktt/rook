@@ -44,13 +44,22 @@ The isolated1024-slot pure activity/shelter cache passes184 native tests,
 original54 strict replays and eight-wire24 with independent raw/source closure.
 Its one fixed generic70-lifetime pilot sums14.348167s control948c versus
 14.1165515s candidatea9472bd0, ratio0.9838574851 (1.614251% lower), with7/7
-lower medians. The predeclared rule passes; fresh own-PGO preparation follows
+lower medians. The generic rule passes and permits a separate own-PGO trial
 under [decision0014](docs/decisions/0014-pure-component-cache-trial.md).
 The [generic trial checkpoint](evidence/placement-pure-cache-generic-checkpoint-20261018-01/README.md)
 preserves893 members, both images, raw measurements and consumed dependencies.
 Public/custom-influence evaluation stays uncached; actual pawn-cache effects,
 live weighting, retained updates and semantic relation charges are preserved.
-No cache is adopted; production source and final qualification are unchanged.
+Fresh own-source PGO training54, profile remerge, use54 and eight-wire24 all
+pass, with independent source/profile/raw closure. The matched own-PGO pilot
+retains all70 executions and independently sums13.053751s control79d19ebe
+versus13.007105s candidateabe793bb: ratio0.9964266210 (0.357338% lower),
+with5/7 lower medians and worst ratio1.004388531. It fails the frozen aggregate
+threshold<=0.995. The cache is parked without resizing, retry, full117 execution
+or promotion. Generic improvement does not transfer to PGO. Production source
+and final qualification are unchanged. The
+[closed own-PGO checkpoint](evidence/placement-pure-cache-pgo-checkpoint-20261018-01/README.md)
+preserves2577 members, both own-PGO images and the complete trial evidence.
 
 ## Previous activity destination checkpoint
 
