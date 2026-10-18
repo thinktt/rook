@@ -13,6 +13,8 @@ integration. Canonical915f83e4 passes54 strict replays, eight interruption
 fixtures and its own six-case timing pilot; final qualification remains.
 Compact relation tables and typed-list influence are now also integrated,
 passing134 canonical native tests and the49-operation adapter regression.
+The subsequent cold score/weight expansion passes53 operations/2496 cases and
+39 adapter units against unchanged canonical native source.
 Fresh canonical8c4619a7 passes all54 strict replays and eight interruption
 fixtures/24 searches. Its own complete54 CPU collection is recorded below.
 
@@ -77,9 +79,9 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapterab8b7c3c implements49 operations and passes2215
-  cases across41 complete fixture files plus25 unchanged selected cases
-  from two partially supported files. All36 adapter unit tests pass. The first
+- The separate external DIAG adapter9c8780c9 implements53 operations and passes2496
+  cases across44 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All39 adapter unit tests pass. The first
   expanded attempt and its12 unsupported ordering failures remain retained;
   prior attempts and their source links remain preserved. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
@@ -133,6 +135,11 @@ substantial independent engine work. See
 Next: use measured remaining pipeline costs to select further computational
 reuse/representation experiments, expand mandatory external diagnostics and
 production review, and complete artifact-specific gameplay/performance evidence.
+The isolated private activity-width trial passes134 native tests, a10,000-
+position coordinate-oracle comparison and both generic artifacts'54 replays.
+Its independently reconciled60-lifetime pilot is0.261914% lower in summed
+medians, with all six ranges overlapping and three increased medians. It is
+parked; no source adoption or PGO benefit is inferred.
 Earlier partial timings below are historical development checkpoints.
 
 The isolated compact relation kernel now passes133 native tests and all54

@@ -24,6 +24,7 @@ mod policies;
 mod position_terms;
 mod positions;
 mod relations;
+mod scores;
 mod supplied;
 
 type Result<T> = std::result::Result<T, String>;
@@ -100,6 +101,10 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "evaluation.scoreFinish"
+        | "evaluation.finalScore"
+        | "evaluation.personalityWeights"
+        | "evaluation.personalityCentralBalance" => scores::dispatch(operation, input),
         "evaluation.endgamePawnSpread"
         | "evaluation.pawnlessPotential"
         | "evaluation.minorMateGeometry"

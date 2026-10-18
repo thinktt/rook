@@ -21,7 +21,7 @@ agreement is not a proof over every admitted setup or a full gameplay pass.
 | N/R charges, natural4096 polls, captures, terminal work and publication | `work_clock`, `engine`, `timed`, `host`, `session` | External native timing fixtures, active-time native tests, all54 work-post replays and eight literal interruption fixtures. Review every pre/post-capture interrupted ownership boundary. |
 | Persistent game/clock/parameters/seed lifetime and ordinary command meaning | `session`, `clock`, `parameters`, `timing` | Persistent native sequences, literal seed controls, same-artifact focused12/632 plus continuity. Full3288-game gate and admitted command-domain audit remain. |
 | Framing, nonblocking queue/polls, live records, result/fatal exits, PV/score spelling | `wire`, `host`, `output`, `bin/rook2` | Literal process controls, eight wire interruption fixtures, complete all54 and focused replay. Full ordinary protocol requirement review remains. |
-| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozenab8b7c3c passes49 operations/2215 cases across41 complete files plus25 selected cases from two partial files, with36 adapter units, linked to integrated compact-relation/typed-list native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
+| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozen9c8780c9 passes53 operations/2496 cases across44 complete files plus25 selected cases from two partial files, with39 adapter units, linked to integrated compact-relation/typed-list native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
 | Owned whole-engine cost, repeatability, cross-host calibration and final performance | External measurement tools and frozen build artifacts | Direct wait4 controls, balanced local pilots and canonical8c4619a7 complete54 CPU collection:216 strict lifetimes,81.828432s summed case medians. PMU unavailable through disabled self-opens. Final measurement profile, calibration, qualified54/12 costs and current-artifact gameplay remain separate obligations. |
 
 Production search uses static generic diagnostic/host specialization. Ordinary
@@ -65,3 +65,10 @@ in ab8b7c3c, with both source closures and all original reports retained.
 That closes the transport subset that was still pending at the scalar review's
 original checkpoint; its immutable source-review receipt remains historical.
 The first1022-case attempt and its12 unsupported ordering failures are retained.
+
+The subsequent four score/weight transports in9c8780c9 pass39 units and2496
+cases across53 operations against unchanged canonical native source. Supplied
+final-score context remains distinct from placement-derived fresh evaluation.
+The full signed32 coefficient conversion and narrower composed central domain
+retain separate admission. This extends finite component transport coverage;
+production context lifecycle and global arithmetic review remain open.

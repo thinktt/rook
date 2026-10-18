@@ -159,7 +159,7 @@ and production review remain requirements alongside optimization.
    CPU collection independently reconciles216 lifetimes, summing81.828432s in
    case medians. Trial timing does not transfer; final qualification remains.
 
-10. **Private activity arithmetic widths: correctness checked, cost unmeasured.**
+10. **Private activity arithmetic widths: measured and parked.**
     An isolated source uses three u32 mobility accumulators in place of
     i64/i64/u64, plus bounded u32 category/index arithmetic and i32 raw piece
     score. Public activity fields and outer signed evaluation arithmetic remain
@@ -168,6 +168,9 @@ and production review remain requirements alongside optimization.
     admitted placement/phase domain; it is not the global score audit.
     All134 native tests and10,000 constructed placements against our independent
     prior coordinate oracle pass. Generic candidate73ad8177 and baselinee7168491
-    have stable build receipts; full54 strict regression and a fixed matched
-    CPU pilot are the next tests. Canonical8c source remains unchanged.
+    have stable build receipts and both pass all54 strict replays. The fixed
+    six-case60-lifetime pilot independently reconciles14.947846s baseline
+    versus14.9086955s candidate in summed medians:0.261914% lower. Every case
+    has overlapping observed ranges and three medians increase. This does not
+    support adoption or a further PGO trial. Canonical8c source remains unchanged.
     See `evidence/activity-widths-preparation-20261018/`.
