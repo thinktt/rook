@@ -20,6 +20,20 @@ consumer without having matched a generated legal move. A hash identity/group
 collision is one possible concern; no public reachable witness establishing
 all these premises together has been produced.
 
+A later source proof narrows this condition. If effectiveLower <= L, any
+completion learned update with final best > L must first have crossed L through
+a strict improvement by a generated candidate, replacing the inherited hint.
+A preceding quiet-mate replacement is also generated. Thus the empty-source
+inherited hint is excluded in that region. In first-half nodes the effective
+lower is -10000, so this exclusion applies conditional on incoming L >= -10000;
+the wider normalized-score bound alone does not prove that caller-window premise.
+In second-half nodes the quiet-mate probe is automatically disabled. The open
+branch therefore requires effectiveLower > L and every consumed candidate score
+<= effectiveLower, along with an actually reachable uncertified empty-source
+hint and the earlier admission gates. Recent/retained metadata can carry a
+nonnull hint without a usable score even at sufficient marked depth; metadata
+does not supply a provenance proof. See the [bounded reduction](../../evidence/uncertified-hint117-reduction-review-20261018-score-context/review.md).
+
 SEARCH-REMEMBERED-RESULTS explicitly does not certify hint legality.
 SEARCH-CUTOFF-MEMORY states that a non-null move with empty destination updates
 killers/history, with history keyed by the moving piece's color/type. It gives

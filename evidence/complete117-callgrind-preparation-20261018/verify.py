@@ -1,0 +1,40 @@
+"""Future independent raw/profile/source reconciliation, no engine execution."""
+from pathlib import Path
+import hashlib,json,subprocess,sys
+HERE=Path(__file__).resolve().parent
+load=lambda p:json.loads(Path(p).read_text())
+sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def main():
+ plan=load(HERE/'plan.json');out=Path(plan['output']);terminal=load(out/'tool-terminal.json')
+ assert terminal.get('actual_tool_terminal_observed') is True and terminal['exit_code']==0 and (terminal.get('terminal_chunk_id') or terminal.get('chunk_id'))
+ record=load(out/'provenance.json');assert record['complete'] and list(record['cases'])==plan['cases'] and record['one_fixed_lifetime_per_case']
+ assert sum(x['stem']=='annotate-version' for x in record['commands'])==1
+ for x in record['commands']:
+  expected=255 if x['stem']=='annotate-version' else 0
+  assert x['actual_child_return_observed'] and x['exit_code']==x['expected_exit_code']==expected
+  assert x['output_sha256']=={stream:sha(out/(x['stem']+'.'+stream)) for stream in ['stdout','stderr']}
+  if x['stem']=='annotate-version':
+   assert x['argv'][-2:]==[str(Path(plan['valgrind_prefix'])/'bin/callgrind_annotate'),'--version']
+ assert (out/'annotate-version.stdout').read_bytes()==b'' and (out/'annotate-version.stderr').read_bytes()==b'callgrind_annotate-3.24.0\n'
+ closure=load(out/'input-closure.json');assert closure==record['input_sha256'] and all(sha(path)==digest for path,digest in closure.items())
+ assert sha(plan['engine'])==record['engine_sha256']==plan['engine_sha256'] and sha(plan['source_archive'])==record['source_archive_sha256']==plan['source_archive_sha256']
+ reference=load(plan['strict_reference']);details={}
+ for case in plan['cases']:
+  row=load(out/(case+'-oracle.stdout'))['results'][0];ref=next(x for x in reference['results'] if x['case']==case)
+  assert row['stdout'].encode()==ref['stdout'].encode()==(out/(case+'-stdout.raw')).read_bytes()
+  assert row['stderr']==ref['stderr']=='' and row['exit']==dict(code=0,signal=None) and row['complete'] and not row['truncated'] and row['error'] is None and row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
+  profile=out/(case+'.callgrind');lines=profile.read_text().splitlines()
+  assert [x for x in lines if x.startswith('events:')]==['events: Ir']
+  totals=[int(x.split(':',1)[1]) for x in lines if x.startswith('summary:')]
+  assert totals==[record['cases'][case]['total_simulated_Ir']] and totals[0]>0
+  assert sha(profile)==record['cases'][case]['profile_sha256'] and sha(out/(case+'.log'))==record['cases'][case]['log_sha256']
+  details[case]=dict(total_simulated_Ir=totals[0],native_exit=row['exit'],raw_bytes_equal_reference=True)
+ argv=['/usr/bin/taskset','-c','0-5,8-13',plan['node'],str(HERE/'recheck.mjs'),str(out)]
+ with (out/'independent-checkReplay.stdout').open('xb') as x,(out/'independent-checkReplay.stderr').open('xb') as y:r=subprocess.run(argv,stdout=x,stderr=y)
+ assert r.returncode==0 and not (out/'independent-checkReplay.stderr').stat().st_size
+ assert load(out/'independent-checkReplay.stdout')==dict(complete=True,originalCheckReplayCount=2,engineRuns=0)
+ assert all(sha(path)==digest for path,digest in closure.items())
+ result=dict(complete=True,cases=details,all_original_inputs_unchanged=True,original_checkReplay_exit_code=r.returncode,original_checkReplay_cases=2,event_scope=plan['event_scope'],native_engine_runs=0,qualification=False,outer_actual_terminal_required=True)
+ with (out/'independent-verification.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+ print(json.dumps(result))
+if __name__=='__main__':main()

@@ -27,9 +27,18 @@ remain stable, with real root code-size/initialization/allocation-lifetime risks
 carried into measurement. Own-PGO6a5ce6e2 now passes fresh54 strict replays,
 eight interruption fixtures/24 searches and independent profile/raw reconciliation.
 That same image also passes all12 games/632 searches, continuous8 and required
-seed controls, with independent raw reconciliation. Current complete54/12 CPU
-costs and comparison-profile qualification remain open. The most recent
-complete54 costs still belong to older8d9dddc5; no old timing is transferred.
+seed controls, with independent raw reconciliation. The current54 CPU collection
+now independently reconciles216 lifetimes:76.090895s summed case medians versus
+published63.431779s (raw cross-hardware ratio1.199571). Nine descriptive raw case
+ratios exceed1.25. The12-game collection now also independently reconciles
+all48 lifetimes/2528 searches, summing768.200873s versus644.222971s published
+reference (raw cross-hardware ratio1.192446). Main-0000 is the sole raw game
+ratio above1.25. Both results remain reported-only; final comparison-profile
+qualification stays open. See [current CPU evidence](evidence/complete117-cpu-reconciliation-20261018/README.md).
+Per-case fixed-calibrator transfer gives a planning ratio1.278174 under an
+unvalidated cross-implementation assumption, with transfer error unquantified;
+[interpretation](evidence/complete117-cpu-interpretation-20261018/README.md) is not
+a qualified verdict. Historical timings remain bound to their older images.
 Production audits retain explicit conditional obligations. The full3288-game
 gate is assigned to an external system; prepare its exact artifact handoff.
 

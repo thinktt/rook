@@ -19,8 +19,11 @@ Remaining work:
   and required seed controls, plus fresh54 strict/eight interruption24-search
   regression. Independent profile and complete raw checks pass. Preserve exact
   identity when collecting its current costs; another image needs its own gates.
-- Collect current complete54-search and12-game whole-lifetime CPU costs under
-  the fixed measurement profile. Retain every case, warmup, sample and failure.
+- Both current CPU collections independently reconcile their full schedules:
+  all54 search cases/216 lifetimes at76.090895s versus63.431779s (raw1.199571),
+  and all12 games/48 lifetimes at768.200873s versus644.222971s (raw1.192446).
+  These cross-hardware results remain reported-only; further optimization and
+  compatible final cost qualification remain. All cases/warmups/samples remain.
   Approved opaque per-case calibration now passes all216 lifetimes with independent
   raw/reference reconciliation; PMU remains unavailable pending a separately
   authorized deployed collector. Cross-hardware calibration

@@ -2,14 +2,17 @@
 
 Current117 has mandatory7673-case/117-operation success and a generic12-game
 pre-gate pass. Own-PGO6a5ce6e2 also passes its own fresh54/eight-wire and12-game
-pre-gate checks. Its complete54/12 CPU costs are pending. The
-bounded codegen review is complete. None of the historical measurements below
-transfers to that source. CPU-only
+pre-gate checks. Its54 CPU collection independently reconciles216 lifetimes,
+76.090895s summed medians versus published63.431779s: raw cross-hardware
+ratio1.199571. Its12-game CPU collection also independently reconciles all48
+lifetimes at768.200873s versus644.222971s, raw ratio1.192446. These are
+cross-hardware reported-only comparisons; optimization remains. The bounded codegen review
+is complete; none of the historical measurements below transfers to that source. CPU-only
 opaque calibration passes216 lifetimes with per-case local/reference ratios
 0.906–0.972; this is fixed-program hardware context, not engine acceptance.
 
 Date: 2026-10-18. Statuses below distinguish adopted experiments from hypotheses; none promises
-a qualified speedup. The latest complete54 collection, on frozen8d9dddc5,
+a qualified speedup. The historical complete54 collection on frozen8d9dddc5
 has full local PGO CPU costs totaling
 81.131004s versus the published63.431779s sum(raw uncalibrated ratio1.279028).
 Previous8c4619a7 totals81.828432s; the new sum is0.852305% lower, with41
@@ -17,7 +20,7 @@ case medians lower and13 higher in this sequential historical comparison.
 The previous915f83e4 collection totals88.486549s; all54 new medians are lower,
 with a7.524440% lower aggregate in this sequential historical comparison.
 The earlier3660 collection totaled97.685122s. Calibration/profile differences
-remain unresolved. The current8d9dddc5 profile-01 simulated total is11.604B Ir, versus12.027B
+remain unresolved. The historical8d9dddc5 profile-01 simulated total is11.604B Ir, versus12.027B
 on previous8c and13.607B on earlier3660fecf; activity remains prominent after
 the adopted kernels. This is whole-lifetime instruction simulation, not PMU counting.
 Function attribution changed through inlining, so source-line evidence matters.

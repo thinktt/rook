@@ -1,0 +1,7 @@
+The completed own-PGO6a54 collection independently passes216 lifetimes. Sum of local case medians is76.090895s, versus published reference63.431779s: raw ratio1.199570565. These are cross-hardware reported-only measurements.
+
+The independently accepted fixed calibration program has54 same-case local/reference CPU factors H between0.905924 and0.972146. All are below1. The simple planning assumption candidate-on-reference-host_i = local_candidate_i / H_i gives an estimated sum81.076860s and estimated ratio1.278174152. Every case uses its own factor; this is not a single host multiplier.
+
+That transfer assumption is unvalidated across implementations: cache, instruction mix, branch behavior, runtime/resource/frequency and observation differences can change it. Its transfer error is not quantified. The estimate is not an observed KingRE-reference comparison, confidence interval or qualification verdict, and it is not applied to the12-game collection. It supports keeping optimization as the next engineering task; it does not justify dismissing the raw gap as a slower Vic.
+
+`analysis.json` retains each input median, same-case factor, raw/estimated ratio, descriptive selectivity grouping and largest absolute raw excesses. Groups contain different positions/personality/clock inputs and establish no causal selectivity effect. No new native, profiler, hash or archive ran for this lightweight analysis during the12-game timing window.

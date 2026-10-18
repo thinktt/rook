@@ -1,0 +1,37 @@
+# Current117 profile support for the ordered-ray prototype
+
+**Preliminary decision: GO to the already bounded isolated functional trial, with weak/path-relevant attribution support. PARK timing/adoption pending that trial and later backend review.** Both current cases spend nontrivial mapped work in destination traversal within complete generation, and most mapped `pieces` work is in the full producer rather than the capped producer. This supports testing the distinct occupancy-stop kernel, not predicting a CPU benefit. The saved data cannot isolate the exact nonchecked B/R/Q subset; the direct decision footprint is small enough that new mask setup, scans and code layout can plausibly erase a saving.
+
+Basis is the closed current own-PGO artifact6a5ce6e27b74490e623fbb705f70c770ec12ff7e88f761fb0c7119ca2aee4a50, profiles35/08 in `complete117-callgrind-20261018`, and the frozen actual native source under `complete117-pgo-use-build-20261018/source-before`. Native/profile identity and exact strict raw equality were independently closed by parent b30ef5/0. Canonical usable source displays are `complete117-callgrind-absolute-annotation-20261018-02/profile-{35,08}-movegen-lines.stdout` (parent executefcc68e/0, independentb38fcf/0). No new engine, profile, build, variant, source edit or runtime observation was made for this review. Offline analysis was on housekeeping0-5,8-13.
+
+All numbers below are **exclusive simulated user Ir**, whole native lifetime: case35 total48,746,346,838; case08 total4,163,216,998. They are not PMU instructions, cycles, CPU time, semantic R charges, or dynamic move/call counts. The rows are debug source attribution, not source statements executed once each.
+
+| Exclusive mapped source scope | Case35 Ir (% whole) | Case08 Ir (% whole) |
+| --- | ---: | ---: |
+| All `pieces` rows565–605, every emitted function context | 732,685,903 (1.5031%) | 53,559,996 (1.2865%) |
+| Those rows specifically inside full `generate_legal` | 701,389,045 (1.4389%) | 50,333,811 (1.2090%) |
+| Those rows inside capped `legal_replies_up_to_two` | 8,787,709 (0.0180%) | 3,061,718 (0.0735%) |
+| Those rows inside shared outlined `pieces` | 22,509,149 (0.0462%) | 164,467 (0.0040%) |
+| Full-producer occupancy/classification583–585 only | 240,615,955 (0.4936%) | 13,320,413 (0.3200%) |
+| Full-producer stop decision598 only | 72,444,717 (0.1486%) | 6,449,907 (0.1549%) |
+| Full-producer source/direction/cursor rows579,580,582 | 301,122,345 (0.6177%) | 16,844,779 (0.4046%) |
+
+The first row partitions into the following three function-context rows; later rows are subsets, not extra costs to add to them. The full occupancy+stop rows sum313,060,672 (0.6422% whole35) and19,770,320 (0.4749% whole08). **Neither sum is an avoidable-cost bound or a forecast.** It includes checked positions and knight/king visits, all excluded by the proposed dispatch. Enumeration and many loop operations remain required in the candidate; bit extraction itself introduces work. Offset/type/list traversal may also be attributed to `types.rs` or Rust library rows rather than these movegen lines, so the table is not a complete kernel cost.
+
+The context split was derived from the existing textual callgrind function/file/line records, excluding the cost record following each `calls=` association. It reconciles every exclusive Ir to each program summary, all known movegen line counters exactly to canonical02, and line0 to its separate unidentified count. It separates the full entry from the LIMIT2 entry without treating a source-file owner as a conceptual function. The outlined `pieces` context is shared; its caller-specific costs are not apportioned here. Full generation is still a mixture of nonchecked ordinary/root work and checked/evasion work; runtime piece kinds are also merged. No exact eligible invocation count, average ray length, blocker-distance distribution or candidate-only cost follows.
+
+## Costs the prototype does not remove
+
+The actual candidate replaces only full nonchecked B/R/Q geometric destination supply. Chronological source/direction order, near-first target enumeration, `GenerationSafety`, move encoding, cap guards and list stores remain. Capped generation, checked generation, pawn/special/knight/king paths and Q's distinct tactical producer remain unchanged.
+
+For context, exclusive movegen safety-setup rows281–340 are134,453,180/17,866,960; safety-acceptance rows344–370 are107,235,381/3,952,976; list store/cap rows37–43 are199,971,088/15,181,588 (35/08). These are mixed consumers, not candidate savings. `legal_after_bits` rows203–217 carry127,746,894/56,855,295, also separate from the proposed destination traversal. Inlined projection/attack work can live in other source files and emitted callers. Most prominently, mailbox checker rows81–133 carry1,198,870,547/112,006,012; these implement `find_attackers`/mailbox safety/checking uses, not the new full-slider destination kernel. A large `movegen.rs` file total must not be assigned to this proposal.
+
+Known-line movegen source displays sum3,081,401,748 (6.32%) and317,801,962 (7.63%). The additional unidentified-line0 movegen amounts728,590,570 (1.4947%) and60,304,989 (1.4485%) are **not included in those annotated sums** and cannot be allocated to sliders. PGO/inlining, debug attribution and library-owned operations prevent interpreting blank/no-counter source lines as free. The printed function tables stop at cumulative99%; missing table entries are not zero. The source-row extraction was checked against raw records rather than relying on that table threshold; it still cannot recover attribution absent from debug data. Inclusive `=>callee` rows were excluded throughout.
+
+## Scope and evidence history
+
+Original relative-name source displays ended in “No information has been collected”; their preceding long repeated tables were only file:function data. My first two absolute-name attempts210f41/0 and361774/0 also had no source rows because the public annotator strips cwd prefixes from profile filenames but not the user argument. Those unusable outputs remain in this directory. Parent canonical01 aborted92e712/1 on the copied first output before any new annotation call. Canonical02 resolved cwd/path identity and is the only annotation used for conclusions.
+
+One offline consistency assertion77c24f/1 initially added unidentified-line counts to `events annotated`; this failed before derived data was written. The correction is preserved in `parser-attempt-01-failure.json`. Corrected extraction1e346e/0 proves visible exclusive source rows alone equal `events annotated`, and keeps unidentified amounts separate. Raw-context extraction13d824/0 independently reconciles the source and whole-profile totals. These are analysis-only corrections, not native/source/profile failures.
+
+The parked historical destination-table trial changed coordinate supply while still loading/classifying each visited destination; its flat historical CPU result does not price the current plane-derived first-blocker kernel. Current attribution gives a modest reason to try the narrow different kernel, while leaving the central empirical question open: does replacing repeated empty-square classification with mask setup/blocker scan/ordered bit extraction actually help on the current full producer? Only later authorized functional, backend and matched cost evidence can answer. No gain, default-cost neutrality or adoption is claimed here.
