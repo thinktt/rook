@@ -46,7 +46,7 @@ they do not substitute for the complete scalar transport or lifecycle audit.
 | Return M+1 only after at least one match | A zero match count returns0; positive matches add the current occurrence. At H<=100 at most49 earlier distances are examined, so the counted result fits u32 and can equal50. |
 | Root split does not discard eligible history | `mark_root` records an index without truncation. The scan uses the whole boundary sequence. Search reset removes only the recursive tail. Vec capacity is a reservation, not an admission/truncation ceiling. |
 | Signed nonzero ana has the same exception | `repetition_draw` tests ana==0, ply>=3 or count>=3 after requiring positive count. It does not order negative and positive nonzero ana. |
-| Reversal requires current/prior same-side endpoints and flags | `short_reversal` requires search ply>=3 and H>=3, current and two-plies-earlier arrivals present, reversed endpoints and rights/EP equal to the three-plies-earlier boundary. It does not strengthen with secondary identity or placement equality. |
+| Reversal compares the prescribed endpoint arrivals and flags | `short_reversal` requires search ply>=3 and H>=3, current and two-plies-earlier arrivals present, reversed endpoints and rights/EP equal to the three-plies-earlier boundary. Moving-side equality, promotion choice, kind, secondary identity and placement equality do not strengthen the predicate. |
 | Null arrival is absent | `push` filters the absent-move sentinel to None; either compared endpoint arrival being None rejects reversal. A null intermediate arrival is not itself one of those two compared moves. |
 
 Ordinary entry charges its node, tests repetition, clears next-ply killers only
