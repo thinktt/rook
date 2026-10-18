@@ -17,9 +17,10 @@ fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implement
 57 mandatory operations with2868 external cases so far. Complete diagnostics, full gameplay and
 performance qualification remain outstanding. Current generation reuse and
 compiler-PGO experiments retain exact builds, strict replay results and balanced
-whole-native CPU pilots. Current canonical8c4619a7 passes54 strict replays and
-eight interruption fixtures. Its independently reconciled216-lifetime54 CPU
-collection totals81.828432s in case medians; final qualification remains open.
+whole-native CPU pilots. Current canonical8d9dddc5 includes static piece-kind
+activity kernels and passes54 strict replays and eight interruption fixtures.
+Its independently reconciled216-lifetime54 CPU collection totals81.131004s
+in case medians,0.852305% lower than previous8c4619a7. Final qualification remains open.
 See [STATUS.md](STATUS.md) for artifact-specific evidence and limitations.
 
 Placement now includes exact attack planes owned by Position160/Node176,
@@ -29,6 +30,8 @@ storage/kernel decision and its validation boundaries are recorded in
 Influence now uses the coherent typed piece lists and a compact immutable
 relation kernel; their combined decision is recorded in
 [decision0006](docs/decisions/0006-typed-influence-enumeration.md).
+Private activity specialization and its separate generic/own-PGO comparisons
+are recorded in [decision0007](docs/decisions/0007-static-activity-kinds.md).
 The offline [relation generator](scripts/generate_relation_table.py) reproduces
 the source table from the general formula; `--check src/relation_table.rs`
 verifies exact bytes without writing it.

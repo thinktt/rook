@@ -32,7 +32,7 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   eight literal interruption fixtures and native active-time tests cover parts
   of that composition; they do not exhaust interruption during every IIO stage
   or establish a naturally reached first-root fallback witness.
-- Complete the full3288-game gate. Current canonical8c4619a7 now passes
+- Complete the full3288-game gate. Previous canonical8c4619a7 passes
   all12 focused games (632 searches), its own eight-search continuity and
   both public seed controls, combined by the unchanged released collector. This establishes complete focused replay,
   with `completeGameplayQualification=false`. The ordinary interface
@@ -62,7 +62,7 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
 These open items permit substantial local progress while PMU support is
 investigated. No hardware limitation currently blocks engine implementation.
 
-The latest complete local54 collection on canonical8c4619a7 retains216 normal
+The latest completed local54 collection on frozen8c4619a7 retains216 normal
 strict-oracle/native lifetimes and independently reconciles all raw samples.
 Its sum of54 case medians is81.828432s, raw uncalibrated reference ratio1.290023.
 The prior915f83e4 collection totals88.486549s; the new aggregate is7.524440%
@@ -112,3 +112,17 @@ qualification remain open; no trial timing transfers.
 The original CPU collection is terminal,
 and all57 verified own lead/client threads are now confined to housekeeping
 CPUs. This later correction does not qualify the prior measurements.
+
+Static-kind activity is now adopted under decision0007. Fresh canonical
+8d9dddc5 passes134 native tests, verified own54-case PGO training,54 strict
+replays and eight interruption fixtures. Its balanced60-lifetime pilot is
+2.052997% lower in summed CPU medians than8c; profile29 is slightly higher
+with overlapping samples. Identical DIAG frontend e31263ac passes2868 cases/
+42 units on the new native source. These close finite regression steps;
+complete cost/gameplay and mandatory diagnostic coverage remain open.
+
+Fresh8d9dddc5 complete54 CPU evidence now reconciles216 normal strict
+lifetimes and sums81.131004s in case medians,0.852305% lower than frozen8c.
+Forty-one case medians are lower and thirteen higher; raw uncalibrated reference
+ratio is1.279027725. This updates the local cost checkpoint without closing
+measurement/calibration, current-artifact gameplay or mandatory conformance.

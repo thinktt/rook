@@ -64,20 +64,42 @@ pub fn compute(
     let mut raw_scores = [0i64; 2];
     let mut relation_queries = 0;
     for color in [Color::White, Color::Black] {
-        for kind in [
-            PieceKind::Knight,
-            PieceKind::Bishop,
-            PieceKind::Rook,
-            PieceKind::Queen,
-        ] {
-            for &source in position.piece_squares(color, kind) {
-                let mobility = destinations(position, influence, color, kind, source, &mut marks);
-                let (score, queries) =
-                    piece_score(influence, color, kind, source, mobility, phase.endgame);
-                raw_scores[color.index()] += score;
-                relation_queries += queries;
-            }
-        }
+        accumulate_kind::<1>(
+            position,
+            influence,
+            color,
+            &mut marks,
+            phase.endgame,
+            &mut raw_scores[color.index()],
+            &mut relation_queries,
+        );
+        accumulate_kind::<2>(
+            position,
+            influence,
+            color,
+            &mut marks,
+            phase.endgame,
+            &mut raw_scores[color.index()],
+            &mut relation_queries,
+        );
+        accumulate_kind::<3>(
+            position,
+            influence,
+            color,
+            &mut marks,
+            phase.endgame,
+            &mut raw_scores[color.index()],
+            &mut relation_queries,
+        );
+        accumulate_kind::<4>(
+            position,
+            influence,
+            color,
+            &mut marks,
+            phase.endgame,
+            &mut raw_scores[color.index()],
+            &mut relation_queries,
+        );
     }
     let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
     Activity {
@@ -88,6 +110,25 @@ pub fn compute(
         ],
         weighted: weighted(pieces, material_score, weights, phase),
         relation_queries,
+    }
+}
+
+#[inline]
+fn accumulate_kind<const KIND: usize>(
+    position: &Position,
+    influence: &Influence,
+    color: Color,
+    marks: &mut Marks,
+    endgame: u16,
+    score: &mut i64,
+    queries: &mut u64,
+) {
+    let kind = PieceKind::ALL[KIND];
+    for &source in position.piece_squares(color, kind) {
+        let mobility = destinations_kind::<KIND>(position, influence, color, source, marks);
+        let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+        *score += piece;
+        *queries += work;
     }
 }
 
@@ -179,14 +220,14 @@ fn transparent(color: Color, kind: PieceKind, step: (i8, i8), occupant: Piece) -
     }
 }
 
-fn destinations(
+fn destinations_kind<const KIND: usize>(
     position: &Position,
     influence: &Influence,
     color: Color,
-    kind: PieceKind,
     source: Square,
     marks: &mut Marks,
 ) -> Mobility {
+    let kind = PieceKind::ALL[KIND];
     let mut result = Mobility::default();
     if kind == PieceKind::Knight {
         let targets = &KNIGHT_SOURCES[source.0 as usize];
@@ -266,14 +307,14 @@ fn destinations(
     result
 }
 
-fn piece_score(
+fn piece_score_kind<const KIND: usize>(
     influence: &Influence,
     color: Color,
-    kind: PieceKind,
     source: Square,
     mobility: Mobility,
     endgame: u16,
 ) -> (i64, u64) {
+    let kind = PieceKind::ALL[KIND];
     let raw_mobility = match kind {
         PieceKind::Knight => (3 * mobility.total) / 4,
         PieceKind::Bishop => mobility.total / 2,
@@ -306,6 +347,41 @@ fn piece_score(
         score -= penalty;
     }
     (score, queries)
+}
+
+#[cfg(test)]
+fn destinations(
+    position: &Position,
+    influence: &Influence,
+    color: Color,
+    kind: PieceKind,
+    source: Square,
+    marks: &mut Marks,
+) -> Mobility {
+    match kind {
+        PieceKind::Knight => destinations_kind::<1>(position, influence, color, source, marks),
+        PieceKind::Bishop => destinations_kind::<2>(position, influence, color, source, marks),
+        PieceKind::Rook => destinations_kind::<3>(position, influence, color, source, marks),
+        PieceKind::Queen => destinations_kind::<4>(position, influence, color, source, marks),
+        _ => unreachable!("non-activity piece"),
+    }
+}
+#[cfg(test)]
+fn piece_score(
+    influence: &Influence,
+    color: Color,
+    kind: PieceKind,
+    source: Square,
+    mobility: Mobility,
+    endgame: u16,
+) -> (i64, u64) {
+    match kind {
+        PieceKind::Knight => piece_score_kind::<1>(influence, color, source, mobility, endgame),
+        PieceKind::Bishop => piece_score_kind::<2>(influence, color, source, mobility, endgame),
+        PieceKind::Rook => piece_score_kind::<3>(influence, color, source, mobility, endgame),
+        PieceKind::Queen => piece_score_kind::<4>(influence, color, source, mobility, endgame),
+        _ => unreachable!("non-activity piece"),
+    }
 }
 
 #[inline]

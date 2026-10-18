@@ -17,6 +17,15 @@ The subsequent cold score/weight and endgame-bound expansions pass57
 operations/2868 cases and42 adapter units against unchanged canonical native
 source. Canonical8c4619a7 also passes all12 focused games/632 searches, the
 eight-search continuity check and both released seed controls.
+Private static-kind activity is now integrated after a separate own-PGO pilot
+finds2.205812% lower summed medians(all six lower; profile29 ranges overlap).
+Fresh canonical8d9dddc5 passes134 native tests, independently verified own54-case
+training and54 strict production replays/eight interruption fixtures. Its
+balanced60-lifetime CPU pilot independently reconciles2.052997% lower summed
+medians against8c; five medians improve and profile29 is slightly higher with
+overlapping samples. The unchanged57-operation adapter freshly relinks as e31263ac and passes
+2868 cases/42 units. Its complete54 CPU evidence is now recorded below; current-artifact gameplay and
+final cost qualification remain separate. Complete CPU/gameplay evidence below still belongs to frozen8c4619a7.
 Fresh canonical8c4619a7 passes all54 strict replays and eight interruption
 fixtures/24 searches. Its own complete54 CPU collection is recorded below.
 
@@ -29,12 +38,20 @@ Shared immutable geometry is now also used by influence and activity. Its
 10,000-position coordinate-oracle check and all54 replays pass; a separate
 six-case generic CPU pilot gives a2.25% sum-of-medians reduction. See
 [decision0003](docs/decisions/0003-shared-evaluation-geometry.md). A separately trained PGO comparison also improves the six-case sum by3.19%.
-The latest production PGO artifact8c4619a7 passes all54 strict replays and eight
-interruption fixtures; its complete54 CPU collection is recorded below.
+The previous production PGO artifact8c4619a7 owns the complete54 CPU collection
+recorded below; its timing is not transferred to fresh8d9dddc5.
 A reproducible generic x86-64 compiler-PGO build is available
 through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
+
+- Canonical8d9dddc5 now independently reconciles216 full54 CPU lifetimes,
+  summing81.131004s in case medians versus81.828432s previous8c:0.852305%
+  lower, with41 case medians lower and13 higher. Raw uncalibrated reference
+  ratio is1.279027725; maximum observed three-sample range/median is2.398788%.
+  Its separate balanced six-case pilot is2.052997% lower. These finite local
+  costs do not close qualification or transfer previous focused gameplay.
+  See [current full54](evidence/production54-cpu-activity-specialization-20261018/README.md).
 
 - The integrated pure kernels pass132 library+2 CLI tests. Adapterab8b7c3c
   passes36 units and2215 cases/49 operations against the exact new source.

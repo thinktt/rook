@@ -45,9 +45,10 @@ remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
 The current2868-case external result comprises47 complete fixture files plus
 25 unchanged selected cases from two partially supported files. All42 adapter
 unit tests pass. Frozen adapter SHA256 is
-`f8e0b7b0d73b1024984731e60fe44fbd958762db034e7e7de8b02d44da80cf12`.
-See `evidence/diagnostic-endgame-bounds-20261018/`; linked native source and all
-declared dependencies remain unchanged. The original25-case selection provenance
+`e31263ac39c03020b47189eb285ae08656380c3428db50c8aae46318eba3e4a5`.
+See `evidence/diagnostic-activity-specialization-20261018/`; this identical
+frontend is freshly linked against the canonical static-kind activity source,
+with both source closures and all declared dependencies verified unchanged. The original25-case selection provenance
 remains in `diagnostic-positions-20261018-02/`.
 
 The retained first expanded attempt passed1010of1022 cases and failed12
@@ -91,3 +92,10 @@ They do not infer legal ancestry, score favor, check state or phase from the
 supplied placement. Full stage clipping remains lower-then-upper; selected
 consumers preserve their distinct score/bound outputs. Frozenf8e0b7b0 passes
 all2868 cases/42 units against unchanged canonical native source.
+
+The identical57-operation frontend has now been relinked after static-kind
+activity integration. Frozene31263ac again passes42 units and2868 unique
+external cases; every original exit/report/source dependency is independently
+reconciled. The priorf8e0b7b0 observation stays attached to its older native
+source. No missing operation or production qualification claim is closed by
+this relink.

@@ -175,7 +175,7 @@ and production review remain requirements alongside optimization.
     support adoption or a further PGO trial. Canonical8c source remains unchanged.
     See `evidence/activity-widths-preparation-20261018/`.
 
-11. **Static piece-kind activity traversal: prepared hypothesis.**
+11. **Static piece-kind activity traversal: adopted measured specialization.**
     The next isolated candidate exposes fixed Knight/Bishop/Rook/Queen kinds to
     destination and piece-score kernels through four private instantiations.
     Currenti64/u64 arithmetic, per-type chronology, mark/charge order and all
@@ -193,5 +193,24 @@ and production review remain requirements alongside optimization.
     0.972921615(2.707839% lower). All six medians are lower; four observed ranges
     are disjoint, with profile02/29 overlapping. It advances to an isolated
     own-profile PGO trial; canonical source is unchanged and no PGO benefit
-    is inferred from generic timing.
+    is inferred from generic timing. Own-PGOb8cee321 then passes54 replays/eight
+    interruptions and independently reconciles60 matched lifetimes against8c:
+    13.7566335s versus13.453188s,2.205812% lower. All six medians are lower;
+    five ranges are disjoint, with profile29 overlapping. Exact source is
+    adopted under decision0007; fresh canonical verification/profile/cost is
+    separate. Canonical8d9dddc5 now passes134 native tests, verified54-case
+    training,54 strict replays and eight interruption fixtures. Its fresh balanced
+    60-lifetime pilot gives2.052997% lower summed medians against8c; five medians
+    improve, while profile29 is slightly higher with overlapping samples.
     See `evidence/activity-specialization-preparation-20261018/`.
+
+12. **Null-transition influence opportunity: measured positive scope parked.**
+    A D=true derivative of frozen8c counts positive ordinary null entries after
+    table admission where influence will be built, plus null-to-quiescence
+    boundaries. All54 strict replays pass; original counts reconcile independently.
+    Positive null entries build354565 maps out of46179283,0.767801%. Park this
+    narrow reuse path before adding admission/copy cost. Another2650437 null
+    entries delegate to Q, but those are not direct map-build counts and establish
+    no reuse benefit. No cache/reuse is implemented or CPU gain inferred.
+    The probe is tied to8c source, not a timing artifact for new specialization.
+    See `evidence/null-influence-opportunity-20261018/`.

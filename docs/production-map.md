@@ -21,8 +21,8 @@ agreement is not a proof over every admitted setup or a full gameplay pass.
 | N/R charges, natural4096 polls, captures, terminal work and publication | `work_clock`, `engine`, `timed`, `host`, `session` | External native timing fixtures, active-time native tests, all54 work-post replays and eight literal interruption fixtures. Review every pre/post-capture interrupted ownership boundary. |
 | Persistent game/clock/parameters/seed lifetime and ordinary command meaning | `session`, `clock`, `parameters`, `timing` | Persistent native sequences, literal seed controls, same-artifact focused12/632 plus continuity. Full3288-game gate and admitted command-domain audit remain. |
 | Framing, nonblocking queue/polls, live records, result/fatal exits, PV/score spelling | `wire`, `host`, `output`, `bin/rook2` | Literal process controls, eight wire interruption fixtures, complete all54 and focused replay. Full ordinary protocol requirement review remains. |
-| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozenf8e0b7b0 passes57 operations/2868 cases across47 complete files plus25 selected cases from two partial files, with42 adapter units, linked to integrated compact-relation/typed-list native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
-| Owned whole-engine cost, repeatability, cross-host calibration and final performance | External measurement tools and frozen build artifacts | Direct wait4 controls, balanced local pilots and canonical8c4619a7 complete54 CPU collection:216 strict lifetimes,81.828432s summed case medians. PMU unavailable through disabled self-opens. Final measurement profile, calibration, qualified54/12 costs and current-artifact gameplay remain separate obligations. |
+| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozene31263ac passes57 operations/2868 cases across47 complete files plus25 selected cases from two partial files, with42 adapter units, linked to current integrated compact-relation/typed-list/static-kind activity native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
+| Owned whole-engine cost, repeatability, cross-host calibration and final performance | External measurement tools and frozen build artifacts | Direct wait4 controls, balanced local pilots and canonical8d9dddc5 complete54 CPU collection:216 strict lifetimes,81.131004s summed case medians. PMU unavailable through disabled self-opens. Final measurement profile, calibration, qualified54/12 costs and current-artifact gameplay remain separate obligations. |
 
 Production search uses static generic diagnostic/host specialization. Ordinary
 `Session<false>` has no development counters/traces; `NoHost` is zero-sized when
@@ -81,6 +81,22 @@ qualified performance remain open.
 
 A bounded [current-source score review](../evidence/score-range-review-20261018/score-range-cold-review-20261018-imp2-subagent.md)
 proves selected FULL race/queen endpoint bounds and distinguishes the discarded
-ply63 FAST endpoints. Conditional i16 capacity is safe under its stated store
-invariants; complete TT-origin/root-window induction and global retained/intermediate
-bounds remain unclosed. This source review supplies no runtime defect claim.
+ply63 FAST endpoints. A subsequent [production TT-origin review](../evidence/store-origin-review-20261018/production-tt-origin-cold-proof-20261018-store-origin-review.md), independently reviewed against the current native source, closes normalized TT score capacity at +/-10062 through actual store sites, root windows and table lifetime. It imports the consumed endpoint bounds and valid completed upstream arithmetic; global retained/intermediate bounds remain open. These cold reviews identify no reachable runtime defect.
+
+Current static-kind activity integration passes134 native tests. Canonical
+8d9dddc5 has verified own54-case PGO training and passes54 strict replays/eight
+interruption fixtures. Its fresh60-lifetime pilot independently reconciles
+2.052997% lower summed CPU medians than8c, with profile29 slightly higher and
+overlapping. The unchanged57-operation adapter freshly relinks as e31263ac
+and passes2868 unique cases/42 units against this same native source. Complete
+cost and current-artifact gameplay are separate from these observations.
+
+The linked [production score-capacity review](research/production-score-capacity.md)
+connects the bounded endpoint, retained producer, raw search-intermediate and
+TT/window proofs. This closes the stated numeric premises under admitted
+position/root invariants, without closing full lifecycle or source-global audit.
+
+Fresh8d9dddc5 full54 cost now independently reconciles216 normal strict
+lifetimes:81.131004s summed medians,0.852305% below the previous81.828432s.
+There are41 lower and13 higher case medians. The raw uncalibrated reference
+ratio1.279027725 and maximum finite spread2.398788% do not close qualification.
