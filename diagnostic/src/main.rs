@@ -12,6 +12,7 @@ use std::{
     process::ExitCode,
 };
 
+mod admission;
 mod candidate_order;
 mod learned;
 mod ledger;
@@ -98,6 +99,9 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "search.nodeAdmission" | "search.historyAdmission" | "search.moveExtensions" => {
+            admission::dispatch(operation, input)
+        }
         "evaluation.materialBalance"
         | "search.captureException"
         | "search.captureDefense"

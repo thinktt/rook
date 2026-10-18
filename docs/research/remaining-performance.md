@@ -48,8 +48,12 @@ Function attribution changed through inlining, so source-line evidence matters.
    Both generic artifacts pass54 strict replays. Its independently reconciled
    six-case/60-lifetime pilot sums16.2258485s baseline versus15.7125745s lookup,
    ratio0.968366893(3.163311% lower), with profile29 ranges overlapping.
-   A separate own-PGO training/build/comparison follows; production retains the
-   formula until that decision. Two dependent class loads can offset lower footprint.
+   Own-PGO1e5d075d also passes54 replays/eight interruption fixtures. Its separate
+   matched60-lifetime pilot sums14.361971s versus14.8805095s canonical915f83e4,
+   ratio0.965153176(3.484682% lower); profile02/29 ranges overlap. The kernel is
+   selected for next canonical integration under decision0005, with production
+   source still unchanged pending that step. Canonical timing cannot inherit
+   trial results. Two dependent class loads still need complete pipeline cost.
 
 4. **Placement bitplanes/other representations.** The independently developed
    four-u64 Piece-tag representation has now passed a matched storage comparison
@@ -128,3 +132,18 @@ and production review remain requirements alongside optimization.
    query kernel and cannot isolate storage cost. It is unimplemented/unmeasured;
    investigate only after the matched bitplane results, with broad independent
    Boolean/projection comparisons and whole-native timing before adoption.
+
+9. **Typed-list influence construction.** A separate pure enumeration prototype
+   walks existing coherent per-type lists instead of scanning64 mailbox squares
+   and classifying each source. It retains the exact targets/ray geometry,
+   transparency, weakening, pawn extension and wrapping sums. Chronology is
+   immaterial to these commutative bytes. The old mailbox builder remains a
+   test oracle;10,000 broad placements also match the target-centric coordinate
+   oracle after per-type order reversal. All134 native tests and54 strict
+   replays/eight interruption fixtures pass on generic10634820. Its matched
+   generic60-lifetime pilot independently reconciles all samples and gives
+   sum15.4118105s versus16.181479s baseline, ratio0.952435219(4.756478% lower).
+   All six candidate maxima are below their baseline minima, a finite observation
+   rather than a confidence band. A fresh combined lookup/list source passes134
+   tests and enters its own PGO training for a baseline/table/combined comparison.
+   No combined or standalone PGO gain or production adoption is inferred yet.

@@ -6,12 +6,13 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements41 native-backed operations,
+  The separate `diagnostic/` crate now implements44 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
   supplied candidate/priority/capture order, root randomization/aspiration,
   quiescence capture policy/PV line length, material balance, capture exception/
   defense/allowance, frontier estimate, king pressure and guarded fast cutoff,
-  with1475 external cases. Every other mandatory operation still needs
+  plus opaque/produced-history admission and local move extensions, with1968
+  external cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -74,7 +75,7 @@ qualification transfers to it. The collection remains reported-only, including
 the disclosed inherited-affinity helper limitation recorded under
 `evidence/production12-cpu-analysis-preparation-20261018/`.
 
-The integrated fresh diagnostic attempt passes32 units and1475 cases across41
+The integrated fresh diagnostic attempt passes34 units and1968 cases across44
 operations. Prior attempts and12 missing-transport failures remain preserved.
 Both matched bitplane variants pass133
 tests and54 replays; their90-lifetime generic pilot favors persistent by2.13%
@@ -89,7 +90,15 @@ overlap). Its complete54 CPU collection independently reconciles216 lifetimes,
 summing88.486549s; this does not close final timing qualification. A compact
 relation-state lookup passes133 native tests and both generic artifacts pass54
 strict replays. Its independently reconciled60-lifetime generic pilot is3.163311%
-lower in summed medians, with profile29 ranges overlapping; own PGO training/
-comparison is separate and no production adoption follows yet. The original CPU collection is terminal,
+lower in summed medians, with profile29 ranges overlapping. Its own PGO artifact
+passes54 replays/eight interruption fixtures, then independently reconciles60
+matched CPU lifetimes with3.484682% lower summed medians(profile02/29 ranges
+overlap). The kernel is selected for next integration under decision0005;
+canonical source/build/profile and measurements still need their own validation.
+A separate typed-list influence prototype passes134 tests and54 replays/eight
+interruption fixtures; its independently reconciled60-lifetime generic pilot
+is4.756478% lower in summed medians, with all six finite ranges disjoint.
+A combined source passes134 tests and enters its own PGO training/comparison;
+no combined gain or canonical adoption follows yet. The original CPU collection is terminal,
 and all57 verified own lead/client threads are now confined to housekeeping
 CPUs. This later correction does not qualify the prior measurements.

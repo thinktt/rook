@@ -7,14 +7,15 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current41 operations cover time schedule/allowance, parameters and output
+The current44 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
 candidate ordering, priority-sequence permutation and capture preference;
 root randomization/aspiration, quiescence capture policy and PV line length;
 material balance, capture exception/defense/allowance, frontier estimate,
-king pressure and guarded fast cutoff.
+king pressure and guarded fast cutoff; opaque/produced-history admission and
+local move extensions.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -38,11 +39,11 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current1475-case external result comprises34 complete fixture files plus
-25 unchanged selected cases from two partially supported files. All32 adapter
+The current1968-case external result comprises37 complete fixture files plus
+25 unchanged selected cases from two partially supported files. All34 adapter
 unit tests pass. Frozen adapter SHA256 is
-`a3c94922b9f02f9a65d01dfc4b644095b8a054e905ba631ee7949cfbc24f96f8`.
-See `evidence/diagnostic-supplied-20261018/`; linked native source and all
+`bb87250940e99881bff0ab30e827da326a754619545d7c6e0bbd12e99edb625a`.
+See `evidence/diagnostic-admission-20261018/`; linked native source and all
 declared dependencies remain unchanged. The original25-case selection provenance
 remains in `diagnostic-positions-20261018-02/`.
 

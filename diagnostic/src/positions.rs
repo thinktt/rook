@@ -6,7 +6,7 @@ use rook2::{
         Phase, Position, BLACK_KINGSIDE, BLACK_QUEENSIDE, NO_SQUARE, WHITE_KINGSIDE,
         WHITE_QUEENSIDE,
     },
-    types::{Color, MoveKind, Piece, PieceKind, Square},
+    types::{Color, Move, MoveKind, Piece, PieceKind, Square},
 };
 use serde_json::{json, Map, Value};
 
@@ -87,7 +87,7 @@ pub(super) fn phase_value(phase: Phase) -> Value {
     json!({"opening":phase.opening,"middlegame":phase.middlegame,"endgame":phase.endgame})
 }
 
-fn state(position: &Position) -> Value {
+pub(super) fn state(position: &Position) -> Value {
     json!({"placement":position.placement(),"sideToMove":COLORS[position.side.index()],
            "castling":rights(position),"enPassant":ep(position),"halfmoveClock":position.halfmove,
            "pieceOrder":piece_order(position),"identity":identity(position),"phase":phase_value(position.phase())})
@@ -121,7 +121,7 @@ fn restore_order(position: &mut Position, value: &Value) -> Result<()> {
     position.validate()
 }
 
-fn sequence_position(fen: &str, normalize: bool) -> Result<Position> {
+pub(super) fn sequence_position(fen: &str, normalize: bool) -> Result<Position> {
     let mut position = Position::from_fen(fen)?;
     bounded_material(&position)?;
     if !normalize {
@@ -154,6 +154,10 @@ fn sequence_position(fen: &str, normalize: bool) -> Result<Position> {
 }
 
 fn advance(position: &Position, spelling: &str) -> Result<Position> {
+    advance_with_move(position, spelling).map(|(child, _)| child)
+}
+
+pub(super) fn advance_with_move(position: &Position, spelling: &str) -> Result<(Position, Move)> {
     if !spelling.is_ascii()
         || !matches!(spelling.len(), 4 | 5)
         || Square::parse(&spelling[..2]).is_none()
@@ -188,7 +192,7 @@ fn advance(position: &Position, spelling: &str) -> Result<Position> {
     }
     let child = position.played_unchecked(movement);
     bounded_material(&child)?;
-    Ok(child)
+    Ok((child, movement))
 }
 
 pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {

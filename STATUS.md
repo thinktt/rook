@@ -29,7 +29,7 @@ through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 Current artifact-specific evidence:
 
 - Integrated persistent-bitplane source passes131 native library tests and two
-  development-CLI tests. Adaptera3c94922 passes32 units and1475 cases/41 operations
+  development-CLI tests. Adapterbb872509 passes34 units and1968 cases/44 operations
   against that source. The isolated PGO trialf4a2f8bf passes54 strict replays and
   eight interruption fixtures/24 searches; its independently reconciled60-lifetime
   pilot sums14.805304s versus15.296771s baseline1dc996b2(ratio0.967871193).
@@ -62,9 +62,9 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adaptera3c94922 implements41 operations and passes1475
-  cases across34 complete fixture files plus25 unchanged selected cases
-  from two partially supported files. All32 adapter unit tests pass. The first
+- The separate external DIAG adapterbb872509 implements44 operations and passes1968
+  cases across37 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All34 adapter unit tests pass. The first
   expanded attempt and its12 unsupported ordering failures remain retained;
   prior attempts and their source links remain preserved. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
@@ -116,6 +116,19 @@ Next: use measured remaining pipeline costs to select further computational
 reuse/representation experiments, expand mandatory external diagnostics and
 production review, and complete artifact-specific gameplay/performance evidence.
 Earlier partial timings below are historical development checkpoints.
+
+The isolated compact relation kernel now passes133 native tests and all54
+replays. Its own-PGO1e5d075d also passes54 replays/eight interruption fixtures
+and independently reconciles60 CPU lifetimes:3.484682% lower summed medians
+than canonical915f83e4, with profile02/29 ranges overlapping. It is selected
+for the next canonical integration under
+[decision0005](docs/decisions/0005-compact-relation-kernel.md).
+A separate typed-list influence prototype passes134 tests and54 replays/eight
+interruption fixtures; its60-lifetime generic pilot is4.756478% lower in summed
+medians, with all six observed ranges disjoint. A combined source passes134
+tests and is training its own PGO profile for an explicit interaction comparison.
+Production native source/binary remains unchanged; no trial timing transfers
+to the next canonical artifact or completes qualification.
 
 ## Runtime policy
 
