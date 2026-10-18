@@ -1,6 +1,7 @@
 //! Cold public result formatting; stored PVs and charged work are untouched.
 use crate::movegen::{generate_legal, in_check, MoveList};
 use crate::ordinary_policy::selective_depth;
+use crate::post_lifecycle::{final_report, FinalReport};
 use crate::position::Position;
 use crate::timed::{Capture, Outcome};
 use crate::types::{Move, MoveKind, PieceKind};
@@ -212,11 +213,20 @@ pub fn render(mut position: Position, pv: &[Move], fields: Fields) -> Result<Pos
 pub fn capture_fields(root: &Position, capture: &Capture, draw: i32, selectivity: i32) -> Fields {
     let depth = capture.depth as i32;
     let margin = selective_depth(depth, selectivity, root.phase().endgame, depth).margin;
+    captured_fields(capture.depth, margin, capture.score, draw, capture.search_id, capture.elapsed_cs)
+}
+
+/// Scalar captured metadata; production supplies its actual elapsed word and
+/// native root margin, controlled captures supply their admitted opaque suffix.
+pub fn captured_fields(
+    depth: u8, remainder: i32, ranking: i32, draw: i32,
+    search_id: u64, elapsed_word: u32,
+) -> Fields {
     Fields {
-        depth_token: 1000 * depth + margin,
-        evaluation: reported_score(capture.score, draw),
-        centiseconds: capture.elapsed_cs as i32,
-        search_id: capture.search_id,
+        depth_token: 1000 * i32::from(depth) + remainder,
+        evaluation: reported_score(ranking, draw),
+        centiseconds: elapsed_word as i32,
+        search_id,
     }
 }
 
@@ -251,23 +261,18 @@ pub fn completed_events(
         .unwrap_or(outcome.initial_candidates[0]);
     let mut events = Vec::new();
     if post_enabled {
-        if !outcome.publications.is_empty() {
-            for capture in &outcome.publications {
-                events.push(Event::Post(render(
-                    root,
-                    &capture.pv,
-                    capture_fields(&root, capture, draw, selectivity),
-                )?));
-            }
-        } else if let Some(capture) = &outcome.result {
+        for capture in &outcome.publications {
             events.push(Event::Post(render(
-                root,
-                &capture.pv,
-                capture_fields(&root, capture, draw, selectivity),
+                root, &capture.pv, capture_fields(&root, capture, draw, selectivity),
             )?));
-        } else {
-            events.push(Event::Post(render(root, &[selected], Fields::default())?));
         }
+    }
+    match final_report(post_enabled, !outcome.publications.is_empty(), outcome.result.as_ref()) {
+        FinalReport::Suppressed => {},
+        FinalReport::Retained(capture) => events.push(Event::Post(render(
+            root, &capture.pv, capture_fields(&root, capture, draw, selectivity),
+        )?)),
+        FinalReport::Fallback => events.push(Event::Post(render(root, &[selected], Fields::default())?)),
     }
     events.push(Event::Move(selected));
     Ok(events)

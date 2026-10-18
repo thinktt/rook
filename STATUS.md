@@ -2,23 +2,36 @@
 
 ## Current stage — 2026-10-18
 
-The independent native engine serves the live King XBoard stream, including
-work-timed recursive search, actual publication and one-command-per-poll input,
-persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT/
-learned state and specified root scheduling. Ordinary `Session<false>` excludes
-development tracing; cold JSON is a separate adapter package. Position160/Node176
-now owns exact placement attack planes while retaining copied-child ownership.
-Current source implements105 mandatory diagnostic operations and passes7519
-unique cases/182 adapter units plus158 native tests. Source promotion exactly
-matches the tested103-file closure; frozen1befaa6d passes54 strict replays and
-eight interruption fixtures/24 searches, and adapter9809cb49 owns the component
-result. The direct matched generic comparison to95 is2.373051% lower in summed
-CPU medians, with all six observed ranges separated in favor of combined.
-Current source has no own-PGO/full54/12 cost/gameplay result. Remaining mandatory
-inventory is12 operations/154 cases. The goOutcome canonical command vocabulary
-retains a wider effect-domain audit obligation. See
-[decision0010](docs/decisions/0010-ordered-checkers-and-projected-q-view.md) and
-[105 integration](evidence/ordered-q-actual-timed105-integration-20261018/README.md).
+The repository now contains the complete117-operation semantic checkpoint.
+Its shared native timed controller owns root attempts/retries, capture/publication,
+unit charging and terminal sequencing. The external diagnostic crate passes all
+7673 unique mandatory cases across115 original whole fixture files and209 units.
+Exact native source binds177 passed native tests,54 strict replays and eight
+interruption fixtures/24 searches. Generic39cadc62 also passes all12 pre-gate
+games/632 searches, eight-search continuity and both required seed controls;
+all game/continuity protocol bytes were independently reconciled.
+
+Source112=46 native+23 tools+43 cold files exactly matches frozen corrected
+117 graphdee7a450e2e54420a879c89feb78a480cb795150879cafa2ec8da78232db5ed7.
+Ordinary39cadc62 and adapterdc842a1a retain separate artifact identities.
+This is source promotion, not a canonical-path rebuild or PGO qualification.
+The two corrected controlled test witnesses and their original failures remain
+preserved. Native green checks were reused only by exact source equality after
+the cold-only clock-test correction;209 units/all7673 cases are fresh.
+See [117 validation](evidence/complete117-ledger-test-validation-preparation-20261018/report.md),
+[pre-gate](evidence/complete117-generic-pregate-20261018/README.md) and
+[decision0011](docs/decisions/0011-shared-timed-search-controller.md).
+
+Backend/copy/frame/ABI review, own-PGO production regression, current complete
+54/12 CPU costs and comparison-profile qualification remain open. The most recent
+complete54 costs still belong to older8d9dddc5; no old timing is transferred.
+Production audits retain explicit conditional obligations. The full3288-game
+gate is assigned to an external system; prepare its exact artifact handoff.
+
+The preceding105 source passed7519 cases/182 adapter units and158 native tests.
+Its matched generic comparison to95 was2.373051% lower in summed CPU medians,
+with all six ranges separated. That historical timing remains artifact-specific.
+See [decision0010](docs/decisions/0010-ordered-checkers-and-projected-q-view.md).
 The earlier85-operation Q observer restored default evaluation call scope and stack size;
 its disposition extraction retains a small code difference. The original
 metadata-instability failure and stable replay retry remain preserved. See
@@ -88,12 +101,27 @@ unchanged total size. It was not separately promoted; its changes are included
 in105 with distinct artifact/source closure and no neutrality claim. See
 [102 validation](evidence/iterations-clock102-regression-overlay-preparation-20261018/report.md).
 
-The isolated shared root scheduler prototype compiles and passes158 native
-tests,54 strict replays and eight interruption fixtures/24 searches. It owns
-actual timed-root scheduling/retry/ranking through opaque initial-table IDs;
-timing/publication/stop owners remain at their existing sites. Its controlled
-three-route transports and emitted-code costs remain pending. It is not
-integrated. See [prototype protocol check](evidence/root-scheduler-native-protocol-20261018/README.md).
+The separate108-operation shared scheduler composition passes163 native tests,
+188 adapter tests/all7584 cases,54 strict replays and eight interruption
+fixtures/24 searches, with independent raw/source/image reconciliation.
+It owns actual timed-root scheduling/retry/ranking through opaque initial-table
+IDs and three controlled transports. Its direct generic60-lifetime comparison
+to exact1bef is0.006650% lower in summed CPU medians, with four cases lower,
+two higher and all six observed ranges overlapping. This establishes neither
+speedup, regression nor neutrality. Actual root-helper/aggregate/lookup costs
+are accepted for further composition; source remains unpromoted. Whole-suite
+CPU15 has133 nonidle ticks, without pervariant attribution; a read-only audit
+found shared guest Herdr/other Codex threads eligible on14/15 while this pane
+remained confined. See [scheduler pilot](evidence/controlled-root108-cpu-pilot-20261018/README.md).
+
+The separate109-operation capture/publication composition passes169 native
+tests,192 adapter tests/all7606 cases,54 strict replays and eight interruption
+fixtures/24 searches. Shared capture ownership and actual live/offline finish
+policy preserve their distinct publication facts. Its actual root helper,
+NoHost frame and final-post aggregate lowering change; generated-code review
+finds no ownership blocker but establishes no CPU neutrality. It remains
+unpromoted, without its own timing or qualification result. See
+[109 validation](evidence/post-lifecycle109-validation-preparation-20261018/report.md).
 
 The isolated projected Q bit-view candidate passes 145 native tests, strict54
 and eight-wire/24 searches. Its independently reconciled generic pilot is

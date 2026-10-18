@@ -1,0 +1,2227 @@
+--- a/diagnostic/src/actual_timed.rs
++++ b/diagnostic/src/actual_timed.rs
+@@ -1,11 +1,11 @@
+ //! Cold, distinct admitted transports over actual native timed/session owners.
+ use super::{boolean, integer, moves, object, text, unsigned32, Result};
+-use rook2::{host::{self, Host, Record}, engine::Search, history::SearchHistory, movegen::{self, MoveList},
+-    output::{self, Event, Post}, parameters::{Parameters, NAMES},
++use rook2::{engine::Search, history::SearchHistory, movegen::{self, MoveList},
++    output::{self, Event, Post}, parameters::{self, Parameters, NAMES},
+     position::Position, quiescence::{Limits, Work}, session::{self, Action, Session},
+     timed::{self, Controls, Point}, types::Move};
+ use serde_json::{json, Value};
+-use std::{io, time::{SystemTime, UNIX_EPOCH}};
++use std::time::{SystemTime, UNIX_EPOCH};
+ 
+ // Exact released ordinary neutral vector, in native NAMES order. Request
+ // controls only: not startup defaults or a fixture-derived search answer.
+@@ -55,17 +55,10 @@
+             origin:0,seed:self.seed,randomness:50,maximum_entered_iterations:6},Limits{nodes:Some(8192)})
+             .map_err(|e|format!("seeded timed search did not reach its admitted stop: {e:?}"))?;
+         if history.search_ply()!=0 { return Err("native timed history did not unwind".into()); }
+-        validate_natural(&outcome)?;
++        validate_seeded(&outcome)?;
+         if outcome.seed!=self.seed { return Err("native timed seed changed".into()); }
+-        project_natural(root, &outcome, search.evaluator.draw_preference, search.config.selectivity)
+-    }
+-}
+-
+-/// One projection/render owner for the two distinct natural timed admissions.
+-pub(super) fn project_natural(
+-    root:Position, outcome:&timed::Outcome, draw:i32, selectivity:i32,
+-)->Result<Value> {
+-        let events=output::completed_events(root,outcome,draw,selectivity,true).map_err(|e|format!("native output: {e:?}"))?;
++        let events=output::completed_events(root,&outcome,search.evaluator.draw_preference,
++            search.config.selectivity,true).map_err(|e|format!("native output: {e:?}"))?;
+         let iterations=outcome.iterations.iter().map(|i|json!({"depth":i.depth,"complete":i.complete,
+             "steps":i.steps.iter().map(|s|json!({"move":moves::descriptor(s.movement),
+                 "window":{"lower":s.window[0],"upper":s.window[1]},"adjustment":s.adjustment,
+@@ -86,8 +79,8 @@
+             "result":{"depth":captured.depth,"rootIndex":captured.root_index,"score":captured.score,
+                 "principalVariation":variation(&captured.pv),"searchId":captured.search_id,
+                 "elapsedCs":captured.elapsed_cs},"events":events.iter().map(event).collect::<Vec<_>>() }))
+-}
+-
++    }
++}
+ fn point(p:Point) -> &'static str { match p { Point::Root=>"root",Point::Iteration=>"iteration",Point::Poll=>"poll" } }
+ fn variation(pv:&[Move]) -> Vec<Value> { pv.iter().copied().map(moves::descriptor).collect() }
+ fn work(w:Work) -> Value { json!({"chargedSearchUnits":w.charged_search_units,"chargedRelationQueries":w.charged_relation_queries}) }
+@@ -134,7 +127,7 @@
+     }
+     Ok(())
+ }
+-pub(super) fn validate_natural(out:&timed::Outcome)->Result<()> {
++fn validate_seeded(out:&timed::Outcome)->Result<()> {
+     validate_records(out,8192)?;
+     if out.stats.iio_initial_phases!=0 || out.stats.iio_tail_phases!=0 {
+         return Err("seeded timed search entered unsupported internal iterative ordering".into());
+@@ -172,28 +165,15 @@
+     Ok(())
+ }
+ 
+-// Cold natural host: native timed preparation owns the acquisition boundary.
+-#[derive(Default)]
+-struct GoHost { records:Vec<Record>, acquisitions:Vec<(u32,u32,u32)>, started:Vec<u32> }
+-impl Host for GoHost {
+-    fn acquire_seed(&mut self,_supplied:u32,entry:u32)->io::Result<u32> {
+-        let seconds=SystemTime::now().duration_since(UNIX_EPOCH)
+-            .map_err(io::Error::other)?.as_secs() as u32;
+-        let seed=host::seed_from_seconds(seconds,entry);
+-        self.acquisitions.push((seconds,entry,seed));Ok(seed)
+-    }
+-    fn started(&mut self,seed:u32)->io::Result<()> {self.started.push(seed);Ok(())}
+-    fn publish(&mut self,record:Record)->io::Result<()> {self.records.push(record);Ok(())}
+-}
+ struct Go { commands:Vec<String> }
+ impl Go {
+     fn parse(input:&Value)->Result<Self> {
+         object(input,&["commands","remainingTimeCs"])?;
+         integer(&input["remainingTimeCs"],60000,60000)?;
+-        // Eagerly validate every record before applying any native setup command.
+-        // Native Session::idle owns command arguments and ordered state changes.
++        // No invented per-request command-count bound. The native ordinary
++        // per-record byte/token limits still apply to every setup command.
+         let supplied=input["commands"].as_array().ok_or("expected setup command array")?;
+-        let mut commands=Vec::new();
++        let mut commands=Vec::new();let mut setboards=0;let mut post=false;let mut easy=false;
+         for value in supplied {
+             let line=text(value)?;
+             if line.len()>1022||!line.is_ascii()||line.bytes().any(|b|b==0||b==b'\r'||b==b'\n'
+@@ -202,59 +182,63 @@
+             }
+             let words=line.split_ascii_whitespace().collect::<Vec<_>>();
+             if words.len()>40 { return Err("too many ordinary setup tokens".into()); }
+-            if words.first().is_some_and(|word|["sd","go","quit","hard"].contains(word)) {
+-                return Err("command is outside goOutcome setup admission".into());
++            match words.as_slice() {
++                ["post"]=>post=true,
++                ["easy"]=>easy=true,
++                ["setboard",rest @ ..] if rest.len()==6=>{
++                    // Actual Session::setboard owns semantic normalization;
++                    // full FEN counters must not be narrowed to Position's u8.
++                    for (field,min) in [(rest[4],0),(rest[5],1)] {
++                        if !field.bytes().all(|b|b.is_ascii_digit())
++                            ||parameters::integer(field).map_err(|e|format!("FEN counter: {e:?}"))?<min {
++                            return Err("invalid public setboard counter".into());
++                        }
++                    }
++                    setboards+=1;
++                },
++                ["cm_parm",args @ ..] if !args.is_empty()=>{
++                    for arg in args {
++                        if *arg=="default" { continue; }
++                        let (name,value)=arg.split_once('=').ok_or("setup parameters require assignments or default")?;
++                        if !NAMES.contains(&name)&&!["cc","mob","ks","pp","pw"].contains(&name) {
++                            return Err("unknown setup parameter".into());
++                        }
++                        parameters::integer(value).map_err(|e|format!("setup integer: {e:?}"))?;
++                    }
++                },
++                _=>return Err("command is outside fresh goOutcome setup".into()),
+             }
+             commands.push(line.to_owned());
+         }
++        if setboards!=1||!post||!easy { return Err("goOutcome requires one setboard, post and easy".into()); }
+         Ok(Self{commands})
+     }
+     fn setup(&self)->Result<Session<true>> {
+         let mut state=Session::<true>::default();
+         idle(&mut state,"xboard")?;
+-        let mut fen6_baseline=false;let mut post=false;let mut easy=false;
+-        for command in &self.commands {
+-            idle(&mut state,command)?;
+-            let words=command.split_ascii_whitespace().collect::<Vec<_>>();
+-            match words.as_slice() {
+-                ["setboard",fields @ ..]=>fen6_baseline=fields.len()==6,
+-                ["new"]=>fen6_baseline=false,
+-                ["post"]=>post=true,["easy"]=>easy=true,
+-                _=>{},
+-            }
+-        }
+-        if !fen6_baseline||!post||!easy||state.parameters!=profile(1,0)||!state.post
+-            ||state.pondering||!state.force||!state.moves.is_empty() {
+-            return Err("goOutcome requires a FEN6 baseline, post/easy and the final neutral md1/rnd0 force/empty-history state".into());
++        for command in &self.commands { idle(&mut state,command)?; }
++        if state.parameters!=profile(1,0)||!state.post||state.pondering||!state.force||!state.moves.is_empty() {
++            return Err("goOutcome requires the complete neutral md1/rnd0 empty-history state".into());
+         }
+         idle(&mut state,"time 60000")?;idle(&mut state,"otim 60000")?;
+         Ok(state)
+     }
+-    fn observe(self)->Result<Value> {self.observe_with_host().map(|(value,_)|value)}
+-    fn observe_with_host(self)->Result<(Value,GoHost)> {
++    fn observe(self)->Result<Value> {
+         let mut state=self.setup()?;
+         let root=state.position();
+         let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
+         if legal.len!=0&&!movegen::in_check(&root,root.side) {
+             return Err("nonempty goOutcome root must actually be checked".into());
+         }
+-        // The placeholder is ignored by GoHost. No system-clock sample occurs
+-        // until actual timed preparation reaches Host::acquire_seed.
+-        let (result,host)=state.go_live(GoHost::default(),0,Limits{nodes:Some(4095)},1,false);
++        let seconds=SystemTime::now().duration_since(UNIX_EPOCH)
++            .map_err(|_|"ordinary system clock precedes POSIX epoch")?.as_secs() as u32;
++        let result=state.go(seconds,Limits{nodes:Some(4095)},1);
+         match result {
+-            Err(session::Error::FatalEmptyRoot) if legal.len==0=>{
+-                if !host.records.is_empty()||!host.acquisitions.is_empty()||!host.started.is_empty() {
+-                    return Err("fatal empty-root preparation must not acquire or publish".into());
+-                }
+-                Ok((json!({"kind":"fatalExit","exit":{"code":1,"signal":Value::Null},"posts":[],"move":Value::Null}),host))
+-            },
++            Err(session::Error::FatalEmptyRoot) if legal.len==0=>
++                Ok(json!({"kind":"fatalExit","exit":{"code":1,"signal":Value::Null},"posts":[],"move":Value::Null})),
+             Err(error)=>Err(format!("goOutcome did not produce its admitted native outcome: {error:?}")),
+             Ok(result)=>{
+                 if legal.len==0 { return Err("native result disagrees with empty generated roots".into()); }
+-                if host.acquisitions.len()!=1||host.started.as_slice()!=[result.seed]
+-                    ||host.acquisitions[0].1!=result.entry_clock||host.acquisitions[0].2!=result.seed {
+-                    return Err("ordinary result must retain its one actual late acquired seed".into());
+-                }
+                 let out=&result.outcome;validate_records(out,4095)?;
+                 if out.stop.point!=Point::Iteration||out.stop.depth!=1||out.iterations.len()!=1
+                     ||!out.iterations[0].complete||out.iterations[0].steps.len()!=legal.len
+@@ -262,26 +246,23 @@
+                     return Err("goOutcome did not complete its actual first root iteration".into());
+                 }
+                 let mut posts=Vec::new();let mut selected=None;
+-                for record in &host.records {match record {
+-                    Record::Post(p) if selected.is_none()=>posts.push(post(p)),
+-                    Record::Move(m) if selected.is_none()=>selected=Some(*m),
+-                    Record::Result(_) if selected.is_some()=>{},
++                for e in &result.events { match e {
++                    Event::Post(p) if selected.is_none()=>posts.push(post(p)),
++                    Event::Move(m) if selected.is_none()=>selected=Some(*m),
+                     _=>return Err("invalid native goOutcome event order".into()),
+-                }}
++                } }
+                 let selected=selected.ok_or("native goOutcome has no selected move")?;
+                 if out.result.as_ref().and_then(|c|c.pv.first()).copied()!=Some(selected) {
+                     return Err("native selected move disagrees with retained capture".into());
+                 }
+-                Ok((json!({"kind":"move","posts":posts,"move":selected.to_string()}),host))
++                Ok(json!({"kind":"move","posts":posts,"move":selected.to_string()}))
+             },
+         }
+     }
+ }
+ fn idle(state:&mut Session<true>,line:&str)->Result<()> {
+     match state.idle(line).map_err(|e|format!("native setup: {e:?}"))? {
+-        Action::Reply(lines) if !lines.iter().any(|line|line.starts_with("Illegal move:")||line.starts_with("Error"))=>Ok(()),
+-        Action::Reply(_)=>Err("native rejected setup command or move".into()),
+-        _=>Err("fresh setup must remain idle".into()),
++        Action::Reply(_)=>Ok(()),_=>Err("fresh setup must remain idle".into()),
+     }
+ }
+ pub(super) fn dispatch(operation:&str,input:&Value)->Result<Value> {
+@@ -358,94 +339,47 @@
+         assert_eq!(high["stop"]["point"],json!("root"));assert!(high["stop"]["pendingRoot"].is_null());
+     }
+     #[test]
+-    fn go_schema_has_no_fixture_recipe_and_validates_all_records_before_setup() {
++    fn go_schema_has_no_fixture_count_limit_and_rejects_nonsetup_records() {
+         let valid=go(CHECKED);assert!(Go::parse(&valid).is_ok());
+         let mut many=valid.clone();
+         many["commands"].as_array_mut().unwrap().extend((0..300).map(|_|json!("post")));
+-        assert!(Go::parse(&many).unwrap().setup().is_ok());
+-        for line in ["force","xboard","cm_parm unknown=7","cm_parm rnd unknown","cm_parm", "", " \t ",
+-            "cm_parm md=20 rnd=1000 cc=1001 default md=1 rnd=0 tts=67108864"] {
+-            let mut input=valid.clone();input["commands"].as_array_mut().unwrap().push(json!(line));
+-            let state=Go::parse(&input).unwrap().setup().unwrap();
+-            assert_eq!(state.position(),Position::from_fen(CHECKED).unwrap());
+-            assert_eq!(state.parameters,profile(1,0));assert!(state.force&&state.moves.is_empty());
+-        }
+-        for line in ["go","quit","sd 1","sd","hard","post\ngo", "force\r", "force\u{0}"] {
++        assert!(Go::parse(&many).is_ok());
++        for line in ["go","quit","sd 1","a2a4","nopost","hard","cm_parm bad=1","cm_parm rnd",
++            "post\ngo","cm_parm rnd=0.5","setboard 8/8/8/8/8/8/8/8 w - -"] {
+             let mut input=valid.clone();input["commands"].as_array_mut().unwrap().push(json!(line));
+             assert!(Go::parse(&input).is_err());
+         }
+-        let mut wide=valid.clone();wide["commands"].as_array_mut().unwrap().push(json!(" ".repeat(1023)));
+-        assert!(Go::parse(&wide).is_err());
+-        let mut tokens=valid.clone();tokens["commands"].as_array_mut().unwrap().push(json!(format!("cm_parm {}", "rnd ".repeat(40))));
+-        assert!(Go::parse(&tokens).is_err());
+-        let mut malformed=valid.clone();malformed["commands"].as_array_mut().unwrap().push(json!(false));
+-        assert!(Go::parse(&malformed).is_err());
+         let mut input=valid.clone();input["remainingTimeCs"]=json!(59999);assert!(Go::parse(&input).is_err());
+         input=valid;input["expected"]=json!("move");assert!(Go::parse(&input).is_err());
+     }
+     #[test]
+-    fn public_setboard_and_native_rewinds_qualify_the_latest_fen6_baseline() {
++    fn public_setboard_normalization_preserves_wide_text_counters_without_history() {
+         let input=go("4k3/8/8/8/1b6/P7/2P4P/4K3 w - - 2147483647 2147483647");
+         let state=Go::parse(&input).unwrap().setup().unwrap();
+         assert_eq!(state.position().halfmove,0);assert!(state.moves.is_empty());
+         assert_eq!(state.states.len(),1);assert_eq!(state.parameters,profile(1,0));
+         assert!(state.post&&!state.pondering&&state.force);
+-        for tail in [vec!["c2c3".to_owned(),"undo".to_owned()],vec!["c2c3".to_owned(),"remove".to_owned()],
+-            vec![format!("setboard {}",session::START),format!("setboard {CHECKED}")],
+-            vec!["new".to_owned(),"force".to_owned(),format!("setboard {CHECKED}")],
+-            vec!["setboard 4k3/8/8/8/1b6/P7/2P4P/4K3 w - -".to_owned(),format!("setboard {CHECKED}")]] {
+-            let mut changed=go(CHECKED);changed["commands"].as_array_mut().unwrap().extend(tail.into_iter().map(Value::String));
+-            let restored=Go::parse(&changed).unwrap().setup().unwrap();
+-            assert_eq!(restored.position(),state.position());assert_eq!(restored.states.len(),1);
+-            assert!(restored.moves.is_empty());assert_eq!(restored.ledger.last(),0);
+-        }
+-        for tail in [vec!["new","force"],vec!["setboard 4k3/8/8/8/1b6/P7/2P4P/4K3 w - -"],vec!["c2c3"]] {
+-            let mut changed=go(CHECKED);changed["commands"].as_array_mut().unwrap().extend(tail.into_iter().map(|s|json!(s)));
+-            assert!(Go::parse(&changed).unwrap().setup().is_err());
+-        }
+-    }
+-    #[test]
+-    fn actual_live_go_preserves_output_and_acquires_once_only_after_nonempty_preparation() {
+-        let (normal,host)=Go::parse(&go(CHECKED)).unwrap().observe_with_host().unwrap();
++    }
++    #[test]
++    fn actual_go_distinguishes_completed_checked_root_and_generated_empty_union() {
++        let normal=dispatch("session.goOutcome",&go(CHECKED)).unwrap();
+         assert_eq!(normal["kind"],json!("move"));assert_eq!(normal.as_object().unwrap().len(),3);
+         assert!(!normal["posts"].as_array().unwrap().is_empty());
+         assert_eq!(normal["move"].as_str().unwrap().len(),4);
+-        assert_eq!(host.acquisitions.len(),1);let (seconds,entry,seed)=host.acquisitions[0];
+-        assert_eq!(seed,host::seed_from_seconds(seconds,entry));assert_eq!(host.started,[seed]);
+-        assert_eq!(entry,0);assert!(matches!(host.records.last(),Some(Record::Move(_)|Record::Result(_))));
+-        // Same actual native owner with harmless setup and discarded echoes.
+-        let mut changed=go(CHECKED);
+-        changed["commands"].as_array_mut().unwrap().extend([json!("force"),json!("xboard"),json!("cm_parm unknown=7 rnd"),
+-            json!("cm_parm"),json!("nopost"),json!("post"),json!("c2c3"),json!("undo")]);
+-        assert_eq!(Go::parse(&changed).unwrap().observe().unwrap(),normal);
+-        // Compare actual live publication to the original offline native owner,
+-        // with the same admitted inputs; rnd0 makes natural seconds immaterial.
+-        let mut offline=Go::parse(&go(CHECKED)).unwrap().setup().unwrap();
+-        let old=offline.go(0,Limits{nodes:Some(4095)},1).unwrap();
+-        let old_posts=old.events.iter().filter_map(|e|if let Event::Post(p)=e{Some(post(p))}else{None}).collect::<Vec<_>>();
+-        let old_move=old.events.iter().find_map(|e|if let Event::Move(m)=e{Some(m.to_string())}else{None}).unwrap();
+-        assert_eq!(normal,json!({"kind":"move","posts":old_posts,"move":old_move}));
+         for fen in ["7k/6Q1/6K1/8/8/8/8/8 b - - 0 1","7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"] {
+             let state=Go::parse(&go(fen)).unwrap().setup().unwrap();
+-            let mut roots=MoveList::new();movegen::generate_legal(&state.position(),&mut roots);assert_eq!(roots.len,0);
+-            let (fatal,host)=Go::parse(&go(fen)).unwrap().observe_with_host().unwrap();
++            let mut roots=MoveList::new();movegen::generate_legal(&state.position(),&mut roots);
++            assert_eq!(roots.len,0);
++            let fatal=dispatch("session.goOutcome",&go(fen)).unwrap();
+             assert_eq!(fatal,json!({"kind":"fatalExit","exit":{"code":1,"signal":Value::Null},"posts":[],"move":Value::Null}));
+-            assert!(host.acquisitions.is_empty()&&host.started.is_empty()&&host.records.is_empty());
+-        }
+-    }
+-    #[test]
+-    fn go_final_qualification_and_actual_native_command_errors_remain_failures() {
++        }
++    }
++    #[test]
++    fn go_produced_domain_rejects_unchecked_nonempty_and_late_profile_reset() {
+         assert!(dispatch("session.goOutcome",&go(session::START)).is_err());
+-        for line in ["cm_parm default","cm_parm md=2","nopost","new", "nonsense", "a2a4",
+-            "cm_parm rnd=0.5","cm_parm 2bad=1","setboard 8/8/8/8/8/8/8/8 w - -"] {
+-            let mut input=go(CHECKED);input["commands"].as_array_mut().unwrap().push(json!(line));
+-            assert!(Go::parse(&input).unwrap().setup().is_err());
+-        }
+-        for omitted in ["post","easy"] {
+-            let mut input=go(CHECKED);input["commands"].as_array_mut().unwrap().retain(|v|v.as_str()!=Some(omitted));
+-            assert!(Go::parse(&input).unwrap().setup().is_err());
+-        }
+-        let mut noforce=go(CHECKED);noforce["commands"].as_array_mut().unwrap().insert(0,json!("new"));
+-        assert!(Go::parse(&noforce).unwrap().setup().is_err());
+-    }
+-}
++        let mut input=go(CHECKED);input["commands"].as_array_mut().unwrap().push(json!("cm_parm default"));
++        assert!(Go::parse(&input).unwrap().setup().is_err());
++        input=go(CHECKED);input["commands"].as_array_mut().unwrap().push(json!("cm_parm md=2"));
++        assert!(Go::parse(&input).unwrap().setup().is_err());
++    }
++}
+--- a/diagnostic/src/controlled_timed.rs
++++ /dev/null
+@@ -1,145 +0,0 @@
+-//! Exact supplied schedules; native code owns every root/time/activity recurrence.
+-use super::{array,boolean,integer,object,text,unsigned32,Result};
+-use rook2::timed_sequence::{self,ControlledStage,ElapsedReply,SuppliedOutcome,WorkReply};
+-use serde_json::{json,Value};
+-use std::collections::BTreeSet;
+-
+-enum Replies {Elapsed(Vec<Vec<[ElapsedReply;2]>>),Work(Vec<Vec<[WorkReply;2]>>)}
+-struct Query {average:u32,maximum:u32,start:u32,checked:bool,labels:Vec<String>,replies:Replies}
+-impl Query {
+-    fn parse(value:&Value,work:bool)->Result<Self> {
+-        object(value,&["average","maximum","start","inCheck","labels","iterations"])?;
+-        let average=integer(&value["average"],0,1000000)? as u32;
+-        let maximum=integer(&value["maximum"],average as i32,1000000)? as u32;
+-        let start=unsigned32(&value["start"])?;let checked=boolean(&value["inCheck"])?;
+-        let labels=array(&value["labels"],1,8)?.iter().map(|v|{
+-            let label=text(v)?;
+-            if !(1..=24).contains(&label.len())||!label.bytes()
+-                .all(|b|b.is_ascii_alphanumeric()||matches!(b,b'_'|b'-')) {
+-                return Err("invalid supplied timed candidate identity".into());
+-            }
+-            Ok(label.to_owned())
+-        }).collect::<Result<Vec<_>>>()?;
+-        if labels.iter().collect::<BTreeSet<_>>().len()!=labels.len() {
+-            return Err("supplied timed candidate identities must be unique".into());
+-        }
+-        let mut elapsed_rows=Vec::new();let mut work_rows=Vec::new();
+-        for row in array(&value["iterations"],1,8)? {
+-            let mut elapsed_candidates=Vec::new();let mut work_candidates=Vec::new();
+-            for pair in array(row,labels.len(),labels.len())? {
+-                let pair=array(pair,2,2)?;
+-                let mut elapsed_pair=Vec::new();let mut work_pair=Vec::new();
+-                for reply in pair {
+-                    object(reply,if work {&["score","work","relations"]} else {&["score","work","elapsed"]})?;
+-                    let score=integer(&reply["score"],-2000,2000)?;
+-                    let units=integer(&reply["work"],0,50000)? as u64;
+-                    if work {work_pair.push(WorkReply{score,work:units,
+-                        relations:integer(&reply["relations"],0,50000)? as u64});}
+-                    else {elapsed_pair.push(ElapsedReply{score,work:units,
+-                        elapsed:integer(&reply["elapsed"],0,1000000)? as u32});}
+-                }
+-                if work {work_candidates.push([work_pair[0],work_pair[1]]);}
+-                else {elapsed_candidates.push([elapsed_pair[0],elapsed_pair[1]]);}
+-            }
+-            if work {work_rows.push(work_candidates);} else {elapsed_rows.push(elapsed_candidates);}
+-        }
+-        Ok(Self{average,maximum,start,checked,labels,replies:if work {Replies::Work(work_rows)}
+-            else {Replies::Elapsed(elapsed_rows)}})
+-    }
+-    fn observe(self)->Result<Value> {
+-        let (out,work)=match self.replies {
+-            Replies::Elapsed(rows)=>(timed_sequence::run_supplied_elapsed(self.average,self.maximum,
+-                self.start,self.checked,&rows),false),
+-            Replies::Work(rows)=>(timed_sequence::run_supplied_work(self.average,self.maximum,
+-                self.start,self.checked,&rows),true),
+-        };
+-        project(&self.labels,out,work)
+-    }
+-}
+-fn stage(stage:ControlledStage)->&'static str {match stage {
+-    ControlledStage::Initialization=>"initialization",ControlledStage::Adjustment=>"adjustment",
+-    ControlledStage::RootCompletion=>"root-completion",ControlledStage::IterationCompletion=>"iteration-completion",
+-    ControlledStage::Poll=>"poll",
+-}}
+-fn project(labels:&[String],out:SuppliedOutcome,work:bool)->Result<Value> {
+-    if !work&&out.selected.is_none() {return Err("completed elapsed source produced no capture".into());}
+-    let selected=out.selected.as_ref();
+-    let passes=out.passes.iter().map(|p|{
+-        let mut row=json!({"depth":p.depth,"candidate":labels[usize::from(p.attempt.id)],
+-            "attempt":if p.attempt.retry {"retry"} else {"initial"},
+-            "lowerBound":p.attempt.window[0],"upperBound":p.attempt.window[1],"score":p.score,
+-            "searchId":p.work.charged_search_units,"elapsed":p.elapsed});
+-        if work {row["completed"]=json!(p.completed);}row
+-    }).collect::<Vec<_>>();
+-    let posts=out.posts.iter().map(|c|json!({"depth":c.depth,"candidate":labels[usize::from(c.id)],
+-        "score":c.score,"searchId":c.search_id,"elapsed":c.elapsed})).collect::<Vec<_>>();
+-    let checks=out.clock_checks.iter().map(|c|{
+-        let mut row=json!({"stage":stage(c.stage),"depth":c.depth,"index":c.index,"elapsed":c.elapsed});
+-        if work {row["searchId"]=json!(c.work.charged_search_units);
+-            row["relationQueries"]=json!(c.work.charged_relation_queries);}row
+-    }).collect::<Vec<_>>();
+-    let mut output=json!({"limits":out.limits,"changes":out.changes,
+-        "depth":if work {selected.map_or(0,|c|c.depth)} else {out.depth},"stopped":out.stopped,
+-        "selected":selected.map(|c|labels[usize::from(c.id)].as_str()),"score":selected.map(|c|c.score),
+-        "searchId":out.work.charged_search_units,"selectedSearchId":selected.map_or(0,|c|c.search_id),
+-        "selectedElapsed":selected.map_or(0,|c|c.elapsed),"passes":passes,"posts":posts,"clockChecks":checks});
+-    if work {output["relationQueries"]=json!(out.work.charged_relation_queries);
+-        output["lastElapsed"]=json!(out.last_elapsed);}Ok(output)
+-}
+-pub(super) fn dispatch(operation:&str,input:&Value)->Result<Value> {
+-    let work=match operation {"search.timedRootSequence"=>false,"search.workTimedRootSequence"=>true,
+-        _=>return Err("unknown controlled timed operation".into())};
+-    object(input,&["queries"])?;
+-    let queries=array(&input["queries"],1,if work {4} else {16})?.iter()
+-        .map(|v|Query::parse(v,work)).collect::<Result<Vec<_>>>()?;
+-    Ok(json!({"sequences":queries.into_iter().map(Query::observe).collect::<Result<Vec<_>>>()?}))
+-}
+-
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    fn query(work:bool)->Value {
+-        let reply=if work {json!({"score":10,"work":0,"relations":0})}
+-            else {json!({"score":10,"work":0,"elapsed":0})};
+-        json!({"average":0,"maximum":1,"start":4294967295u32,"inCheck":false,
+-            "labels":["0-root"],"iterations":[[[reply.clone(),reply]]]})
+-    }
+-    #[test]
+-    fn exact_all_query_suffixes_pairs_and_operation_specific_domains_are_eager() {
+-        for work in [false,true] {
+-            let good=query(work);assert!(Query::parse(&good,work).is_ok());
+-            let mut bad=good.clone();bad["iterations"][0][0][1][if work {"relations"} else {"elapsed"}]=json!(-1);
+-            let operation=if work {"search.workTimedRootSequence"} else {"search.timedRootSequence"};
+-            assert!(dispatch(operation,&json!({"queries":[good.clone(),bad]})).is_err());
+-            let mut bad=good.clone();bad["labels"]=json!(["same","same"]);
+-            assert!(Query::parse(&bad,work).is_err());
+-            bad=good.clone();bad["iterations"][0][0].as_array_mut().unwrap().pop();
+-            assert!(Query::parse(&bad,work).is_err());
+-            bad=good.clone();bad["iterations"][0][0][1]["ignored"]=json!(0);
+-            assert!(Query::parse(&bad,work).is_err());
+-            let maximum=if work {4} else {16};
+-            assert!(dispatch(operation,&json!({"queries":vec![good.clone();maximum]})).is_ok());
+-            assert!(dispatch(operation,&json!({"queries":vec![good;maximum+1]})).is_err());
+-        }
+-    }
+-    #[test]
+-    fn cold_projection_keeps_interrupted_null_capture_and_native_label_clock_invariance() {
+-        let mut input=query(true);input["iterations"][0][0][0]=json!({"score":2000,"work":4096,"relations":50000});
+-        let output=dispatch("search.workTimedRootSequence",&json!({"queries":[input.clone()]})).unwrap();
+-        let result=&output["sequences"][0];
+-        assert_eq!(result["depth"],json!(0));assert!(result["selected"].is_null());assert!(result["score"].is_null());
+-        assert_eq!(result["passes"][0]["completed"],json!(false));assert!(result["passes"][0]["score"].is_null());
+-        assert!(result["posts"].as_array().unwrap().is_empty());
+-        let mut shifted=input.clone();shifted["start"]=json!(17);
+-        assert_eq!(dispatch("search.workTimedRootSequence",&json!({"queries":[shifted]})).unwrap(),output);
+-        input["labels"]=json!(["renamed"]);
+-        let renamed=dispatch("search.workTimedRootSequence",&json!({"queries":[input]})).unwrap();
+-        assert_eq!(renamed["sequences"][0]["passes"][0]["candidate"],json!("renamed"));
+-        let elapsed=dispatch("search.timedRootSequence",&json!({"queries":[query(false)]})).unwrap();
+-        assert!(!elapsed["sequences"][0]["stopped"].as_bool().unwrap());
+-        assert_eq!(elapsed["sequences"][0]["depth"],json!(1));
+-        assert!(elapsed["sequences"][0]["passes"][0].get("completed").is_none());
+-        assert!(elapsed["sequences"][0].get("lastElapsed").is_none());
+-    }
+-}
+--- a/diagnostic/src/generic_timed.rs
++++ /dev/null
+@@ -1,189 +0,0 @@
+-//! Exact generic numeric admission over the immediate native IIO-entry fence.
+-use super::{actual_timed, array, boolean, integer, object, positions, text, unsigned32, Result};
+-use rook2::{engine::Search, history::SearchHistory, movegen::{self, MoveList},
+-    parameters::{Parameters, NAMES}, position::Position, quiescence::Limits,
+-    timed::Controls};
+-use serde_json::Value;
+-
+-struct Request { root:Position, history:SearchHistory, parameters:Parameters, seed:u32 }
+-impl Request {
+-    fn parse(input:&Value)->Result<Self> {
+-        object(input,&["fen","moves","personalityParameters","seed","allowance","controls"])?;
+-        let fen=text(&input["fen"])?;
+-        object(&input["personalityParameters"],&NAMES)?;
+-        let mut values=[0;30];
+-        for (index,name) in NAMES.iter().enumerate() {
+-            let (low,high)=match *name {
+-                "myk"|"opk"|"ana"=>(0,0), "avd"=>(-100,100),
+-                "cfd"=>(-10000,10000), "sop"=>(0,100), "sel"=>(0,64),
+-                "rnd"=>(0,1000), "md"=>(6,99), "tts"=>(4194304,67108864),
+-                _=>(0,1000),
+-            };
+-            values[index]=integer(&input["personalityParameters"][*name],low,high)?;
+-        }
+-        let seed=unsigned32(&input["seed"])?;
+-        object(&input["allowance"],&["averageCs","maximumCs"])?;
+-        integer(&input["allowance"]["averageCs"],1,1)?;
+-        integer(&input["allowance"]["maximumCs"],1,1)?;
+-        let controls=&input["controls"];
+-        object(controls,&["completion","learnedState","pondering","analysis","seedSource","workOrigin"])?;
+-        for (key,expected) in [("completion","natural-work-clock"),("learnedState","fresh-ordinary-search"),
+-            ("seedSource","explicit"),("workOrigin","after-root-preparation")] {
+-            if text(&controls[key])?!=expected { return Err(format!("unsupported generic timed {key}")); }
+-        }
+-        if boolean(&controls["pondering"])?||boolean(&controls["analysis"])? {
+-            return Err("generic timed pondering/analysis must both be false".into());
+-        }
+-        let supplied=array(&input["moves"],0,255)?.iter().map(|value|{
+-            let token=text(value)?;positions::coordinate(token)?;Ok(token)
+-        }).collect::<Result<Vec<_>>>()?;
+-        // Complete transport syntax precedes setup and actual legal replay.
+-        // No seeded fixed vector, initial nonmoving-check or orthodox EP guard
+-        // is imported: only the released reached-root conditions apply here.
+-        let mut root=Position::from_fen(fen)?;
+-        let mut history=SearchHistory::new(&root);
+-        for token in supplied {
+-            let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
+-            let movement=legal.as_slice().iter().copied().find(|m|m.to_string()==token)
+-                .ok_or_else(||format!("illegal generic timed history move: {token}"))?;
+-            root=root.played_unchecked(movement);
+-            history.push(&root,Some(movement));
+-        }
+-        history.mark_root();
+-        if movegen::in_check(&root,root.side) { return Err("generic timed reached root is in check".into()); }
+-        let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
+-        if !(1..=256).contains(&legal.len) { return Err("generic timed root count is outside1..256".into()); }
+-        Ok(Self{root,history,parameters:Parameters{values},seed})
+-    }
+-    fn observe(mut self)->Result<Value> {
+-        let mut search=Search::<true>::new(&self.root);
+-        self.parameters.bind(&mut search).map_err(|error|format!("parameter binding: {error:?}"))?;
+-        let outcome=search.run_work_timed_without_iio(self.root,&mut self.history,
+-            Controls{average_cs:1,maximum_cs:1,origin:0,seed:self.seed,
+-                randomness:self.parameters.values[24] as u32,maximum_entered_iterations:6},
+-            Limits{nodes:Some(8192)})
+-            .map_err(|error|format!("generic timed search did not reach its admitted stop: {error:?}"))?;
+-        if self.history.search_ply()!=0 { return Err("native generic timed history did not unwind".into()); }
+-        // Immediate native rejection is primary; terminal zero-entry admission
+-        // remains independent rather than treating any partial Outcome as success.
+-        actual_timed::validate_natural(&outcome)?;
+-        if outcome.seed!=self.seed||outcome.initial_candidates.len()>256 {
+-            return Err("generic timed native seed/root domain changed".into());
+-        }
+-        actual_timed::project_natural(self.root,&outcome,search.evaluator.draw_preference,
+-            search.config.selectivity)
+-    }
+-}
+-pub(super) fn dispatch(input:&Value)->Result<Value> { Request::parse(input)?.observe() }
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    use serde_json::json;
+-    fn request()->Value {
+-        let values=[100,100,100,100,100,100,100,100,100,100,0,0,
+-            100,100,100,100,100,100,100,100,100,100,0,100,50,14,0,20,0,67108864];
+-        let vector=Value::Object(NAMES.iter().zip(values).map(|(n,v)|(n.to_string(),json!(v))).collect());
+-        json!({"fen":rook2::session::START,"moves":[],"personalityParameters":vector,"seed":0,
+-            "allowance":{"averageCs":1,"maximumCs":1},
+-            "controls":{"completion":"natural-work-clock","learnedState":"fresh-ordinary-search",
+-                "pondering":false,"analysis":false,"seedSource":"explicit",
+-                "workOrigin":"after-root-preparation"}})
+-    }
+-    #[test]
+-    fn full_thirty_numeric_domains_admit_unselected_vectors_and_validate_late_fields() {
+-        let valid=request();
+-        for name in NAMES {
+-            let (low,high)=match name {
+-                "myk"|"opk"|"ana"=>(0,0),"avd"=>(-100,100),"cfd"=>(-10000,10000),
+-                "sop"=>(0,100),"sel"=>(0,64),"rnd"=>(0,1000),"md"=>(6,99),
+-                "tts"=>(4194304,67108864),_=>(0,1000),
+-            };
+-            for value in [low,high] {
+-                let mut q=valid.clone();q["personalityParameters"][name]=json!(value);
+-                assert!(Request::parse(&q).is_ok(),"rejected admitted {name}={value}");
+-            }
+-            for value in [low-1,high+1] {
+-                let mut q=valid.clone();q["personalityParameters"][name]=json!(value);
+-                assert!(Request::parse(&q).is_err(),"accepted outside {name}={value}");
+-            }
+-            let mut q=valid.clone();q["personalityParameters"].as_object_mut().unwrap().remove(name);
+-            assert!(Request::parse(&q).is_err());
+-        }
+-        let mut varied=valid.clone();
+-        for (index,name) in NAMES.iter().enumerate().filter(|(_,n)|!matches!(**n,
+-            "myk"|"opk"|"ana"|"avd"|"cfd"|"sop"|"sel"|"rnd"|"md"|"tts")) {
+-            varied["personalityParameters"][*name]=json!(17*index);
+-        }
+-        assert!(Request::parse(&varied).is_ok());
+-        let mut q=valid.clone();q["personalityParameters"]["extra"]=json!(0);
+-        assert!(Request::parse(&q).is_err());
+-        q=valid;q["moves"]=json!(["a1a8"]);q["personalityParameters"]["tts"]=json!(0);
+-        match Request::parse(&q) {
+-            Err(error)=>assert!(!error.contains("illegal")),Ok(_)=>panic!("late invalid field admitted"),
+-        }
+-    }
+-    #[test]
+-    fn exact_generic_controls_and_explicit_zero_seed_are_separate_from_seeded_binding() {
+-        let valid=request();
+-        for seed in [0,2147483648,u32::MAX] {
+-            let mut q=valid.clone();q["seed"]=json!(seed);assert_eq!(Request::parse(&q).unwrap().seed,seed);
+-        }
+-        for value in [json!(-1),json!(4294967296u64),json!(0.5),json!(false),json!("0")] {
+-            let mut q=valid.clone();q["seed"]=value;assert!(Request::parse(&q).is_err());
+-        }
+-        for (key,value) in [("completion",json!("work-clock")),("analysis",json!(true)),
+-            ("pondering",json!(true)),("seedSource",json!("clock")),
+-            ("workOrigin",json!("before-root-preparation")),("workClock",json!("kingwcr-reset-safe"))] {
+-            let mut q=valid.clone();q["controls"][key]=value;assert!(Request::parse(&q).is_err());
+-        }
+-        for name in ["completion","learnedState","pondering","analysis","seedSource","workOrigin"] {
+-            let mut q=valid.clone();q["controls"].as_object_mut().unwrap().remove(name);
+-            assert!(Request::parse(&q).is_err());
+-        }
+-        for key in ["averageCs","maximumCs"] {
+-            let mut q=valid.clone();q["allowance"][key]=json!(2);assert!(Request::parse(&q).is_err());
+-        }
+-        let mut q=valid;q["moves"]=json!(["a1a8","e2e4"]);q["controls"]["analysis"]=json!(0);
+-        match Request::parse(&q) {
+-            Err(error)=>assert_eq!(error,"expected boolean"),Ok(_)=>panic!("invalid analysis admitted"),
+-        }
+-    }
+-    #[test]
+-    fn reached_root_history_population_and_joined_legal_ep_are_not_narrowed_to_other_routes() {
+-        let mut q=request();
+-        q["moves"]=json!((0..255).map(|i|["g1f3","g8f6","f3g1","f6g8"][i%4]).collect::<Vec<_>>());
+-        let parsed=Request::parse(&q).unwrap();
+-        assert_eq!((parsed.history.pre_root_len(),parsed.history.search_ply()),(255,0));
+-        assert_eq!(parsed.root.side,rook2::types::Color::Black);assert_eq!(parsed.root.halfmove,255);
+-        q["moves"].as_array_mut().unwrap().push(json!("f6g8"));assert!(Request::parse(&q).is_err());
+-        for fen in ["7k/6pp/8/8/8/QQQQQQQQ/QQ6/K7 w - - 0 1",
+-            "7k/8/8/8/8/8/7R/K7 w - - 0 1"] {
+-            let mut q=request();q["fen"]=json!(fen);assert!(Request::parse(&q).is_ok());
+-        }
+-        for (fen,movement) in [("7k/8/8/3nP3/8/8/8/K7 w - d6 0 1","e5d6"),
+-            ("7k/8/8/8/8/8/3rP3/K7 w - d3 0 1","e2d3")] {
+-            let mut q=request();q["fen"]=json!(fen);q["moves"]=json!([movement]);
+-            let parsed=Request::parse(&q).unwrap();assert_eq!(parsed.history.pre_root_len(),1);
+-            assert_eq!(parsed.root.side,rook2::types::Color::Black);
+-        }
+-        for fen in ["4k3/8/8/8/1b6/P7/2P4P/4K3 w - - 0 1",
+-            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"] {
+-            let mut q=request();q["fen"]=json!(fen);assert!(Request::parse(&q).is_err());
+-        }
+-    }
+-    #[test]
+-    fn guarded_generic_zero_entry_search_reuses_actual_seeded_projection_and_rendering() {
+-        let input=request();let mut seeded=input.clone();
+-        seeded["controls"]=json!({"completion":"work-clock","learnedState":"fresh-ordinary-search",
+-            "pondering":false,"seedSource":"explicit","workClock":"kingwcr-reset-safe",
+-            "workOrigin":"after-root-preparation"});
+-        let expected=actual_timed::dispatch("search.seededTimedSearch",&seeded).unwrap();
+-        let actual=dispatch(&input).unwrap();assert_eq!(actual,expected);
+-        assert_eq!(actual["seed"],json!(0));assert_eq!(actual.as_object().unwrap().len(),7);
+-        let steps=actual["iterations"].as_array().unwrap();assert!(!steps.last().unwrap()["complete"].as_bool().unwrap());
+-        let events=actual["events"].as_array().unwrap();
+-        assert_eq!(events.last().unwrap()["type"],json!("move"));
+-        assert!(events[..events.len()-1].iter().all(|e|e["type"]==json!("post")));
+-    }
+-}
+--- a/diagnostic/src/joined_search.rs
++++ /dev/null
+@@ -1,322 +0,0 @@
+-//! Fresh joined ingress is executed by the actual persistent Session owner.
+-use super::{array, integer, object, positions, text, unsigned32, Result};
+-use rook2::{
+-    movegen::{self, MoveList},
+-    output::Event,
+-    parameters::{Parameters, NAMES},
+-    position::Position,
+-    quiescence::Limits,
+-    session::{self, Action, Session},
+-    timed::Point,
+-    timing::Adaptive,
+-};
+-use serde_json::{json, Map, Value};
+-
+-const DELIVERY: [&str; 27] = [
+-    "avd", "cfd", "md", "myb", "mycc", "myks", "mymob", "myp", "mypp",
+-    "mypw", "myq", "myr", "myn", "opb", "opcc", "opks", "opmob", "opn",
+-    "opp", "oppp", "oppw", "opq", "opr", "rnd", "sel", "sop", "tts",
+-];
+-const SAFE: u64 = 9_007_199_254_740_991;
+-
+-struct Request {
+-    fen: Option<String>,
+-    moves: Vec<String>,
+-    supplied: Parameters,
+-    effective: Parameters,
+-    randomness_override: Option<i32>,
+-    group: String,
+-    remaining: i32,
+-    seconds: u32,
+-    iterations: u8,
+-    units: u64,
+-    bytes: usize,
+-}
+-
+-fn parameters(value: &Value) -> Result<Parameters> {
+-    object(value, &NAMES)?;
+-    let mut values = [0; 30];
+-    for (index, name) in NAMES.iter().enumerate() {
+-        let (minimum, maximum) = match *name {
+-            "ana" | "myk" | "opk" => (0, 0),
+-            "avd" => (-100, 100),
+-            "cfd" => (-10000, 10000),
+-            "sop" | "rnd" => (0, 100),
+-            "sel" => (0, 64),
+-            "md" => (1, 99),
+-            "tts" => (4194304, 75497472),
+-            _ => (0, 1000),
+-        };
+-        values[index] = integer(&value[*name], minimum, maximum)?;
+-        if *name == "tts" && ![4194304, 16777216, 67108864, 75497472].contains(&values[index]) {
+-            return Err("joined tts must be one of the four admitted capacities".into());
+-        }
+-    }
+-    Ok(Parameters { values })
+-}
+-
+-fn coordinate(value: &Value) -> Result<String> {
+-    let spelling = text(value)?;
+-    let b = spelling.as_bytes();
+-    if !matches!(b.len(), 4 | 5)
+-        || !matches!(b[0], b'a'..=b'h') || !matches!(b[1], b'1'..=b'8')
+-        || !matches!(b[2], b'a'..=b'h') || !matches!(b[3], b'1'..=b'8')
+-        || (b.len() == 5 && !matches!(b[4], b'n' | b'b' | b'r' | b'q'))
+-    {
+-        return Err("expected lowercase coordinate move with optional promotion suffix".into());
+-    }
+-    Ok(spelling.to_owned())
+-}
+-
+-impl Request {
+-    fn parse(input: &Value) -> Result<Self> {
+-        let mut keys = vec!["setup", "personalityParameters", "clock", "systemSeconds"];
+-        if input.get("randomnessOverride").is_some() { keys.push("randomnessOverride"); }
+-        if input.get("diagnosticCapacity").is_some() { keys.push("diagnosticCapacity"); }
+-        object(input, &keys)?;
+-        let setup = &input["setup"];
+-        let fen = match text(&setup["kind"])? {
+-            "standard-history" => {
+-                object(setup, &["kind", "moves"])?;
+-                None
+-            }
+-            "setboard-history" => {
+-                object(setup, &["kind", "fen", "moves"])?;
+-                let fen = text(&setup["fen"])?;
+-                if fen.split_ascii_whitespace().count() != 6 {
+-                    return Err("joined setboard requires six-field FEN".into());
+-                }
+-                Some(fen.to_owned())
+-            }
+-            _ => return Err("unknown joined setup kind".into()),
+-        };
+-        let moves = array(&setup["moves"], 0, 799)?.iter()
+-            .map(coordinate).collect::<Result<Vec<_>>>()?;
+-        let supplied = parameters(&input["personalityParameters"])?;
+-        let randomness_override = input.get("randomnessOverride")
+-            .map(|v| integer(v, 0, 100)).transpose()?;
+-        let mut effective = supplied.clone();
+-        if let Some(value) = randomness_override { effective.values[24] = value; }
+-        let clock = &input["clock"];
+-        object(clock, &["policyId", "group"])?;
+-        if text(&clock["policyId"])? != "joined-diagnostic-group-clocks-v1" {
+-            return Err("unsupported joined clock policy".into());
+-        }
+-        let group = text(&clock["group"])?;
+-        let remaining = match group {
+-            "Easy" => 6637, "Hard" => 9483, "GM" => 18100,
+-            _ => return Err("unknown joined clock group".into()),
+-        };
+-        let seconds = unsigned32(&input["systemSeconds"])?;
+-        let (iterations, units, bytes) = if let Some(capacity) = input.get("diagnosticCapacity") {
+-            object(capacity, &["maximumEnteredIterations", "maximumChargedSearchUnits", "maximumResultBytes"])?;
+-            (integer(&capacity["maximumEnteredIterations"], 1, 9)? as u8,
+-             integer(&capacity["maximumChargedSearchUnits"], 1, 524288)? as u64,
+-             integer(&capacity["maximumResultBytes"], 1, 16777216)? as usize)
+-        } else { (3, 8192, 16777216) };
+-        Ok(Self { fen, moves, supplied, effective, randomness_override,
+-            group: group.to_owned(), remaining, seconds, iterations, units, bytes })
+-    }
+-
+-    fn prepare(&self) -> Result<Session<true>> {
+-        let mut live = Session::<true>::default();
+-        idle(&mut live, "xboard")?;
+-        idle(&mut live, "post")?;
+-        if let Some(fen) = &self.fen {
+-            // Native setboard owns FEN syntax, normalization and counter reset.
+-            // No standalone candidate-domain gate is inserted here.
+-            live.setboard(fen).map_err(|e| format!("joined setboard: {e:?}"))?;
+-        }
+-        idle(&mut live, &format!("time {}", self.remaining))?;
+-        idle(&mut live, &format!("otim {}", self.remaining))?;
+-        idle(&mut live, "cm_parm default")?;
+-        let mut command = String::from("cm_parm");
+-        for name in DELIVERY {
+-            let index = NAMES.iter().position(|n| *n == name).unwrap();
+-            command.push_str(&format!(" {name}={}", self.effective.values[index]));
+-        }
+-        idle(&mut live, &command)?;
+-        if live.parameters != self.effective {
+-            return Err("actual parameter commands did not establish the joined vector".into());
+-        }
+-        idle(&mut live, "easy")?;
+-        for spelling in &self.moves {
+-            if live.result.is_some() {
+-                return Err("joined history has a protocol-terminal prefix before another move".into());
+-            }
+-            let before = live.moves.len();
+-            idle(&mut live, spelling)?;
+-            if live.moves.len() != before + 1 || live.moves.last().unwrap().to_string() != *spelling {
+-                return Err("joined retained coordinate move was not accepted".into());
+-            }
+-            if live.position().counts.iter().any(|counts| counts[5] != 1) {
+-                return Err("the exceptional king-victim command continuation has no joined JSON outcome".into());
+-            }
+-        }
+-        Ok(live)
+-    }
+-
+-    fn observe(self) -> Result<Value> {
+-        let mut live = self.prepare()?;
+-        let root = live.position();
+-        let mut legal = MoveList::new();
+-        movegen::generate_legal(&root, &mut legal);
+-        let checked = movegen::in_check(&root, root.side);
+-        let allowance = live.allowance().map_err(|e| format!("joined allocation: {e:?}"))?;
+-        let adaptive = Adaptive::new(allowance.average_cs, allowance.maximum_cs, checked, live.ledger.last());
+-        let initial_fen = if self.fen.is_some() { normalized_fen(&live.states[0]) }
+-            else { session::START.to_owned() };
+-        let mut ingress = json!({
+-            "position": {"initialFen": initial_fen, "moves": self.moves,
+-                "root": {"placement": root.placement(), "sideToMove": side(root.side),
+-                    "castling": positions::rights(&root), "enPassant": positions::ep(&root),
+-                    "halfmoveClock": root.halfmove, "inCheck": checked}},
+-            "personality": {"suppliedParameters": vector(&self.supplied),
+-                "parameters": vector(&live.parameters), "effectiveRnd": live.parameters.values[24],
+-                "randomnessOverride": {"supplied": self.randomness_override.is_some(), "value": self.randomness_override},
+-                "parameterDelivery": {"explicitCommandFields": DELIVERY, "defaultedFields": ["ana", "myk", "opk"]}},
+-            "clock": {"policyId": "joined-diagnostic-group-clocks-v1", "group": self.group,
+-                "remainingTimeCs": self.remaining,
+-                "schedule": live.clock.schedule.stages.iter().map(|s| json!({"moves":s.moves,
+-                    "baseSeconds":s.base_seconds,"incrementSeconds":s.increment_seconds})).collect::<Vec<_>>(),
+-                "gamePly":live.game_ply(), "initialSide":side(live.states[0].side),
+-                "selectedClock":side(live.clock_color), "adjustmentCs":live.clock.adjustment_cs,
+-                "allowance":{"moveIndex":allowance.move_index,"averageCs":allowance.average_cs,"maximumCs":allowance.maximum_cs},
+-                "adaptiveInitial":{"iterationSeconds":adaptive.limits[0],"rootSeconds":adaptive.limits[1],"maximumSeconds":adaptive.limits[2]}},
+-            "controls":{"session":"fresh","mode":"ordinary","pondering":false,"analysis":false,
+-                "searchState":"fresh-ordinary-search","learnedState":"empty","pawnState":"empty",
+-                "transpositionState":"new-from-personality-tts"}
+-        });
+-        if !matches!(live.idle("go").map_err(|e| format!("joined go command: {e:?}"))?, Action::Search) {
+-            return Err("native joined go did not request search".into());
+-        }
+-        let result = live.go(self.seconds, Limits { nodes: Some(self.units) }, self.iterations);
+-        let output = match result {
+-            Err(session::Error::FatalEmptyRoot) if legal.len == 0 => {
+-                json!({"derivedIngress":ingress,"fatal":{"exit":{"code":1,"signal":null},"events":[]}})
+-            }
+-            Err(error) => return Err(format!("joined search failed without a portable outcome: {error:?}")),
+-            Ok(result) => {
+-                if legal.len == 0 || result.entry_clock != 0 || result.seed != self.seconds
+-                    || result.allowance != allowance || result.outcome.stop.work.charged_search_units > self.units
+-                    || result.outcome.stop.work.charged_relation_queries > SAFE
+-                    || result.outcome.initial_candidates.as_slice() != legal.as_slice()
+-                {
+-                    return Err("joined native result exceeds its bound or contradicts fresh ingress".into());
+-                }
+-                if result.outcome.result.is_none() {
+-                    let out = &result.outcome;
+-                    if out.stop.point != Point::Poll || out.stop.root_index != Some(0)
+-                        || out.stop.reason != "maximum" || out.stop.depth != 1
+-                        || out.stop.work.charged_search_units == 0
+-                        || out.stop.work.charged_search_units % 4096 != 0
+-                        || !out.publications.is_empty()
+-                        || out.iterations.iter().any(|i| i.complete || !i.steps.is_empty())
+-                        || out.stop.pending.is_none_or(|p| p.movement != out.initial_candidates[0])
+-                    {
+-                        return Err("joined uncaptured result is outside first-root poll fallback".into());
+-                    }
+-                    if !matches!(result.events.as_slice(), [Event::Post(post), Event::Move(movement)]
+-                        if post.fields == rook2::output::Fields::default() && *movement == legal.moves[0])
+-                    {
+-                        return Err("native first-root fallback must retain its zero report and initial move".into());
+-                    }
+-                }
+-                let posts = result.events.iter().filter(|event| matches!(event, Event::Post(_))).count();
+-                if posts == 0 || !matches!(result.events.last(), Some(Event::Move(_)))
+-                    || result.events[..result.events.len()-1].iter().any(|e| !matches!(e, Event::Post(_)))
+-                {
+-                    return Err("joined native completion lacks its ordered posts and sole final move".into());
+-                }
+-                ingress["seed"] = json!({"systemSeconds":self.seconds,
+-                    "entryWorkClockCentiseconds":result.entry_clock,"acceptedSeed":result.seed,
+-                    "dependency":"first search in a fresh KingWCR session; setup commands do not charge the work clock"});
+-                json!({"ingress":ingress,"terminalWork":{"searchWork":result.outcome.stop.work.charged_search_units,
+-                    "relationWork":result.outcome.stop.work.charged_relation_queries},
+-                    "events":result.events.iter().map(event).collect::<Vec<_>>()})
+-            }
+-        };
+-        fit_envelope(output, self.bytes)
+-    }
+-}
+-
+-fn idle(live: &mut Session<true>, command: &str) -> Result<()> {
+-    match live.idle(command).map_err(|e| format!("joined command: {e:?}"))? {
+-        Action::Reply(_) => Ok(()),
+-        _ => Err("unexpected search/quit while preparing joined ingress".into()),
+-    }
+-}
+-fn side(color: rook2::types::Color) -> &'static str {
+-    match color { rook2::types::Color::White => "white", rook2::types::Color::Black => "black" }
+-}
+-fn normalized_fen(p: &Position) -> String {
+-    format!("{} {} {} {} 0 1", p.placement(), if p.side == rook2::types::Color::White { "w" } else { "b" },
+-        positions::rights(p), positions::ep(p))
+-}
+-fn vector(p: &Parameters) -> Value {
+-    let values: Map<String, Value> = NAMES.iter().zip(p.values).map(|(name, value)|
+-        ((*name).to_owned(), json!(value))).collect();
+-    Value::Object(values)
+-}
+-fn event(event: &Event) -> Value {
+-    match event {
+-        Event::Post(post) => json!({"type":"post","depthToken":post.fields.depth_token,
+-            "evaluation":post.fields.evaluation,"searchId":post.fields.search_id,
+-            "pv":post.pv,"engineCentiseconds":post.fields.centiseconds}),
+-        Event::Move(movement) => json!({"type":"move","move":movement.to_string()}),
+-    }
+-}
+-fn fit_envelope(output: Value, maximum: usize) -> Result<Value> {
+-    let complete = json!({"version":1,"output":output});
+-    if serde_json::to_vec(&complete).map_err(|e| format!("joined serialization: {e}"))?.len() > maximum {
+-        return Err("complete joined JSON response exceeds maximumResultBytes".into());
+-    }
+-    Ok(complete["output"].clone())
+-}
+-pub(super) fn dispatch(input: &Value) -> Result<Value> { Request::parse(input)?.observe() }
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    fn request() -> Value {
+-        let mut p = Parameters::default();p.values[27] = 1;p.values[29] = 67108864;
+-        json!({"setup":{"kind":"standard-history","moves":[]},
+-            "personalityParameters":vector(&p),"clock":{"policyId":"joined-diagnostic-group-clocks-v1","group":"GM"},
+-            "systemSeconds":0})
+-    }
+-    #[test]
+-    fn omitted_override_is_distinct_from_explicit_zero_and_only_rnd_changes() {
+-        let mut input = request();input["personalityParameters"]["rnd"] = json!(100);
+-        let absent = Request::parse(&input).unwrap();assert_eq!(absent.randomness_override,None);
+-        assert_eq!(absent.effective.values[24],100);
+-        input["randomnessOverride"] = json!(0);
+-        let zero = Request::parse(&input).unwrap();assert_eq!(zero.randomness_override,Some(0));
+-        let mut expected = zero.supplied.clone();expected.values[24] = 0;
+-        assert_eq!(zero.effective,expected);
+-        input["randomnessOverride"] = Value::Null;assert!(Request::parse(&input).is_err());
+-    }
+-    #[test]
+-    fn setup_uses_native_counter_normalization_and_accepts_broad_nonpawn_ep() {
+-        let mut input = request();
+-        input["setup"] = json!({"kind":"setboard-history", "fen":"7k/8/8/8/8/8/3rP3/K7 w - d3 2147483647 2147483647", "moves":["e2d3"]});
+-        let parsed = Request::parse(&input).unwrap();let live = parsed.prepare().unwrap();
+-        assert_eq!(live.states[0].halfmove,0);assert_eq!(live.moves.len(),1);
+-        assert_eq!(live.position().placement(),"7k/8/8/8/8/3P4/8/K7");
+-        assert_eq!(live.ledger.last(),0);
+-        input["setup"] = json!({"kind":"setboard-history", "fen":"4k3/4R3/8/8/8/8/8/K7 w - - 0 1", "moves":[]});
+-        assert!(Request::parse(&input).unwrap().prepare().is_ok());
+-    }
+-    #[test]
+-    fn history_rejects_terminal_prefix_and_admission_keeps_independent_capacity() {
+-        let mut input = request();
+-        input["setup"] = json!({"kind":"setboard-history", "fen":"7k/8/8/8/8/8/8/K7 w - - 0 1", "moves":["a1b1"]});
+-        assert!(Request::parse(&input).unwrap().prepare().is_err());
+-        input["diagnosticCapacity"] = json!({"maximumEnteredIterations":9,"maximumChargedSearchUnits":524288,"maximumResultBytes":16777216});
+-        let parsed = Request::parse(&input).unwrap();assert_eq!((parsed.iterations,parsed.units,parsed.bytes),(9,524288,16777216));
+-        input["diagnosticCapacity"]["maximumResultBytes"] = json!(16777217);
+-        assert!(Request::parse(&input).is_err());
+-        input["diagnosticCapacity"]["maximumResultBytes"] = json!(1);
+-        input["personalityParameters"]["tts"] = json!(5000000);
+-        assert!(Request::parse(&input).is_err());
+-    }
+-}
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -13,13 +13,11 @@
+ };
+ 
+ mod actual_timed;
+-mod generic_timed;
+ mod admission;
+ mod boundary_admission;
+ mod candidate_order;
+ mod cached_entry;
+ mod controlled_root;
+-mod controlled_timed;
+ mod clock_boundaries;
+ mod endgame_bounds;
+ mod endings;
+@@ -27,7 +25,6 @@
+ mod fresh_evaluation;
+ mod generation;
+ mod king_shelter;
+-mod joined_search;
+ mod learned;
+ mod ledger;
+ mod move_evaluation;
+@@ -128,12 +125,9 @@
+ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+     match operation {
+         "session.searches" | "session.clockSeededSearches" | "session.interruptedSearches" | "session.ordinaryIterations" => persistent_sessions::dispatch(operation,input),
+-        "search.ordinaryJoinedSearch" => joined_search::dispatch(input),
+         "output.postLifecycle" => post_captures::dispatch(input),
+         "search.rootWorkSchedule" | "search.unrestrictedRootSequence" | "search.restrictedRootSequence" => controlled_root::dispatch(operation,input),
+         "search.seededTimedSearch" | "session.goOutcome" => actual_timed::dispatch(operation, input),
+-        "search.genericTimedSearch" => generic_timed::dispatch(input),
+-        "search.timedRootSequence" | "search.workTimedRootSequence" => controlled_timed::dispatch(operation,input),
+         "time.adaptiveSequence" | "search.iterationTerminalStop" | "session.timeSetup" => clock_boundaries::dispatch(operation,input),
+         "evaluation.kingShelter" => king_shelter::run(input),
+         "evaluation.materialValues"
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -129,7 +129,13 @@
+     }
+ 
+     pub(crate) fn charge_node(&mut self, history: &SearchHistory) -> Result<(), Stopped> {
+-        if crate::work_clock::charge_search_unit(&mut self.stats.nodes,self.limits.nodes)? {
++        if let Some(limit) = self.limits.nodes {
++            if self.stats.nodes >= limit {
++                return Err(Stopped::NodeLimit(limit));
++            }
++        }
++        self.stats.nodes += 1;
++        if self.stats.nodes & 4095 == 0 {
+             let work = self.work();
+             self.work_poll(history, work)?;
+         }
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -40,7 +40,6 @@
+ pub mod tactical;
+ mod time_powers;
+ pub mod timed;
+-pub mod timed_sequence;
+ pub mod timing;
+ pub mod types;
+ pub mod wire;
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -375,107 +375,6 @@
+         validate_pv(child.position, &search.pv[1][..search.pv_len[1]]);
+         assert_eq!(history.search_ply(), 1);
+     }
+-    #[test]
+-    fn disabled_iio_counts_actual_initial_and_tail_entry_before_any_phase_work() {
+-        let position=Position::from_fen(START).unwrap();
+-        for start in [0,1] {
+-            let mut search=engine::<true>(&position);
+-            let (node,map)=search.prepare_root_with_influence(position);
+-            let mut history=SearchHistory::new(&position);
+-            movegen::generate_legal(&position,&mut search.candidates[0]);
+-            let before=search.candidates[0].as_slice().to_vec();
+-            search.extension_flags[0].fill(7);
+-            search.begin_sequence(Limits::default());
+-            let result=search.ordering_phase::<false>(&node,&mut history,
+-                Request{ply:0,depth:6,lower:-10000,upper:10000,
+-                    previous_extension:0,iteration:6,checked:Some(false)},
+-                Predecessor{position:&position,influence:&map,checked:false,movement:None},
+-                &map,false,start);
+-            assert_eq!(result,Err(Stopped::InternalIterativeOrdering));
+-            assert_eq!((search.stats.iio_initial_phases,search.stats.iio_tail_phases),
+-                if start==0 {(1,0)} else {(0,1)});
+-            assert_eq!((search.stats.iio_passes,search.stats.iio_children,
+-                search.stats.iio_nonzero_fresh_extensions),(0,0,0));
+-            assert_eq!(search.work(),Work::default());
+-            assert_eq!(search.candidates[0].as_slice(),before);
+-            assert!(search.extension_flags[0].iter().all(|&flag|flag==7));
+-            assert_eq!(history.search_ply(),0);
+-            assert_eq!(node.position,position);
+-        }
+-    }
+-
+-    fn actual_iio_probe(mode:u8,tail:bool)->(Result<i32,Stopped>,Search<true>,SearchHistory,Node) {
+-        let position=Position::from_fen("7k/R7/8/8/8/8/8/K7 w - - 0 1").unwrap();
+-        let mut search=engine::<true>(&position);
+-        // Tail-only controlled native gate witness: the parent at ply1
+-        // remains ordinary, while its first ply2 child enters actual Q.
+-        // This is not a claim about genericTimedSearch's md>=6 admission.
+-        if tail {search.config.maximum_depth=2;}
+-        search.ensure_table().unwrap();
+-        let (root,influence)=search.prepare_root_with_influence(position);
+-        let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);
+-        let movement=*legal.as_slice().iter().find(|m|m.to_string()=="a7a8").unwrap();
+-        let mut child=root.child(&search.evaluator.root,movement);
+-        search.begin_sequence(Limits{nodes:Some(200000)});
+-        if tail {
+-            // Lower metadata skips parent initial IIO without returning a
+-            // score; real Q terminates its first ordinary main-child call.
+-            let table=search.remembered.as_mut().unwrap();
+-            table.store(Store{query:Query{group:table.group_for(&child.position),
+-                identity:child.position.secondary,ply:1,target:6,lower:-10000,upper:100},
+-                score:100,move_hint:None,quiet_mate_checked:true,mark_depth:true});
+-            let observed=table.probe(Query{group:table.group_for(&child.position),
+-                identity:child.position.secondary,ply:1,target:6,
+-                lower:-10000,upper:10000});
+-            assert_eq!((observed.bound,observed.marked_depth,observed.score),
+-                (Bound::Lower,Some(5),None));
+-        }
+-        let mut history=SearchHistory::new(&position);
+-        history.push(&child.position,Some(movement));
+-        let request=Request{ply:1,depth:5,lower:-10000,upper:10000,
+-            previous_extension:0,iteration:6,checked:Some(true)};
+-        let previous=Predecessor{position:&position,influence:&influence,checked:false,
+-            movement:Some(movement)};
+-        let result=match mode {
+-            0=>search.visit_ordinary(&mut child,&mut history,request,previous),
+-            1=>search.visit_ordinary_impl::<true>(&mut child,&mut history,request,previous),
+-            2=>search.visit_ordinary_impl::<false>(&mut child,&mut history,request,previous),
+-            _=>unreachable!(),
+-        };
+-        assert_eq!(history.search_ply(),1);
+-        history.pop();
+-        (result,search,history,child)
+-    }
+-
+-    #[test]
+-    fn recursive_iio_defaults_true_and_false_initial_tail_errors_unwind_without_phase_subtrees() {
+-        for tail in [false,true] {
+-            let (default,a,history_a,node_a)=actual_iio_probe(0,tail);
+-            let (enabled,b,history_b,node_b)=actual_iio_probe(1,tail);
+-            assert!(default.is_ok());assert_eq!(default,enabled);
+-            assert_eq!(a.stats,b.stats);assert_eq!(a.evaluator.stats,b.evaluator.stats);
+-            assert_eq!(a.work(),b.work());assert_eq!(node_a,node_b);
+-            assert_eq!(&a.pv[1][..a.pv_len[1]],&b.pv[1][..b.pv_len[1]]);
+-            assert_eq!((history_a.search_ply(),history_b.search_ply()),(0,0));
+-            assert!(if tail {a.stats.iio_tail_phases>0} else {a.stats.iio_initial_phases>0});
+-            let (disabled,c,history_c,_)=actual_iio_probe(2,tail);
+-            assert_eq!(disabled,Err(Stopped::InternalIterativeOrdering));
+-            assert_eq!((c.stats.iio_initial_phases,c.stats.iio_tail_phases),
+-                if tail {(0,1)} else {(1,0)});
+-            assert_eq!((c.stats.iio_passes,c.stats.iio_children,
+-                c.stats.iio_nonzero_fresh_extensions),(0,0,0));
+-            assert_eq!(history_c.search_ply(),0);
+-            // False reaches the parent's tail only after index1: one
+-            // ordinary main-child call handed to actual charged Q, with no
+-            // recursive ordinary entry. Global children includes Q children.
+-            if tail {
+-                assert_eq!((c.stats.ordinary_nodes,c.stats.table_probes),(1,1));
+-                assert!(c.stats.children>=1);
+-                assert!(c.work().charged_search_units>1);
+-            } else {assert_eq!(c.stats.children,0);}
+-        }
+-    }
+-
+ }
+ 
+ pub struct Iteration {
+@@ -681,18 +580,7 @@
+         threat.value
+     }
+ 
+-    /// Ordinary production and fixed-iteration callers retain full IIO.
+     pub(crate) fn visit_ordinary(
+-        &mut self,
+-        node: &mut Node,
+-        history: &mut SearchHistory,
+-        request: Request,
+-        previous: Predecessor<'_>,
+-    ) -> Result<i32, Stopped> {
+-        self.visit_ordinary_impl::<true>(node, history, request, previous)
+-    }
+-
+-    pub(crate) fn visit_ordinary_impl<const ALLOW_IIO: bool>(
+         &mut self,
+         node: &mut Node,
+         history: &mut SearchHistory,
+@@ -820,7 +708,7 @@
+                 }
+                 let mut child = node.null_child();
+                 history.push(&child.position, None);
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary(
+                     &mut child,
+                     history,
+                     Request {
+@@ -931,7 +819,7 @@
+                 .marked_depth
+                 .is_none_or(|d| d < request.depth - 2)
+         {
+-            self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 0)?;
++            self.ordering_phase(node, history, request, previous, map, checked, 0)?;
+         }
+         let mut best = effective_lower;
+         let mut lower = request.lower;
+@@ -1017,7 +905,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
++                let returned = self.visit_ordinary(&mut child, history, child_request, predecessor);
+                 let returned = match returned {
+                     Ok(value) => Ok(-value),
+                     Err(stop) => Err(stop),
+@@ -1030,7 +918,7 @@
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
+-                        self.visit_ordinary_impl::<ALLOW_IIO>(
++                        self.visit_ordinary(
+                             &mut child,
+                             history,
+                             Request {
+@@ -1069,7 +957,7 @@
+             index += 1;
+             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
+             {
+-                self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 1)?;
++                self.ordering_phase(node, history, request, previous, map, checked, 1)?;
+             }
+         }
+         best = best.min(effective_upper);
+@@ -1080,7 +968,7 @@
+         Ok(best)
+     }
+ 
+-    fn ordering_phase<const ALLOW_IIO: bool>(
++    fn ordering_phase(
+         &mut self,
+         node: &Node,
+         history: &mut SearchHistory,
+@@ -1090,20 +978,17 @@
+         checked: bool,
+         start: usize,
+     ) -> Result<(), Stopped> {
+-        if DIAGNOSTICS || !ALLOW_IIO {
++        let p = request.ply;
++        let target = p as i32 + request.depth;
++        let position = &node.position;
++        let count = self.candidates[p].len;
++        if DIAGNOSTICS {
+             if start == 0 {
+                 self.stats.iio_initial_phases += 1;
+             } else {
+                 self.stats.iio_tail_phases += 1;
+             }
+         }
+-        if !ALLOW_IIO {
+-            return Err(Stopped::InternalIterativeOrdering);
+-        }
+-        let p = request.ply;
+-        let target = p as i32 + request.depth;
+-        let position = &node.position;
+-        let count = self.candidates[p].len;
+         for offset in (2..=20).rev().step_by(2) {
+             let shallow_target = target - offset;
+             if shallow_target < p as i32 + 2 {
+@@ -1137,7 +1022,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.iio_children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary(
+                     &mut child,
+                     history,
+                     Request {
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -39,8 +39,6 @@
+ pub enum Stopped {
+     NodeLimit(u64),
+     WorkPoll,
+-    /// Bounded diagnostic refused actual internal-iterative-ordering entry.
+-    InternalIterativeOrdering,
+     HostStop,
+     HostAbort,
+     HostIo(std::io::ErrorKind),
+--- a/src/timed.rs
++++ b/src/timed.rs
+@@ -1,15 +1,15 @@
+ //! Work-timed native ordinary search. Public ingress, commands and rendering are separate.
+ use crate::engine::Search;
+-use crate::evaluator::{EvalStats, Node};
+-use crate::influence::Influence;
++use crate::evaluator::EvalStats;
+ use crate::history::SearchHistory;
+ use crate::movegen::{self, MoveList};
+ use crate::ordinary::{Error, Predecessor, Request};
+ use crate::position::Position;
+ use crate::post_lifecycle::CaptureSlot;
+ use crate::quiescence::{Limits, Stats, Stopped, Work};
+-use crate::root_schedule::{Attempt as RootAttempt, Completed as RootCompleted, Row as RootRow};
+-use crate::timed_sequence::{self, AttemptResult, Effects};
++use crate::root_schedule::{
++    Iteration as RootIteration, Policy as RootPolicy, Returned as RootReturned, Row as RootRow,
++};
+ use crate::timing::{Adaptive, Stage, Terminal};
+ use crate::types::{Move, MoveKind, PieceKind};
+ use crate::work_clock::Ledger;
+@@ -315,56 +315,6 @@
+         assert_eq!(out.iterations.len(), 1);
+         assert!(search.timing.is_none());
+     }
+-    #[test]
+-    fn default_explicit_true_and_guarded_zero_entry_timed_runs_keep_identical_records() {
+-        let position=Position::from_fen(START).unwrap();
+-        let mut results=Vec::new();
+-        for mode in 0..3 {
+-            let mut search=Search::<true>::new(&position);
+-            search.config.tts_bytes=65536;
+-            let mut history=SearchHistory::new(&position);
+-            let mut control=controls();control.average_cs=1;control.origin=0;
+-            let result=match mode {
+-                0=>search.run_work_timed(position,&mut history,control,Limits{nodes:Some(8192)}),
+-                1=>search.run_work_timed_entry::<true>(position,&mut history,control,Limits{nodes:Some(8192)}),
+-                _=>search.run_work_timed_without_iio(position,&mut history,control,Limits{nodes:Some(8192)}),
+-            }.unwrap();
+-            assert!(search.timing.is_none());assert_eq!(history.search_ply(),0);
+-            assert_eq!((result.stats.iio_initial_phases,result.stats.iio_tail_phases),(0,0));
+-            results.push(result);
+-        }
+-        let expected=&results[0];
+-        for actual in &results[1..] {
+-            assert_eq!((&actual.initial_candidates,&actual.result,&actual.publications,
+-                &actual.stop,&actual.checks,actual.ledger,actual.stats,actual.evaluations),
+-                (&expected.initial_candidates,&expected.result,&expected.publications,
+-                &expected.stop,&expected.checks,expected.ledger,expected.stats,expected.evaluations));
+-            assert_eq!(actual.iterations.len(),expected.iterations.len());
+-            for (a,b) in actual.iterations.iter().zip(&expected.iterations) {
+-                assert_eq!((a.depth,a.complete,&a.steps),(b.depth,b.complete,&b.steps));
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn guarded_timed_iio_error_unwinds_active_history_and_always_clears_timing() {
+-        let position=Position::from_fen("6k1/8/8/8/8/8/P7/K6R w - - 0 1").unwrap();
+-        let mut search=Search::<true>::new(&position);search.config.tts_bytes=96;
+-        let mut history=SearchHistory::new(&position);
+-        let control=Controls{average_cs:0,maximum_cs:0,origin:u32::MAX-2,
+-            seed:0,randomness:0,maximum_entered_iterations:6};
+-        assert!(matches!(search.run_work_timed_without_iio(position,&mut history,control,
+-            Limits{nodes:Some(100000)}),Err(Error::Stopped(Stopped::InternalIterativeOrdering))));
+-        assert_eq!(history.search_ply(),0);assert!(search.timing.is_none());
+-        assert_eq!(search.stats.iio_initial_phases+search.stats.iio_tail_phases,1);
+-        assert_eq!((search.stats.iio_passes,search.stats.iio_children),(0,0));
+-        let retry=search.run_iterations(position,&mut history,1,Limits::default()).unwrap();
+-        let mut fresh=Search::<true>::new(&position);fresh.config.tts_bytes=96;
+-        let expected=fresh.run_iterations(position,&mut history,1,Limits::default()).unwrap();
+-        assert_eq!((retry.score,retry.pv,retry.work),(expected.score,expected.pv,expected.work));
+-        assert_eq!(history.search_ply(),0);assert!(search.timing.is_none());
+-    }
+-
+ }
+ 
+ impl<const D: bool, H: crate::host::Host> Search<D, H> {
+@@ -472,34 +422,12 @@
+         controls: Controls,
+         limits: Limits,
+     ) -> Result<Outcome, Error> {
+-        self.run_work_timed_entry::<true>(position, history, controls, limits)
+-    }
+-
+-    /// Bounded diagnostic capability: fail at the first actual IIO entry.
+-    /// Default timed/ordinary production continues to allow the complete rule.
+-    pub fn run_work_timed_without_iio(
+-        &mut self,
+-        position: Position,
+-        history: &mut SearchHistory,
+-        controls: Controls,
+-        limits: Limits,
+-    ) -> Result<Outcome, Error> {
+-        self.run_work_timed_entry::<false>(position, history, controls, limits)
+-    }
+-
+-    fn run_work_timed_entry<const ALLOW_IIO: bool>(
+-        &mut self,
+-        position: Position,
+-        history: &mut SearchHistory,
+-        controls: Controls,
+-        limits: Limits,
+-    ) -> Result<Outcome, Error> {
+-        let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
++        let result = self.run_work_timed_inner(position, history, controls, limits);
+         self.timing = None;
+         result
+     }
+ 
+-    fn run_work_timed_inner<const ALLOW_IIO: bool>(
++    fn run_work_timed_inner(
+         &mut self,
+         position: Position,
+         history: &mut SearchHistory,
+@@ -521,7 +449,7 @@
+             return Err(Error::NoLegalRoots);
+         }
+         let initial_candidates = legal.as_slice().to_vec();
+-        let roots: Vec<RootRow> = initial_candidates
++        let mut roots: Vec<RootRow> = initial_candidates
+             .iter()
+             .enumerate()
+             .map(|(id, _)| RootRow {
+@@ -541,18 +469,205 @@
+         if H::ACTIVE {
+             self.host.started(controls.seed).map_err(Error::Host)?;
+         }
+-        let mut effects=ActualEffects::<D,H,ALLOW_IIO> {
+-            search:self,history,root:&root,position:&position,influence:&influence,
+-            initial_candidates:&initial_candidates,controls,checked,
+-            iterations:Vec::new(),iteration:None,pv:Vec::new(),captures:CaptureSlot::new(),
++        let mut iterations = Vec::new();
++        let mut captures = CaptureSlot::new();
++        let mut previous_best = 0;
++        let stop = 'search: {
++            for depth in 1..=controls.maximum_entered_iterations {
++                self.timing.as_mut().unwrap().depth = depth;
++                let mut schedule =
++                    RootIteration::new(roots, self.work().charged_search_units, previous_best);
++                let restricted = schedule.policy() == RootPolicy::Restricted;
++                let mut pv = Vec::new();
++                let mut iteration = Iteration {
++                    depth,
++                    complete: false,
++                    steps: Vec::new(),
++                };
++                while let Some(initial_attempt) = schedule.next(self.work().charged_search_units) {
++                    let index = initial_attempt.index;
++                    self.timing.as_mut().unwrap().root_index = index;
++                    let movement = initial_candidates[initial_attempt.id as usize];
++                    let window = initial_attempt.window;
++                    let adjustment =
++                        random_adjustment(controls.seed, controls.randomness, movement);
++                    let mut child = root.child(&self.evaluator.root, movement);
++                    let mut attempt_window = window;
++                    let mut passes = Vec::new();
++                    let completion = loop {
++                        history.push(&child.position, Some(movement));
++                        let result = self.visit_ordinary(
++                            &mut child,
++                            history,
++                            Request {
++                                ply: 1,
++                                depth: depth as i32 - 1,
++                                lower: -score_add(attempt_window[1], -adjustment),
++                                upper: -score_add(attempt_window[0], -adjustment),
++                                previous_extension: 0,
++                                iteration: depth as i32,
++                                checked: None,
++                            },
++                            Predecessor {
++                                position: &position,
++                                influence: &influence,
++                                checked,
++                                movement: Some(movement),
++                            },
++                        );
++                        history.pop();
++                        let value = match result {
++                            Ok(value) => score_add(-value, adjustment),
++                            Err(
++                                stop @ (Stopped::WorkPoll | Stopped::HostStop | Stopped::HostAbort),
++                            ) => {
++                                iterations.push(iteration);
++                                let clock = self.timing.as_ref().unwrap();
++                                break 'search Stop {
++                                    point: Point::Poll,
++                                    depth,
++                                    root_index: Some(index),
++                                    work: self.work(),
++                                    elapsed_cs: clock.adaptive.elapsed_cs(clock.ledger.last()),
++                                    pending: Some(Pending {
++                                        movement,
++                                        window: attempt_window,
++                                        adjustment,
++                                    }),
++                                    reason: match stop {
++                                        Stopped::HostStop => "host",
++                                        Stopped::HostAbort => "abort",
++                                        _ => "maximum",
++                                    },
++                                };
++                            }
++                            Err(error) => return Err(Error::Stopped(error)),
++                        };
++                        if D {
++                            passes.push(Pass {
++                                window: attempt_window,
++                                returned_score: value,
++                                work: self.work(),
++                            });
++                        }
++                        match schedule.returned(value, self.work().charged_search_units) {
++                            RootReturned::Retry(attempt) => attempt_window = attempt.window,
++                            RootReturned::Completed(completed) => break completed,
++                        }
++                    };
++                    let returned = completion.returned_score;
++                    let score = completion.score;
++                    let best = completion.best;
++                    let second = completion.second;
++                    let work = self.work();
++                    if restricted && index == 0 {
++                        self.timing.as_mut().unwrap().adjustment(
++                            Stage::ScoreDrop,
++                            previous_best,
++                            returned,
++                            second,
++                            work,
++                        );
++                    }
++                    if completion.best_changed {
++                        pv.clear();
++                        pv.push(movement);
++                        pv.extend_from_slice(&self.pv[1][..self.pv_len[1]]);
++                        let clock = self.timing.as_mut().unwrap();
++                        clock.adjustment(Stage::BestChange, previous_best, best, second, work);
++                        let word = clock.ledger.observe(work);
++                        let capture = Capture {
++                            depth,
++                            root_index: index,
++                            score,
++                            pv: pv.clone(),
++                            search_id: work.charged_search_units,
++                            elapsed_cs: clock.adaptive.elapsed_cs(word),
++                        };
++                        captures.capture(depth, capture, |capture| {
++                            if H::ACTIVE {
++                                self.publish_capture(capture).map_err(Error::Host)?;
++                            }
++                            Ok::<(), Error>(())
++                        })?;
++                    }
++                    if D {
++                        iteration.steps.push(Step {
++                            movement,
++                            window,
++                            adjustment,
++                            score,
++                            best,
++                            second,
++                            child_pv: self.pv[1][..self.pv_len[1]].to_vec(),
++                            pv: pv.clone(),
++                            work,
++                            passes,
++                        });
++                    }
++                    if self
++                        .timing
++                        .as_mut()
++                        .unwrap()
++                        .check::<D>(Stage::Root, best, second, work)
++                    {
++                        iterations.push(iteration);
++                        let clock = self.timing.as_ref().unwrap();
++                        break 'search Stop {
++                            point: Point::Root,
++                            depth,
++                            root_index: Some(index),
++                            work,
++                            elapsed_cs: clock.adaptive.elapsed_cs(clock.ledger.last()),
++                            pending: None,
++                            reason: "root",
++                        };
++                    }
++                }
++                let best = schedule.best();
++                let second = schedule.second();
++                let work = self.work();
++                let clock = self.timing.as_mut().unwrap();
++                let stage = if !restricted && work.charged_search_units >= 25000 {
++                    Stage::EasyIteration
++                } else {
++                    Stage::Iteration
++                };
++                clock.check::<D>(stage, best, second, work);
++                let terminal = Terminal {
++                    depth: depth as i32,
++                    selectivity: self.config.selectivity,
++                    root_endgame: self.evaluator.root.phase.endgame,
++                    maximum_depth: self.config.maximum_depth,
++                    analysis: self.config.analysis,
++                    average_cs: controls.average_cs,
++                    best,
++                    second,
++                    previous: previous_best,
++                    start: clock.adaptive.start,
++                    clock: clock.ledger.last(),
++                    iteration_limit: clock.adaptive.limits[0],
++                };
++                iteration.complete = true;
++                iterations.push(iteration);
++                if let Some(reason) = terminal.reason() {
++                    break 'search Stop {
++                        point: Point::Iteration,
++                        depth,
++                        root_index: None,
++                        work,
++                        elapsed_cs: clock.adaptive.elapsed_cs(clock.ledger.last()),
++                        pending: None,
++                        reason,
++                    };
++                }
++                previous_best = best;
++                roots = schedule.into_ranked();
++            }
++            return Err(Error::IterationCapacity);
+         };
+-        let stop=timed_sequence::drive(roots,controls.maximum_entered_iterations,&mut effects)?
+-            .ok_or(Error::IterationCapacity)?;
+-        let ActualEffects{search,iterations,captures,..}=effects;
+-        let clock=search.timing.take().unwrap();
+-        let (captured,publications)=captures.into_parts();
+-        let stats=search.stats;
+-        let evaluations=search.evaluator.stats;
++        let clock = self.timing.take().unwrap();
++        let (captured, publications) = captures.into_parts();
+         Ok(Outcome {
+             seed: controls.seed,
+             initial_candidates,
+@@ -562,130 +677,8 @@
+             result: captured,
+             publications,
+             ledger: clock.ledger,
+-            stats,
+-            evaluations,
++            stats: self.stats,
++            evaluations: self.evaluator.stats,
+         })
+     }
+ }
+-
+-
+-/// These are the former root-local variables, never new Search/Node fields.
+-struct ActualEffects<'a,const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> {
+-    search:&'a mut Search<D,H>,
+-    history:&'a mut SearchHistory,
+-    root:&'a Node,
+-    position:&'a Position,
+-    influence:&'a Influence,
+-    initial_candidates:&'a [Move],
+-    controls:Controls,
+-    checked:bool,
+-    iterations:Vec<Iteration>,
+-    iteration:Option<Iteration>,
+-    pv:Vec<Move>,
+-    captures:CaptureSlot<Capture>,
+-}
+-struct ActualChild {
+-    node:Node,
+-    movement:Move,
+-    window:[i32;2],
+-    adjustment:i32,
+-    passes:Vec<Pass>,
+-}
+-impl<const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> Effects
+-    for ActualEffects<'_,D,H,ALLOW_IIO> {
+-    type Child=ActualChild;
+-    type Stop=Stop;
+-    type Interruption=Stopped;
+-    type Error=Error;
+-    fn work(&self)->Work {self.search.work()}
+-    fn set_depth(&mut self,depth:u8) {self.search.timing.as_mut().unwrap().depth=depth;}
+-    fn begin_iteration_records(&mut self,depth:u8) {
+-        self.pv=Vec::new();
+-        self.iteration=Some(Iteration{depth,complete:false,steps:Vec::new()});
+-    }
+-    fn begin_candidate(&mut self,_depth:u8,attempt:RootAttempt)->ActualChild {
+-        self.search.timing.as_mut().unwrap().root_index=attempt.index;
+-        let movement=self.initial_candidates[usize::from(attempt.id)];
+-        let adjustment=random_adjustment(self.controls.seed,self.controls.randomness,movement);
+-        ActualChild{node:self.root.child(&self.search.evaluator.root,movement),movement,
+-            window:attempt.window,adjustment,passes:Vec::new()}
+-    }
+-    fn execute(&mut self,depth:u8,attempt:RootAttempt,child:&mut ActualChild)
+-        ->Result<AttemptResult<Stopped>,Error> {
+-        self.history.push(&child.node.position,Some(child.movement));
+-        let result=self.search.visit_ordinary_impl::<ALLOW_IIO>(
+-            &mut child.node,self.history,Request{ply:1,depth:depth as i32-1,
+-                lower:-score_add(attempt.window[1],-child.adjustment),
+-                upper:-score_add(attempt.window[0],-child.adjustment),previous_extension:0,
+-                iteration:depth as i32,checked:None},
+-            Predecessor{position:self.position,influence:self.influence,
+-                checked:self.checked,movement:Some(child.movement)});
+-        self.history.pop();
+-        match result {
+-            Ok(value)=>Ok(AttemptResult::Returned(score_add(-value,child.adjustment))),
+-            Err(stop @ (Stopped::WorkPoll|Stopped::HostStop|Stopped::HostAbort))=>
+-                Ok(AttemptResult::Interrupted(stop)),
+-            Err(error)=>Err(Error::Stopped(error)),
+-        }
+-    }
+-    fn record_pass(&mut self,_depth:u8,attempt:RootAttempt,value:i32,work:Work,child:&mut ActualChild) {
+-        if D {child.passes.push(Pass{window:attempt.window,returned_score:value,work});}
+-    }
+-    fn adjustment(&mut self,_depth:u8,stage:Stage,previous:i32,best:i32,second:i32,work:Work) {
+-        self.search.timing.as_mut().unwrap().adjustment(stage,previous,best,second,work);
+-    }
+-    fn install_best(&mut self,child:&ActualChild,_completed:RootCompleted) {
+-        self.pv.clear();self.pv.push(child.movement);
+-        self.pv.extend_from_slice(&self.search.pv[1][..self.search.pv_len[1]]);
+-    }
+-    fn capture(&mut self,depth:u8,completed:RootCompleted,work:Work)->Result<(),Error> {
+-        let clock=self.search.timing.as_mut().unwrap();
+-        let word=clock.ledger.observe(work);
+-        let capture=Capture{depth,root_index:completed.index,score:completed.score,pv:self.pv.clone(),
+-            search_id:work.charged_search_units,elapsed_cs:clock.adaptive.elapsed_cs(word)};
+-        let search=&mut *self.search;
+-        self.captures.capture(depth,capture,|capture| {
+-            if H::ACTIVE {search.publish_capture(capture).map_err(Error::Host)?;}
+-            Ok::<(),Error>(())
+-        })
+-    }
+-    fn completed_step(&mut self,child:ActualChild,completed:RootCompleted,work:Work) {
+-        if D {self.iteration.as_mut().unwrap().steps.push(Step{movement:child.movement,
+-            window:child.window,adjustment:child.adjustment,score:completed.score,
+-            best:completed.best,second:completed.second,
+-            child_pv:self.search.pv[1][..self.search.pv_len[1]].to_vec(),
+-            pv:self.pv.clone(),work,passes:child.passes});}
+-    }
+-    fn root_check(&mut self,depth:u8,completed:RootCompleted,work:Work)->Option<Stop> {
+-        if !self.search.timing.as_mut().unwrap().check::<D>(Stage::Root,completed.best,completed.second,work) {
+-            return None;
+-        }
+-        self.iterations.push(self.iteration.take().unwrap());
+-        let clock=self.search.timing.as_ref().unwrap();
+-        Some(Stop{point:Point::Root,depth,root_index:Some(completed.index),work,
+-            elapsed_cs:clock.adaptive.elapsed_cs(clock.ledger.last()),pending:None,reason:"root"})
+-    }
+-    fn finish_interrupted(&mut self,depth:u8,attempt:RootAttempt,child:&ActualChild,
+-        reason:Stopped,work:Work)->Stop {
+-        self.iterations.push(self.iteration.take().unwrap());
+-        let clock=self.search.timing.as_ref().unwrap();
+-        Stop{point:Point::Poll,depth,root_index:Some(attempt.index),work,
+-            elapsed_cs:clock.adaptive.elapsed_cs(clock.ledger.last()),
+-            pending:Some(Pending{movement:child.movement,window:attempt.window,adjustment:child.adjustment}),
+-            reason:match reason {Stopped::HostStop=>"host",Stopped::HostAbort=>"abort",_=>"maximum"}}
+-    }
+-    fn complete_iteration(&mut self,depth:u8,stage:Stage,previous:i32,best:i32,second:i32,
+-        work:Work)->Option<Stop> {
+-        let clock=self.search.timing.as_mut().unwrap();
+-        clock.check::<D>(stage,best,second,work);
+-        let terminal=Terminal{depth:depth as i32,selectivity:self.search.config.selectivity,
+-            root_endgame:self.search.evaluator.root.phase.endgame,
+-            maximum_depth:self.search.config.maximum_depth,analysis:self.search.config.analysis,
+-            average_cs:self.controls.average_cs,best,second,previous,start:clock.adaptive.start,
+-            clock:clock.ledger.last(),iteration_limit:clock.adaptive.limits[0]};
+-        let mut iteration=self.iteration.take().unwrap();iteration.complete=true;
+-        self.iterations.push(iteration);
+-        terminal.reason().map(|reason|Stop{point:Point::Iteration,depth,root_index:None,work,
+-            elapsed_cs:clock.adaptive.elapsed_cs(clock.ledger.last()),pending:None,reason})
+-    }
+-}
+--- a/src/timed_sequence.rs
++++ /dev/null
+@@ -1,363 +0,0 @@
+-//! One synchronous sequence owner for actual and controlled timed searches.
+-use crate::quiescence::Work;
+-use crate::root_schedule::{Attempt,Completed,Iteration,Policy,Returned,Row};
+-use crate::timing::Stage;
+-
+-pub(crate) enum AttemptResult<I> { Returned(i32), Interrupted(I) }
+-
+-/// Effects expose native owners through scoped static loans. The driver alone
+-/// admits and orders completion events; a Child remains alive through retries.
+-pub(crate) trait Effects {
+-    type Child;
+-    type Stop;
+-    type Interruption;
+-    type Error;
+-    fn work(&self)->Work;
+-    fn set_depth(&mut self,depth:u8);
+-    fn begin_iteration_records(&mut self,depth:u8);
+-    fn begin_candidate(&mut self,depth:u8,attempt:Attempt)->Self::Child;
+-    fn execute(&mut self,depth:u8,attempt:Attempt,child:&mut Self::Child)
+-        ->Result<AttemptResult<Self::Interruption>,Self::Error>;
+-    fn record_pass(&mut self,depth:u8,attempt:Attempt,value:i32,work:Work,child:&mut Self::Child);
+-    fn adjustment(&mut self,depth:u8,stage:Stage,previous:i32,best:i32,second:i32,work:Work);
+-    fn install_best(&mut self,child:&Self::Child,completed:Completed);
+-    fn capture(&mut self,depth:u8,completed:Completed,work:Work)->Result<(),Self::Error>;
+-    fn completed_step(&mut self,child:Self::Child,completed:Completed,work:Work);
+-    fn root_check(&mut self,depth:u8,completed:Completed,work:Work)->Option<Self::Stop>;
+-    fn finish_interrupted(&mut self,depth:u8,attempt:Attempt,child:&Self::Child,
+-        reason:Self::Interruption,work:Work)->Self::Stop;
+-    fn complete_iteration(&mut self,depth:u8,stage:Stage,previous:i32,best:i32,second:i32,
+-        work:Work)->Option<Self::Stop>;
+-}
+-
+-/// None means only that the supplied resource/list is exhausted: actual search
+-/// turns it into IterationCapacity; controlled supplied runners report no stop.
+-pub(crate) fn drive<E:Effects>(mut rows:Vec<Row>,maximum_depth:u8,effects:&mut E)
+-    ->Result<Option<E::Stop>,E::Error> {
+-    let mut previous=0;
+-    for depth in 1..=maximum_depth {
+-        effects.set_depth(depth);
+-        let mut schedule=Iteration::new(rows,effects.work().charged_search_units,previous);
+-        let restricted=schedule.policy()==Policy::Restricted;
+-        effects.begin_iteration_records(depth);
+-        while let Some(initial)=schedule.next(effects.work().charged_search_units) {
+-            let mut child=effects.begin_candidate(depth,initial);
+-            let mut attempt=initial;
+-            let completed=loop {
+-                let value=match effects.execute(depth,attempt,&mut child)? {
+-                    AttemptResult::Returned(value)=>value,
+-                    AttemptResult::Interrupted(reason)=> {
+-                        let work=effects.work();
+-                        return Ok(Some(effects.finish_interrupted(depth,attempt,&child,reason,work)));
+-                    },
+-                };
+-                let work=effects.work();
+-                effects.record_pass(depth,attempt,value,work,&mut child);
+-                match schedule.returned(value,work.charged_search_units) {
+-                    Returned::Retry(next)=>attempt=next,
+-                    Returned::Completed(completed)=>break completed,
+-                }
+-            };
+-            let work=effects.work();
+-            if restricted&&completed.index==0 {
+-                effects.adjustment(depth,Stage::ScoreDrop,previous,completed.returned_score,
+-                    completed.second,work);
+-            }
+-            if completed.best_changed {
+-                effects.install_best(&child,completed);
+-                effects.adjustment(depth,Stage::BestChange,previous,completed.best,completed.second,work);
+-                effects.capture(depth,completed,work)?;
+-            }
+-            effects.completed_step(child,completed,work);
+-            if let Some(stop)=effects.root_check(depth,completed,work) { return Ok(Some(stop)); }
+-        }
+-        let (best,second,work)=(schedule.best(),schedule.second(),effects.work());
+-        let stage=if !restricted&&work.charged_search_units>=25000 {
+-            Stage::EasyIteration
+-        } else {Stage::Iteration};
+-        if let Some(stop)=effects.complete_iteration(depth,stage,previous,best,second,work) {
+-            return Ok(Some(stop));
+-        }
+-        previous=best;
+-        rows=schedule.into_ranked();
+-    }
+-    Ok(None)
+-}
+-
+-
+-use crate::post_lifecycle::CaptureSlot;
+-use crate::timing::{Adaptive,TerminalPrefix};
+-use crate::timed::Point;
+-use crate::work_clock::{charge_search_unit,Ledger};
+-use std::convert::Infallible;
+-
+-#[derive(Clone,Copy,Debug)]
+-pub struct ElapsedReply {pub score:i32,pub work:u64,pub elapsed:u32}
+-#[derive(Clone,Copy,Debug)]
+-pub struct WorkReply {pub score:i32,pub work:u64,pub relations:u64}
+-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+-pub enum ControlledStage {Initialization,Adjustment,RootCompletion,IterationCompletion,Poll}
+-#[derive(Clone,Debug,PartialEq,Eq)]
+-pub struct ControlledCheck {
+-    pub stage:ControlledStage,pub depth:u8,pub index:usize,pub elapsed:u32,pub work:Work,
+-}
+-#[derive(Clone,Debug,PartialEq,Eq)]
+-pub struct ControlledCapture {
+-    pub depth:u8,pub id:u16,pub score:i32,pub search_id:u64,pub elapsed:u32,
+-}
+-#[derive(Clone,Debug,PartialEq,Eq)]
+-pub struct ControlledPass {
+-    pub depth:u8,pub attempt:Attempt,pub score:Option<i32>,pub completed:bool,
+-    pub work:Work,pub elapsed:u32,
+-}
+-pub struct SuppliedOutcome {
+-    pub limits:[f64;3],pub changes:[u32;3],pub depth:u8,pub stopped:bool,
+-    pub selected:Option<ControlledCapture>,pub work:Work,pub last_elapsed:u32,
+-    pub passes:Vec<ControlledPass>,pub posts:Vec<ControlledCapture>,pub clock_checks:Vec<ControlledCheck>,
+-}
+-
+-trait Source:Sized {
+-    type Reply:Copy;
+-    fn work(&self)->Work;
+-    fn observe(&mut self)->u32;
+-    fn last(&self)->u32;
+-    fn score(reply:Self::Reply)->i32;
+-    fn perform<F:FnMut(&mut Self)->bool>(&mut self,reply:Self::Reply,poll:F)->bool;
+-}
+-struct ElapsedSource {work:Work,start:u32,elapsed:u32,last:u32}
+-impl Source for ElapsedSource {
+-    type Reply=ElapsedReply;
+-    fn work(&self)->Work {self.work}
+-    fn observe(&mut self)->u32 {self.last=self.start.wrapping_add(self.elapsed);self.last}
+-    fn last(&self)->u32 {self.last}
+-    fn score(reply:ElapsedReply)->i32 {reply.score}
+-    fn perform<F:FnMut(&mut Self)->bool>(&mut self,reply:ElapsedReply,_poll:F)->bool {
+-        self.work.charged_search_units=self.work.charged_search_units.checked_add(reply.work)
+-            .expect("supplied N exceeds native arithmetic domain");
+-        self.elapsed=self.elapsed.checked_add(reply.elapsed).expect("supplied elapsed exceeds u32");
+-        false
+-    }
+-}
+-struct WorkSource {work:Work,ledger:Ledger}
+-impl Source for WorkSource {
+-    type Reply=WorkReply;
+-    fn work(&self)->Work {self.work}
+-    fn observe(&mut self)->u32 {self.ledger.observe(self.work)}
+-    fn last(&self)->u32 {self.ledger.last()}
+-    fn score(reply:WorkReply)->i32 {reply.score}
+-    fn perform<F:FnMut(&mut Self)->bool>(&mut self,reply:WorkReply,mut poll:F)->bool {
+-        self.work.charged_relation_queries=self.work.charged_relation_queries.checked_add(reply.relations)
+-            .expect("supplied R exceeds native arithmetic domain");
+-        for _ in 0..reply.work {
+-            let due=charge_search_unit(&mut self.work.charged_search_units,None)
+-                .expect("absent supplied resource limit cannot fail");
+-            if due&&poll(self) {return true;}
+-        }
+-        false
+-    }
+-}
+-
+-fn apply_control<S:Source>(adaptive:&mut Adaptive,source:&mut S,trace:&mut Vec<ControlledCheck>,
+-    stage:Stage,depth:u8,index:usize,previous:i32,best:i32,second:i32)->bool {
+-    let start=adaptive.start;
+-    adaptive.apply(stage,i32::from(depth),previous,best,second,|| {
+-        let clock=source.observe();
+-        let tag=match stage {
+-            Stage::BestChange|Stage::ScoreDrop=>ControlledStage::Adjustment,
+-            Stage::Root=>ControlledStage::RootCompletion,
+-            Stage::Iteration|Stage::EasyIteration=>ControlledStage::IterationCompletion,
+-            Stage::Poll=>ControlledStage::Poll,
+-        };
+-        trace.push(ControlledCheck{stage:tag,depth,index,elapsed:clock.wrapping_sub(start),work:source.work()});
+-        clock
+-    })
+-}
+-
+-struct ControlledEffects<'a,S:Source> {
+-    replies:&'a [Vec<[S::Reply;2]>],source:S,adaptive:Adaptive,average:u32,
+-    index:usize,last_depth:u8,captures:CaptureSlot<ControlledCapture>,
+-    passes:Vec<ControlledPass>,trace:Vec<ControlledCheck>,
+-}
+-impl<S:Source> Effects for ControlledEffects<'_,S> {
+-    type Child=u16;
+-    type Stop=Point;
+-    type Interruption=();
+-    type Error=Infallible;
+-    fn work(&self)->Work {self.source.work()}
+-    fn set_depth(&mut self,depth:u8) {self.last_depth=depth;}
+-    fn begin_iteration_records(&mut self,_depth:u8) {}
+-    fn begin_candidate(&mut self,_depth:u8,attempt:Attempt)->u16 {self.index=attempt.index;attempt.id}
+-    fn execute(&mut self,depth:u8,attempt:Attempt,child:&mut u16)
+-        ->Result<AttemptResult<()>,Infallible> {
+-        let reply=self.replies[usize::from(depth)-1][usize::from(*child)][usize::from(attempt.retry)];
+-        let adaptive=&mut self.adaptive;let trace=&mut self.trace;
+-        let interrupted=self.source.perform(reply,|source| {
+-            apply_control(adaptive,source,trace,Stage::Poll,depth,attempt.index,0,0,0)
+-        });
+-        if interrupted {
+-            // The stopping poll already observed the credited final prefix.
+-            self.passes.push(ControlledPass{depth,attempt,score:None,completed:false,
+-                work:self.source.work(),elapsed:self.adaptive.elapsed_cs(self.source.last())});
+-            Ok(AttemptResult::Interrupted(()))
+-        } else {Ok(AttemptResult::Returned(S::score(reply)))}
+-    }
+-    fn record_pass(&mut self,depth:u8,attempt:Attempt,value:i32,work:Work,_child:&mut u16) {
+-        // Diagnostic reporting is an actual owned observation, excluded from the
+-        // adaptive trace. Actual production's Pass effect does not read a clock.
+-        let clock=self.source.observe();
+-        self.passes.push(ControlledPass{depth,attempt,score:Some(value),completed:true,work,
+-            elapsed:self.adaptive.elapsed_cs(clock)});
+-    }
+-    fn adjustment(&mut self,depth:u8,stage:Stage,previous:i32,best:i32,second:i32,_work:Work) {
+-        apply_control(&mut self.adaptive,&mut self.source,&mut self.trace,stage,depth,self.index,
+-            previous,best,second);
+-    }
+-    fn install_best(&mut self,_child:&u16,_completed:Completed) {}
+-    fn capture(&mut self,depth:u8,completed:Completed,work:Work)->Result<(),Infallible> {
+-        let clock=self.source.observe();
+-        let capture=ControlledCapture{depth,id:completed.id,score:completed.score,
+-            search_id:work.charged_search_units,elapsed:self.adaptive.elapsed_cs(clock)};
+-        self.captures.capture(depth,capture,|_|Ok::<(),Infallible>(()))
+-    }
+-    fn completed_step(&mut self,_child:u16,_completed:Completed,_work:Work) {}
+-    fn root_check(&mut self,depth:u8,completed:Completed,_work:Work)->Option<Point> {
+-        apply_control(&mut self.adaptive,&mut self.source,&mut self.trace,Stage::Root,depth,
+-            completed.index,0,completed.best,completed.second).then_some(Point::Root)
+-    }
+-    fn finish_interrupted(&mut self,_depth:u8,_attempt:Attempt,_child:&u16,_reason:(),_work:Work)->Point {
+-        Point::Poll
+-    }
+-    fn complete_iteration(&mut self,depth:u8,stage:Stage,previous:i32,best:i32,second:i32,
+-        _work:Work)->Option<Point> {
+-        let count=self.replies[usize::from(depth)-1].len();
+-        apply_control(&mut self.adaptive,&mut self.source,&mut self.trace,stage,depth,count,
+-            0,best,second);
+-        TerminalPrefix{depth:i32::from(depth),average_cs:self.average,analysis:0,best,second,previous,
+-            start:self.adaptive.start,clock:self.source.last(),iteration_limit:self.adaptive.limits[0]}
+-            .reason().map(|_|Point::Iteration)
+-    }
+-}
+-
+-fn supplied<S:Source>(average:u32,maximum:u32,checked:bool,mut source:S,
+-    replies:&[Vec<[S::Reply;2]>])->SuppliedOutcome {
+-    assert!(!replies.is_empty()&&replies.len()<=usize::from(u8::MAX));
+-    let count=replies[0].len();
+-    assert!(count>0&&count<=usize::from(u16::MAX)+1);
+-    assert!(replies.iter().all(|row|row.len()==count));
+-    let start=source.observe();
+-    let trace=vec![ControlledCheck{stage:ControlledStage::Initialization,depth:0,index:0,
+-        elapsed:0,work:source.work()}];
+-    let mut effects=ControlledEffects{replies,source,adaptive:Adaptive::new(average,maximum,checked,start),
+-        average,index:0,last_depth:0,captures:CaptureSlot::new(),passes:Vec::new(),trace};
+-    let rows=(0..count).map(|id|Row{id:id as u16,score:0,work:0}).collect();
+-    let stop=match drive(rows,replies.len() as u8,&mut effects) {Ok(stop)=>stop,Err(never)=>match never {}};
+-    let ControlledEffects{source,adaptive,last_depth,captures,passes,trace,..}=effects;
+-    let (selected,posts)=captures.into_parts();
+-    SuppliedOutcome{limits:adaptive.limits,changes:adaptive.changes,depth:last_depth,stopped:stop.is_some(),
+-        selected,work:source.work(),last_elapsed:adaptive.elapsed_cs(source.last()),passes,posts,clock_checks:trace}
+-}
+-
+-/// Typed supplied ordinary scores/work/elapsed; callers admit all rows before
+-/// entry and keep sums in the native arithmetic domain. Labels never enter here.
+-pub fn run_supplied_elapsed(average:u32,maximum:u32,start:u32,checked:bool,
+-    replies:&[Vec<[ElapsedReply;2]>])->SuppliedOutcome {
+-    supplied(average,maximum,checked,ElapsedSource{work:Work::default(),start,elapsed:0,last:start},replies)
+-}
+-/// Supplied relation-first/unit-by-unit activity, sharing actual credit/poll
+-/// admission and Ledger/Adaptive owners. No observation is added at finalization.
+-pub fn run_supplied_work(average:u32,maximum:u32,start:u32,checked:bool,
+-    replies:&[Vec<[WorkReply;2]>])->SuppliedOutcome {
+-    supplied(average,maximum,checked,WorkSource{work:Work::default(),ledger:Ledger::with_origin(start)},replies)
+-}
+-
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    struct OrderedEffects {work:Work,events:Vec<&'static str>,stages:Vec<Stage>,depth:u8}
+-    impl Effects for OrderedEffects {
+-        type Child=u16;type Stop=();type Interruption=();type Error=Infallible;
+-        fn work(&self)->Work {self.work}
+-        fn set_depth(&mut self,depth:u8) {self.depth=depth;}
+-        fn begin_iteration_records(&mut self,_depth:u8) {}
+-        fn begin_candidate(&mut self,_depth:u8,attempt:Attempt)->u16 {attempt.id}
+-        fn execute(&mut self,_depth:u8,_attempt:Attempt,_child:&mut u16)
+-            ->Result<AttemptResult<()>,Infallible> {
+-            self.work.charged_search_units+=if self.work.charged_search_units==0 {25000} else {1};
+-            Ok(AttemptResult::Returned(100))
+-        }
+-        fn record_pass(&mut self,_depth:u8,_attempt:Attempt,_value:i32,_work:Work,_child:&mut u16) {}
+-        fn adjustment(&mut self,_depth:u8,stage:Stage,_previous:i32,_best:i32,_second:i32,_work:Work) {
+-            self.events.push(if stage==Stage::ScoreDrop {"drop"} else {"best"});
+-        }
+-        fn install_best(&mut self,_child:&u16,_completed:Completed) {self.events.push("install");}
+-        fn capture(&mut self,_depth:u8,_completed:Completed,_work:Work)->Result<(),Infallible> {
+-            self.events.push("capture");Ok(())
+-        }
+-        fn completed_step(&mut self,_child:u16,_completed:Completed,_work:Work) {self.events.push("step");}
+-        fn root_check(&mut self,depth:u8,completed:Completed,_work:Work)->Option<()> {
+-            self.events.push("root");(depth==2&&completed.index==0).then_some(())
+-        }
+-        fn finish_interrupted(&mut self,_depth:u8,_attempt:Attempt,_child:&u16,_reason:(),_work:Work) {}
+-        fn complete_iteration(&mut self,_depth:u8,stage:Stage,_previous:i32,_best:i32,_second:i32,
+-            _work:Work)->Option<()> {self.stages.push(stage);None}
+-    }
+-    #[test]
+-    fn coupled_driver_orders_restricted_first_transaction_and_stops_before_iteration_effects() {
+-        let rows=vec![Row{id:0,score:0,work:0},Row{id:1,score:0,work:0}];
+-        let mut effects=OrderedEffects{work:Work::default(),events:Vec::new(),stages:Vec::new(),depth:0};
+-        assert!(drive(rows,3,&mut effects).unwrap().is_some());
+-        assert_eq!(effects.depth,2);
+-        assert_eq!(effects.stages,[Stage::EasyIteration]);
+-        assert_eq!(&effects.events[effects.events.len()-6..],
+-            ["drop","install","best","capture","step","root"]);
+-        assert_eq!(effects.events.iter().filter(|&&e|e=="capture").count(),2);
+-        let r=|score,work|ElapsedReply{score,work,elapsed:0};
+-        let retried=run_supplied_elapsed(0,0,0,false,&[
+-            vec![[r(10,12500),r(0,0)],[r(0,12500),r(0,0)]],
+-            vec![[r(10,1),r(0,0)],[r(13,2),r(5,3)]]]);
+-        assert!(!retried.stopped);assert_eq!(retried.work.charged_search_units,25006);
+-        assert_eq!(retried.passes.len(),5);
+-        assert_eq!((retried.passes[3].attempt.window,retried.passes[3].score),([12,13],Some(13)));
+-        assert_eq!((retried.passes[4].attempt.window,retried.passes[4].score),([12,10000],Some(5)));
+-        assert!(retried.passes[4].attempt.retry);
+-        assert_eq!(retried.changes,[1,1,0]);
+-        let captured=retried.selected.unwrap();
+-        assert_eq!((captured.depth,captured.id,captured.score,captured.search_id),(2,0,10,25001));
+-    }
+-    fn reply(score:i32,work:u64,relations:u64)->WorkReply {WorkReply{score,work,relations}}
+-    #[test]
+-    fn final_unit_poll_withholds_score_and_preserves_only_previously_completed_capture() {
+-        let empty=run_supplied_work(0,1,0,false,&[vec![[reply(999,4096,50000),reply(0,1,0)]]]);
+-        assert!(empty.stopped);assert!(empty.selected.is_none());assert!(empty.posts.is_empty());
+-        assert_eq!(empty.work,Work{charged_search_units:4096,charged_relation_queries:50000});
+-        assert_eq!((empty.passes.len(),empty.passes[0].completed,empty.passes[0].score),(1,false,None));
+-        assert_eq!(empty.clock_checks.iter().map(|c|c.stage).collect::<Vec<_>>(),
+-            [ControlledStage::Initialization,ControlledStage::Poll]);
+-        let saved=run_supplied_work(0,1,u32::MAX,false,&[vec![
+-            [reply(100,4096,0),reply(0,50000,50000)],
+-            [reply(2000,4096,0),reply(0,50000,50000)]]]);
+-        assert!(saved.stopped);assert_eq!(saved.work.charged_search_units,8192);
+-        assert_eq!(saved.work.charged_relation_queries,0);
+-        assert_eq!(saved.passes.len(),2);assert!(!saved.passes[1].completed);
+-        let capture=saved.selected.unwrap();
+-        assert_eq!((capture.id,capture.score,capture.search_id,capture.elapsed),(0,100,4096,0));
+-        assert_eq!(saved.last_elapsed,1);assert!(saved.posts.is_empty());
+-    }
+-    #[test]
+-    fn relations_do_not_poll_and_reporting_reads_retain_fractional_carry_without_restamping_capture() {
+-        let only=run_supplied_work(0,1,19,false,&[vec![[reply(100,0,50000),reply(0,0,0)]]]);
+-        assert!(!only.stopped);assert_eq!(only.work.charged_search_units,0);
+-        assert_eq!(only.last_elapsed,1);assert_eq!(only.clock_checks.len(),1);
+-        assert_eq!(only.selected.as_ref().unwrap().elapsed,1);
+-        let carried=run_supplied_work(0,1,u32::MAX-2,false,&[vec![
+-            [reply(100,7882,0),reply(0,0,0)],[reply(0,0,2),reply(0,0,0)]]]);
+-        assert!(!carried.stopped);
+-        assert_eq!(carried.work,Work{charged_search_units:7882,charged_relation_queries:2});
+-        assert_eq!((carried.passes[0].elapsed,carried.passes[1].elapsed,carried.last_elapsed),(0,1,1));
+-        assert_eq!(carried.selected.as_ref().unwrap().elapsed,0);
+-        assert_eq!(carried.clock_checks.len(),2);
+-        assert_eq!(carried.clock_checks[1].work.charged_search_units,4096);
+-        assert!(carried.clock_checks.iter().all(|c|c.depth<=1));
+-    }
+-}
+--- a/src/timing.rs
++++ b/src/timing.rs
+@@ -149,33 +149,6 @@
+     }
+ }
+ 
+-/// Shared ordered ordinary terminal prefix: controlled labels need no phase/md.
+-#[derive(Clone,Copy,Debug)]
+-pub struct TerminalPrefix {
+-    pub depth:i32,
+-    pub average_cs:u32,
+-    pub analysis:i32,
+-    pub best:i32,
+-    pub second:i32,
+-    pub previous:i32,
+-    pub start:u32,
+-    pub clock:u32,
+-    pub iteration_limit:f64,
+-}
+-impl TerminalPrefix {
+-    pub fn reason(&self)->Option<&'static str> {
+-        if self.depth>1 && (self.clock.wrapping_sub(self.start) as i32) as f64*0.01>=self.iteration_limit {
+-            Some("elapsed52")
+-        } else if self.average_cs!=0 && self.depth>1 && self.best>=9000 && self.previous>=9000 {
+-            Some("confirmedWinningScore")
+-        } else if self.average_cs!=0 && self.depth>1 && self.best<=-9000 {
+-            Some("losingBestScore")
+-        } else if self.average_cs!=0 && self.depth>1 && self.second<=-9000 && self.analysis==0 {
+-            Some("losingAlternativeScore")
+-        } else {None}
+-    }
+-}
+-
+ pub struct Terminal {
+     pub depth: i32,
+     pub selectivity: i32,
+@@ -200,10 +173,14 @@
+     }
+     pub fn reason(&self) -> Option<&'static str> {
+         let depth = self.depth;
+-        if let Some(reason)=(TerminalPrefix{depth,average_cs:self.average_cs,analysis:self.analysis,
+-            best:self.best,second:self.second,previous:self.previous,start:self.start,
+-            clock:self.clock,iteration_limit:self.iteration_limit}).reason() {
+-            Some(reason)
++        if depth > 1 && self.elapsed_cs() as f64 * 0.01 >= self.iteration_limit {
++            Some("elapsed52")
++        } else if self.average_cs != 0 && depth > 1 && self.best >= 9000 && self.previous >= 9000 {
++            Some("confirmedWinningScore")
++        } else if self.average_cs != 0 && depth > 1 && self.best <= -9000 {
++            Some("losingBestScore")
++        } else if self.average_cs != 0 && depth > 1 && self.second <= -9000 && self.analysis == 0 {
++            Some("losingAlternativeScore")
+         } else if depth > 61 {
+             Some("iterationCeiling")
+         } else if depth as usize >= self.maximum_depth {
+--- a/src/work_clock.rs
++++ b/src/work_clock.rs
+@@ -1,17 +1,5 @@
+ //! Observed work ledger. Search owns N/R; observations own the carried origin.
+ use crate::quiescence::Work;
+-
+-
+-/// One native charged search unit. Limits precede increment; a due poll follows
+-/// the credited unit. Starting from zero, non-overflowing counts never poll at0.
+-pub(crate) fn charge_search_unit(units:&mut u64,limit:Option<u64>)
+-    ->Result<bool,crate::quiescence::Stopped> {
+-    if let Some(limit)=limit {
+-        if *units>=limit {return Err(crate::quiescence::Stopped::NodeLimit(limit));}
+-    }
+-    *units+=1;
+-    Ok(*units&4095==0)
+-}
+ 
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+ pub struct Ledger {
+@@ -57,17 +45,6 @@
+     use super::*;
+ 
+     #[test]
+-    fn shared_unit_admission_credits_poll_boundary_and_refuses_limit_before_increment() {
+-        let mut units=4095;
+-        assert_eq!(charge_search_unit(&mut units,Some(4096)),Ok(true));assert_eq!(units,4096);
+-        assert_eq!(charge_search_unit(&mut units,Some(4096)),Err(crate::quiescence::Stopped::NodeLimit(4096)));
+-        assert_eq!(units,4096);
+-        let mut zero=0;
+-        assert_eq!(charge_search_unit(&mut zero,Some(0)),Err(crate::quiescence::Stopped::NodeLimit(0)));
+-        assert_eq!(zero,0);assert_eq!(charge_search_unit(&mut zero,None),Ok(false));assert_eq!(zero,1);
+-    }
+-
+-    #[test]
+     fn fine_snapshot_belongs_to_observation_and_reset_discards_segment_fraction() {
+         let mut clock = Ledger::with_origin(u32::MAX);
+         let just_under = Work {

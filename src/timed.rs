@@ -1,11 +1,15 @@
 //! Work-timed native ordinary search. Public ingress, commands and rendering are separate.
 use crate::engine::Search;
-use crate::evaluator::EvalStats;
+use crate::evaluator::{EvalStats, Node};
+use crate::influence::Influence;
 use crate::history::SearchHistory;
 use crate::movegen::{self, MoveList};
 use crate::ordinary::{Error, Predecessor, Request};
 use crate::position::Position;
+use crate::post_lifecycle::CaptureSlot;
 use crate::quiescence::{Limits, Stats, Stopped, Work};
+use crate::root_schedule::{Attempt as RootAttempt, Completed as RootCompleted, Row as RootRow};
+use crate::timed_sequence::{self, AttemptResult, Effects};
 use crate::timing::{Adaptive, Stage, Terminal};
 use crate::types::{Move, MoveKind, PieceKind};
 use crate::work_clock::Ledger;
@@ -240,13 +244,6 @@ pub fn random_adjustment(seed: u32, randomness: u32, movement: Move) -> i32 {
     (mixed % (randomness + 1)) as i32 - (randomness / 2) as i32
 }
 
-#[derive(Clone, Copy)]
-struct Root {
-    movement: Move,
-    score: i32,
-    work: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -318,6 +315,56 @@ mod tests {
         assert_eq!(out.iterations.len(), 1);
         assert!(search.timing.is_none());
     }
+    #[test]
+    fn default_explicit_true_and_guarded_zero_entry_timed_runs_keep_identical_records() {
+        let position=Position::from_fen(START).unwrap();
+        let mut results=Vec::new();
+        for mode in 0..3 {
+            let mut search=Search::<true>::new(&position);
+            search.config.tts_bytes=65536;
+            let mut history=SearchHistory::new(&position);
+            let mut control=controls();control.average_cs=1;control.origin=0;
+            let result=match mode {
+                0=>search.run_work_timed(position,&mut history,control,Limits{nodes:Some(8192)}),
+                1=>search.run_work_timed_entry::<true>(position,&mut history,control,Limits{nodes:Some(8192)}),
+                _=>search.run_work_timed_without_iio(position,&mut history,control,Limits{nodes:Some(8192)}),
+            }.unwrap();
+            assert!(search.timing.is_none());assert_eq!(history.search_ply(),0);
+            assert_eq!((result.stats.iio_initial_phases,result.stats.iio_tail_phases),(0,0));
+            results.push(result);
+        }
+        let expected=&results[0];
+        for actual in &results[1..] {
+            assert_eq!((&actual.initial_candidates,&actual.result,&actual.publications,
+                &actual.stop,&actual.checks,actual.ledger,actual.stats,actual.evaluations),
+                (&expected.initial_candidates,&expected.result,&expected.publications,
+                &expected.stop,&expected.checks,expected.ledger,expected.stats,expected.evaluations));
+            assert_eq!(actual.iterations.len(),expected.iterations.len());
+            for (a,b) in actual.iterations.iter().zip(&expected.iterations) {
+                assert_eq!((a.depth,a.complete,&a.steps),(b.depth,b.complete,&b.steps));
+            }
+        }
+    }
+
+    #[test]
+    fn guarded_timed_iio_error_unwinds_active_history_and_always_clears_timing() {
+        let position=Position::from_fen("6k1/8/8/8/8/8/P7/K6R w - - 0 1").unwrap();
+        let mut search=Search::<true>::new(&position);search.config.tts_bytes=96;
+        let mut history=SearchHistory::new(&position);
+        let control=Controls{average_cs:0,maximum_cs:0,origin:u32::MAX-2,
+            seed:0,randomness:0,maximum_entered_iterations:6};
+        assert!(matches!(search.run_work_timed_without_iio(position,&mut history,control,
+            Limits{nodes:Some(100000)}),Err(Error::Stopped(Stopped::InternalIterativeOrdering))));
+        assert_eq!(history.search_ply(),0);assert!(search.timing.is_none());
+        assert_eq!(search.stats.iio_initial_phases+search.stats.iio_tail_phases,1);
+        assert_eq!((search.stats.iio_passes,search.stats.iio_children),(0,0));
+        let retry=search.run_iterations(position,&mut history,1,Limits::default()).unwrap();
+        let mut fresh=Search::<true>::new(&position);fresh.config.tts_bytes=96;
+        let expected=fresh.run_iterations(position,&mut history,1,Limits::default()).unwrap();
+        assert_eq!((retry.score,retry.pv,retry.work),(expected.score,expected.pv,expected.work));
+        assert_eq!(history.search_ply(),0);assert!(search.timing.is_none());
+    }
+
 }
 
 impl<const D: bool, H: crate::host::Host> Search<D, H> {
@@ -425,12 +472,34 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
         controls: Controls,
         limits: Limits,
     ) -> Result<Outcome, Error> {
-        let result = self.run_work_timed_inner(position, history, controls, limits);
+        self.run_work_timed_entry::<true>(position, history, controls, limits)
+    }
+
+    /// Bounded diagnostic capability: fail at the first actual IIO entry.
+    /// Default timed/ordinary production continues to allow the complete rule.
+    pub fn run_work_timed_without_iio(
+        &mut self,
+        position: Position,
+        history: &mut SearchHistory,
+        controls: Controls,
+        limits: Limits,
+    ) -> Result<Outcome, Error> {
+        self.run_work_timed_entry::<false>(position, history, controls, limits)
+    }
+
+    fn run_work_timed_entry<const ALLOW_IIO: bool>(
+        &mut self,
+        position: Position,
+        history: &mut SearchHistory,
+        controls: Controls,
+        limits: Limits,
+    ) -> Result<Outcome, Error> {
+        let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
         self.timing = None;
         result
     }
 
-    fn run_work_timed_inner(
+    fn run_work_timed_inner<const ALLOW_IIO: bool>(
         &mut self,
         position: Position,
         history: &mut SearchHistory,
@@ -452,10 +521,11 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
             return Err(Error::NoLegalRoots);
         }
         let initial_candidates = legal.as_slice().to_vec();
-        let mut roots: Vec<Root> = initial_candidates
+        let roots: Vec<RootRow> = initial_candidates
             .iter()
-            .map(|&movement| Root {
-                movement,
+            .enumerate()
+            .map(|(id, _)| RootRow {
+                id: id as u16,
                 score: 0,
                 work: 0,
             })
@@ -471,218 +541,18 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
         if H::ACTIVE {
             self.host.started(controls.seed).map_err(Error::Host)?;
         }
-        let mut iterations = Vec::new();
-        let mut captured = None;
-        let mut publications = Vec::new();
-        let mut previous_best = 0;
-        let stop = 'search: {
-            for depth in 1..=controls.maximum_entered_iterations {
-                self.timing.as_mut().unwrap().depth = depth;
-                let restricted = self.work().charged_search_units >= 25000;
-                let mut ranked = Vec::<Root>::with_capacity(roots.len());
-                let mut best = -10000;
-                let mut pv = Vec::new();
-                let mut iteration = Iteration {
-                    depth,
-                    complete: false,
-                    steps: Vec::new(),
-                };
-                for index in 0..roots.len() {
-                    if restricted && index == 1 {
-                        roots[1..].sort_by_key(|r| std::cmp::Reverse(r.work));
-                    }
-                    self.timing.as_mut().unwrap().root_index = index;
-                    let movement = roots[index].movement;
-                    let window = if restricted && index != 0 {
-                        aspiration(best, previous_best)
-                    } else {
-                        [ranked.get(1).map_or(-10000, |r| r.score), 10000]
-                    };
-                    let adjustment =
-                        random_adjustment(controls.seed, controls.randomness, movement);
-                    let before = self.work().charged_search_units;
-                    let mut child = root.child(&self.evaluator.root, movement);
-                    let mut attempt_window = window;
-                    let mut passes = Vec::new();
-                    let mut retry = false;
-                    let returned = loop {
-                        history.push(&child.position, Some(movement));
-                        let result = self.visit_ordinary(
-                            &mut child,
-                            history,
-                            Request {
-                                ply: 1,
-                                depth: depth as i32 - 1,
-                                lower: -score_add(attempt_window[1], -adjustment),
-                                upper: -score_add(attempt_window[0], -adjustment),
-                                previous_extension: 0,
-                                iteration: depth as i32,
-                                checked: None,
-                            },
-                            Predecessor {
-                                position: &position,
-                                influence: &influence,
-                                checked,
-                                movement: Some(movement),
-                            },
-                        );
-                        history.pop();
-                        let value = match result {
-                            Ok(value) => score_add(-value, adjustment),
-                            Err(
-                                stop @ (Stopped::WorkPoll | Stopped::HostStop | Stopped::HostAbort),
-                            ) => {
-                                iterations.push(iteration);
-                                let clock = self.timing.as_ref().unwrap();
-                                break 'search Stop {
-                                    point: Point::Poll,
-                                    depth,
-                                    root_index: Some(index),
-                                    work: self.work(),
-                                    elapsed_cs: clock.adaptive.elapsed_cs(clock.ledger.last()),
-                                    pending: Some(Pending {
-                                        movement,
-                                        window: attempt_window,
-                                        adjustment,
-                                    }),
-                                    reason: match stop {
-                                        Stopped::HostStop => "host",
-                                        Stopped::HostAbort => "abort",
-                                        _ => "maximum",
-                                    },
-                                };
-                            }
-                            Err(error) => return Err(Error::Stopped(error)),
-                        };
-                        if D {
-                            passes.push(Pass {
-                                window: attempt_window,
-                                returned_score: value,
-                                work: self.work(),
-                            });
-                        }
-                        if restricted && index != 0 && !retry && value >= window[1] {
-                            retry = true;
-                            attempt_window[1] = 10000;
-                        } else {
-                            break value;
-                        }
-                    };
-                    let score = ranking_score(returned, window, restricted && index != 0);
-                    roots[index].work += self.work().charged_search_units - before;
-                    roots[index].score = score;
-                    let place = ranked.partition_point(|r| r.score >= score);
-                    ranked.insert(place, roots[index]);
-                    let second = ranked.get(1).map_or(-10000, |r| r.score);
-                    let work = self.work();
-                    if restricted && index == 0 {
-                        self.timing.as_mut().unwrap().adjustment(
-                            Stage::ScoreDrop,
-                            previous_best,
-                            returned,
-                            second,
-                            work,
-                        );
-                    }
-                    if score > best {
-                        best = score;
-                        pv.clear();
-                        pv.push(movement);
-                        pv.extend_from_slice(&self.pv[1][..self.pv_len[1]]);
-                        let clock = self.timing.as_mut().unwrap();
-                        clock.adjustment(Stage::BestChange, previous_best, best, second, work);
-                        let word = clock.ledger.observe(work);
-                        let capture = Capture {
-                            depth,
-                            root_index: index,
-                            score,
-                            pv: pv.clone(),
-                            search_id: work.charged_search_units,
-                            elapsed_cs: clock.adaptive.elapsed_cs(word),
-                        };
-                        if depth >= 3 {
-                            publications.push(capture.clone());
-                            if H::ACTIVE {
-                                self.publish_capture(&capture).map_err(Error::Host)?;
-                            }
-                        }
-                        captured = Some(capture);
-                    }
-                    if D {
-                        iteration.steps.push(Step {
-                            movement,
-                            window,
-                            adjustment,
-                            score,
-                            best,
-                            second,
-                            child_pv: self.pv[1][..self.pv_len[1]].to_vec(),
-                            pv: pv.clone(),
-                            work,
-                            passes,
-                        });
-                    }
-                    if self
-                        .timing
-                        .as_mut()
-                        .unwrap()
-                        .check::<D>(Stage::Root, best, second, work)
-                    {
-                        iterations.push(iteration);
-                        let clock = self.timing.as_ref().unwrap();
-                        break 'search Stop {
-                            point: Point::Root,
-                            depth,
-                            root_index: Some(index),
-                            work,
-                            elapsed_cs: clock.adaptive.elapsed_cs(clock.ledger.last()),
-                            pending: None,
-                            reason: "root",
-                        };
-                    }
-                }
-                let second = ranked.get(1).map_or(-10000, |r| r.score);
-                let work = self.work();
-                let clock = self.timing.as_mut().unwrap();
-                let stage = if !restricted && work.charged_search_units >= 25000 {
-                    Stage::EasyIteration
-                } else {
-                    Stage::Iteration
-                };
-                clock.check::<D>(stage, best, second, work);
-                let terminal = Terminal {
-                    depth: depth as i32,
-                    selectivity: self.config.selectivity,
-                    root_endgame: self.evaluator.root.phase.endgame,
-                    maximum_depth: self.config.maximum_depth,
-                    analysis: self.config.analysis,
-                    average_cs: controls.average_cs,
-                    best,
-                    second,
-                    previous: previous_best,
-                    start: clock.adaptive.start,
-                    clock: clock.ledger.last(),
-                    iteration_limit: clock.adaptive.limits[0],
-                };
-                iteration.complete = true;
-                iterations.push(iteration);
-                if let Some(reason) = terminal.reason() {
-                    break 'search Stop {
-                        point: Point::Iteration,
-                        depth,
-                        root_index: None,
-                        work,
-                        elapsed_cs: clock.adaptive.elapsed_cs(clock.ledger.last()),
-                        pending: None,
-                        reason,
-                    };
-                }
-                previous_best = best;
-                roots = ranked;
-            }
-            return Err(Error::IterationCapacity);
+        let mut effects=ActualEffects::<D,H,ALLOW_IIO> {
+            search:self,history,root:&root,position:&position,influence:&influence,
+            initial_candidates:&initial_candidates,controls,checked,
+            iterations:Vec::new(),iteration:None,pv:Vec::new(),captures:CaptureSlot::new(),
         };
-        let clock = self.timing.take().unwrap();
+        let stop=timed_sequence::drive(roots,controls.maximum_entered_iterations,&mut effects)?
+            .ok_or(Error::IterationCapacity)?;
+        let ActualEffects{search,iterations,captures,..}=effects;
+        let clock=search.timing.take().unwrap();
+        let (captured,publications)=captures.into_parts();
+        let stats=search.stats;
+        let evaluations=search.evaluator.stats;
         Ok(Outcome {
             seed: controls.seed,
             initial_candidates,
@@ -692,8 +562,130 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
             result: captured,
             publications,
             ledger: clock.ledger,
-            stats: self.stats,
-            evaluations: self.evaluator.stats,
+            stats,
+            evaluations,
         })
+    }
+}
+
+
+/// These are the former root-local variables, never new Search/Node fields.
+struct ActualEffects<'a,const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> {
+    search:&'a mut Search<D,H>,
+    history:&'a mut SearchHistory,
+    root:&'a Node,
+    position:&'a Position,
+    influence:&'a Influence,
+    initial_candidates:&'a [Move],
+    controls:Controls,
+    checked:bool,
+    iterations:Vec<Iteration>,
+    iteration:Option<Iteration>,
+    pv:Vec<Move>,
+    captures:CaptureSlot<Capture>,
+}
+struct ActualChild {
+    node:Node,
+    movement:Move,
+    window:[i32;2],
+    adjustment:i32,
+    passes:Vec<Pass>,
+}
+impl<const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> Effects
+    for ActualEffects<'_,D,H,ALLOW_IIO> {
+    type Child=ActualChild;
+    type Stop=Stop;
+    type Interruption=Stopped;
+    type Error=Error;
+    fn work(&self)->Work {self.search.work()}
+    fn set_depth(&mut self,depth:u8) {self.search.timing.as_mut().unwrap().depth=depth;}
+    fn begin_iteration_records(&mut self,depth:u8) {
+        self.pv=Vec::new();
+        self.iteration=Some(Iteration{depth,complete:false,steps:Vec::new()});
+    }
+    fn begin_candidate(&mut self,_depth:u8,attempt:RootAttempt)->ActualChild {
+        self.search.timing.as_mut().unwrap().root_index=attempt.index;
+        let movement=self.initial_candidates[usize::from(attempt.id)];
+        let adjustment=random_adjustment(self.controls.seed,self.controls.randomness,movement);
+        ActualChild{node:self.root.child(&self.search.evaluator.root,movement),movement,
+            window:attempt.window,adjustment,passes:Vec::new()}
+    }
+    fn execute(&mut self,depth:u8,attempt:RootAttempt,child:&mut ActualChild)
+        ->Result<AttemptResult<Stopped>,Error> {
+        self.history.push(&child.node.position,Some(child.movement));
+        let result=self.search.visit_ordinary_impl::<ALLOW_IIO>(
+            &mut child.node,self.history,Request{ply:1,depth:depth as i32-1,
+                lower:-score_add(attempt.window[1],-child.adjustment),
+                upper:-score_add(attempt.window[0],-child.adjustment),previous_extension:0,
+                iteration:depth as i32,checked:None},
+            Predecessor{position:self.position,influence:self.influence,
+                checked:self.checked,movement:Some(child.movement)});
+        self.history.pop();
+        match result {
+            Ok(value)=>Ok(AttemptResult::Returned(score_add(-value,child.adjustment))),
+            Err(stop @ (Stopped::WorkPoll|Stopped::HostStop|Stopped::HostAbort))=>
+                Ok(AttemptResult::Interrupted(stop)),
+            Err(error)=>Err(Error::Stopped(error)),
+        }
+    }
+    fn record_pass(&mut self,_depth:u8,attempt:RootAttempt,value:i32,work:Work,child:&mut ActualChild) {
+        if D {child.passes.push(Pass{window:attempt.window,returned_score:value,work});}
+    }
+    fn adjustment(&mut self,_depth:u8,stage:Stage,previous:i32,best:i32,second:i32,work:Work) {
+        self.search.timing.as_mut().unwrap().adjustment(stage,previous,best,second,work);
+    }
+    fn install_best(&mut self,child:&ActualChild,_completed:RootCompleted) {
+        self.pv.clear();self.pv.push(child.movement);
+        self.pv.extend_from_slice(&self.search.pv[1][..self.search.pv_len[1]]);
+    }
+    fn capture(&mut self,depth:u8,completed:RootCompleted,work:Work)->Result<(),Error> {
+        let clock=self.search.timing.as_mut().unwrap();
+        let word=clock.ledger.observe(work);
+        let capture=Capture{depth,root_index:completed.index,score:completed.score,pv:self.pv.clone(),
+            search_id:work.charged_search_units,elapsed_cs:clock.adaptive.elapsed_cs(word)};
+        let search=&mut *self.search;
+        self.captures.capture(depth,capture,|capture| {
+            if H::ACTIVE {search.publish_capture(capture).map_err(Error::Host)?;}
+            Ok::<(),Error>(())
+        })
+    }
+    fn completed_step(&mut self,child:ActualChild,completed:RootCompleted,work:Work) {
+        if D {self.iteration.as_mut().unwrap().steps.push(Step{movement:child.movement,
+            window:child.window,adjustment:child.adjustment,score:completed.score,
+            best:completed.best,second:completed.second,
+            child_pv:self.search.pv[1][..self.search.pv_len[1]].to_vec(),
+            pv:self.pv.clone(),work,passes:child.passes});}
+    }
+    fn root_check(&mut self,depth:u8,completed:RootCompleted,work:Work)->Option<Stop> {
+        if !self.search.timing.as_mut().unwrap().check::<D>(Stage::Root,completed.best,completed.second,work) {
+            return None;
+        }
+        self.iterations.push(self.iteration.take().unwrap());
+        let clock=self.search.timing.as_ref().unwrap();
+        Some(Stop{point:Point::Root,depth,root_index:Some(completed.index),work,
+            elapsed_cs:clock.adaptive.elapsed_cs(clock.ledger.last()),pending:None,reason:"root"})
+    }
+    fn finish_interrupted(&mut self,depth:u8,attempt:RootAttempt,child:&ActualChild,
+        reason:Stopped,work:Work)->Stop {
+        self.iterations.push(self.iteration.take().unwrap());
+        let clock=self.search.timing.as_ref().unwrap();
+        Stop{point:Point::Poll,depth,root_index:Some(attempt.index),work,
+            elapsed_cs:clock.adaptive.elapsed_cs(clock.ledger.last()),
+            pending:Some(Pending{movement:child.movement,window:attempt.window,adjustment:child.adjustment}),
+            reason:match reason {Stopped::HostStop=>"host",Stopped::HostAbort=>"abort",_=>"maximum"}}
+    }
+    fn complete_iteration(&mut self,depth:u8,stage:Stage,previous:i32,best:i32,second:i32,
+        work:Work)->Option<Stop> {
+        let clock=self.search.timing.as_mut().unwrap();
+        clock.check::<D>(stage,best,second,work);
+        let terminal=Terminal{depth:depth as i32,selectivity:self.search.config.selectivity,
+            root_endgame:self.search.evaluator.root.phase.endgame,
+            maximum_depth:self.search.config.maximum_depth,analysis:self.search.config.analysis,
+            average_cs:self.controls.average_cs,best,second,previous,start:clock.adaptive.start,
+            clock:clock.ledger.last(),iteration_limit:clock.adaptive.limits[0]};
+        let mut iteration=self.iteration.take().unwrap();iteration.complete=true;
+        self.iterations.push(iteration);
+        terminal.reason().map(|reason|Stop{point:Point::Iteration,depth,root_index:None,work,
+            elapsed_cs:clock.adaptive.elapsed_cs(clock.ledger.last()),pending:None,reason})
     }
 }

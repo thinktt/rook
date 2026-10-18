@@ -13,10 +13,13 @@ use std::{
 };
 
 mod actual_timed;
+mod generic_timed;
 mod admission;
 mod boundary_admission;
 mod candidate_order;
 mod cached_entry;
+mod controlled_root;
+mod controlled_timed;
 mod clock_boundaries;
 mod endgame_bounds;
 mod endings;
@@ -24,6 +27,7 @@ mod evaluation_common;
 mod fresh_evaluation;
 mod generation;
 mod king_shelter;
+mod joined_search;
 mod learned;
 mod ledger;
 mod move_evaluation;
@@ -34,6 +38,8 @@ mod pawn_progress;
 mod pawn_retained;
 mod pawn_subtotals;
 mod policies;
+mod post_captures;
+mod persistent_sessions;
 mod position_terms;
 mod positions;
 mod quiescence_evaluation;
@@ -121,7 +127,13 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "session.searches" | "session.clockSeededSearches" | "session.interruptedSearches" | "session.ordinaryIterations" => persistent_sessions::dispatch(operation,input),
+        "search.ordinaryJoinedSearch" => joined_search::dispatch(input),
+        "output.postLifecycle" => post_captures::dispatch(input),
+        "search.rootWorkSchedule" | "search.unrestrictedRootSequence" | "search.restrictedRootSequence" => controlled_root::dispatch(operation,input),
         "search.seededTimedSearch" | "session.goOutcome" => actual_timed::dispatch(operation, input),
+        "search.genericTimedSearch" => generic_timed::dispatch(input),
+        "search.timedRootSequence" | "search.workTimedRootSequence" => controlled_timed::dispatch(operation,input),
         "time.adaptiveSequence" | "search.iterationTerminalStop" | "session.timeSetup" => clock_boundaries::dispatch(operation,input),
         "evaluation.kingShelter" => king_shelter::run(input),
         "evaluation.materialValues"

@@ -39,6 +39,8 @@ pub struct Limits {
 pub enum Stopped {
     NodeLimit(u64),
     WorkPoll,
+    /// Bounded diagnostic refused actual internal-iterative-ordering entry.
+    InternalIterativeOrdering,
     HostStop,
     HostAbort,
     HostIo(std::io::ErrorKind),

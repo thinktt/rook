@@ -5,6 +5,13 @@ use crate::session::GameResult;
 use crate::types::{Color, Move};
 use std::io;
 
+/// Seed arithmetic shared by native session preparation and actual host acquisition.
+/// Callers own the seconds sample and its existing timing/error boundary.
+#[inline]
+pub fn seed_from_seconds(seconds: u32, entry: u32) -> u32 {
+    seconds.wrapping_add(entry)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
     Finish,

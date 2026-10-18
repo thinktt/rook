@@ -1,7 +1,13 @@
 # Remaining performance investigations
 
+Current117 has mandatory7673-case/117-operation success and a generic12-game
+pre-gate pass. Its own-PGO, codegen review and complete54/12 costs are pending;
+none of the historical measurements below transfers to that source. CPU-only
+opaque calibration preparation is accepted; no local calibration has run yet.
+
 Date: 2026-10-18. Statuses below distinguish adopted experiments from hypotheses; none promises
-a qualified speedup. Current canonical8d9dddc5 full local54 PGO CPU costs total
+a qualified speedup. The latest complete54 collection, on frozen8d9dddc5,
+has full local PGO CPU costs totaling
 81.131004s versus the published63.431779s sum(raw uncalibrated ratio1.279028).
 Previous8c4619a7 totals81.828432s; the new sum is0.852305% lower, with41
 case medians lower and13 higher in this sequential historical comparison.
@@ -70,8 +76,8 @@ Function attribution changed through inlining, so source-line evidence matters.
 The reported-only full12 collection on1dc996b2 now reconciles48 lifetimes/
 2528 searches, summing941.928787s in game CPU medians (raw uncalibrated
 ratio1.462116). Its helper-affinity limitation remains disclosed. Final qualified
-54/12 costs, full gameplay, remaining mandatory diagnostics
-and production review remain requirements alongside optimization.
+54/12 costs, external full-game handoff and production review remain
+requirements alongside optimization; mandatory117 fixture coverage is now complete.
 
 5. **Pure inputs within one evaluation invocation.** An isolated prototype at
    `/tmp/imp2-evaluation-inputs-20261018` reuses current phase and root-valued

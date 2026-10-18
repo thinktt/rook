@@ -149,6 +149,33 @@ impl Adaptive {
     }
 }
 
+/// Shared ordered ordinary terminal prefix: controlled labels need no phase/md.
+#[derive(Clone,Copy,Debug)]
+pub struct TerminalPrefix {
+    pub depth:i32,
+    pub average_cs:u32,
+    pub analysis:i32,
+    pub best:i32,
+    pub second:i32,
+    pub previous:i32,
+    pub start:u32,
+    pub clock:u32,
+    pub iteration_limit:f64,
+}
+impl TerminalPrefix {
+    pub fn reason(&self)->Option<&'static str> {
+        if self.depth>1 && (self.clock.wrapping_sub(self.start) as i32) as f64*0.01>=self.iteration_limit {
+            Some("elapsed52")
+        } else if self.average_cs!=0 && self.depth>1 && self.best>=9000 && self.previous>=9000 {
+            Some("confirmedWinningScore")
+        } else if self.average_cs!=0 && self.depth>1 && self.best<=-9000 {
+            Some("losingBestScore")
+        } else if self.average_cs!=0 && self.depth>1 && self.second<=-9000 && self.analysis==0 {
+            Some("losingAlternativeScore")
+        } else {None}
+    }
+}
+
 pub struct Terminal {
     pub depth: i32,
     pub selectivity: i32,
@@ -173,14 +200,10 @@ impl Terminal {
     }
     pub fn reason(&self) -> Option<&'static str> {
         let depth = self.depth;
-        if depth > 1 && self.elapsed_cs() as f64 * 0.01 >= self.iteration_limit {
-            Some("elapsed52")
-        } else if self.average_cs != 0 && depth > 1 && self.best >= 9000 && self.previous >= 9000 {
-            Some("confirmedWinningScore")
-        } else if self.average_cs != 0 && depth > 1 && self.best <= -9000 {
-            Some("losingBestScore")
-        } else if self.average_cs != 0 && depth > 1 && self.second <= -9000 && self.analysis == 0 {
-            Some("losingAlternativeScore")
+        if let Some(reason)=(TerminalPrefix{depth,average_cs:self.average_cs,analysis:self.analysis,
+            best:self.best,second:self.second,previous:self.previous,start:self.start,
+            clock:self.clock,iteration_limit:self.iteration_limit}).reason() {
+            Some(reason)
         } else if depth > 61 {
             Some("iterationCeiling")
         } else if depth as usize >= self.maximum_depth {

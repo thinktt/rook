@@ -129,13 +129,7 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
     }
 
     pub(crate) fn charge_node(&mut self, history: &SearchHistory) -> Result<(), Stopped> {
-        if let Some(limit) = self.limits.nodes {
-            if self.stats.nodes >= limit {
-                return Err(Stopped::NodeLimit(limit));
-            }
-        }
-        self.stats.nodes += 1;
-        if self.stats.nodes & 4095 == 0 {
+        if crate::work_clock::charge_search_unit(&mut self.stats.nodes,self.limits.nodes)? {
             let work = self.work();
             self.work_poll(history, work)?;
         }

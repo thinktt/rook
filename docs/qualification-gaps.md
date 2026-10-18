@@ -1,85 +1,48 @@
 # Remaining qualification work
 
-The active mission retains full behavioral, gameplay and performance scope.
-The ordinary wire is implemented and has all54 profiling replay cases,
-literal controls, interruptions and short continuous switching evidence at
-the frozen `5357563` checkpoint. These observations do not close the mission.
+Current117 source has complete mandatory fixture success:117 operations,
+7673 unique cases/115 whole files,209 diagnostic units,177 native tests,
+54 strict replays and eight interruption fixtures/24 searches. Generic39cadc62
+also passes the12-game pre-gate/632 searches, continuity8 and required seed
+controls. Source equality explicitly binds reused green native evidence after
+the cold test-only correction. Ordinary and diagnostic artifacts remain distinct.
+See [117 report](../evidence/complete117-ledger-test-validation-preparation-20261018/report.md)
+and [pre-gate](../evidence/complete117-generic-pregate-20261018/README.md).
 
-- Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements105 operations,
-  including placement/pawn terms, work ledger, learned/table sequences and
-  supplied candidate/priority/capture order, root randomization/aspiration,
-  quiescence capture policy/PV line length, material balance, capture exception/
-  defense/allowance, frontier estimate, king pressure and guarded fast cutoff,
-  plus opaque/produced-history admission, local move extensions and five endgame
-  components, plus fresh personality weights/central balance and score finishing:
-  selected/full endgame bounds plus material/fast-threat composition, root/square/
-  shelter and score contexts, fresh/retained pawn observations and subtotals,
-  complete forced-fresh subtotal/score, controlled full/fast and actual move/null
-  sequences, Q-entry/disposition observations, retained pawn subtotals and fixed
-  root search pawn sequences and recursive Q trees, plus cached/controlled fast
-  admission, effective bounds, draw/reversal and bounded mate leaves, shared
-  generation, fixed/seeded root iterations, adaptive/terminal clock boundaries
-  and two actual timed-session routes:
-  7519 unique cases/102 complete fixture files and182 adapter units pass after158
-  native tests. Remaining mandatory inventory is12 operations/154 cases. Every other mandatory operation still needs
-  transport/schema implementation and exact fixture success; native projection
-  checks are not replacements for the mandatory adapter.
-- Close two remaining diagnostic admission reviews before claiming complete
-  domain coverage. The generic timed-search contract requires a dedicated
-  failure at unsupported IIO entry; a final counter rejection alone does not
-  establish that placement. Its native entry policy remains unimplemented.
-  The validated105 goOutcome parser uses a bounded canonical setup vocabulary;
-  the released contract does not expressly enumerate every harmless setup
-  command. Review wider equivalent setup sequences before treating that parser
-  as complete domain proof. See
-  [independent105 review](../evidence/actual-timed105-review-20261018/review-20261018T113351Z-a6874c.md).
-- Extend exact composed-search comparisons beyond the ten first-root and nine
-  ordinary fixture cases. Extend actual evaluation-stage and quiescence trace
-  evidence beyond the bounded ten-tree component contract and
-  verify IIO/tail/extension behavior beyond bounded native coverage.
-- Audit learned-memory consumption of uncertified/colliding cache hints. The
-  current empty-source guard avoids indexing an absent piece; behavior in that
-  broader completed-node combination remains unqualified. A specification-only
-  consultation confirms a conditional composition/admission gap rather than a
-  public reachable defect; see [hint completion review](research/uncertified-hint-completion.md).
-- Expand the initial [production ownership map](production-map.md) to individual
-  normative requirements and close their review/test obligations beyond finite examples. The live
-  host now publishes immediately at real captures, polls one available line
-  per4096 units, supports current-path/null status and active time updates, and
-  preserves abort/finish/fallback ownership. All54 natural fine-work replays,
-  eight literal interruption fixtures and native active-time tests cover parts
-  of that composition; they do not exhaust interruption during every IIO stage
-  or establish a naturally reached first-root fallback witness.
-- Complete the full3288-game gate. Previous canonical8c4619a7 passes
-  all12 focused games (632 searches), its own eight-search continuity and
-  both public seed controls, combined by the unchanged released collector. This establishes complete focused replay,
-  with `completeGameplayQualification=false`. The ordinary interface
-  includes natural POSIX acquisition, persistent gate overrides and fine-work
-  posts. Exceptional king-victim and zero-root fatal exits have literal
-  process-level controls. None of these replaces full gameplay qualification.
-- Continue measured representation/restoration work at suitable fidelity.
-  The generation-summary/evasion algorithm retains copied-child ownership, with
-  its original all54 replay regression and four-case
-  whole-native CPU pilot. That decision is documented in
-  [decision0002](decisions/0002-geometric-legality.md); it does not close full
-  performance collection, production mapping/review or mandatory conformance.
-- Establish scoped PMU/calibration capabilities and qualified measurement
-  boundaries. Qualify the complete local54 CPU collection and run the complete
-  12-game CPU collection under that final profile.
-  The first CPU pilot used a selected-move/checkpoint endpoint. A new direct
-  wait4 supervisor includes native startup, setup, execution and destruction,
-  with independent strict-oracle supervision. Its initial control tests do not
-  constitute a final measurement/uncertainty profile. Clock-sampling attempts
-  reported unreliable timers; their percentages are not optimization evidence.
-  Callgrind instruction simulation is a separate diagnostic, not PMU counts.
-  A reproducible generic PGO build now passes all54 strict replays and wire
-  interruption checks; its four-anchor CPU pilot shows a further local6.5%
-  sum-of-medians reduction. That named pilot is not either complete collection
-  or a calibrated reference comparison.
+Remaining work:
 
-These open items permit substantial local progress while PMU support is
-investigated. No hardware limitation currently blocks engine implementation.
+- Review actual emitted shared-controller/default/false-IIO code, recursive
+  errors/ABI, copies, frames and PV/ranking allocation lifetimes. Source sharing
+  and unchanged public layouts do not prove free lowering.
+- Train/build the selected exact source with its own generic PGO profile, then
+  freshly regress its production artifact. Generic pre-gate success cannot be
+  transferred to that future image.
+- Collect current complete54-search and12-game whole-lifetime CPU costs under
+  the fixed measurement profile. Retain every case, warmup, sample and failure.
+  Run approved opaque per-case hardware calibration; PMU remains unavailable
+  pending a separately authorized deployed collector. Cross-hardware calibration
+  is interpretive evidence, not qualified KingRE acceptance.
+- Freeze and validate the comparison, repeatability/uncertainty and finite
+  follow-up procedure before applying aggregate1.10/every-case1.25 limits.
+  Both54-search and12-game limits apply independently; no offsets or universal
+  hardware factor are permitted.
+- Finish normative production review beyond finite fixtures: TT-origin/window
+  induction, conditional empty-source remembered-hint composition, interruption
+  and natural IIO-path coverage. Current numerical review supports retained P/G,
+  selected late bounds and actual relation-charge ownership, with raw counter
+  capacity explicitly scoped. See [numerical crosswalk](../evidence/production-retained117-numerical-crosswalk-20261018-score-context/review.md)
+  and [hint gap](research/uncertified-hint-completion.md).
+- Prepare exact source/build/artifact/evidence handoff for the external full
+  3288-game gate. The owner explicitly assigned that gate off Vic; do not run
+  it here. Local12-game success does not claim the external gate passed.
+
+Generic timed-search now reports its dedicated failure at the actual unsupported
+IIO entry. The revised goOutcome/persistent transports use native admission and
+late seed ownership; the prior105 bounded-vocabulary issue and original failed
+unit witnesses remain preserved. Complete finite fixture success is not a proof
+of every admitted production/domain input.
+
+Historical evidence below keeps its original identities and limitations.
 
 The previous completed local54 collection on frozen8c4619a7 retains216 normal
 strict-oracle/native lifetimes and independently reconciles all raw samples.
@@ -179,7 +142,7 @@ then adds shared native Q/stage observations, passing145 native tests,
 bytes under a bounded static review; no CPU neutrality is inferred. Remaining29
 operations/1512 cases included wider complete-search/session traces.
 
-Current95 source exactly matches its tested99-file closure. Native6e7b2935
+Historical95 source exactly matched its tested99-file closure. Native6e7b2935
 passes151 tests/strict54/eight-wire, adapter9a968d54 passes149 units and7393
 cases/95 operations/89 whole files. Seven scalar admission/boundary transports
 share live native owners where documented; controlled FastCutoff arithmetic

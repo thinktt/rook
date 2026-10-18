@@ -23,7 +23,7 @@ impl<W: Write, E: Write> Host for WireHost<'_, W, E> {
             .duration_since(UNIX_EPOCH)
             .map_err(io::Error::other)?
             .as_secs() as u32;
-        Ok(seconds.wrapping_add(entry))
+        Ok(rook2::host::seed_from_seconds(seconds, entry))
     }
     fn started(&mut self, seed: u32) -> io::Result<()> {
         if self.diagnostic_seed {

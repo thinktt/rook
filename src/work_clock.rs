@@ -1,6 +1,18 @@
 //! Observed work ledger. Search owns N/R; observations own the carried origin.
 use crate::quiescence::Work;
 
+
+/// One native charged search unit. Limits precede increment; a due poll follows
+/// the credited unit. Starting from zero, non-overflowing counts never poll at0.
+pub(crate) fn charge_search_unit(units:&mut u64,limit:Option<u64>)
+    ->Result<bool,crate::quiescence::Stopped> {
+    if let Some(limit)=limit {
+        if *units>=limit {return Err(crate::quiescence::Stopped::NodeLimit(limit));}
+    }
+    *units+=1;
+    Ok(*units&4095==0)
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Ledger {
     origin: u32,
@@ -43,6 +55,17 @@ impl Ledger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_unit_admission_credits_poll_boundary_and_refuses_limit_before_increment() {
+        let mut units=4095;
+        assert_eq!(charge_search_unit(&mut units,Some(4096)),Ok(true));assert_eq!(units,4096);
+        assert_eq!(charge_search_unit(&mut units,Some(4096)),Err(crate::quiescence::Stopped::NodeLimit(4096)));
+        assert_eq!(units,4096);
+        let mut zero=0;
+        assert_eq!(charge_search_unit(&mut zero,Some(0)),Err(crate::quiescence::Stopped::NodeLimit(0)));
+        assert_eq!(zero,0);assert_eq!(charge_search_unit(&mut zero,None),Ok(false));assert_eq!(zero,1);
+    }
 
     #[test]
     fn fine_snapshot_belongs_to_observation_and_reset_discards_segment_fraction() {

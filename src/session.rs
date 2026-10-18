@@ -7,6 +7,7 @@ use crate::ordinary;
 use crate::output::{self, Event};
 use crate::parameters::{self, Parameters};
 use crate::position::Position;
+use crate::post_lifecycle::{final_report, FinalReport};
 use crate::quiescence::{Limits, Work};
 use crate::timed::{self, Controls};
 use crate::types::{Color, Move, MoveKind, PieceKind, Square};
@@ -453,7 +454,7 @@ impl<const D: bool> Session<D> {
                 .allowance(self.game_ply(), self.parameters.values[23], false, entry)?;
         let seed = self
             .seed_override
-            .unwrap_or(system_seconds.wrapping_add(entry));
+            .unwrap_or(crate::host::seed_from_seconds(system_seconds, entry));
         self.clock.begin(entry);
         self.ledger.reset();
         self.work = Work::default();
@@ -591,19 +592,22 @@ impl<const D: bool> Session<D> {
                     .and_then(|r| r.pv.first())
                     .copied()
                     .unwrap_or(outcome.initial_candidates[0]);
-                if self.post && !control.published {
-                    let post = if let Some(capture) = &outcome.result {
+                let final_post = match final_report(self.post, control.published, outcome.result.as_ref()) {
+                    FinalReport::Suppressed => None,
+                    FinalReport::Retained(capture) => {
                         let mut fields =
                             output::capture_fields(&prepared.root, capture, draw, selectivity);
                         if fine_work {
                             fields.centiseconds = self.ledger.fine_post();
                         }
-                        output::render(prepared.root, &capture.pv, fields)
-                    } else {
-                        output::render(prepared.root, &[movement], output::Fields::default())
-                    }
-                    .map_err(Error::Rendering)?;
-                    host.publish(Record::Post(post)).map_err(Error::Host)?;
+                        Some(output::render(prepared.root, &capture.pv, fields))
+                    },
+                    FinalReport::Fallback => Some(output::render(
+                        prepared.root, &[movement], output::Fields::default(),
+                    )),
+                };
+                if let Some(post) = final_post {
+                    host.publish(Record::Post(post.map_err(Error::Rendering)?)).map_err(Error::Host)?;
                 }
                 self.accept_move(movement);
                 host.publish(Record::Move(movement)).map_err(Error::Host)?;
@@ -785,5 +789,77 @@ mod tests {
             assert_eq!(s.idle(command).unwrap(), Action::Reply(Vec::new()));
         }
         assert_eq!(s.game_ply(), 2);
+    }
+
+    fn post_session(depth: u8) -> Session<true> {
+        let mut session = Session::<true>::default();
+        let parameters = format!("cm_parm rnd=0 md={depth} tts=65536");
+        for command in ["post", "level 0 5 0", "time 18100",
+            "setboard 4k3/8/8/8/8/8/P7/4K3 w - - 0 1", &parameters] {
+            assert!(matches!(session.idle(command).unwrap(), Action::Reply(_)));
+        }
+        session.seed_override = Some(17);
+        session
+    }
+
+    #[test]
+    fn actual_offline_and_live_finish_publish_identical_shallow_and_eligible_captures() {
+        use crate::host::{Host, Record};
+        #[derive(Default)]
+        struct Recorder(Vec<Record>);
+        impl Host for Recorder {
+            fn publish(&mut self, record: Record) -> std::io::Result<()> {
+                self.0.push(record); Ok(())
+            }
+        }
+        for depth in [1, 3] {
+            let mut offline = post_session(depth);
+            let mut live = post_session(depth);
+            let expected = offline.go(0, Limits { nodes: Some(100_000) }, 3).unwrap();
+            let (actual, host) = live.go_live(Recorder::default(), 0,
+                Limits { nodes: Some(100_000) }, 3, false);
+            let actual = actual.unwrap();
+            let observed: Vec<Event> = host.0.into_iter().map(|record| match record {
+                Record::Post(post) => Event::Post(post),
+                Record::Move(movement) => Event::Move(movement),
+                other => panic!("unexpected completion record: {other:?}"),
+            }).collect();
+            assert_eq!(observed, expected.events);
+            assert_eq!(actual.outcome.result, expected.outcome.result);
+            assert_eq!(actual.outcome.publications, expected.outcome.publications);
+            assert_eq!(actual.outcome.stop.work, expected.outcome.stop.work);
+            assert_eq!(actual.outcome.publications.is_empty(), depth == 1);
+            assert_eq!(live.position(), offline.position());
+            assert_eq!(live.game_ply(), 1);
+        }
+    }
+
+    #[test]
+    fn actual_capture_and_finish_publication_errors_return_before_accepting_a_move() {
+        use crate::host::{Host, Record};
+        #[derive(Default)]
+        struct RejectPost(Vec<Record>);
+        impl Host for RejectPost {
+            fn publish(&mut self, record: Record) -> std::io::Result<()> {
+                let rejected = matches!(&record, Record::Post(_));
+                self.0.push(record);
+                if rejected { Err(std::io::Error::new(std::io::ErrorKind::Other, "post rejected")) }
+                else { Ok(()) }
+            }
+        }
+        for depth in [1, 3] {
+            let mut session = post_session(depth);
+            let initial = session.position();
+            let (result, host) = session.go_live(RejectPost::default(), 0,
+                Limits { nodes: Some(100_000) }, 3, false);
+            if depth == 1 {
+                assert!(matches!(result, Err(Error::Host(_))));
+            } else {
+                assert!(matches!(result, Err(Error::Search(ordinary::Error::Host(_)))));
+            }
+            assert!(matches!(host.0.as_slice(), [Record::Post(_)]));
+            assert_eq!(session.position(), initial);
+            assert_eq!(session.game_ply(), 0);
+        }
     }
 }
