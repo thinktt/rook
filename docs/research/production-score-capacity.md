@@ -84,3 +84,12 @@ retains the preceding numerical prerequisites and unresolved hint-composition
 domain.145 native tests,133 adapter units/6161 cases and54/eight-wire are finite
 behavioral evidence; the reviewed32-byte local stack increase is not a new
 arithmetic proof or a performance result.
+
+The subsequent checked bounded king-first adoption changes only threshold
+witness order in movegen.rs. Its two actual consumers observe the saturated
+count and retain complete lists only below2; full order, arithmetic, placement
+and retained owners remain unchanged. The
+[king-first delta binding](../../evidence/king-first88-integration-20261018/numeric-proof-delta-binding.json)
+retains the same premises and unresolved composition limits. Fresh147 native,
+54/eight-wire and133 adapter units/6161 cases bind the named88 artifacts;
+separate frozen85 trial costs do not transfer.

@@ -1,0 +1,303 @@
+//! Produced or opaque history into native admission and local move extensions.
+use super::{array, boolean, color, integer, moves, object, positions, text, Result};
+use rook2::{
+    history::{repetition_draw, SearchHistory},
+    movegen::{self, MoveList},
+    ordinary_policy::{Extensions, Learning},
+    position::{Position, NO_SQUARE},
+    types::{Move, Piece, PieceKind, Square},
+};
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+
+fn consumer_position(fen: &str) -> Result<Position> {
+    let position = positions::sequence_position(fen, true)?;
+    if movegen::in_check(&position, position.side.opponent()) {
+        return Err("nonmoving king is attacked at this consumer's setup boundary".into());
+    }
+    if position.ep != NO_SQUARE {
+        let target = Square(position.ep);
+        let white = position.side == rook2::types::Color::White;
+        let rank = if white { 5 } else { 2 };
+        let victim = target.offset(0, if white { -1 } else { 1 });
+        if target.rank() != rank
+            || victim.is_none_or(|square| {
+                position.board[square.0 as usize]
+                    != Piece::new(position.side.opponent(), PieceKind::Pawn)
+            })
+        {
+            return Err("retained EP fails this consumer's rank/pawn-victim precondition".into());
+        }
+    }
+    Ok(position)
+}
+
+fn killers(value: &Value) -> Result<Learning> {
+    parse_killers(value, 63)
+}
+
+/// Cold schema capacity is chosen by the consumer; older admission stays63.
+pub(super) fn parse_killers(value: &Value, maximum: usize) -> Result<Learning> {
+    let mut learning = Learning::default();
+    let mut seen = [false; 65];
+    for entry in array(value, 0, maximum)? {
+        object(entry, &["ply", "moves"])?;
+        let ply = integer(&entry["ply"], 1, maximum as i32)? as usize;
+        if seen[ply] {
+            return Err("duplicate killer ply".into());
+        }
+        seen[ply] = true;
+        let pair = array(&entry["moves"], 2, 2)?;
+        learning.killers[ply] = [
+            moves::movement(&pair[0])?.unwrap_or(Move::NONE),
+            moves::movement(&pair[1])?.unwrap_or(Move::NONE),
+        ];
+    }
+    Ok(learning)
+}
+
+fn admission(
+    history: &SearchHistory,
+    checked: bool,
+    analysis: i32,
+    mut learning: Learning,
+) -> Value {
+    let count = history.repetition_count(checked);
+    let draw = repetition_draw(count, history.search_ply(), analysis);
+    if !draw {
+        learning.clear_next(history.search_ply());
+    }
+    let pairs = killers_output(&learning, 63);
+    // The diagnostic executes exactly one admission stage, including its
+    // unconditional visit charge. History replay is outside that stage.
+    json!({"repetitionCount":count,"outcome":if draw {"draw"} else {"continue"},
+           "chargedSearchUnits":1,"killers":pairs})
+}
+
+/// Formatting only; preserve native pair order, omit empty pairs and sort plies.
+pub(super) fn killers_output(learning: &Learning, maximum: usize) -> Value {
+    let mut pairs = Vec::new();
+    for ply in 1..=maximum {
+        let pair = learning.killers[ply];
+        if pair != [Move::NONE; 2] {
+            pairs.push(json!({"ply":ply,"moves":[moves::descriptor(pair[0]),moves::descriptor(pair[1])]}));
+        }
+    }
+    json!(pairs)
+}
+
+pub(super) fn opaque_position(value: &Value, labels: &mut BTreeMap<String, u32>) -> Result<Position> {
+    object(value, &["identity", "side", "castling", "enPassant"])?;
+    let label = text(&value["identity"])?;
+    if !(1..=32).contains(&label.len())
+        || !label
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    {
+        return Err("invalid opaque identity label".into());
+    }
+    let next = labels.len() as u32;
+    let identity = *labels.entry(label.to_owned()).or_insert(next);
+    let mut position = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
+    position.primary = identity;
+    position.side = color(&value["side"])?;
+    let mut previous_index = None;
+    let mut rights = 0u8;
+    for byte in text(&value["castling"])?.bytes() {
+        let index = b"KQkq"
+            .iter()
+            .position(|&b| b == byte)
+            .ok_or("invalid castling subset")?;
+        if previous_index.is_some_and(|previous| previous >= index) {
+            return Err("castling must be an ordered subset without duplicates".into());
+        }
+        previous_index = Some(index);
+        rights |= 1 << index;
+    }
+    position.rights = rights;
+    position.ep = if value["enPassant"].is_null() {
+        NO_SQUARE
+    } else {
+        let square = positions::square(&value["enPassant"])?;
+        if !matches!(square.rank(), 2 | 5) {
+            return Err("opaque EP must be on rank3 or6".into());
+        }
+        square.0
+    };
+    Ok(position)
+}
+
+fn node_admission(input: &Value) -> Result<Value> {
+    object(
+        input,
+        &[
+            "searchPly",
+            "preRootLength",
+            "halfmoveClock",
+            "inCheck",
+            "analysis",
+            "prior",
+            "current",
+            "killers",
+        ],
+    )?;
+    let ply = integer(&input["searchPly"], 1, 62)? as usize;
+    let pre_root = integer(&input["preRootLength"], 0, 512)? as usize;
+    let halfmove = integer(&input["halfmoveClock"], 0, 255)? as u8;
+    let checked = boolean(&input["inCheck"])?;
+    let analysis = integer(&input["analysis"], i32::MIN, i32::MAX)?;
+    let learning = killers(&input["killers"])?;
+    let prior = array(&input["prior"], pre_root + ply, pre_root + ply)?;
+    let mut labels = BTreeMap::new();
+    let initial = opaque_position(&prior[0], &mut labels)?;
+    let mut history = SearchHistory::new(&initial);
+    for (index, value) in prior.iter().enumerate().skip(1) {
+        history.push(&opaque_position(value, &mut labels)?, None);
+        if index == pre_root {
+            history.mark_root();
+        }
+    }
+    let mut current = opaque_position(&input["current"], &mut labels)?;
+    current.halfmove = halfmove;
+    history.push(&current, None);
+    assert_eq!(
+        (history.search_ply(), history.pre_root_len()),
+        (ply, pre_root)
+    );
+    Ok(admission(&history, checked, analysis, learning))
+}
+
+fn observed_state(position: &Position) -> Value {
+    let full = positions::state(position);
+    let mut output = serde_json::Map::new();
+    for key in [
+        "placement",
+        "sideToMove",
+        "castling",
+        "enPassant",
+        "halfmoveClock",
+        "identity",
+    ] {
+        output.insert(key.into(), full[key].clone());
+    }
+    output.insert(
+        "inCheck".into(),
+        json!(movegen::in_check(position, position.side)),
+    );
+    Value::Object(output)
+}
+
+fn history_admission(input: &Value) -> Result<Value> {
+    object(input, &["fen", "moves", "searchPly", "analysis", "killers"])?;
+    let mut position = consumer_position(text(&input["fen"])?)?;
+    let movements = array(&input["moves"], 1, 256)?;
+    let ply = integer(&input["searchPly"], 1, 62)? as usize;
+    if ply > movements.len() {
+        return Err("searchPly exceeds history length".into());
+    }
+    let pre_root = movements.len() - ply;
+    let analysis = integer(&input["analysis"], i32::MIN, i32::MAX)?;
+    let learning = killers(&input["killers"])?;
+    let mut history = SearchHistory::new(&position);
+    let mut states = vec![observed_state(&position)];
+    states[0]["placement"] = json!(text(&input["fen"])?.split(' ').next().unwrap());
+    for (index, movement) in movements.iter().enumerate() {
+        let (child, actual) = positions::advance_with_move(&position, text(movement)?)?;
+        position = child;
+        history.push(&position, Some(actual));
+        if index + 1 == pre_root {
+            history.mark_root();
+        }
+        states.push(observed_state(&position));
+    }
+    assert_eq!(
+        (history.search_ply(), history.pre_root_len()),
+        (ply, pre_root)
+    );
+    let mut result = admission(
+        &history,
+        movegen::in_check(&position, position.side),
+        analysis,
+        learning,
+    );
+    result["states"] = json!(states);
+    Ok(result)
+}
+
+fn move_extensions(input: &Value) -> Result<Value> {
+    object(input, &["fen", "moves", "previousExtension"])?;
+    let mut position = consumer_position(text(&input["fen"])?)?;
+    let mut previous = position;
+    let mut arrival = None;
+    for movement in array(&input["moves"], 0, 255)? {
+        let (child, actual) = positions::advance_with_move(&position, text(movement)?)?;
+        previous = position;
+        position = child;
+        arrival = Some(actual);
+    }
+    let previous_extension = integer(&input["previousExtension"], 0, 7)? as u8;
+    let checked = movegen::in_check(&position, position.side);
+    let mut legal = MoveList::new();
+    movegen::generate_legal(&position, &mut legal);
+    if legal.len > 230 {
+        return Err("complete candidate inventory exceeds diagnostic230 limit".into());
+    }
+    let extensions = Extensions::new(
+        &position,
+        legal.as_slice(),
+        &previous,
+        arrival,
+        previous_extension,
+        checked,
+    );
+    let candidates: Vec<_> = legal.as_slice().iter().map(|&movement| {
+        json!({"move":moves::descriptor(movement),"extension":extensions.for_move(&position, movement)})
+    }).collect();
+    Ok(json!({"inCheck":checked,"candidates":candidates}))
+}
+
+pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+    match operation {
+        "search.nodeAdmission" => node_admission(input),
+        "search.historyAdmission" => history_admission(input),
+        "search.moveExtensions" => move_extensions(input),
+        _ => Err(format!("unsupported admission operation: {operation}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consumer_checks_do_not_narrow_the_shared_setup_domain() {
+        for fen in [
+            "7k/8/8/3nP3/8/8/8/K7 w - d6 0 1",
+            "7k/8/8/8/8/8/7R/7K w - - 0 1",
+        ] {
+            assert!(positions::sequence_position(fen, true).is_ok());
+            assert!(consumer_position(fen).is_err());
+        }
+    }
+
+    #[test]
+    fn opaque_node_uses_root_split_and_clears_only_on_continuation() {
+        let state =
+            json!({"identity":"case-sensitive-id","side":"white","castling":"","enPassant":null});
+        let pair = json!({"move":"a2a3","kind":"ordinary"});
+        let mut q = json!({"searchPly":1,"preRootLength":3,"halfmoveClock":4,"inCheck":false,"analysis":1,"prior":vec![state.clone();4],"current":state,"killers":[{"ply":2,"moves":[pair,null]},{"ply":63,"moves":[pair,null]}]});
+        let out = node_admission(&q).unwrap();
+        assert_eq!(out["repetitionCount"], 2);
+        assert_eq!(out["outcome"], "continue");
+        assert_eq!(out["killers"].as_array().unwrap().len(), 1);
+        assert_eq!(out["killers"][0]["ply"], 63);
+        q["analysis"] = json!(0);
+        assert_eq!(
+            node_admission(&q).unwrap()["killers"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+}

@@ -1,0 +1,585 @@
+--- a/diagnostic/src/admission.rs
++++ b/diagnostic/src/admission.rs
+@@ -10,7 +10,7 @@
+ use serde_json::{json, Value};
+ use std::collections::BTreeMap;
+ 
+-fn consumer_position(fen: &str) -> Result<Position> {
++pub(super) fn consumer_position(fen: &str) -> Result<Position> {
+     let position = positions::sequence_position(fen, true)?;
+     if movegen::in_check(&position, position.side.opponent()) {
+         return Err("nonmoving king is attacked at this consumer's setup boundary".into());
+--- a/diagnostic/src/candidate_order.rs
++++ b/diagnostic/src/candidate_order.rs
+@@ -19,6 +19,88 @@
+     ])
+ }
+ 
++/// Shared cold supplied context. Each caller validates its exact operation keys.
++pub(super) struct Context {
++    pub(super) root: RootContext,
++    pub(super) learning: Learning,
++    pub(super) hint: Option<Move>,
++    ply: usize,
++}
++impl Context {
++    pub(super) fn parse(input: &Value, position: &rook2::position::Position, ply: usize) -> Result<Self> {
++        let mut root = RootContext::neutral(position);
++        object(&input["values"], &moves::COLORS)?;
++        for (side, name) in moves::COLORS.iter().enumerate() {
++            let values = &input["values"][*name];
++            object(values, &moves::PIECES[..5])?;
++            for (kind, name) in moves::PIECES[..5].iter().enumerate() {
++                root.values[side][kind] = integer(&values[*name], 0, 10000)?;
++            }
++        }
++        root.squares = [[[0; 64]; 5]; 2];
++        let mut seen = HashSet::new();
++        for entry in array(&input["squareAdjustments"], 0, 768)? {
++            object(entry, &["side", "piece", "square", "value"])?;
++            let side = color(&entry["side"])?;
++            let kind = moves::piece(&entry["piece"])?;
++            if kind == PieceKind::King {
++                return Err("king has no supplied square adjustment".into());
++            }
++            let square = positions::square(&entry["square"])?;
++            let value = integer(&entry["value"], -128, 127)?;
++            if !seen.insert((side.index(), kind.index(), square.0)) {
++                return Err("duplicate square-adjustment key".into());
++            }
++            if !(-10000..=10000).contains(&(root.values[side.index()][kind.index()] + value)) {
++                return Err("material plus square adjustment outside component domain".into());
++            }
++            root.squares[side.index()][kind.index()][square.0 as usize] = value as i16;
++        }
++        let mut learning = Learning::default();
++        learning.history = ordering_history(&input["history"])?;
++        // Ordering consumes supplied synthetic entries without learning or summing
++        // them; unlike cutoffMemory, there is no10000 total restriction here.
++        let killers = &input["killers"];
++        object(killers, &["current", "twoPliesEarlier"])?;
++        learning.killers[ply] = pair(&killers["current"])?;
++        let earlier = pair(&killers["twoPliesEarlier"])?;
++        if ply <= 2 {
++            if earlier != [Move::NONE; 2] {
++                return Err("two-plies-earlier killers require ply at least3".into());
++            }
++        } else {
++            learning.killers[ply - 2] = earlier;
++        }
++        let hint = moves::movement(&input["hashMove"])?;
++        Ok(Self { root,learning,hint,ply })
++    }
++
++    pub(super) fn order(&self, position: &rook2::position::Position, list: &mut MoveList) {
++        let map = Influence::build(position);
++        tactical::order_by(list, &mut OrderingScratch::new(), |movement| {
++            ordinary_policy::priority(position, &self.root, &map, &self.learning,
++                self.ply, self.hint, movement)
++        });
++    }
++}
++
++pub(super) fn ordering_history(value: &Value) -> Result<[[[u32;64];6];2]> {
++    let mut history = [[[0;64];6];2];
++    let mut seen = HashSet::new();
++    for entry in array(value, 0, 768)? {
++        object(entry, &["side", "piece", "square", "value"])?;
++        let side = color(&entry["side"])?;
++        let kind = moves::piece(&entry["piece"])?;
++        let square = positions::square(&entry["square"])?;
++        if !seen.insert((side.index(), kind.index(), square.0)) {
++            return Err("duplicate history key".into());
++        }
++        history[side.index()][kind.index()][square.0 as usize] =
++            unsigned32(&entry["value"])?;
++    }
++    Ok(history)
++}
++
+ pub(super) fn dispatch(input: &Value) -> Result<Value> {
+     object(
+         input,
+@@ -37,61 +119,7 @@
+     let mut position = positions::placement(&input["placement"], true)?;
+     position.side = color(&input["side"])?;
+     let ply = integer(&input["ply"], 1, 62)? as usize;
+-    let mut root = RootContext::neutral(&position);
+-    object(&input["values"], &moves::COLORS)?;
+-    for (side, name) in moves::COLORS.iter().enumerate() {
+-        let values = &input["values"][*name];
+-        object(values, &moves::PIECES[..5])?;
+-        for (kind, name) in moves::PIECES[..5].iter().enumerate() {
+-            root.values[side][kind] = integer(&values[*name], 0, 10000)?;
+-        }
+-    }
+-    root.squares = [[[0; 64]; 5]; 2];
+-    let mut seen = HashSet::new();
+-    for entry in array(&input["squareAdjustments"], 0, 768)? {
+-        object(entry, &["side", "piece", "square", "value"])?;
+-        let side = color(&entry["side"])?;
+-        let kind = moves::piece(&entry["piece"])?;
+-        if kind == PieceKind::King {
+-            return Err("king has no supplied square adjustment".into());
+-        }
+-        let square = positions::square(&entry["square"])?;
+-        let value = integer(&entry["value"], -128, 127)?;
+-        if !seen.insert((side.index(), kind.index(), square.0)) {
+-            return Err("duplicate square-adjustment key".into());
+-        }
+-        if !(-10000..=10000).contains(&(root.values[side.index()][kind.index()] + value)) {
+-            return Err("material plus square adjustment outside component domain".into());
+-        }
+-        root.squares[side.index()][kind.index()][square.0 as usize] = value as i16;
+-    }
+-    let mut learning = Learning::default();
+-    seen.clear();
+-    for entry in array(&input["history"], 0, 768)? {
+-        object(entry, &["side", "piece", "square", "value"])?;
+-        let side = color(&entry["side"])?;
+-        let kind = moves::piece(&entry["piece"])?;
+-        let square = positions::square(&entry["square"])?;
+-        if !seen.insert((side.index(), kind.index(), square.0)) {
+-            return Err("duplicate history key".into());
+-        }
+-        learning.history[side.index()][kind.index()][square.0 as usize] =
+-            unsigned32(&entry["value"])?;
+-    }
+-    // Ordering consumes supplied synthetic entries without learning or summing
+-    // them; unlike cutoffMemory, there is no10000 total restriction here.
+-    let killers = &input["killers"];
+-    object(killers, &["current", "twoPliesEarlier"])?;
+-    learning.killers[ply] = pair(&killers["current"])?;
+-    let earlier = pair(&killers["twoPliesEarlier"])?;
+-    if ply <= 2 {
+-        if earlier != [Move::NONE; 2] {
+-            return Err("two-plies-earlier killers require ply at least3".into());
+-        }
+-    } else {
+-        learning.killers[ply - 2] = earlier;
+-    }
+-    let hint = moves::movement(&input["hashMove"])?;
++    let context = Context::parse(input, &position, ply)?;
+     let mut list = MoveList::new();
+     let mut descriptors = HashSet::new();
+     for value in array(&input["candidates"], 0, 230)? {
+@@ -103,10 +131,7 @@
+         list.push(movement);
+     }
+     let original = list.as_slice().to_vec();
+-    let map = Influence::build(&position);
+-    tactical::order_by(&mut list, &mut OrderingScratch::new(), |movement| {
+-        ordinary_policy::priority(&position, &root, &map, &learning, ply, hint, movement)
+-    });
++    context.order(&position, &mut list);
+     let indices: Vec<_> = list
+         .as_slice()
+         .iter()
+--- /dev/null
++++ b/diagnostic/src/generation.rs
+@@ -0,0 +1,222 @@
++//! Cold generation compositions; native owners produce and order every move.
++use super::{admission, array, candidate_order, integer, moves, object, positions,
++    quiescence_evaluation, text, Result};
++use rook2::{movegen::{self, CheckClassification, MoveList}, position::Position,
++    tactical, types::Move};
++use serde_json::{json, Value};
++
++const PRODUCED: &[&str] = &["fen", "moves", "ply", "values", "squareAdjustments",
++    "history", "hashMove", "killers"];
++const QUIESCENCE: &[&str] = &["fen", "percentages", "averageDepth", "cfd", "sop",
++    "history", "move", "alpha", "beta", "orderingHistory"];
++
++struct Produced {
++    position: Position,
++    context: candidate_order::Context,
++    quiescence: bool,
++}
++impl Produced {
++    fn parse(input: &Value) -> Result<Self> {
++        let supplied = input.as_object().ok_or("expected object")?;
++        let quiescence = if supplied.contains_key("orderingMode") {
++            let mut keys=PRODUCED.to_vec();keys.push("orderingMode");object(input,&keys)?;
++            if text(&input["orderingMode"])? != "quiescence" {
++                return Err("only explicit quiescence ordering mode is admitted".into());
++            }
++            true
++        } else { object(input,PRODUCED)?;false };
++        let ply=integer(&input["ply"],1,62)? as usize;
++        let mut position=admission::consumer_position(text(&input["fen"])?)?;
++        let spellings=array(&input["moves"],0,256)?.iter().map(|value| {
++            let spelling=text(value)?;positions::coordinate(spelling)?;Ok(spelling)
++        }).collect::<Result<Vec<_>>>()?;
++        // Cold legality replay completes before ranking or any output mutation;
++        // native transitions preserve piece chronology instead of rebuilding it.
++        for spelling in &spellings {
++            position=positions::advance_with_move(&position,spelling)?.0;
++        }
++        let context=candidate_order::Context::parse(input,&position,ply)?;
++        if quiescence && (!spellings.is_empty() || !movegen::in_check(&position,position.side)
++            || context.hint.is_some() || context.learning.killers[ply] != [Move::NONE;2]
++            || (ply>=3 && context.learning.killers[ply-2] != [Move::NONE;2])) {
++            return Err("quiescence ordering needs setup-only check and no hash/killer preferences".into());
++        }
++        Ok(Self { position,context,quiescence })
++    }
++
++    fn observe(self) -> Result<Value> {
++        let checked=movegen::check_classification(&self.position);
++        let mut list=MoveList::new();movegen::generate_legal(&self.position,&mut list);
++        if list.len>230 {return Err("complete legal candidate inventory exceeds diagnostic230 limit".into());}
++        let generated=descriptors(&list);
++        let terminal=if list.len!=0 {"none"} else if checked==CheckClassification::None {"stalemate"} else {"checkmate"};
++        if self.quiescence {
++            tactical::order(&self.position,&self.context.root,&self.context.learning.history,&mut list);
++        } else {self.context.order(&self.position,&mut list);}
++        Ok(json!({"position":{"placement":self.position.placement(),
++            "sideToMove":if self.position.side==rook2::types::Color::White {"white"} else {"black"},
++            "castling":positions::rights(&self.position),"enPassant":positions::ep(&self.position),
++            "halfmoveClock":self.position.halfmove},
++            "check":match checked {CheckClassification::None=>"none",CheckClassification::Single=>"single",CheckClassification::Double=>"double"},
++            "terminal":terminal,"generatedCandidates":generated,"orderedCandidates":descriptors(&list),
++            "chargedRelationQueries":0}))
++    }
++}
++
++fn descriptors(list: &MoveList) -> Value {
++    json!(list.as_slice().iter().map(|&movement|moves::descriptor(movement)).collect::<Vec<_>>())
++}
++
++fn quiescence(input: &Value) -> Result<Value> {
++    object(input,QUIESCENCE)?;
++    // Supplied ordering keys validate before path replay, evaluator or cache
++    // creation, including requests whose eventual disposition returns early.
++    let history=candidate_order::ordering_history(&input["orderingHistory"])?;
++    let request=quiescence_evaluation::Request::parse_candidates(input)?;
++    request.observe_with(true,|evaluator,node,returned| {
++        if returned.is_some() {return Ok(Some(json!({"reached":false})));}
++        let mut list=MoveList::new();tactical::generate(&node.position,&mut list);
++        if list.len>230 {return Err("complete tactical candidate inventory exceeds diagnostic230 limit".into());}
++        let generated=descriptors(&list);
++        tactical::order(&node.position,&evaluator.root,&history,&mut list);
++        Ok(Some(json!({"reached":true,"generatedCandidates":generated,
++            "orderedCandidates":descriptors(&list),"additionalChargedRelationQueries":0,
++            "additionalChargedSearchUnits":0})))
++    })
++}
++
++pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
++    match operation {
++        "search.produceAndOrderCandidates"=>Produced::parse(input)?.observe(),
++        "search.quiescenceCandidates"=>quiescence(input),
++        _=>Err("unknown generation operation".into()),
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use super::super::scores;
++
++    const START: &str="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++    fn produced(fen:&str)->Value {
++        let values=json!({"pawn":100,"knight":300,"bishop":300,"rook":500,"queen":890});
++        json!({"fen":fen,"moves":[],"ply":3,"values":{"white":values.clone(),"black":values},
++            "squareAdjustments":[],"history":[],"hashMove":null,
++            "killers":{"current":[null,null],"twoPliesEarlier":[null,null]}})
++    }
++    fn qrequest(fen:&str,movement:&str)->Value {
++        let percentages:serde_json::Map<String,Value>=scores::NAMES.iter()
++            .map(|name|(name.to_string(),json!(100))).collect();
++        json!({"fen":fen,"history":[],"move":movement,"alpha":-10000,"beta":10000,
++            "percentages":{"own":percentages.clone(),"opponent":percentages},
++            "averageDepth":0,"cfd":0,"sop":100,"orderingHistory":[]})
++    }
++    fn names(values:&Value)->Vec<String> {
++        values.as_array().unwrap().iter().map(|value|value["move"].as_str().unwrap().to_owned()).collect()
++    }
++    fn history(piece:&str,square:&str,value:u32)->Value {
++        json!({"side":"white","piece":piece,"square":square,"value":value})
++    }
++
++    #[test]
++    fn produced_schema_and_local_domain_guards_are_exact() {
++        let mut input=produced(START);input["orderingMode"]=json!("ordinary");
++        assert!(Produced::parse(&input).is_err());
++        input["orderingMode"]=json!("quiescence");assert!(Produced::parse(&input).is_err());
++        let checked="K6r/p1P5/1p6/8/3k4/8/8/8 w - - 1 1";
++        let mut input=produced(checked);input["orderingMode"]=json!("quiescence");
++        input["hashMove"]=json!({"move":"a1b1","kind":"ordinary"});assert!(Produced::parse(&input).is_err());
++        input["hashMove"]=Value::Null;input["history"]=json!([history("king","b7",2),history("king","b7",3)]);
++        assert!(Produced::parse(&input).is_err());
++        input["history"]=json!([]);input["killers"]["twoPliesEarlier"][1]=json!({"move":"a1b1","kind":"ordinary"});
++        assert!(Produced::parse(&input).is_err());input["ply"]=json!(2);assert!(Produced::parse(&input).is_err());
++        for fen in ["7k/8/8/8/8/8/8/K6R w - - 0 1", "7k/8/8/3nP3/8/8/8/K7 w - d6 0 1"] {
++            assert!(positions::sequence_position(fen,true).is_ok());
++            assert!(Produced::parse(&produced(fen)).is_err());
++        }
++        let mut input=produced(START);input["extra"]=json!(false);assert!(Produced::parse(&input).is_err());
++    }
++
++    #[test]
++    fn complete_production_retains_checked_observable_order_and_terminal_labels() {
++        // Capped king-first witnesses for this position differ from its full
++        // inventory. This transport must retain the complete knight-first list.
++        let output=Produced::parse(&produced("5n1k/8/8/5b2/8/8/8/K6R b - - 0 1")).unwrap().observe().unwrap();
++        assert_eq!(output["check"],"single");assert_eq!(output["terminal"],"none");
++        assert_eq!(output["generatedCandidates"].as_array().unwrap().len(),5);
++        assert_eq!(output["generatedCandidates"][0]["move"],"f8h7");
++        for (fen,check,terminal) in [
++            ("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1","single","checkmate"),
++            ("8/8/8/8/8/2k5/2q5/K7 w - - 0 1","none","stalemate"),
++        ] {
++            let output=Produced::parse(&produced(fen)).unwrap().observe().unwrap();
++            assert_eq!(output["check"],check);assert_eq!(output["terminal"],terminal);
++            assert_eq!(output["generatedCandidates"],json!([]));assert_eq!(output["orderedCandidates"],json!([]));
++        }
++    }
++
++    #[test]
++    fn explicit_q_evasions_keep_quiet_promotions_and_original_source_history_keys() {
++        let mut input=produced("K6r/p1P5/1p6/8/3k4/8/8/8 w - - 1 1");
++        input["orderingMode"]=json!("quiescence");
++        input["squareAdjustments"]=json!([{"side":"black","piece":"pawn","square":"a7","value":-2}]);
++        let expected=["c7c8q","c7c8r","c7c8b","c7c8n","a8a7","a8b7"];
++        for supplied in [json!([]),json!([history("pawn","c8",2)])] {
++            input["history"]=supplied;
++            let output=Produced::parse(&input).unwrap().observe().unwrap();
++            assert_eq!(names(&output["orderedCandidates"]),expected);
++            assert_eq!(names(&output["generatedCandidates"]),["c7c8q","c7c8r","c7c8b","c7c8n","a8b7","a8a7"]);
++            assert_eq!(output["chargedRelationQueries"],0);
++        }
++        input["history"]=json!([history("king","b7",u32::MAX)]);
++        let output=Produced::parse(&input).unwrap().observe().unwrap();
++        assert_eq!(output["orderedCandidates"][0]["move"],"a8b7");
++    }
++
++    #[test]
++    fn deferred_zero_one_keep_generated_order_then_native_preferred_prefix_is_added() {
++        let mut input=produced("7k/8/8/8/8/8/PPP5/K7 w - - 0 1");
++        input["history"]=json!([history("pawn","a3",1),history("pawn","c4",0)]);
++        let low=Produced::parse(&input).unwrap().observe().unwrap();
++        assert_eq!(low["orderedCandidates"],low["generatedCandidates"]);
++        input["history"]=json!([history("pawn","a3",1),history("pawn","c4",2)]);
++        let preferred=Produced::parse(&input).unwrap().observe().unwrap();
++        let mut expected=names(&preferred["generatedCandidates"]);
++        let index=expected.iter().position(|name|name=="c2c4").unwrap();let movement=expected.remove(index);
++        expected.insert(0,movement);
++        assert_eq!(names(&preferred["orderedCandidates"]),expected);
++        assert_eq!(preferred["generatedCandidates"],low["generatedCandidates"]);
++    }
++
++    #[test]
++    fn q_ordering_history_is_eager_and_static_returns_have_only_reached_false() {
++        let mut input=qrequest("7k/8/8/8/8/8/8/K7 w - - 0 1","a1b1");
++        input["alpha"]=json!(-10000);input["beta"]=json!(-9999);
++        let output=quiescence(&input).unwrap();assert_eq!(output["tacticalGeneration"],json!({"reached":false}));
++        for entries in [json!([history("pawn","a3",1),history("pawn","a3",2)]),
++            json!([{"side":"white","piece":"king","square":"a1","value":4294967296u64}]),
++            json!([{"side":"white","piece":"king","square":"a1","value":0,"extra":true}])] {
++            input["orderingHistory"]=entries;assert!(quiescence(&input).is_err());
++        }
++    }
++
++    #[test]
++    fn q_keeps_exact_evaluation_results_and_pseudo_legal_king_exposing_candidates() {
++        let mut input=qrequest(START,"g1f3");
++        input["history"]=json!([{"move":"e2e4","kind":"full"},{"move":"e7e5","kind":"fast"}]);
++        let mut evaluation=input.clone();evaluation.as_object_mut().unwrap().remove("orderingHistory");
++        let expected=quiescence_evaluation::dispatch("evaluation.quiescenceDisposition",&evaluation).unwrap();
++        let output=quiescence(&input).unwrap();assert_eq!(output["results"],expected["results"]);
++        let input=qrequest("k3r3/8/8/8/8/8/4R2p/4K3 b - - 0 1","a8b8");
++        let output=quiescence(&input).unwrap();assert_eq!(output["tacticalGeneration"]["reached"],true);
++        let generated=&output["tacticalGeneration"]["generatedCandidates"];
++        let capture=generated.as_array().unwrap().iter().find(|value|value["move"]=="e2h2").unwrap();
++        let position=positions::sequence_position(input["fen"].as_str().unwrap(),true).unwrap();
++        let current=positions::advance_with_move(&position,"a8b8").unwrap().0;
++        let child=current.played_unchecked(moves::movement(capture).unwrap().unwrap());
++        assert!(movegen::in_check(&child,current.side));
++        assert_eq!(output["tacticalGeneration"]["additionalChargedRelationQueries"],0);
++        assert_eq!(output["tacticalGeneration"]["additionalChargedSearchUnits"],0);
++    }
++}
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -20,6 +20,7 @@
+ mod endings;
+ mod evaluation_common;
+ mod fresh_evaluation;
++mod generation;
+ mod king_shelter;
+ mod learned;
+ mod ledger;
+@@ -170,6 +171,7 @@
+         "ordering.prioritySequence" | "tactics.capturePreferenceOrder" => {
+             ordering::dispatch(operation, input)
+         }
++        "search.produceAndOrderCandidates" | "search.quiescenceCandidates" => generation::dispatch(operation,input),
+         "search.orderCandidates" => candidate_order::dispatch(input),
+         "clock.workSequence" => ledger::dispatch(input),
+         "search.cutoffMemory" | "search.rememberedResults" => learned::dispatch(operation, input),
+--- a/diagnostic/src/quiescence_evaluation.rs
++++ b/diagnostic/src/quiescence_evaluation.rs
+@@ -1,12 +1,12 @@
+ //! Admitted non-check evaluation and immediate disposition, without a Q search.
+-use super::{array, evaluation_common as common, integer, object, positions, text, Result};
++use super::{admission, array, evaluation_common as common, integer, object, positions, text, Result};
+ use rook2::{
+     evaluator::{Evaluation, Evaluator, FastDetails, FullDetails, Node, Parameters, Retained},
+     influence::Influence,
+     movegen,
+     position::Position,
+     quiescence_policy::{self as policy, EvaluationReturn},
+-    types::Move,
++    types::{Color, Move, PieceKind},
+ };
+ use serde_json::{json, Value};
+ use std::cell::Cell;
+@@ -29,7 +29,7 @@
+ 
+ struct Transition { movement: Option<Move>, kind: Kind }
+ 
+-struct Request {
++pub(super) struct Request {
+     root: Position,
+     initial_placement: String,
+     parameters: Parameters,
+@@ -40,12 +40,19 @@
+ }
+ 
+ impl Request {
+-    fn parse(input: &Value) -> Result<Self> {
+-        object(input, &["fen", "percentages", "averageDepth", "cfd", "sop",
+-            "history", "move", "alpha", "beta"])?;
++    fn parse(input: &Value) -> Result<Self> { Self::parse_inner(input,false) }
++
++    /// Caller parses orderingHistory before constructing this cold replay.
++    pub(super) fn parse_candidates(input: &Value) -> Result<Self> { Self::parse_inner(input,true) }
++
++    fn parse_inner(input: &Value, candidates: bool) -> Result<Self> {
++        let mut keys=vec!["fen", "percentages", "averageDepth", "cfd", "sop", "history", "move", "alpha", "beta"];
++        if candidates {keys.push("orderingHistory");}
++        object(input,&keys)?;
+         let parameters = common::parameters(input, true)?;
+         let fen = text(&input["fen"])?;
+-        let root = positions::sequence_position(fen, true)?;
++        let root = if candidates {admission::consumer_position(fen)?}
++            else {positions::sequence_position(fen, true)?};
+         let alpha = integer(&input["alpha"], -10000, 10000)?;
+         let beta = integer(&input["beta"], -10000, 10000)?;
+         if alpha >= beta { return Err("alpha must be strictly below beta".into()); }
+@@ -80,11 +87,28 @@
+         if movegen::in_check(&final_position, final_position.side) {
+             return Err("final side to move must not be in check".into());
+         }
++        // This is a local final-position diagnostic precondition, checked
++        // before evaluator/cache creation even if static disposition will return.
++        if candidates && final_position.counts[final_position.side.index()][PieceKind::Queen.index()] > 8 {
++            let penultimate=if final_position.side==Color::White {6} else {1};
++            if final_position.piece_squares(final_position.side,PieceKind::Pawn).iter()
++                .any(|square|square.rank()==penultimate) {
++                return Err("tactical diagnostic promotion context permits at most eight queens".into());
++            }
++        }
+         Ok(Self { root, initial_placement:fen.split(' ').next().unwrap().into(),
+             parameters, history, final_move, alpha, beta })
+     }
+ 
+     fn observe(self, disposition: bool) -> Value {
++        self.observe_with(disposition, |_,_,_| Ok(None))
++            .expect("the original evaluation-only callback cannot fail")
++    }
++
++    /// Cold continuation receives the actual evaluated node/root/cache context.
++    pub(super) fn observe_with<F>(self, disposition: bool, finish: F) -> Result<Value>
++    where F: FnOnce(&Evaluator<true>, &Node, Option<EvaluationReturn>) -> Result<Option<Value>>
++    {
+         let mut evaluator = Evaluator::<true>::new(&self.root);
+         evaluator.parameters = self.parameters;
+         evaluator.begin_search(&self.root);
+@@ -121,13 +145,15 @@
+         final_record["selection"] = json!({
+             "initialKind":if selected.initially_full { "full" } else { "fast" },
+             "fastScore":selected.fast_score,"refreshed":selected.refreshed});
+-        if disposition {
+-            final_record["disposition"] = disposition_output(policy::evaluation_return(
+-                selected.evaluation.lower, selected.evaluation.upper, selected.evaluation.score,
+-                self.alpha, self.beta));
+-        }
++        let returned=if disposition {policy::evaluation_return(
++            selected.evaluation.lower, selected.evaluation.upper, selected.evaluation.score,
++            self.alpha, self.beta)} else {None};
++        if disposition {final_record["disposition"] = disposition_output(returned);}
+         results.push(final_record);
+-        json!({"results":results})
++        let generation=finish(&evaluator,&node,returned)?;
++        let mut output=json!({"results":results});
++        if let Some(generation)=generation {output["tacticalGeneration"]=generation;}
++        Ok(output)
+     }
+ }
+ 
+@@ -394,4 +420,20 @@
+         assert_eq!(last(&output)["state"]["halfmoveClock"], 0);
+         assert_eq!(last(&output)["inherited"]["evaluationAge"], 1);
+     }
+-}
++    #[test]
++    fn candidate_local_initial_and_final_population_guards_do_not_narrow_old_entry() {
++        for (fen,movement) in [
++            ("7k/8/8/8/8/8/8/K6R w - - 0 1","h1g1"),
++            ("7k/8/8/3nP3/8/8/8/K7 w - d6 0 1","a1b1"),
++            // The Black rook interposes on c3-h8. The resulting White position
++            // has nine queens and a7 pawn: allowed by old evaluation, excluded
++            // by the new producer's provisional promotion-capacity domain.
++            ("7k/P7/6r1/8/QQQ5/QQQ5/QQQ5/K7 b - - 0 1","g6g7"),
++        ] {
++            let input=request(fen,movement);assert!(Request::parse(&input).is_ok());
++            let mut candidates=input;candidates["orderingHistory"]=json!([]);
++            assert!(Request::parse_candidates(&candidates).is_err());
++        }
++    }
++
++}
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -136,6 +136,19 @@
+ pub fn in_check(position: &Position, side: Color) -> bool {
+     let king = position.piece_squares(side, PieceKind::King)[0];
+     position.attack_view().attacked(king, side.opponent())
++}
++
++/// Semantic current-side classification, saturated at two checkers.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum CheckClassification { None, Single, Double }
++
++/// Read-only component observation using the same native checker finder as
++/// complete generation. Existing Boolean/default/hot callers stay unchanged.
++pub fn check_classification(position: &Position) -> CheckClassification {
++    let king=position.piece_squares(position.side,PieceKind::King)[0];
++    match find_attackers::<2>(&position.board,king,position.side.opponent()).len {
++        0=>CheckClassification::None, 1=>CheckClassification::Single, _=>CheckClassification::Double,
++    }
+ }
+ 
+ /// Project just the fields needed for geometric king safety, not a semantic
+@@ -732,6 +745,19 @@
+                 old.as_slice(),
+                 "bounded reuse: {context}"
+             );
++        }
++    }
++
++    #[test]
++    fn semantic_check_classification_reports_none_single_and_saturated_double() {
++        for (fen,expected) in [
++            ("7k/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::None),
++            ("r6k/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::Single),
++            ("r5kb/8/8/8/8/8/8/K7 w - - 0 1",CheckClassification::Double),
++        ] {
++            let position=Position::from_fen(fen).unwrap();
++            assert_eq!(check_classification(&position),expected);
++            assert_eq!(in_check(&position,position.side),expected!=CheckClassification::None);
+         }
+     }
+ 

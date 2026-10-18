@@ -39,3 +39,10 @@ are retained in `analysis.json`; `tool-terminal.json` binds the actual terminal
 and suite summary. No old8d profile or performance result is reused. These
 frozen85 artifacts do not qualify the later87/88 diagnostic source, ordered-bit
 checker prototype, gameplay or reference comparison.
+
+Later isolation audit: the retained whole-suite guest CPU15 snapshots contain46
+nonidle ticks. Own server/code-mode/launcher threads were still eligible on14/15;
+109 verified own-pane threads were subsequently restricted to housekeeping.
+Other guest panes/system remain outside that correction. These aggregate ticks
+cannot establish per-variant interference or its cause; no zero-interference
+claim follows. See `../own-helper-affinity-refresh-20261018/`.

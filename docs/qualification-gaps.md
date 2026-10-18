@@ -18,7 +18,7 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   complete forced-fresh subtotal/score, controlled full/fast and actual move/null
   sequences, Q-entry/disposition observations, retained pawn subtotals and fixed
   root search pawn sequences and recursive Q trees:
-  6161 unique cases/83 complete fixture files and133 adapter units pass after145
+  6161 unique cases/83 complete fixture files and133 adapter units pass after147
   native tests. Remaining mandatory inventory is29 operations/1512 cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.

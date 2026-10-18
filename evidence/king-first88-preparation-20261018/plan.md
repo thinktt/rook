@@ -1,0 +1,5 @@
+# Reviewed execution plan
+
+Compose only exact accepted king-first movegen onto frozen88; require baseline identity and remaining96 files unchanged. Build generic fourjobs housekeeping, observe actual terminal, freeze image/archive before later compilation. Run isolated145lib+2dev tests from frozen images; strict original54 then8wire/24searches serial, freeze input closure, independently parse retained streams. Build unchanged31-file DIAG against composed native;133units and all6161cases from83wholefixtures/88ops through original runner and literal per-case recorder; independently reconcile every fixture/request/raw response/original actual/child exit and full97source closure. No source changes, PGO, CPU, profilers or static scans. Parent decides adoption.
+
+Review: disjoint tree/evidence; only movegen change; no root write; no inherited native evidence substituted for fresh checks. Metadata dependencies frozen during executions. All helpers/engines untimed0-5,8-13; actual handles/terminals recorded externally. Preserve failures.

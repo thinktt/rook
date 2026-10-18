@@ -1,0 +1,89 @@
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -647,6 +647,15 @@
+         return;
+     }
+     let safety = GenerationSafety::new(position, king, checkers);
++    // The capped predicate discards its witnesses once two replies exist.
++    // Keep complete generation in its observable order, including the EP prefix.
++    let king_early = LIMIT == 2 && checkers.len != 0;
++    if king_early {
++        pieces::<LIMIT>(position, list, &safety, PieceKind::King);
++        if list.len >= LIMIT {
++            return;
++        }
++    }
+     let pawn_start = list.len;
+     pawns::<LIMIT>(position, list, &safety);
+     if list.len >= LIMIT {
+@@ -672,6 +681,9 @@
+         PieceKind::Queen,
+         PieceKind::King,
+     ] {
++        if king_early && kind == PieceKind::King {
++            continue;
++        }
+         pieces::<LIMIT>(position, list, &safety, kind);
+         if list.len >= LIMIT {
+             return;
+@@ -876,6 +888,60 @@
+     }
+ 
+     #[test]
++    fn capped_checked_replies_keep_fixed_zero_one_and_two_king_witnesses() {
++        for (fen, full_count, capped_names) in [
++            ("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1", 0, &[][..]),
++            ("7k/7R/6K1/8/8/8/8/8 b - - 0 1", 1, &["h8g8"][..]),
++            // The knight and bishop can interpose, but two king escapes
++            // alone prove the threshold without adopting the full base order.
++            ("5n1k/8/8/5b2/8/8/8/K6R b - - 0 1", 5, &["h8g7", "h8g8"][..]),
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            assert!(in_check(&position, position.side));
++            compare_projection(&position, fen);
++            let mut full = MoveList::new();
++            let mut capped = MoveList::new();
++            generate_legal(&position, &mut full);
++            assert_eq!(full.len, full_count, "fixed legal count: {fen}");
++            assert_eq!(legal_replies_up_to_two(&position, &mut capped), full_count.min(2));
++            let names: Vec<String> = capped.as_slice().iter().map(ToString::to_string).collect();
++            let expected: Vec<String> = capped_names.iter().map(ToString::to_string).collect();
++            assert_eq!(names, expected, "fixed threshold witnesses: {fen}");
++            assert!(capped.as_slice().iter().all(|movement| full.as_slice().contains(movement)));
++            if full_count == 5 {
++                assert_eq!(full.moves[0].to_string(), "f8h7");
++                assert_ne!(capped.as_slice(), &full.as_slice()[..2]);
++            }
++        }
++    }
++
++    #[test]
++    fn capped_checked_replies_keep_sole_nonking_and_joined_ep_evasions() {
++        let fen = "7k/8/8/8/2b5/2p5/2R4r/K6r w - - 0 1";
++        let position = Position::from_fen(fen).unwrap();
++        assert!(in_check(&position, position.side));
++        compare_projection(&position, fen);
++        let mut capped = MoveList::new();
++        assert_eq!(legal_replies_up_to_two(&position, &mut capped), 1);
++        assert_eq!(capped.moves[0].to_string(), "c2c1");
++
++        // Joined EP removes a knight checker and interposes on a bishop ray.
++        // A double-check king-only shortcut would lose this legal prefix.
++        let fen = "1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1";
++        let position = Position::from_fen(fen).unwrap();
++        let king = position.piece_squares(position.side, PieceKind::King)[0];
++        assert_eq!(find_attackers::<2>(&position.board, king, position.side.opponent()).len, 2);
++        compare_projection(&position, fen);
++        let mut full = MoveList::new();
++        generate_legal(&position, &mut full);
++        assert!(full.len >= 2);
++        assert_eq!(legal_replies_up_to_two(&position, &mut capped), 2);
++        assert_eq!(capped.moves[0].to_string(), "c5d6");
++        assert_eq!(capped.moves[0].kind(), MoveKind::EnPassant);
++        assert!(capped.as_slice().iter().all(|movement| full.as_slice().contains(movement)));
++    }
++
++    #[test]
+     fn check_route_classification_separates_discovered_and_simultaneous_checks() {
+         for (fen, from, to, expected) in [
+             (

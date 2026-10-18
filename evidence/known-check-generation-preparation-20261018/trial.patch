@@ -1,0 +1,74 @@
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -624,20 +624,39 @@
+ /// Complete legal root/non-root base order, including search-specific prefixes.
+ /// This does not apply ordinary learned/hash/capture ranking.
+ pub fn generate_legal(position: &Position, list: &mut MoveList) {
+-    generate_bounded::<MOVE_CAPACITY>(position, list);
++    generate_bounded::<MOVE_CAPACITY>(position, list, true);
++}
++
++/// Reuse a check fact for this exact immutable position and its moving side.
++/// A false fact skips only checker discovery; pin construction still runs.
++/// Checked positions retain ordered checker identities from the normal finder.
++pub(crate) fn generate_legal_with_check(
++    position: &Position,
++    list: &mut MoveList,
++    checked: bool,
++) {
++    generate_bounded::<MOVE_CAPACITY>(position, list, checked);
+ }
+ 
+ /// Return min(2, legal reply count), stopping as soon as the predicate is known.
+ /// A result below two also leaves the complete reply list available to reuse.
+ pub(crate) fn legal_replies_up_to_two(position: &Position, list: &mut MoveList) -> usize {
+-    generate_bounded::<2>(position, list);
++    generate_bounded::<2>(position, list, true);
+     list.len
+ }
+ 
+-fn generate_bounded<const LIMIT: usize>(position: &Position, list: &mut MoveList) {
++fn generate_bounded<const LIMIT: usize>(
++    position: &Position,
++    list: &mut MoveList,
++    discover_checkers: bool,
++) {
+     list.clear();
+     let king = position.piece_squares(position.side, PieceKind::King)[0];
+-    let checkers = find_attackers::<2>(&position.board, king, position.side.opponent());
++    let checkers = if discover_checkers {
++        find_attackers::<2>(&position.board, king, position.side.opponent())
++    } else {
++        Checkers { squares: [Square(0); 2], len: 0 }
++    };
+     en_passant_prefix::<LIMIT>(position, list, king);
+     if list.len >= LIMIT {
+         return;
+@@ -720,6 +739,16 @@
+         FORCE_PROJECTION.with(|forced| forced.set(true));
+         generate_legal(position, &mut old);
+         FORCE_PROJECTION.with(|forced| forced.set(false));
++        // Choose the admission with the unchanged mailbox oracle, independently
++        // of the persistent Boolean query used by ordinary entry.
++        let king = position.piece_squares(position.side, PieceKind::King)[0];
++        let checked = find_attackers::<2>(
++            &position.board, king, position.side.opponent(),
++        ).len != 0;
++        assert_eq!(in_check(position, position.side), checked, "check truth: {context}");
++        let mut known = MoveList::new();
++        generate_legal_with_check(position, &mut known, checked);
++        assert_eq!(known.as_slice(), old.as_slice(), "known check inventory: {context}");
+         assert_eq!(
+             fast.as_slice(),
+             old.as_slice(),
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -612,7 +612,7 @@
+             }
+         }
+ 
+-        movegen::generate_legal(&position, &mut self.candidates[p]);
++        movegen::generate_legal_with_check(&position, &mut self.candidates[p], checked);
+         let count = self.candidates[p].len;
+         if DIAGNOSTICS {
+             self.stats.generated += count as u64;

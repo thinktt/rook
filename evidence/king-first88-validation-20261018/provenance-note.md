@@ -1,0 +1,5 @@
+# Composition provenance clarification
+
+The authoritative composed closure is king-first88-preparation-20261018/prepared.json (97 files) and its prepared-source-closure.tar.gz; native/DIAG build receipts and fresh inputs-before/after independently bind it. The diagnostic plan was adapted from frozen88. Its inherited proposal_manifest_sha256/source_graph_sha256 and historical codegen-risk prose describe the frozen88 baseline provenance, not a new composed manifest or new codegen inspection. No codegen inspection was authorized or performed. No plan/dependency is edited during execution.
+
+Fresh validation replaces every native/strict/wire/DIAG result:147native,54strict,eightwire24,133DIAGunits/full6161cases (subject to final actual exits and independent reconciliation). Earlier85 or88 success is not substituted. Generic build archived before unit compilation. The only native file replacement is exact accepted king-first movegen; fixed tests are unchanged. Preparation patch formatting and duplicate-archive driver failures are preserved, with no native source fixes.

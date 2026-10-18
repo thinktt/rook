@@ -1,0 +1,18 @@
+[package]
+name = "rook2-diag"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+description = "External KingRE diagnostic transport over the native rook2 library"
+
+[dependencies]
+rook2 = { path = ".." }
+serde_json = "=1.0.154"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+debug = 1

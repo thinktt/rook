@@ -309,3 +309,30 @@ and production review remain requirements alongside optimization.
     `evidence/bounded-reply-king-first-cpu-pilot-20261018/README.md`.
     Exact own-PGO evidence is in
     `evidence/pgo-bounded-reply-cpu-pilot-20261018/README.md`.
+
+18. **Ordered bitplane checker discovery: generic pilot advances to own PGO.**
+    Phase1 reuses existing coherent Position planes for exact ordered first-two
+    checker identities at full/capped generation. It preserves pawn/knight/ray
+    order, adjacent-king interleaving, blockers and caps. Q's projected mailbox
+    remains unchanged.143 native tests include independent mailbox identity
+    comparisons over10000 broad placements/all targets/both colors;54 strict
+    replays/eight-wire pass. Full/capped local frames shrink32 bytes, while
+    whole text grows1408 bytes and Q outlining changes; no neutrality follows.
+    The generic60-lifetime pilot independently reconciles14.696158s d38ff037
+    versus14.496659s132ba135:1.357491% lower, all six medians lower, with
+    profile01/02/29 ranges separated and04/05/35 overlapping. Select an own-PGO
+    follow-up before adoption. No later source or cost qualification transfers.
+    See `evidence/ordered-bit-checkers-phase1-cpu-pilot-20261018/README.md`.
+
+19. **Ordinary known-check admission: generic signal, own PGO pending.**
+    Reuse the reached ordinary node's existing immutable-position check fact
+    in a shared runtime full generator. False skips only ordered discovery;
+    pin construction and unknown/capped/checked-Q behavior remain. No field,
+    Boolean prequery or child/null inheritance is added.147 native tests,
+    54 strict replays/eight-wire and independent source review pass. One full
+    body survives with the same0x128 frame; whole text grows16 bytes. Its
+    generic60-lifetime pilot reconciles14.4919105s731aa0aa versus14.386390s
+    682446e7:0.728134% lower, five medians lower and profile05 higher with
+    separated ranges. Profile02/04/29 favor candidate in separate ranges;
+    01/35 overlap. Keep experimental pending a matched own-source PGO test.
+    See `evidence/known-check-generation-cpu-pilot-20261018/README.md`.

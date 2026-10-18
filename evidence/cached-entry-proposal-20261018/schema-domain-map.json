@@ -1,0 +1,76 @@
+{
+  "common": "Exact object fields; finite integer domains; all complete query arrays parsed before observations/table mutations. No legality or board reachability strengthening for independent supplied contexts.",
+  "search.cachedAdmission": {
+    "top": [
+      "context",
+      "setup",
+      "group",
+      "identity",
+      "followup"
+    ],
+    "context": {
+      "mode": [
+        "full",
+        "mateInterior"
+      ],
+      "searchPly": "1..62",
+      "targetPly": "P+1..64",
+      "maximumDepth": "0..99; P<maximumDepth only full",
+      "lowerBound/upperBound": "-10000..10000, lower<upper",
+      "preRootLength": "0..512",
+      "halfmoveClock": "0..255",
+      "inCheck": "boolean",
+      "analysis": "i32",
+      "prior": "exact preRootLength+P opaque states",
+      "current": "opaque state",
+      "currentMove/earlierMove": "null or full raw descriptor; earlier arrival at P-2 when P>=3; still validated below3",
+      "killers": "0..64 entries, unique ply1..64; exactly2 null/descriptors each"
+    },
+    "opaque_state": "identity1..32 ASCII alnum/_/- case-sensitive, side white/black, ordered castling subset KQkq, EP null or rank3/6; separate equality map from table",
+    "table": "setup0..128 existing clear/store/probe schemas; followup1..16 probe-only; shared1..32 ASCII label domains; at most16 groups across setup/current/followup even on early draw",
+    "stage": "apply setup; auxiliary immutable observations; native early_draw explicit P; native stage probe only on continuation; followups in order; no hint legalization/completion",
+    "charges": "exactly1 search0 relation for this admission stage; history/table work adds none"
+  },
+  "search.fastEntry": {
+    "queries": "1..4096; independent empty native table/query",
+    "exact_fields": [
+      "cutoff",
+      "iterationDepth",
+      "selectivity",
+      "endgameWeight",
+      "moveKind",
+      "currentMaterial",
+      "lowerBound",
+      "followups"
+    ],
+    "cutoff": "existing complete fastCutoff parser: P1..62,T P+1..64,staticScore[-10000,10000],upper[-9999,10000],current/previousCheck booleans,capture,pressure,materialThreat0..20000",
+    "iterationDepth": "0..64",
+    "selectivity": "i32",
+    "endgameWeight": "0..256 independent from counts",
+    "moveKind": "ordinary/enPassant/castling; nonordinary requires null promotion",
+    "material": "Each color independently named pawn/knight/bishop/rook/queen counts0..15, totalboth<=30, implicit1king/color. Current and previous independent; broader nibble normalization native.",
+    "capture": "promotion null/N/B/R/Q; destination null or side+piece including king; complete context eagerly parsed even inadmitted",
+    "pressure": "side plus exactly8 included/previous/current profiles; each profile exact weak/queen/rook/minor/pawn counts0..31, normalized by existing parser; excluded profiles still validate",
+    "lowerBound": "-10000..cutoff.upperBound-1",
+    "followups": "1..4 exact P0..63,T0..64,lower/upper[-10000,10000]strict; T may be belowP",
+    "stage": "native selective_depth -> native fast_admitted -> shared existing cold controlled fastCutoff consumer if admitted -> nativeStore only for Some(score), includingzero/negative -> native followup probes",
+    "charges": "request/storage observations only; no invented full-search or threatened-material charge claim"
+  },
+  "search.evaluationBounds": {
+    "queries": "1..4096, no retained state",
+    "exact_fields": [
+      "searchPly",
+      "targetPly",
+      "lowerBound",
+      "upperBound",
+      "staticScore",
+      "evaluationLower",
+      "evaluationUpper"
+    ],
+    "searchPly": "1..62",
+    "targetPly": "P+1..64",
+    "lowerBound/upperBound": "-10000..10000 strictordered",
+    "staticScore/evaluationLower/evaluationUpper": "-10000..10000; L>U admitted; staticScore eagerly validated then ignored",
+    "stage": "native effective bounds with absolute T/2 replacement, then native lower-first cutoff enum; cold only labels enum/score"
+  }
+}

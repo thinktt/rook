@@ -50,12 +50,12 @@ normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
 The current6161-case external result comprises83 complete released fixture
 files with no partial selection or duplicate cases. All133 adapter unit tests
-pass after145 native tests. Frozen adapter SHA256 is
-`75097e2ac847380672ae8b55b6ca00bbdf04966b5b9bd12ecab8616d798bdc25`.
-See `evidence/diagnostic-qtree-pawn-20261018/`; both the31-file frontend
+pass after147 native tests. Frozen adapter SHA256 is
+`e70e9cadfdea544c95c9f0575cf08471fa67c8cda42135b9b5eb0a763abebdd2`.
+See `evidence/king-first88-diagnostic-20261018/`; both the31-file frontend
 and43-file native closure are stable and independently reconciled. Integration
 independently matches both source closures to the exact tested proposal in
-`evidence/quiescence-tree-integration-20261018/`. This is source promotion
+`evidence/king-first88-integration-20261018/`. This is source promotion
 with named frozen artifacts, without a canonical-path rebuild claim. Native
 observation helpers share production arithmetic and retain state/layout/charge
 ownership. This does not transfer timing or gameplay from prior8d artifacts.
@@ -177,3 +177,9 @@ files. The original terminal-stage test incorrectly encountered a repetition
 draw; its failure and the minimal corrected test remain preserved. Remaining
 mandatory inventory is29 operations/1512 cases. No timing result follows from
 the source/codegen/behavior observations.
+
+The same88-route frontend now passes133 units and all6161 cases after the
+checked bounded king-first source composition. Fresh native731aa0aa passes147
+tests,54 strict replays/eight-wire; adaptere70e9cad is relinked and independently
+reconciled. This exact source promotion does not transfer the frozen85 PGO pilot
+or claim a canonical-path rebuild. No diagnostic inventory changes here.
