@@ -40,11 +40,17 @@ only4.3017% in profile35; these are reuse opportunities, not CPU savings.
 Its [closed checkpoint](evidence/placement-transposition-census-checkpoint-20261018-01/README.md)
 records all741 archived members. The831 MB bulk archive stays local; external
 reproduction requires its separate transfer in addition to the Git metadata.
-One isolated1024-slot pure activity/shelter cache trial is selected for source
-preparation under [decision0014](docs/decisions/0014-pure-component-cache-trial.md).
-Public/custom-influence evaluation remains uncached, and pawn-cache effects,
-weighting, retained state and relation charges must remain live. No cache is
-adopted; production source and current qualification evidence are unchanged.
+The isolated1024-slot pure activity/shelter cache passes184 native tests,
+original54 strict replays and eight-wire24 with independent raw/source closure.
+Its one fixed generic70-lifetime pilot sums14.348167s control948c versus
+14.1165515s candidatea9472bd0, ratio0.9838574851 (1.614251% lower), with7/7
+lower medians. The predeclared rule passes; fresh own-PGO preparation follows
+under [decision0014](docs/decisions/0014-pure-component-cache-trial.md).
+The [generic trial checkpoint](evidence/placement-pure-cache-generic-checkpoint-20261018-01/README.md)
+preserves893 members, both images, raw measurements and consumed dependencies.
+Public/custom-influence evaluation stays uncached; actual pawn-cache effects,
+live weighting, retained updates and semantic relation charges are preserved.
+No cache is adopted; production source and final qualification are unchanged.
 
 ## Previous activity destination checkpoint
 

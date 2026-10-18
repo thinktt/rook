@@ -1,6 +1,6 @@
 # One bounded exact-placement pure-component cache trial
 
-Date: 2026-10-18. Status: isolated source preparation; not adopted.
+Date: 2026-10-18. Status: generic pilot passed; own-PGO preparation; not adopted.
 
 The full-byte relation table remains production. The separate reciprocal trial
 failed its fixed advancement rule and stays parked. The guiding mission remains
@@ -61,3 +61,43 @@ at least5/7 case medians lower, and no case ratio>1.02. Otherwise park without
 resizing, weakening the rule or rerunning ordinary variability. A pass permits
 fresh own-source PGO, not adoption. Full117 validation precedes any promotion;
 final full54/12 cost and12-game pre-gate remain exact-artifact requirements.
+
+The frozen source69 graph is
+`e784334543d6045f6952ce5d2b636b6e185705ebfbcf633bdb499e5549996937`.
+Generic candidatea9472bd0 passes184 native tests (six new cache units), all54
+strict replays and eight interruption fixtures/24 searches. Independent
+functional proof `8d67299298e3f2d5ccbdeea615243fb9de2692153b4c2c4ae303c83b8a18e10e`
+binds actual build, frozen unit images, complete source/archive/compiler identity
+and original raw replay/wire checks. It adds no engine executions.
+
+The bounded actual backend review supports heap allocation65536/alignment64,
+32-byte exact placement comparison,32-byte payload,64-byte stride, live pawn
+selection and common pawn+activity relation charges. It also finds full_impl
+text+491 bytes/main reservation+112 bytes, a new816-byte hit-weighting helper
+with payload/weight copies, and root reservation+32 bytes. Main Q/ordinary
+reservations and named call sequences remain unchanged. No CPU, stack/copy or
+aggregate private-layout neutrality is claimed. Public uncached routes are
+not independently linked in main; their source audit and actual native bypass
+tests remain the relevant evidence.
+
+The single frozen generic pilot actually closes29437/0adece→f60dc7/0. Its
+offline reconciliation82eb4f/0, proof
+`7a9c0d80acb1f95c5411fbb11a978389cde0dee141400a4393590243da275c96`,
+retains all70 lifetimes:14 excluded warmups and56 measured samples. Summed
+medians are14.348167s control948c versus14.1165515s candidatea947, ratio
+0.9838574851 (1.614251% lower); all seven medians improve, worst ratio
+0.991736828 in adverse profile35.01/02/04/05/08 ranges separate and29/35
+overlap. Whole-suite CPU15 has15430 idle,3 nonidle and1 iowait tick; no
+per-variant interference, confidence or qualification claim follows.
+
+All frozen advancement conditions pass. The lead selects fresh own-source PGO
+training and a separate matched pilot against full-byte79d19ebe. Freeze its
+same seven cases,70 lifetimes and aggregate<=0.995/at least5 lower/worst<=1.02
+rule before training. A pass selects fresh full117 integration validation;
+it does not adopt the cache or transfer generic timing to PGO or full54/12.
+The immutable pretraining declaration is
+`evidence/placement-pure-cache-pgo-cpu-plan-20261018-01/plan.json`, SHA256
+`f2b8b8c166086835a917de851fa82e441cda50ff954ba1c9a2ef8d71d2ee1d65`.
+The [closed generic checkpoint](../../evidence/placement-pure-cache-generic-checkpoint-20261018-01/README.md)
+preserves893 members/137,787,595 original bytes in a37,562,957-byte archive,
+SHA256 `987f98ab4fe81079cc3942f20c569b5e94dcf04351766767400711a20841219d`.

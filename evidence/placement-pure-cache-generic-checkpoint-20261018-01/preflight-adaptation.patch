@@ -1,0 +1,46 @@
+--- /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-trial-checkpoint-20261018-01/prepare_scope.py
++++ /home/legolas/rook2/evidence/placement-pure-cache-generic-checkpoint-20261018-01/prepare_scope.py
+@@ -1,4 +1,4 @@
+-"""Whitelist only: closed11 TT trees plus explicit dependency bytes; no native runs."""
++"""Whitelist only: closed12 generic pure-cache trees plus explicit dependency bytes; no native runs."""
+ from pathlib import Path
+ import hashlib,json,os,stat,traceback
+ HERE=Path(__file__).resolve().parent;REPO=Path('/home/legolas/rook2');E=REPO/'evidence'
+@@ -25,7 +25,7 @@
+ def main():
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13] and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  plan=load(PLAN);roots=[Path(x) for x in plan['directories']]
+- assert len(roots)==len(set(roots))==11
++ assert len(roots)==len(set(roots))==12
+  assert all(a==b or not(a in b.parents or b in a.parents) for a in roots for b in roots)
+  assert all(p.is_dir() and not p.is_symlink() and p.resolve()==p for p in roots)
+  def inside(path):return any(path==root or root in path.parents for root in roots)
+@@ -44,9 +44,13 @@
+  pins={};origins={}
+  for reference in plan['reference_manifests']:
+   ref=reference['path']
+-  for name,h in load(Path(ref))[reference['field']].items():
++  data=load(Path(ref));data=data[reference['field']] if reference['field'] else data
++  for name,h in data.items():
+    assert name not in pins or pins[name]==h,dict(conflicting_reference=name)
+    pins[name]=h;origins.setdefault(name,[]).append(ref)
++ for name,h in plan['explicit_reference_pins'].items():
++  assert name not in pins or pins[name]==h,dict(conflicting_explicit_reference=name)
++  pins[name]=h;origins.setdefault(name,[]).append(str(PLAN)+'#explicit_reference_pins')
+  extra=set();refs=[];aliases=[]
+  for name,h in sorted(pins.items()):
+   path=Path(name);assert path.is_absolute() and '..' not in path.parts
+@@ -61,10 +65,10 @@
+  files=originals|extra;members={member(p):str(p) for p in files};assert len(members)==len(files)
+  assert not any(HERE==p or HERE in p.parents for p in files)
+  assert all(Path(row['resolved_regular_source']) in files for row in refs)
+- scope=dict(directories=[str(p) for p in roots],explicit_extra_files=[str(p) for p in sorted(extra)],external_logical_reference_paths=[row['path'] for row in refs if not inside(Path(row['path']))],reference_dependencies=refs,explicit_symlink_resolutions=aliases,preservation_plan=str(PLAN),preservation_plan_sha256=sha(PLAN),closed_tree_regular_files=sorted(str(p) for p in originals),closed_tree_directories=sorted(dirs),unsupported_nonregular_closed_tree_entries=[],archive_mapping='repository-relative paths; external/absolute-path-without-leading-slash for outside repository; explicit symlink aliases map to included canonical regular payload bytes',no_silent_exclusions=True,excluded_checkpoint=str(HERE),excluded_active_or_future_scope='No whole other trial or old unrun TT clone, opaque/calibration/census/complete117 or unrelated tree; only consumed external regular files included',overlap=plan['overlap'])
++ scope=dict(directories=[str(p) for p in roots],explicit_extra_files=[str(p) for p in sorted(extra)],external_logical_reference_paths=[row['path'] for row in refs if not inside(Path(row['path']))],reference_dependencies=refs,explicit_symlink_resolutions=aliases,preservation_plan=str(PLAN),preservation_plan_sha256=sha(PLAN),closed_tree_regular_files=sorted(str(p) for p in originals),closed_tree_directories=sorted(dirs),unsupported_nonregular_closed_tree_entries=[],archive_mapping='repository-relative paths; external/absolute-path-without-leading-slash for outside repository; explicit symlink aliases map to included canonical regular payload bytes',no_silent_exclusions=True,excluded_checkpoint=str(HERE),excluded_active_or_future_scope='No future PGO directory, whole unrelated trial, opaque/calibration/census/complete117 or root/Git trees; only consumed external regular files included',overlap='No timing active; potential source-only PGO preparation/read-only review overlap is untimed.')
+  write('included-scope.json',scope)
+- write('preflight-verification.json',dict(complete=True,closed_trial_trees=11,whole_trees=11,reference_union_paths=len(refs),external_logical_paths=len(scope['external_logical_reference_paths']),explicit_extra_regular_payloads=len(extra),explicit_symlink_resolutions=aliases,unsupported_entries=[],duplicate_members=0,all_reference_hashes_equal=True,prospective_regular_members=len(files),source_bytes=sum(p.stat().st_size for p in files),no_native_execution=True))
+- print(json.dumps(dict(complete=True,whole_trees=11,reference_union_paths=len(refs),explicit_extra_payloads=len(extra),members=len(files),source_bytes=sum(p.stat().st_size for p in files),symlink_resolution_count=len(aliases))))
++ write('preflight-verification.json',dict(complete=True,closed_trial_trees=12,whole_trees=12,reference_union_paths=len(refs),external_logical_paths=len(scope['external_logical_reference_paths']),explicit_extra_regular_payloads=len(extra),explicit_symlink_resolutions=aliases,unsupported_entries=[],duplicate_members=0,all_reference_hashes_equal=True,prospective_regular_members=len(files),source_bytes=sum(p.stat().st_size for p in files),no_native_execution=True))
++ print(json.dumps(dict(complete=True,whole_trees=12,reference_union_paths=len(refs),explicit_extra_payloads=len(extra),members=len(files),source_bytes=sum(p.stat().st_size for p in files),symlink_resolution_count=len(aliases))))
+ if __name__=='__main__':
+  try:main()
+  except BaseException as error:write('preflight-failure.json',dict(error=repr(error),traceback=traceback.format_exc()));raise

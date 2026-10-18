@@ -485,5 +485,20 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     seven-case70-lifetime generic pilot including adverse profile35, advancing
     only at aggregate<=0.995 AND>=5 lower AND worst<=1.02. Failure parks it
     without resizing, relaxing the rule or retrying normal variability.
-    Source preparation is authorized; no cache is adopted or timed yet. See
+    Generica9472bd0 then passes184 native tests, original strict54 and eight-wire24,
+    independently reconciled against exact69 source/archive/compiler and raw
+    outputs. Actual emitted full evaluation adds491 text bytes and112 bytes of
+    main stack reservation; root reservation grows32 bytes. A new816-byte hit
+    weighting helper and payload/weight copies survive. Exact32-byte key
+    comparison, heap65536/alignment64, miss fills and both charge paths are
+    supported by the captured code; recursive Q/ordinary frames remain unchanged.
+    These observations do not establish CPU or copy neutrality.
+
+    The one fixed70-lifetime generic pilot independently reconciles14 excluded
+    warmups and56 measured samples:14.348167s control948c versus14.1165515s
+    candidate, ratio0.9838574851 (1.614251% lower),7/7 lower medians and worst
+    ratio0.991736828 (profile35).01/02/04/05/08 observed ranges separate;
+    29/35 overlap. CPU15 whole-suite deltas show15430 idle,3 nonidle and1 iowait
+    tick, without per-variant attribution. The frozen rule passes. Advance to
+    fresh own-source PGO preparation; no cache is adopted. See
     [decision0014](../decisions/0014-pure-component-cache-trial.md).

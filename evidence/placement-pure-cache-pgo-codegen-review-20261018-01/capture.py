@@ -1,0 +1,102 @@
+"""Own frozen own-PGO images only. Inert until explicit parent authority is supplied."""
+from pathlib import Path
+import hashlib,json,os,subprocess
+HERE=Path(__file__).resolve().parent
+PLAN=json.loads((HERE/'plan.json').read_text())
+AFFINITY=PLAN['affinity']
+def sha(path):
+ h=hashlib.sha256()
+ with Path(path).open('rb') as f:
+  for b in iter(lambda:f.read(1024*1024),b''):h.update(b)
+ return h.hexdigest()
+def write(path,value):
+ with Path(path).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
+def guard():
+ assert sorted(os.sched_getaffinity(0))==AFFINITY
+ assert os.environ.get('TMPDIR')=='/home/legolas/rook2-build-tmp'
+ for p,h in json.loads((HERE/'input-pins.json').read_text()).items():assert sha(p)==h,p
+ for p,h in json.loads((HERE/'helper-pins.json').read_text()).items():assert sha(HERE/p)==h,p
+ a=json.loads((HERE/'authority.json').read_text());assert a['capture'] is True,'capture lacks explicit parent clearance'
+ for key in ['candidate_proof_sha256','candidate_proof_terminal_sha256']:assert isinstance(a[key],str) and len(a[key])==64
+ assert sha(PLAN['candidate_independent_proof'])==a['candidate_proof_sha256']
+ assert sha(PLAN['candidate_proof_terminal'])==a['candidate_proof_terminal_sha256']
+ for side in ['control','candidate']:
+  proof=json.loads(Path(PLAN[side+'_independent_proof']).read_text());terminal=json.loads(Path(PLAN[side+'_proof_terminal']).read_text())
+  assert all(proof[k] is True for k in ['complete','own_profile_only','strict_training54','fresh_strict54','wire8_searches24'])
+  assert terminal['actual_tool_terminal_observed'] and terminal['exit_code']==0
+  variant=proof['variants'][PLAN[side+'_variant']]
+  assert variant['training_strict_replays']==variant['post_use_strict_replays']==variant['raw_profiles']==54
+  assert variant['wire_fixtures']==8 and variant['wire_searches']==24 and variant['profile_independently_remerged'] and variant['profile_remerge_exit_code']==0
+ assert len(a['candidate_image_sha256'])==len(a['candidate_receipt_sha256'])==64
+ decision=a['parent_source_review'];assert decision and sha(decision['path'])==decision['sha256']
+ return a
+
+def normalize_own_profile(value,profile):
+ if isinstance(value,str):return value.replace(profile,'<OWN-PROFILE>')
+ if isinstance(value,list):return [normalize_own_profile(x,profile) for x in value]
+ if isinstance(value,dict):return {k:normalize_own_profile(v,profile) for k,v in value.items()}
+ return value
+
+def bind_own_profile(side,build,receipt,expected_image,inputs):
+ pgo=receipt['pgo'];assert pgo['mode']=='profile-use'
+ assert pgo['input_sha256_before']==pgo['input_sha256_after'] and pgo['inputs_unchanged']
+ for path,h in pgo['input_sha256_before'].items():assert sha(path)==h;inputs[path]=h
+ tp=Path(pgo['training_record']);vp=tp.parent/'verification.json'
+ training=json.loads(tp.read_text());verification=json.loads(vp.read_text())
+ assert training['complete'] and training['engine_source_sha256']==receipt['source_sha256_before']
+ assert len(training['raw_profiles_sha256'])==54
+ for path,h in training['raw_profiles_sha256'].items():assert sha(path)==h;inputs[path]=h
+ assert training['profile_sha256']==sha(pgo['profile'])==verification['merged_profile_sha256']
+ assert verification['complete'] and verification['independent_remerge_byte_identical']
+ assert verification['independent_remerge_exit_code']==0 and verification['strict_replays']==54 and verification['raw_profiles_independently_hashed']==54
+ assert verification['training_record_sha256']==sha(tp)
+ assert receipt['rust_flags']==['-C','target-cpu=x86-64','-C','profile-use='+pgo['profile'],'-C','llvm-args=-pgo-warn-missing-function']
+ warnings=(build/'build.stderr').read_text().lower()
+ for token in ['no profile data available for function','profile data may be out of date','profile data mismatch','malformed instrumentation profile data','hash mismatch','unprofiled function']:assert token not in warnings
+ proofpath=Path(PLAN[side+'_independent_proof']);proof=json.loads(proofpath.read_text());variant=proof['variants'][PLAN[side+'_variant']]
+ assert variant['artifact_sha256']==expected_image and variant['profile_sha256']==training['profile_sha256']
+ assert variant['source_sha256']==receipt['source_sha256_before']
+ assert variant['training_record_sha256']==sha(tp) and variant['training_verification_sha256']==sha(vp) and variant['build_receipt_sha256']==sha(build/'receipt.json')
+ for path,h in training['input_sha256'].items():assert sha(path)==h;inputs[path]=h
+ for path in [tp,vp,proofpath,Path(PLAN[side+'_proof_terminal'])]:inputs[str(path)]=sha(path)
+ return {'profile':pgo['profile'],'profile_sha256':training['profile_sha256'],'training_record':str(tp),'training_record_sha256':sha(tp),'verification':str(vp),'verification_sha256':sha(vp),'training_input_sha256':training['input_sha256'],'own_source_training54':True,'fresh_profile_use54_and_wire8_searches24':True,'independent_remerge_byte_identical':True,'independent_proof':str(proofpath),'independent_proof_sha256':sha(proofpath)}
+
+def main():
+ authority=guard();inputs={};receipts={};identities={};commands=[];profile_bindings={}
+ source_manifest=json.loads((Path(PLAN['proposal'])/'source-manifest.json').read_text())['files']
+ assert len(source_manifest)==69
+ for side in ['control','candidate']:
+  build=Path(PLAN[side+'_build']);rp=build/'receipt.json';receipt=json.loads(rp.read_text());receipts[side]=receipt
+  image=build/'rook2-exact';expected=PLAN['control_image_sha256'] if side=='control' else authority['candidate_image_sha256']
+  if side=='candidate':assert sha(rp)==authority['candidate_receipt_sha256']
+  assert sha(image)==expected==receipt['binary_output']['sha256']
+  assert receipt['cargo_exit_code']==0 and receipt['source_identity_unchanged'] and receipt['tool_identity_unchanged']
+  assert receipt['source_sha256_before']==receipt['source_sha256_after'] and receipt['tool_sha256_before']==receipt['tool_sha256_after']
+  assert len(receipt['source_sha256_before'])==46 and len(receipt['tool_sha256_before'])==23
+  smap=receipt['source_sha256_before']|receipt['tool_sha256_before']
+  if side=='candidate':assert smap==source_manifest
+  for rel,digest in smap.items():
+   p=build/'source-before'/rel;assert sha(p)==digest,str(p);inputs[str(p)]=digest
+  for p in [image,rp,build/'build.stderr',build/'archive-receipt.json',build/'verified-source-before.tar.gz']:inputs[str(p)]=sha(p)
+  profile_bindings[side]=bind_own_profile(side,build,receipt,expected,inputs)
+  dest=HERE/side;dest.mkdir()
+  for name,argv in [('nm-demangled',['/usr/bin/nm','-n','-S','-C',str(image)]),('nm-mangled',['/usr/bin/nm','-n','-S',str(image)]),('sections',['/usr/bin/readelf','-W','-S',str(image)]),('relocations',['/usr/bin/readelf','-W','-r',str(image)])]:
+   cmd=['/usr/bin/taskset','-c','0-5,8-13',*argv]
+   with (dest/(name+'.stdout')).open('xb') as out,(dest/(name+'.stderr')).open('xb') as err:r=subprocess.run(cmd,stdout=out,stderr=err)
+   commands.append({'side':side,'name':name,'argv':cmd,'exit_code':r.returncode,'actual_child_return_observed':True});assert r.returncode==0
+  identities[side]={'image':str(image),'image_sha256':expected,'receipt':str(rp),'receipt_sha256':sha(rp)}
+ for field in ['mode','target_triple','target_cpu','jobs','rust_flags','environment_overrides','build_effective_environment','toolchain','cargo_config_sha256_before','cargo_config_sha256_after']:
+  assert normalize_own_profile(receipts['control'][field],receipts['control']['pgo']['profile'])==normalize_own_profile(receipts['candidate'][field],receipts['candidate']['pgo']['profile']),field
+ assert profile_bindings['control']['training_input_sha256']==profile_bindings['candidate']['training_input_sha256']
+ assert receipts['control']['tool_sha256_before']==receipts['candidate']['tool_sha256_before']
+ changes=[p for p,h in receipts['control']['source_sha256_before'].items() if h!=receipts['candidate']['source_sha256_before'][p]]
+ assert sorted(changes)==sorted(PLAN['expected_changed_native_files'])
+ versions={}
+ for name in ['nm','readelf','objdump']:
+  tool='/usr/bin/'+name;inputs[tool]=sha(tool);cmd=['/usr/bin/taskset','-c','0-5,8-13',tool,'--version']
+  with (HERE/(name+'-version.stdout')).open('xb') as out,(HERE/(name+'-version.stderr')).open('xb') as err:r=subprocess.run(cmd,stdout=out,stderr=err)
+  assert r.returncode==0;versions[name]={'argv':cmd,'exit_code':r.returncode,'actual_child_return_observed':True,'sha256':inputs[tool]}
+ assert all(sha(p)==h for p,h in inputs.items())
+ write(HERE/'identity.json',{'complete':True,'images':identities,'source_input_sha256':inputs,'changed_native_sources':changes,'commands':commands,'versions':versions,'engine_runs':0,'build_runs':0,'performance_claim':False,'own_profile_bindings':profile_bindings})
+ print(json.dumps({'complete':True,'changed_sources':changes,'native_engine_runs':0}))
+if __name__=='__main__':main()

@@ -1,0 +1,86 @@
+--- /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-trial-checkpoint-20261018-01/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/placement-pure-cache-generic-checkpoint-20261018-01/archive_checkpoint.py
+@@ -6,7 +6,7 @@
+ SCOPE=json.loads((HERE/'included-scope.json').read_text())
+ ROOTS=[Path(name) for name in SCOPE['directories']]
+ EXTRAS=[Path(name) for name in SCOPE['explicit_extra_files']]
+-ARCHIVE=HERE/'closed-fullbyte-remembered-reciprocal-trial.tar.gz'
++ARCHIVE=HERE/'closed-placement-pure-cache-generic.tar.gz'
+ def sha(path):
+  h=hashlib.sha256()
+  with path.open('rb') as f:
+@@ -65,48 +65,54 @@
+   assert symlink_components(path)==ref['symlink_components']
+   assert included(path,ref['sha256'])['archive_member']==ref['archive_member']
+  assert sha(Path(SCOPE['preservation_plan']))==SCOPE['preservation_plan_sha256']
+- nv=E/'fullbyte-remembered-reciprocal-native-validation-20261018-01';native=load(nv/'result.json')
+- assert native['complete'] and native['total_tests']==179 and native['tests']['lib']['passed']==177 and native['tests']['dev']['passed']==2
++ assert sha(HERE/'parent-whitelist-approval.json')=='e627a302cdd248ba04188a4efcfe4fbf22614f1d0c29130c572d645ef78c85f4'
++ approval=load(HERE/'parent-whitelist-approval.json');assert approval['parent_approved'] is True
++ assert approval['included_scope_sha256']==sha(HERE/'included-scope.json')
++ assert (len(ROOTS),len(rows),sum(row['bytes'] for row in rows),len(EXTRAS))==(12,893,137787595,168)
++ assert rows==load(HERE/'preflight-member-manifest.json')['members']
++ nv=E/'placement-pure-cache-native-validation-20261018-01';native=load(nv/'result.json')
++ assert native['complete'] and native['total_tests']==184 and native['tests']['lib']['passed']==182 and native['tests']['dev']['passed']==2
+  assert all(row['exit_code']==0 and row['actual_child_return_observed'] for row in native['commands'])
+  for item in native['tests'].values():included(item['executable'],item['sha256'])
+- generic=E/'fullbyte-remembered-reciprocal-generic-build-20261018-01';basis=load(generic/'receipt.json')
+- assert basis['binary_output']['sha256']=='40b26a4d8802c6f7124ae76f19e9898df911f0414438d63f38ba6dd1294566cc'
++ generic=E/'placement-pure-cache-generic-build-20261018-01';basis=load(generic/'receipt.json')
++ assert basis['binary_output']['sha256']=='a9472bd0484968e5ff3a0a657c4a9b28df1f0a775f3fc6fc1ee6db6eb2f4b6e0'
+  included(generic/'rook2-exact',basis['binary_output']['sha256'])
+  source=basis['source_sha256_before']|basis['tool_sha256_before'];assert len(source)==69
+  assert basis['source_sha256_before']==basis['source_sha256_after'] and basis['tool_sha256_before']==basis['tool_sha256_after']
+  for name,h in source.items():included(generic/'source-before'/name,h)
+  ar=load(generic/'archive-receipt.json');assert ar['files']==69;included(generic/ar['archive'],ar['sha256'])
+- reg=E/'fullbyte-remembered-reciprocal-regression-20261018-01';rr=load(reg/'result.json')
++ proposal=E/'placement-pure-cache-proposal-20261018-01';included(proposal/'source69.tar.gz',load(proposal/'prepared.json')['archive_sha256'])
++ reg=E/'placement-pure-cache-regression-20261018-01';rr=load(reg/'result.json')
+  assert rr['complete'] and rr['strict54_pass'] and rr['interruption_fixtures']==8 and rr['interruption_searches']==24
+  strict=load(reg/'strict54.stdout');assert len(strict['results'])==54 and strict['status']=='pass'
+  wire=load(reg/'wire/receipt.json');assert wire['pass'] and len(wire['results'])==8 and sum(len(x['searches']) for x in wire['results'])==24
+  for case in wire['results']:
+   for name,item in case['raw'].items():included(reg/'wire'/case['id']/(name+'.raw'),item['sha256'])
+- functional=E/'fullbyte-remembered-reciprocal-independent-preparation-20261018-01/independent-verification.json'
+- assert included(functional)['sha256']=='474d1db408a2da6c37590a55f1063c19203a7ef31afb9295869e0ab590ebfa79'
+- assert load(functional)['complete'] and load(functional)['native_tests']==179
+- pilot=E/'fullbyte-remembered-reciprocal-cpu-pilot-20261018-01';plan=load(pilot/'plan.json')
+- independent=E/'fullbyte-remembered-reciprocal-cpu-independent-preparation-20261018-01/independent-reconciliation.json';ind=load(independent)
+- assert included(independent)['sha256']=='d268a3684ae94fae3d0b85a15c857b77fa95661c26d927b8f9a63478388afb3a'
++ functional=E/'placement-pure-cache-independent-preparation-20261018-01/independent-verification.json'
++ assert included(functional)['sha256']=='8d67299298e3f2d5ccbdeea615243fb9de2692153b4c2c4ae303c83b8a18e10e'
++ assert load(functional)['complete'] and load(functional)['native_tests']==184
++ pilot=E/'placement-pure-cache-cpu-pilot-20261018-01';plan=load(pilot/'plan.json')
++ independent=E/'placement-pure-cache-cpu-independent-preparation-20261018-01/independent-reconciliation.json';ind=load(independent)
++ assert included(independent)['sha256']=='7a9c0d80acb1f95c5411fbb11a978389cde0dee141400a4393590243da275c96'
+  assert ind['complete'] and ind['normal_lifetimes']==70 and ind['original_checkReplay']==70 and ind['warmups_excluded']==14 and ind['measured']==56
+- assert not ind['advance_rule_satisfied'] and ind['rule_outcome']=='park' and ind['lower_case_medians']==4
+- assert ind['frozen_rule']==plan['advance_rule'] and all(x['range_relation']=='overlap' for x in ind['cases'])
++ assert ind['advance_rule_satisfied'] and ind['lower_case_medians']==7 and ind['aggregate_ratio']<=0.995 and ind['worst_case_ratio']<=1.02
++ assert ind['frozen_rule']==plan['advance_rule']
++ assert sum(x['range_relation']=='candidate-below' for x in ind['cases'])==5 and sum(x['range_relation']=='overlap' for x in ind['cases'])==2
+  for variant in plan['variants'].values():included(variant['path'],variant['sha256'])
+  assert plan['variants']['baseline']['sha256']=='948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219'
+  actual=load(pilot/'tool-terminal.json');assert actual['actual_tool_terminal_observed'] and actual['exit_code']==0
+- assert actual['session_id']==95851 and actual['terminal_chunk_id']=='c795d0'
+- independent_actual=load(independent.parent/'tool-terminal.json');assert independent_actual['actual_tool_terminal_observed'] and independent_actual['exit_code']==0 and independent_actual['terminal_chunk_id']=='d9aa6a'
++ assert actual['session_id']==29437 and actual['terminal_chunk_id']=='f60dc7'
++ independent_actual=load(independent.parent/'tool-terminal.json');assert independent_actual['actual_tool_terminal_observed'] and independent_actual['exit_code']==0 and independent_actual['terminal_chunk_id']=='82eb4f'
+  records=sorted(pilot.glob('profile-*/*/native.json'));assert len(records)==70
+  for record in records:
+   included(record);data=load(record);assert data['native_exit_code']==0 and data['exec_error'] is None and data['failure'] is None
+   assert data['engine_sha256_before']==data['engine_sha256_after']==plan['variants']['baseline' if record.parent.name.endswith('baseline') else 'candidate']['sha256']
+   included(record.parent/'comparator.stdout');included(record.parent/'comparator.stderr')
+  oracle=load(independent.parent/'original-checkReplay70-result.json');assert oracle['complete'] and oracle['original_oracle_calls']==70
+- prep=E/'fullbyte-remembered-reciprocal-cpu-preparation-20261018-01'
+- for name in ['preparation-failure-e08b39.json','inverse-assertion-correction.md','launch-clearance.before-future-authority-fix.json','launch-clearance.before-parent-approval.json']:included(prep/name)
+- backend=E/'fullbyte-remembered-reciprocal-codegen-review-20261018-01/review.md'
+- assert included(backend)['sha256']=='f2826bb69afb1abf70761a74b0e950d5a93cc75aebdd76f46780e2028a2a807b'
+- return dict(whole_closed_trial_trees=11,reference_dependency_paths=len(SCOPE['reference_dependencies']),external_regular_payloads=len(EXTRAS),explicit_symlink_resolutions=SCOPE['explicit_symlink_resolutions'],native179_images_raw_tests_source69_archive_included=True,strict54_wire8_searches24_all_raw_included=True,pilot_actual=actual,independent_actual=independent_actual,all70_lifetimes_and14_warmups_preserved=True,decision='park; no own-PGO/retry/composition',aggregate_ratio=ind['aggregate_ratio'],lower_case_medians=4,all7_ranges_overlap=True,control948_explicitly_included=plan['variants']['baseline'],initial_failure_and_authority_correction_snapshots_included=True,all_regular_files_in_selected_trees=True,no_unrelated_whole_tree_or_opaque_census=True,qualification=False)
++ for name in ['source-review-initial-failure.json','post-initial-review.diff']:included(E/'placement-pure-cache-parent-review-20261018-01'/name)
++ for name in ['referent-review-attempt01.stderr','referent-review-syntax-repair02.patch','actual-terminals-final.json']:included(E/'placement-pure-cache-codegen-review-20261018-01'/name)
++ backend=E/'placement-pure-cache-codegen-review-20261018-01/review.md';included(backend,'9b1308c4b0f9e4e674ab6349cf8507aa7e424ee8f9bb3ba123d4fe019d2d66b5')
++ return dict(whole_closed_trial_trees=12,reference_dependency_paths=len(SCOPE['reference_dependencies']),external_regular_payloads=len(EXTRAS),explicit_symlink_resolutions=SCOPE['explicit_symlink_resolutions'],native184_images_raw_tests_source69_archives_included=True,strict54_wire8_searches24_all_raw_included=True,pilot_actual=actual,independent_actual=independent_actual,all70_lifetimes_and14_warmups_preserved=True,decision='Generic rule passed; eligible for separate own-source PGO review only, no adoption or qualification',aggregate_ratio=ind['aggregate_ratio'],lower_case_medians=7,range_relations={'candidate-below':5,'overlap':2},control948_explicitly_included=plan['variants']['baseline'],parent_initial_failure_and_backend_syntax_failure_repair_included=True,all_regular_files_in_selected_trees=True,no_future_PGO_or_unrelated_whole_tree_or_opaque_census=True,parent_whitelist_approval_sha256=sha(HERE/'parent-whitelist-approval.json'),qualification=False)
+ 
+ def main():
+  result=dict(complete=False,failure=None,affinity=sorted(os.sched_getaffinity(0)),no_native_compiler_profiler_timing_git_subprocesses=True)
