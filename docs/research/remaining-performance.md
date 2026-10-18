@@ -15,7 +15,7 @@ Function attribution changed through inlining, so source-line evidence matters.
    match our prior coordinate loops for complete influence bytes, all activity
    fields and relation counts. Native tests and all54 replays pass. A fixed
    six-case generic/non-PGO CPU pilot gives ratio0.977538, supporting adoption
-   under decision0003; production PGO impact remains to be measured. Position/Node
+   under decision0003; a separately trained production PGO six-case pilot also improves by3.19% (ratio0.968078). Position/Node
    layout, copied-child ownership and mutable search state remain unchanged.
 
 2. **Repeated full evaluation: measured and rejected as next cache target.**
@@ -62,4 +62,21 @@ optimization. None of these hypotheses changes KingRE behavior or the mission.
    unchanged throughout that call; PawnCache activity and R charges remain live.
    No persistent cache or mutable key is added. All130 native tests pass; the
    frozen generic build/check is under `evidence/evaluation-inputs-*20261018/`.
-   Full54 replay and whole-native CPU evidence must select it before adoption.
+   All54 strict replays pass. A six-case/60-lifetime generic pilot gives
+   sum-of-medians ratio0.992505 (0.74948% lower), with overlapping samples in
+   several cases. It remains isolated: no production adoption or inferred PGO
+   benefit. See `evidence/evaluation-inputs-cpu-pilot-20261018/`.
+
+
+6. **King-coordinate metadata within existing padding.** An isolated prototype
+   consumes two previously unused bytes of the128-byte Position for direct king
+   access. Node remains144 bytes. Constructors/recompute, ordinary/castling king
+   transitions, null copies and exceptional terminal king removal maintain this
+   placement-derived metadata; chronological lists remain independent.130
+   library tests plus two development-CLI tests and all54 strict replays pass.
+   New mailbox-oracle legal histories and exceptional-child checks validate the
+   invariant. A fixed six-case/60-lifetime generic CPU pilot is essentially flat:
+   sum-of-medians ratio0.998770 (0.12298% lower), with overlapping ranges and
+   two increased case medians. Production adoption is rejected. The unchanged
+   representation remains; avoiding prefix sums alone did not select this
+   change. See `evidence/king-square-cache-cpu-pilot-20261018/`.

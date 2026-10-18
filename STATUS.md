@@ -45,9 +45,9 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapter implements11 operations and passes416
-  cases across eight complete fixture files plus25 unchanged selected cases
-  from two partially supported files. Seven adapter unit tests cover admission,
+- The separate external DIAG adapter implements15 operations and passes510
+  cases across twelve complete fixture files plus25 unchanged selected cases
+  from two partially supported files. Nine adapter unit tests cover admission,
   setup/raw-state distinction and sequence boundaries. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
 - A balanced four-anchor pilot selected the generation-summary/evasion
@@ -71,9 +71,16 @@ reference sum is63.431779s (uncalibrated planning ratio1.5400); this is not a
 qualified performance pass/fail. See
 [whole-native54 collection](evidence/production54-cpu-20261018-pgo/README.md).
 
+A complete12 whole-native CPU collection is now running on artifact1dc996b2,
+with48 scheduled fresh lifetimes/2528 searches and original byte capture. Four
+recorder controls, fixed5s forced-cleanup reconciliation and a balanced complete-
+game observer pilot passed first; observed CPU median overhead was0.15% within
+overlapping ranges. The collection is reported-only and remains incomplete
+until all terminal/raw/input checks reconcile. See
+[game collection](evidence/production12-cpu-20261018-pgo/README.md).
+
 Mandatory diagnostics, production review, the full3288-game gate, the newer
-artifact's full focused replay, full12 CPU collection and final performance
-qualification remain open. The [production map](docs/production-map.md) is an initial ownership map,
+artifact's full focused replay and final performance qualification remain open. The [production map](docs/production-map.md) is an initial ownership map,
 not a completed normative audit. The current PMU probe still returns EACCES with
 UID1000/zero effective capabilities/paranoid3/seccomp0; no security setting was
 changed. Clock sampling was unreliable and its percentages are unused.
@@ -213,5 +220,10 @@ Updates must preserve which version supported each experiment or decision.
 The diagnostics-only full-evaluation opportunity probe matches all54 replays:
 18,569 of37,094,821 full calls enter at retained age0 (0.050058%, including
 first-root calls). The proposed same-produced-node component cache was rejected
-as the next target; no cache was implemented. An isolated pure material/phase
-input-reuse prototype is being tested instead, without adding node state.
+as the next target; no cache was implemented. Pure material/phase input reuse
+passes all54 replays; its six-case generic CPU pilot gives0.75% lower summed
+medians with overlapping samples, so it remains experimental. Direct
+king-coordinate metadata also passes132 native tests and all54 replays, but
+its six-case pilot is effectively flat (0.12% lower summed medians); production
+adoption is rejected. Both frozen experiments and all attempted samples are
+retained; production native source remains unchanged by them.

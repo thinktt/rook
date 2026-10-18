@@ -13,6 +13,7 @@ use std::{
 };
 
 mod positions;
+mod relations;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -81,6 +82,10 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "evaluation.relations"
+        | "evaluation.adjustedRelations"
+        | "evaluation.squareRelations"
+        | "evaluation.influence" => relations::dispatch(operation, input),
         "position.setup"
         | "position.setupMoveSequence"
         | "position.moveSequence"

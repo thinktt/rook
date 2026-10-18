@@ -6,8 +6,8 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements11 native-backed arithmetic,
-  command and position/history operations with416 selected external cases. Every other mandatory operation still needs
+  The separate `diagnostic/` crate now implements15 native-backed arithmetic,
+  command, position/history and influence/relation operations with510 external cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -15,7 +15,9 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   verify IIO/tail/extension behavior beyond bounded native coverage.
 - Audit learned-memory consumption of uncertified/colliding cache hints. The
   current empty-source guard avoids indexing an absent piece; behavior in that
-  broader completed-node combination remains unqualified.
+  broader completed-node combination remains unqualified. A specification-only
+  consultation confirms a conditional composition/admission gap rather than a
+  public reachable defect; see [hint completion review](research/uncertified-hint-completion.md).
 - Expand the initial [production ownership map](production-map.md) to individual
   normative requirements and close their review/test obligations beyond finite examples. The live
   host now publishes immediately at real captures, polls one available line

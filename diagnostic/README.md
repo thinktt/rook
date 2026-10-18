@@ -11,7 +11,9 @@ The current operations are `time.schedule`, `time.allowance`,
 `session.parameters`, `search.selectiveDepth`, `output.searchScore` and
 `output.personalitySearchScore`, plus `position.setup`,
 `position.setupMoveSequence`, `position.moveSequence`, `position.identity` and
-`evaluation.phase`. Other operations fail explicitly until
+`evaluation.phase`, plus `evaluation.relations`,
+`evaluation.adjustedRelations`, `evaluation.squareRelations` and
+`evaluation.influence`. Other operations fail explicitly until
 implemented. This is not complete mandatory diagnostic acceptance.
 
 ```sh
@@ -34,6 +36,10 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current416-case external result comprises eight complete fixture files plus
-25 unchanged selected cases from two partially supported files. See the retained
-`evidence/diagnostic-positions-20261018-02/` receipt and its selection provenance.
+The current510-case external result comprises twelve complete fixture files plus
+25 unchanged selected cases from two partially supported files. Nine adapter
+unit tests also pass. See `evidence/diagnostic-relations-20261018/`; the original
+25-case selection provenance remains in `diagnostic-positions-20261018-02/`.
+Fifteen operations are implemented. Relation encoding calls the native classifier
+and placement influence builder, with operation-specific charge counts; neither
+fixtures nor expected answers are read at runtime.

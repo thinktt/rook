@@ -13,7 +13,7 @@ use serde_json::{json, Map, Value};
 const COLORS: [&str; 2] = ["white", "black"];
 const KINDS: [&str; 6] = ["pawn", "knight", "bishop", "rook", "queen", "king"];
 
-fn square(v: &Value) -> Result<Square> {
+pub(super) fn square(v: &Value) -> Result<Square> {
     Square::parse(text(v)?).ok_or_else(|| "expected lowercase algebraic square".into())
 }
 
@@ -26,7 +26,7 @@ fn bounded_material(position: &Position) -> Result<()> {
     Ok(())
 }
 
-fn placement(value: &Value, bounded: bool) -> Result<Position> {
+pub(super) fn placement(value: &Value, bounded: bool) -> Result<Position> {
     let position = Position::from_fen(&format!("{} w - - 0 1", text(value)?))?;
     if bounded {
         bounded_material(&position)?;

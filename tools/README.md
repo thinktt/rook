@@ -163,3 +163,37 @@ The manifest freezes deadlines, byte guards, identities and accounting scope;
 first failure stops later launches. Before/after local resource snapshots and
 all samples are retained. This development collection is reported-only; it
 does not claim compatible reference resources, calibration or final uncertainty.
+
+
+## Complete selected-game CPU recording
+
+`collect_games.py --engine ENGINE --build-record BUILD/receipt.json --output
+ evidence/FRESH` follows the stored12-game fixture order. Each complete game
+has one excluded warmup followed by three measured fresh-process repetitions.
+The unchanged released independent-game runner checks every command/seed,
+semantic post, move, result and normal shutdown. The direct wait4 supervisor
+accounts actual native CPU separately from the Python launcher identified by
+the replay report. An explicit `--game ID` selection is supporting subset work
+and cannot establish a complete12 collection.
+
+The preloaded `tap_wire.mjs` adds controller-side listeners to the original
+native pipes and taps stdin writes before forwarding the original call. A
+private configuration declares the sole exact launch. It retains original
+stdin/stdout/stderr before the comparator's assertions, binds stream hashes,
+and brackets external go/move observations with native `/proc` CPU ticks.
+It does not relay or replace pipes. Zero tick deltas are unresolved and have
+no reciprocal CPU rate; no terminal N/R or PMU work is inferred. Point native
+identity/placement checks do not establish continuous descendant ownership.
+
+Before launch, the collector records deadlines, caps, inputs, native/build
+identity and inherited resource observations. The first failed lifetime stops
+the schedule. It retains capped prefixes as invalid, and uses a fixed5s owned
+cleanup deadline. Original complete streams are reconciled with released
+comparator byte/record counts and normal native/supervisor exits. All timing is
+reported-only pending the final resource, observer, uncertainty and calibration
+profile. This does not replace focused continuity or full gameplay qualification.
+
+Four retained tap controls are in `evidence/wire-tap-controls-20261018/`. A
+separate stubborn-child cleanup control verifies reconciliation within5s.
+A balanced full-game observer pilot precedes the first collection; its result
+remains separate from the final measurement profile.
