@@ -26,8 +26,9 @@ Bounded backend review found no blocker to own-PGO validation: key frames/layout
 remain stable, with real root code-size/initialization/allocation-lifetime risks
 carried into measurement. Own-PGO6a5ce6e2 now passes fresh54 strict replays,
 eight interruption fixtures/24 searches and independent profile/raw reconciliation.
-Its12-game pre-gate, complete54/12 CPU costs and comparison-profile qualification
-remain open. The most recent
+That same image also passes all12 games/632 searches, continuous8 and required
+seed controls, with independent raw reconciliation. Current complete54/12 CPU
+costs and comparison-profile qualification remain open. The most recent
 complete54 costs still belong to older8d9dddc5; no old timing is transferred.
 Production audits retain explicit conditional obligations. The full3288-game
 gate is assigned to an external system; prepare its exact artifact handoff.

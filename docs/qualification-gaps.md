@@ -15,9 +15,10 @@ Remaining work:
   root-local initialization stores and longer PV/ranking allocation overlap.
   Retry child reuse and return/error-tag handling are consistent; no CPU,
   allocation or copy neutrality is claimed.
-- Finish the12-game pre-gate for own-PGO6a5ce6e2, whose fresh54 strict and
-  eight interruption/24-search regression and independent profile checks now
-  pass. Generic pre-gate success cannot be transferred to that image.
+- Own-PGO6a5ce6e2 now passes its own12-game pre-gate/632 searches, continuous8
+  and required seed controls, plus fresh54 strict/eight interruption24-search
+  regression. Independent profile and complete raw checks pass. Preserve exact
+  identity when collecting its current costs; another image needs its own gates.
 - Collect current complete54-search and12-game whole-lifetime CPU costs under
   the fixed measurement profile. Retain every case, warmup, sample and failure.
   Approved opaque per-case calibration now passes all216 lifetimes with independent

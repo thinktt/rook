@@ -1,0 +1,5 @@
+The source-only review establishes possible exact mechanisms; it does not select a performance optimization. Keep generalized incremental Influence deferred until current117 CPU costs and a current profile identify its value.
+
+The existing historical experiment at `evidence/null-influence-opportunity-20261018/` must also guide selection. Its frozen8c diagnostic derivative passed all54 strict cases and independently reconciled 354,565 positive ordinary null map builds among46,179,283 builds (0.767801%). The2,650,437 null-to-Q entries were boundary counts, not demanded map counts. That experiment parked positive-ordinary-only reuse; this current source study does not overturn it. These historical frequencies are not current117 measurements.
+
+Do not implement a null-only cache merely because it is the narrowest semantic change. A later reuse prototype needs current actual-demand evidence, complete default-path/codegen costs and a matched whole-engine benefit. General move updates additionally need both-placement slider dependency repair, exact wrapping and a measured storage/copy strategy. Current invocation-local maps remain the production choice.
