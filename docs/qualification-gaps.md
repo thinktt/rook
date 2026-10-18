@@ -60,3 +60,16 @@ The latest complete local54 collection retains216 normal strict-oracle/native
 lifetimes and all per-case samples; its sum of54 case medians is97.685122s.
 The raw uncalibrated reference planning ratio is1.5400. This changes optimization
 priorities and does not close final comparison or uncertainty requirements.
+That collection belongs to3660fecf. The newer1dc996b2 shared-geometry PGO artifact
+has all54 strict replay and wire-interruption agreement, plus a six-case pilot;
+its complete12-game CPU collection is currently live. No older focused/CPU
+qualification transfers to it. The collection remains reported-only, including
+the disclosed inherited-affinity helper limitation recorded under
+`evidence/production12-cpu-analysis-preparation-20261018/`.
+
+Cold source prepares eleven further diagnostic routes and a deferred21-unit,
+1022-case regression. This is uncompiled/unverified preparation, not an increase
+in accepted mandatory coverage. Matched local/persistent bitplanes and the
+compact relation-state lookup are also unexecuted experiments. All native
+builds/tests and further engine measurements wait for the live collection to
+terminate and for scoped own-helper affinity to be constrained.

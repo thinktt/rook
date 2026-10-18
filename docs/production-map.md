@@ -45,3 +45,11 @@ maps WC-LEDGER arithmetic/reset/snapshot and historical repetition/reversal
 predicates to the exact latest production source, including admitted arithmetic
 bounds. This closes that source-review subset only; mandatory scalar DIAG and
 all charging, observation, lifecycle and interruption consumers remain open.
+
+A separate [depth/history range review](research/depth-range-review.md) binds
+ordinary recursive depth/target and learned-history capacity to this same native
+source. It proves those arithmetic ranges without closing score storage or
+uncertified-hint eligibility. Cold adapter source now prepares eleven more
+native-backed routes, including ledger, placement/pawn terms and learned/table
+sequences; the planned21-unit/1022-case verification has not run. The accepted
+external result remains the frozen15-operation/510-case artifact.
