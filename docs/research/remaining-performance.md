@@ -44,9 +44,12 @@ Function attribution changed through inlining, so source-line evidence matters.
    preparation is complete under `evidence/relation-states-preparation-20261018/`;
    a fresh isolated preparation now uses the integrated attack-plane source
    under `evidence/relation-states-bitplanes-preparation-20261018/`. Compilation,
-   the existing exhaustive digit-model oracle, all54 replays and a matched
-   generic CPU pilot proceed as a separate bounded experiment. It has no
-   measured benefit yet; two dependent class loads can offset lower footprint.
+   the existing exhaustive digit-model oracle and all133 native units pass.
+   Both generic artifacts pass54 strict replays. Its independently reconciled
+   six-case/60-lifetime pilot sums16.2258485s baseline versus15.7125745s lookup,
+   ratio0.968366893(3.163311% lower), with profile29 ranges overlapping.
+   A separate own-PGO training/build/comparison follows; production retains the
+   formula until that decision. Two dependent class loads can offset lower footprint.
 
 4. **Placement bitplanes/other representations.** The independently developed
    four-u64 Piece-tag representation has now passed a matched storage comparison

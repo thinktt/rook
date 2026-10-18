@@ -29,7 +29,7 @@ through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 Current artifact-specific evidence:
 
 - Integrated persistent-bitplane source passes131 native library tests and two
-  development-CLI tests. Adapter0f8c7226 passes29 units and1262 cases/33 operations
+  development-CLI tests. Adaptera3c94922 passes32 units and1475 cases/41 operations
   against that source. The isolated PGO trialf4a2f8bf passes54 strict replays and
   eight interruption fixtures/24 searches; its independently reconciled60-lifetime
   pilot sums14.805304s versus15.296771s baseline1dc996b2(ratio0.967871193).
@@ -62,9 +62,9 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapter0f8c7226 implements33 operations and passes1262
-  cases across27 complete fixture files plus25 unchanged selected cases
-  from two partially supported files. All29 adapter unit tests pass. The first
+- The separate external DIAG adaptera3c94922 implements41 operations and passes1475
+  cases across34 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All32 adapter unit tests pass. The first
   expanded attempt and its12 unsupported ordering failures remain retained;
   prior attempts and their source links remain preserved. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).

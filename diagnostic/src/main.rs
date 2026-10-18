@@ -22,6 +22,7 @@ mod policies;
 mod position_terms;
 mod positions;
 mod relations;
+mod supplied;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -97,6 +98,14 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "evaluation.materialBalance"
+        | "search.captureException"
+        | "search.captureDefense"
+        | "search.squareCaptureDefense"
+        | "search.quiescenceCaptureAllowance"
+        | "search.frontierEstimate"
+        | "search.kingPressure"
+        | "search.fastCutoff" => supplied::dispatch(operation, input),
         "search.rootRandomization"
         | "search.rootAspiration"
         | "search.quiescenceCapturePolicy"
