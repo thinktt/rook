@@ -34,7 +34,7 @@ pub(super) fn placement(value: &Value, bounded: bool) -> Result<Position> {
     Ok(position)
 }
 
-fn rights(position: &Position) -> String {
+pub(super) fn rights(position: &Position) -> String {
     let mut result = String::new();
     for (name, bit) in [
         ('K', WHITE_KINGSIDE),
@@ -52,7 +52,7 @@ fn rights(position: &Position) -> String {
     result
 }
 
-fn ep(position: &Position) -> String {
+pub(super) fn ep(position: &Position) -> String {
     if position.ep == NO_SQUARE {
         "-".into()
     } else {

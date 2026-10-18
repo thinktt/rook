@@ -32,6 +32,7 @@ mod policies;
 mod position_terms;
 mod positions;
 mod quiescence_evaluation;
+mod quiescence_tree;
 mod relations;
 mod retained_evaluation;
 mod root_context;
@@ -124,6 +125,7 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
         | "evaluation.endgameAdjust"
         | "evaluation.fortressBounds"
         | "evaluation.rookFortress" => endgame_bounds::dispatch(operation, input),
+        "search.quiescenceTree" => quiescence_tree::dispatch(input),
         "evaluation.moveSequence" => move_evaluation::dispatch(input),
         "evaluation.retainedSequence" => retained_evaluation::dispatch(input),
         "evaluation.quiescenceEntry" | "evaluation.quiescenceDisposition" => {

@@ -6,7 +6,7 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements87 native-backed operations,
+  The separate `diagnostic/` crate now implements88 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
   supplied candidate/priority/capture order, root randomization/aspiration,
   quiescence capture policy/PV line length, material balance, capture exception/
@@ -17,13 +17,14 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   shelter and score contexts, fresh/retained pawn observations and subtotals,
   complete forced-fresh subtotal/score, controlled full/fast and actual move/null
   sequences, Q-entry/disposition observations, retained pawn subtotals and fixed
-  root search pawn sequences:
-  6151 unique cases/82 complete fixture files and126 adapter units pass after142
-  native tests. Remaining mandatory inventory is30 operations/1522 cases. Every other mandatory operation still needs
+  root search pawn sequences and recursive Q trees:
+  6161 unique cases/83 complete fixture files and133 adapter units pass after145
+  native tests. Remaining mandatory inventory is29 operations/1512 cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
-  ordinary fixture cases. Complete evaluation-stage and quiescence traces and
+  ordinary fixture cases. Extend actual evaluation-stage and quiescence trace
+  evidence beyond the bounded ten-tree component contract and
   verify IIO/tail/extension behavior beyond bounded native coverage.
 - Audit learned-memory consumption of uncertified/colliding cache hints. The
   current empty-source guard avoids indexing an absent piece; behavior in that
@@ -156,9 +157,12 @@ evidence and stable replay retry are preserved. This is exact source promotion
 with frozen artifacts, not a canonical-path rebuild or new PGO/cost/gameplay
 qualification.
 
-Current87-operation source changes two cold files and retains exactly the same
+The preceding87-operation source changes two cold files and retains exactly the same
 43-file native d38ff037 closure. Adapterbf4c3daa passes126 units and6151 unique
 cases/82 whole files, with independent complete original/raw responses and child
 exits. Native142/strict54/eight-wire evidence is reused by exact binding; no
-ordinary rebuild/replay or new timing is claimed. Remaining30 operations/1522
-cases include recursive quiescence and wider complete-search/session traces.
+ordinary rebuild/replay or new timing is claimed. The current88-operation source
+then adds shared native Q/stage observations, passing145 native tests,
+54/eight-wire and133 adapter units/6161 cases. Its NoTrace local stack grows32
+bytes under a bounded static review; no CPU neutrality is inferred. Remaining29
+operations/1512 cases include wider complete-search/session traces.

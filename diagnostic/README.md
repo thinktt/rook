@@ -7,7 +7,7 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current87 operations cover time schedule/allowance, parameters and output
+The current88 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
@@ -24,7 +24,7 @@ root material/square and raw shelter observations; score-context production;
 fresh/retained pawn structure/candidates and fresh phase/subtotals; complete
 forced-fresh subtotal/score, controlled retained full/fast sequences, actual
 move/null evaluation sequences, admitted Q entry/disposition, retained pawn
-subtotals and fixed-root search pawn sequences.
+subtotals, fixed-root search pawn sequences and actual recursive quiescence trees.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -48,14 +48,14 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current6151-case external result comprises82 complete released fixture
-files with no partial selection or duplicate cases. All126 adapter unit tests
-pass after142 native tests. Frozen adapter SHA256 is
-`bf4c3daaeb84a075f18311d24bae988d5bd3271f97a4411fba44fa760b0dba06`.
-See `evidence/diagnostic-retained-search-pawn-20261018/`; both the30-file frontend
+The current6161-case external result comprises83 complete released fixture
+files with no partial selection or duplicate cases. All133 adapter unit tests
+pass after145 native tests. Frozen adapter SHA256 is
+`75097e2ac847380672ae8b55b6ca00bbdf04966b5b9bd12ecab8616d798bdc25`.
+See `evidence/diagnostic-qtree-pawn-20261018/`; both the31-file frontend
 and43-file native closure are stable and independently reconciled. Integration
 independently matches both source closures to the exact tested proposal in
-`evidence/retained-search-pawn-integration-20261018/`. This is source promotion
+`evidence/quiescence-tree-integration-20261018/`. This is source promotion
 with named frozen artifacts, without a canonical-path rebuild claim. Native
 observation helpers share production arithmetic and retain state/layout/charge
 ownership. This does not transfer timing or gameplay from prior8d artifacts.
@@ -163,6 +163,17 @@ share native retained selection, current membership/phase/piece terms, ending
 fallback and fixed-root context production; all schemas validate before state
 creation. Native43 is unchanged, so accepted142/strict54/eight-wire evidence is
 reused. All126 adapter units and6151 original/raw/exit comparisons pass across
-87 mandatory operations/82 whole files. Complete mandatory acceptance now needs
+87 mandatory operations/82 whole files. At that checkpoint mandatory acceptance needed
 30 operations/1522 cases, followed by wider production/gameplay/performance
 qualification.
+
+The recursive Q route adds ten cases and seven adapter units. One shared native
+recursion records actual entries, retained evaluation stages, returns and PVs
+through a static observer whose sink remains outside Search. Ordinary NoTrace
+keeps the original full/fast call scope and55-call recursive ABI; reviewed local
+stack grows32 bytes. Frozenfed8a40a passes145 native tests and54/eight-wire,
+while adapter75097e2a passes133 units/6161 cases across88 operations/83 whole
+files. The original terminal-stage test incorrectly encountered a repetition
+draw; its failure and the minimal corrected test remain preserved. Remaining
+mandatory inventory is29 operations/1512 cases. No timing result follows from
+the source/codegen/behavior observations.

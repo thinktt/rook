@@ -1,0 +1,161 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -1,6 +1,6 @@
+-//! Placement-owned exact Piece-tag planes for Boolean geometric queries.
++//! Placement-owned exact Piece-tag planes for geometric queries.
+ //! Capped ordered checker identities and evaluation influence keep separate owners.
+-use crate::geometry::{DIRECTIONS, KNIGHT};
++use crate::geometry::{DIRECTIONS, KNIGHT, KNIGHT_SOURCES};
+ use crate::position::Position;
+ use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+ 
+@@ -166,6 +166,72 @@
+             }
+         }
+         false
++    }
++
++    /// Capped geometric identities in the mailbox checker's exact order.
++    /// This reads the existing placement planes; it does not rebuild a view.
++    #[inline]
++    pub(crate) fn ordered_attackers<const LIMIT: usize>(
++        &self,
++        square: Square,
++        by: Color,
++    ) -> ([Square; 2], usize) {
++        debug_assert!((1..=2).contains(&LIMIT));
++        let [a, b, c, black] = self.planes;
++        let color = if by == Color::Black { black } else { !black };
++        let index = square.0 as usize;
++        let pawns = a & !b & !c & color;
++        let knights = !a & b & !c & color;
++        let adjacent_kings = !a & b & c & color & MASKS.king[index];
++        let diagonal = a & (b ^ c) & color;
++        let orthogonal = c & !b & color;
++        let occupied = a | b | c;
++        let mut result = ([Square(0); 2], 0usize);
++        let mut emit = |source| {
++            result.0[result.1] = source;
++            result.1 += 1;
++            result.1 == LIMIT
++        };
++
++        // The two pawn sources share a rank. Numeric order is exactly the
++        // mailbox's source-file offsets [-1,+1] for either attacking color.
++        let mut pawn_hits = pawns & MASKS.pawn_sources[by.index()][index];
++        while pawn_hits != 0 {
++            let source = Square(pawn_hits.trailing_zeros() as u8);
++            if emit(source) {
++                return result;
++            }
++            pawn_hits &= pawn_hits - 1;
++        }
++        let knight_hits = knights & MASKS.knight[index];
++        if knight_hits != 0 {
++            let leaps = &KNIGHT_SOURCES[index];
++            for &source in &leaps.squares[..leaps.len as usize] {
++                if knight_hits & (1u64 << source) != 0 && emit(Square(source)) {
++                    return result;
++                }
++            }
++        }
++        // An adjacent king participates at its ray's original position, after
++        // pawns/knights, rather than ahead of earlier-direction sliders.
++        for direction in 0..8 {
++            let matching = adjacent_kings | if direction < 4 { diagonal } else { orthogonal };
++            let ray = MASKS.rays[index][direction];
++            if matching & ray == 0 {
++                continue;
++            }
++            let blockers = occupied & ray;
++            debug_assert_ne!(blockers, 0);
++            let first = if MASKS.increasing[direction] {
++                blockers & blockers.wrapping_neg()
++            } else {
++                1u64 << (63 - blockers.leading_zeros())
++            };
++            if matching & first != 0 && emit(Square(first.trailing_zeros() as u8)) {
++                return result;
++            }
++        }
++        result
+     }
+ 
+     #[inline]
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -637,7 +637,10 @@
+ fn generate_bounded<const LIMIT: usize>(position: &Position, list: &mut MoveList) {
+     list.clear();
+     let king = position.piece_squares(position.side, PieceKind::King)[0];
+-    let checkers = find_attackers::<2>(&position.board, king, position.side.opponent());
++    let (squares, len) = position
++        .attack_view()
++        .ordered_attackers::<2>(king, position.side.opponent());
++    let checkers = Checkers { squares, len };
+     en_passant_prefix::<LIMIT>(position, list, king);
+     if list.len >= LIMIT {
+         return;
+@@ -720,6 +723,51 @@
+                 old.as_slice(),
+                 "bounded reuse: {context}"
+             );
++        }
++    }
++
++    fn compare_ordered_checker_identities(position: &Position, context: &str) {
++        for target in 0..64 {
++            for side in [Color::White, Color::Black] {
++                let square = Square(target);
++                let one = find_attackers::<1>(&position.board, square, side);
++                let two = find_attackers::<2>(&position.board, square, side);
++                assert_eq!(
++                    position.attack_view().ordered_attackers::<1>(square, side),
++                    (one.squares, one.len),
++                    "one checker: {context}/{target}/{side:?}"
++                );
++                assert_eq!(
++                    position.attack_view().ordered_attackers::<2>(square, side),
++                    (two.squares, two.len),
++                    "two checkers: {context}/{target}/{side:?}"
++                );
++            }
++        }
++    }
++
++    #[test]
++    fn ordered_bit_checker_identities_keep_knight_ray_king_and_capped_order() {
++        for (fen, target, expected) in [
++            ("7k/8/8/8/8/3P1P2/8/K7 w - - 0 1", "e4", &["d3", "f3"][..]),
++            ("7k/8/5N2/8/8/8/3N4/K7 w - - 0 1", "e4", &["f6", "d2"][..]),
++            ("8/8/6B1/8/4k3/3K4/8/8 w - - 0 1", "e4", &["g6", "d3"][..]),
++            ("7k/8/6B1/5n2/8/8/8/K7 w - - 0 1", "e4", &[][..]),
++            // Pawn, knight and rook attack e8. The rook is third, and must
++            // remain absent from the exact first-two identity result.
++            (
++                "4k3/3P4/5N2/8/8/8/4R3/K7 w - - 0 1",
++                "e8",
++                &["d7", "f6"][..],
++            ),
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            compare_ordered_checker_identities(&position, fen);
++            let (squares, len) = position
++                .attack_view()
++                .ordered_attackers::<2>(Square::parse(target).unwrap(), Color::White);
++            let names: Vec<_> = squares[..len].iter().map(ToString::to_string).collect();
++            assert_eq!(names, expected);
+         }
+     }
+ 
+@@ -824,7 +872,9 @@
+             }
+             let side = if sample % 2 == 0 { 'w' } else { 'b' };
+             let fen = format!("{placement} {side} - - 0 1");
+-            compare_projection(&Position::from_fen(&fen).unwrap(), &fen);
++            let position = Position::from_fen(&fen).unwrap();
++            compare_ordered_checker_identities(&position, &fen);
++            compare_projection(&position, &fen);
+         }
+     }
+ 

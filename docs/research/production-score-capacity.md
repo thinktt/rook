@@ -75,3 +75,12 @@ equal to85. Its [cold-only delta binding](../../evidence/retained-search-pawn-in
 therefore retains the same bounded production premises and limitations;
 supplied-context weights and produced fixed-root coefficients keep their
 separate admissions.
+
+The88-operation source observes the existing Q recursion and actual evaluation
+stages through a static sink outside Search. Recorded work/state never feeds
+production arithmetic; selection predicates, defaults and charge order remain.
+Its [88-operation delta binding](../../evidence/quiescence-tree-integration-20261018/numeric-proof-delta-binding.json)
+retains the preceding numerical prerequisites and unresolved hint-composition
+domain.145 native tests,133 adapter units/6161 cases and54/eight-wire are finite
+behavioral evidence; the reviewed32-byte local stack increase is not a new
+arithmetic proof or a performance result.

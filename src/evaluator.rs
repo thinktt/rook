@@ -124,6 +124,18 @@ pub struct EvalStats {
     pub relation_queries: u64,
 }
 
+/// An actual evaluator call, with retained state sampled around that call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StageKind { Full, Fast }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EvaluationStage {
+    pub kind: StageKind,
+    pub before: Retained,
+    pub after: Retained,
+    pub evaluation: Evaluation,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Selection {
     pub evaluation: Evaluation,
@@ -521,8 +533,8 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         capture_exception: bool,
         scratch: &mut Option<Influence>,
     ) -> Selection {
-        self.select_noncheck_impl::<false, _, _>(
-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {},
+        self.select_noncheck_impl::<false, false, _, _, _>(
+            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
         )
     }
 
@@ -543,14 +555,50 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         F: FnMut(FullDetails),
         G: FnMut(FastDetails),
     {
-        self.select_noncheck_impl::<true, _, _>(
-            node, lower, upper, capture_exception, scratch, full_observer, fast_observer,
+        self.select_noncheck_impl::<true, false, _, _, _>(
+            node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
         )
+    }
+
+    /// Observe actual selected calls, including the fast stage before a refresh.
+    pub fn select_noncheck_stages_observed<F: FnMut(EvaluationStage)>(
+        &mut self,
+        node: &mut Node,
+        lower: i32,
+        upper: i32,
+        capture_exception: bool,
+        scratch: &mut Option<Influence>,
+        observer: F,
+    ) -> Selection {
+        self.select_noncheck_impl::<false, true, _, _, _>(
+            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
+        )
+    }
+
+    /// Terminal Q leaves also observe one actual fast call without a refresh.
+    pub fn fast_stage_observed<F: FnOnce(EvaluationStage)>(
+        &mut self, node: &Node, checked: bool, observer: F,
+    ) -> Evaluation {
+        let before = node.retained;
+        let evaluation = self.fast(node, checked);
+        observer(EvaluationStage { kind: StageKind::Fast, before,
+            after: node.retained, evaluation });
+        evaluation
+    }
+
+    fn full_stage_observed<F: FnOnce(EvaluationStage)>(
+        &mut self, node: &mut Node, influence: &Influence, observer: F,
+    ) -> Evaluation {
+        let before = node.retained;
+        let evaluation = self.full(node, influence, false);
+        observer(EvaluationStage { kind: StageKind::Full, before,
+            after: node.retained, evaluation });
+        evaluation
     }
 
     // Only stage call wrappers differ. The ordinary instantiation retains its
     // original full/fast call sites; every selection condition stays shared.
-    fn select_noncheck_impl<const OBSERVE: bool, F, G>(
+    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, F, G, S>(
         &mut self,
         node: &mut Node,
         lower: i32,
@@ -559,10 +607,12 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         scratch: &mut Option<Influence>,
         mut full_observer: F,
         mut fast_observer: G,
+        mut stage_observer: S,
     ) -> Selection
     where
         F: FnMut(FullDetails),
         G: FnMut(FastDetails),
+        S: FnMut(EvaluationStage),
     {
         let sparse = node.position.counts.iter().all(|c| {
             (c[1] as u16
@@ -576,7 +626,9 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         if sparse {
             let influence = self.ensure_influence(&node.position, scratch);
             return Selection {
-                evaluation: if OBSERVE {
+                evaluation: if STAGES {
+                    self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+                } else if OBSERVE {
                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
                 } else {
                     self.full(node, influence, false)
@@ -586,7 +638,9 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
                 refreshed: false,
             };
         }
-        let fast = if OBSERVE {
+        let fast = if STAGES {
+            self.fast_stage_observed(node, false, |stage| stage_observer(stage))
+        } else if OBSERVE {
             self.fast_detailed_observed(node, false, |details| fast_observer(details))
         } else {
             self.fast(node, false)
@@ -594,7 +648,9 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
         let evaluation = if refresh {
             let influence = self.ensure_influence(&node.position, scratch);
-            if OBSERVE {
+            if STAGES {
+                self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+            } else if OBSERVE {
                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
             } else {
                 self.full(node, influence, false)

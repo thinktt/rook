@@ -22,8 +22,11 @@ interruption fixtures/24 searches pass. Static review finds new outlining in
 the capped helper, so its smaller main body is not a code/peak-stack saving
 claim. The whole-engine CPU pilot evaluates the net effect.
 
-Each PGO side will use its own exact-source54-case profile under identical base
+Each PGO side subsequently used its own exact-source54-case profile under identical base
 flags and workload. Control85 and candidate source/build identities remain
 separate from old8d and subsequent diagnostic observer prototypes. No profile
-or timing result transfers between these closures. Production PGO regression
-and a new matched pilot are required before selecting the optimization.
+or timing result transfers between these closures. Both PGO regressions pass;
+the separately reconciled matched pilot gives1.512609% lower summed medians,
+all six lower, with five separated ranges and profile29 overlapping. This
+supports adoption after fresh composition validation against current88. See
+`../pgo-bounded-reply-cpu-pilot-20261018/README.md` for exact results and limits.

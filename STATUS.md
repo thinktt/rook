@@ -8,18 +8,23 @@ persistent sessions/clocks/seed controls, full/fast retained evaluation, pawn/TT
 learned state and specified root scheduling. Ordinary `Session<false>` excludes
 development tracing; cold JSON is a separate adapter package. Position160/Node176
 now owns exact placement attack planes while retaining copied-child ownership.
-Current source implements87 mandatory diagnostic operations and passes6151
-unique cases/126 adapter units plus142 native tests. Source promotion exactly
-matches both tested proposal closures; frozend38ff037 passes54 strict replays
-and eight interruption fixtures, and adapterbf4c3daa owns the component result.
+Current source implements88 mandatory diagnostic operations and passes6161
+unique cases/133 adapter units plus145 native tests. Source promotion exactly
+matches both tested proposal closures; frozenfed8a40a passes54 strict replays
+and eight interruption fixtures, and adapter75097e2a owns the component result.
 These new source/artifact observations have no own-PGO/cost/gameplay result.
-The corrected Q observer restores default evaluation call scope and stack size;
+The earlier85-operation Q observer restored default evaluation call scope and stack size;
 its disposition extraction retains a small code difference. The original
 metadata-instability failure and stable replay retry remain preserved. See
 [85-operation integration](evidence/move-q-evaluation-integration-20261018/README.md).
-The next two retained/fixed-root pawn routes change only two cold files, with
+The subsequent87-operation retained/fixed-root pawn routes change only two cold files, with
 native142/strict54/eight-wire reused by exact source equality. See
 [87-operation integration](evidence/retained-search-pawn-integration-20261018/README.md).
+The88-operation source adds an outside observer to the actual shared Q recursion
+and native evaluation stages. Its default NoTrace body retains the reviewed
+call scope and recursive ABI, with32 additional local stack bytes and116 fewer
+text bytes. This bounded risk is accepted without a CPU-neutrality claim. See
+[88-operation integration](evidence/quiescence-tree-integration-20261018/README.md).
 The matched storage experiments and independent PGO trial support this source
 integration. Canonical915f83e4 passes54 strict replays, eight interruption
 fixtures and its own six-case timing pilot; final qualification remains.
@@ -60,9 +65,14 @@ Current artifact-specific evidence:
 - The checked-only capped king-first trial passes144 native tests,54 strict
   replays/eight-wire and a matched generic60-lifetime pilot. Its summed medians
   are1.247418% lower, with five lower case medians and four separated ranges.
-  It advances to exact-source own-PGO control/candidate trials; no adoption or
-  complete cost result follows. See
+  Matched exact-source own-PGO artifacts each pass54 strict replays/eight-wire;
+  their60-lifetime pilot independently reconciles1.512609% lower summed medians,
+  all six lower, with five separated ranges and profile29 overlapping. This
+  supports adoption pending fresh composition validation against current88;
+  no complete cost result follows. See
   [reply-order pilot](evidence/bounded-reply-king-first-cpu-pilot-20261018/README.md).
+  The [matched PGO pilot](evidence/pgo-bounded-reply-cpu-pilot-20261018/README.md)
+  keeps each artifact's profile, source and validation evidence separate.
 
 - The Q-local material endpoint cache trial is parked. Its balanced generic
   60-lifetime pilot independently reconciles0.008663% lower summed medians,

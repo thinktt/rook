@@ -1,0 +1,514 @@
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -175,7 +175,9 @@
+         | "evaluation.pawnSubtotal"
+         | "evaluation.candidatePawnSubtotal"
+         | "evaluation.freshPawnSubtotal"
+-        | "evaluation.contextPawnSubtotal" => pawn_subtotals::dispatch(operation, input),
++        | "evaluation.contextPawnSubtotal"
++        | "evaluation.retainedPawnSubtotal"
++        | "evaluation.searchPawnSequence" => pawn_subtotals::dispatch(operation, input),
+         "evaluation.pawnStructure"
+         | "evaluation.pawnPressure"
+         | "evaluation.pawnStructureScore"
+--- a/diagnostic/src/pawn_subtotals.rs
++++ b/diagnostic/src/pawn_subtotals.rs
+@@ -1,5 +1,5 @@
+-//! Fresh pawn phase/subtotal transport. Native kernels own scores and work.
+-use super::{array, color, integer, object, pawn_progress, phase, positions, scores, Result};
++//! Cold fresh/retained pawn composition. Native owners produce context, scores and work.
++use super::{array, boolean, color, integer, object, pawn_progress, phase, positions, scores, Result};
+ use rook2::{
+     evaluation::RootContext,
+     evaluator,
+@@ -168,6 +168,11 @@
+                 "pawnOrder",
+             ],
+         )?;
++        Self::parse_fields(query)
++    }
++
++    // The caller owns the exact object schema; all supplied fields are parsed.
++    fn parse_fields(query: &Value) -> Result<Self> {
+         let mut position = positions::placement(&query["placement"], true)?;
+         position.side = color(&query["sideToMove"])?;
+         let phase = phase(&query["phase"])?;
+@@ -224,15 +229,7 @@
+         current.side = color(&query["sideToMove"])?;
+         let average_depth = integer(&query["averageDepth"], -100, 100)?;
+         let order = pawn_order(&current, &query["pawnOrder"])?;
+-        let value = &query["percentages"];
+-        object(value, &["own", "opponent"])?;
+-        let mut percentages = [[0; 11]; 2];
+-        for (owner, side) in [("own", root.side), ("opponent", root.side.opponent())] {
+-            object(&value[owner], &scores::NAMES)?;
+-            for (index, name) in scores::NAMES.iter().enumerate() {
+-                percentages[side.index()][index] = integer(&value[owner][*name], 0, 1000)? as u16;
+-            }
+-        }
++        let percentages = percentages(&query["percentages"], root.side)?;
+         Ok(Self {
+             root,
+             current,
+@@ -243,38 +240,149 @@
+     }
+ 
+     fn observe(self) -> Value {
++        let context = ContextBinding::new(&self.root, self.percentages, self.average_depth);
++        let influence = Influence::build(&self.current);
++        let structure = pawn_structure::fresh_with_order(
++            &self.current, &influence, [&self.order[0], &self.order[1]], [1024; 2],
++        );
++        context.observe(&self.current, &influence, &structure)
++    }
++}
++
++/// Complete percentages are parsed even when a contribution ignores one.
++fn percentages(value: &Value, root_side: Color) -> Result<[[u16; 11]; 2]> {
++    object(value, &["own", "opponent"])?;
++    let mut result = [[0; 11]; 2];
++    for (owner, side) in [("own", root_side), ("opponent", root_side.opponent())] {
++        object(&value[owner], &scores::NAMES)?;
++        for (index, name) in scores::NAMES.iter().enumerate() {
++            result[side.index()][index] = integer(&value[owner][*name], 0, 1000)? as u16;
++        }
++    }
++    Ok(result)
++}
++
++/// Cold binding shared with fresh context. Native root material and coefficient
++/// owners retain all formulas; this record only carries their produced values.
++struct ContextBinding {
++    root: RootContext,
++    weights: Weights,
++    central: [i32; 2],
++}
++
++impl ContextBinding {
++    fn new(position: &Position, percentages: [[u16; 11]; 2], average_depth: i32) -> Self {
+         let material_percentages = [
+-            std::array::from_fn(|index| self.percentages[0][index]),
+-            std::array::from_fn(|index| self.percentages[1][index]),
++            std::array::from_fn(|index| percentages[0][index]),
++            std::array::from_fn(|index| percentages[1][index]),
+         ];
+-        let root = RootContext::new(&self.root, material_percentages, self.average_depth);
+-        let phase = self.current.phase();
+-        let material = root.material(&self.current);
++        let root = RootContext::new(position, material_percentages, average_depth);
+         let pair = |index| {
+             [
+-                evaluator::coefficient(self.percentages[0][index] as i32),
+-                evaluator::coefficient(self.percentages[1][index] as i32),
++                evaluator::coefficient(percentages[0][index] as i32),
++                evaluator::coefficient(percentages[1][index] as i32),
+             ]
+         };
+-        // Context production admits 10240; direct supplied weights stop at
+-        // 10000. Do not reparse produced coefficients through that narrower API.
+-        let weights = Weights {
+-            structure: pair(10),
+-            progress: pair(9),
+-        };
+-        let influence = Influence::build(&self.current);
+-        let pawn = fresh_output(
+-            &self.current,
+-            &influence,
+-            phase,
+-            material,
+-            weights,
+-            &self.order,
+-        );
+-        let central = positional_terms::central(&influence, phase, pair(6));
+-        json!({"rootPhase":positions::phase_value(root.phase),
++        // Produced 10240 is valid here; never reparse through supplied weights.
++        Self {
++            root,
++            weights: Weights { structure: pair(10), progress: pair(9) },
++            central: pair(6),
++        }
++    }
++
++    fn observe(&self, position: &Position, influence: &Influence, structure: &pawn_structure::PawnStructure) -> Value {
++        let phase = position.phase();
++        let material = self.root.material(position);
++        let pawn = selected_output(position, influence, phase, material, self.weights, structure);
++        let central = positional_terms::central(influence, phase, self.central);
++        json!({"rootPhase":positions::phase_value(self.root.phase),
+             "currentPhase":positions::phase_value(phase),"materialScore":material,"pawn":pawn,
+             "central":{"white":central.colors[0],"black":central.colors[1],"weighted":central.weighted}})
++    }
++}
++
++struct RetainedStep {
++    supplied: Fresh,
++    clear: bool,
++}
++
++impl RetainedStep {
++    fn parse(input: &Value) -> Result<Vec<Self>> {
++        object(input, &["steps"])?;
++        array(&input["steps"], 1, 4096)?.iter().map(|step| {
++            object(step, &["placement", "sideToMove", "phase", "materialScore", "weights", "pawnOrder", "clear"])?;
++            Ok(Self { supplied: Fresh::parse_fields(step)?, clear: boolean(&step["clear"])? })
++        }).collect()
++    }
++}
++
++fn retained_subtotals(input: &Value) -> Result<Value> {
++    // Parse the entire request before influence, cache construction or selection.
++    let steps = RetainedStep::parse(input)?;
++    let mut cache = pawn_structure::PawnCache::new();
++    let mut results = Vec::with_capacity(steps.len());
++    for step in steps {
++        if step.clear { cache.clear(); }
++        let q = step.supplied;
++        let influence = Influence::build(&q.position);
++        let selected = cache.select_with_order(&q.position, &influence, [&q.order[0], &q.order[1]]);
++        let pawn = selected_output(&q.position, &influence, q.phase, q.material, q.weights, &selected.structure);
++        results.push(json!({"identity":positions::identity(&q.position),"reused":selected.reused,"pawn":pawn}));
++    }
++    Ok(json!({"results":results}))
++}
++
++struct OrderedPosition {
++    position: Position,
++    order: [Vec<Square>; 2],
++}
++
++impl OrderedPosition {
++    fn parse(value: &Value) -> Result<Self> {
++        object(value, &["placement", "sideToMove", "pawnOrder"])?;
++        let mut position = positions::placement(&value["placement"], true)?;
++        position.side = color(&value["sideToMove"])?;
++        let order = pawn_order(&position, &value["pawnOrder"])?;
++        Ok(Self { position, order })
++    }
++}
++
++struct SearchSequence {
++    positions: Vec<OrderedPosition>,
++    percentages: [[u16; 11]; 2],
++    average_depth: i32,
++}
++
++impl SearchSequence {
++    fn parse(input: &Value) -> Result<Self> {
++        object(input, &["rootSide", "averageDepth", "percentages", "positions"])?;
++        let root_side = color(&input["rootSide"])?;
++        let average_depth = integer(&input["averageDepth"], -100, 100)?;
++        let percentages = percentages(&input["percentages"], root_side)?;
++        let positions = array(&input["positions"], 1, 4096)?.iter()
++            .map(OrderedPosition::parse).collect::<Result<Vec<_>>>()?;
++        if positions[0].position.side != root_side {
++            return Err("first position sideToMove must equal rootSide".into());
++        }
++        Ok(Self { positions, percentages, average_depth })
++    }
++
++    fn observe(self) -> Value {
++        // Both owners are request-local and constructed only after full parsing.
++        // Root phase/counts/ownership bind once; current phase/material do not.
++        let context = ContextBinding::new(&self.positions[0].position, self.percentages, self.average_depth);
++        let mut cache = pawn_structure::PawnCache::new();
++        let mut results = Vec::with_capacity(self.positions.len());
++        for current in self.positions {
++            let influence = Influence::build(&current.position);
++            let selected = cache.select_with_order(&current.position, &influence, [&current.order[0], &current.order[1]]);
++            let mut result = context.observe(&current.position, &influence, &selected.structure);
++            result["identity"] = positions::identity(&current.position);
++            result["reused"] = json!(selected.reused);
++            results.push(result);
++        }
++        json!({"results":results})
+     }
+ }
+ 
+@@ -306,11 +414,25 @@
+ ) -> Value {
+     let structure =
+         pawn_structure::fresh_with_order(position, influence, [&order[0], &order[1]], [1024; 2]);
+-    let terms = pawn_terms::compute_with_phase(position, influence, &structure, phase);
++    selected_output(position, influence, phase, material, weights, &structure)
++}
++
++/// Consume exactly the native selected entry, including collision-retained
++/// categories/file geometry. Current membership, phase, fallback and charges
++/// stay inside the native terms/progress owners.
++fn selected_output(
++    position: &Position,
++    influence: &Influence,
++    phase: Phase,
++    material: i32,
++    weights: Weights,
++    structure: &pawn_structure::PawnStructure,
++) -> Value {
++    let terms = pawn_terms::compute_with_phase(position, influence, structure, phase);
+     let progress = native::selected(
+         position,
+         influence,
+-        &structure,
++        structure,
+         phase,
+         material,
+         weights.progress,
+@@ -324,11 +446,15 @@
+         progress.weighted,
+     );
+     output["terms"] = terms_output(&terms);
+-    // This serialization follows fresh descriptor chronology. Native selected
+-    // consumes these same descriptors; no square/score sort changes tie order.
+-    output["candidates"] = json!({
+-        "white":structure.pawn_slice(Color::White).iter().filter(|pawn| pawn.candidate).map(|pawn| pawn.square.to_string()).collect::<Vec<_>>(),
+-        "black":structure.pawn_slice(Color::Black).iter().filter(|pawn| pawn.candidate).map(|pawn| pawn.square.to_string()).collect::<Vec<_>>()});
++    // Serialize the same native membership filter/order consumed by selected.
++    // This uncharged extraction never recomputes candidate races or relations.
++    let mut candidates = [Vec::new(), Vec::new()];
++    for side in [Color::White, Color::Black] {
++        let mut squares = [Square(0); 8];
++        let len = native::current_candidates(position, structure, side, &mut squares);
++        candidates[side.index()] = squares[..len].iter().map(ToString::to_string).collect::<Vec<_>>();
++    }
++    output["candidates"] = json!({"white":candidates[0],"black":candidates[1]});
+     output
+ }
+ 
+@@ -369,6 +495,11 @@
+ }
+ 
+ pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
++    match operation {
++        "evaluation.retainedPawnSubtotal" => return retained_subtotals(input),
++        "evaluation.searchPawnSequence" => return Ok(SearchSequence::parse(input)?.observe()),
++        _ => {}
++    }
+     object(input, &["queries"])?;
+     let queries = array(&input["queries"], 1, 4096)?;
+     // Collect every parsed query before producing influence or selecting work.
+@@ -697,3 +828,226 @@
+         );
+     }
+ }
++
++
++#[cfg(test)]
++mod retained_search_tests {
++    use super::*;
++
++    const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
++    const TIED: &str = "8/P1P5/8/8/3K3k/8/p7/8";
++
++    fn ordered(placement: &str, side: &str, white: &[&str], black: &[&str]) -> Value {
++        json!({"placement":placement,"sideToMove":side,"pawnOrder":{"white":white,"black":black}})
++    }
++
++    fn retained(mut position: Value, clear: bool) -> Value {
++        position["clear"] = json!(clear);
++        position["phase"] = json!({"opening":0,"middlegame":128,"endgame":128});
++        position["materialScore"] = json!(17);
++        position["weights"] = json!({"white":{"structure":799,"progress":1873},
++            "black":{"structure":1321,"progress":613}});
++        position
++    }
++
++    fn search(positions: Vec<Value>, side: &str) -> Value {
++        let owner = |offset| Value::Object(scores::NAMES.iter().enumerate()
++            .map(|(index, name)| (name.to_string(), json!(100 + index + offset))).collect());
++        json!({"rootSide":side,"averageDepth":7,
++            "percentages":{"own":owner(0),"opponent":owner(7)},"positions":positions})
++    }
++
++    fn run_retained(steps: Vec<Value>) -> Value {
++        dispatch("evaluation.retainedPawnSubtotal", &json!({"steps":steps})).unwrap()["results"].clone()
++    }
++
++    fn run_search(input: &Value) -> Value {
++        dispatch("evaluation.searchPawnSequence", input).unwrap()["results"].clone()
++    }
++
++    #[test]
++    fn retained_order_survives_reuse_until_clear_and_next_request_starts_empty() {
++        let a = retained(ordered(TIED, "white", &["a7", "c7"], &["a2"]), false);
++        let b = retained(ordered(TIED, "white", &["c7", "a7"], &["a2"]), false);
++        let mut cleared = b.clone();
++        cleared["clear"] = json!(true);
++        let out = run_retained(vec![a.clone(), b.clone(), cleared, a]);
++        assert_eq!(out[0]["reused"], false);
++        assert_eq!(out[1]["reused"], true);
++        assert_eq!(out[1]["pawn"]["candidates"]["white"], json!(["a7", "c7"]));
++        assert_eq!(out[1]["pawn"]["endingScore"], 400);
++        assert_eq!(out[2]["reused"], false);
++        assert_eq!(out[2]["pawn"]["endingScore"], 100);
++        assert_eq!(out[3]["pawn"]["candidates"]["white"], json!(["c7", "a7"]));
++        assert_eq!(out[3]["pawn"]["endingScore"], 100);
++        let isolated = run_retained(vec![b]);
++        assert_eq!(isolated[0]["reused"], false);
++        assert_eq!(isolated[0]["pawn"], out[2]["pawn"]);
++    }
++
++    #[test]
++    fn full_collision_keeps_base_piece_geometry_but_filters_current_candidates() {
++        // Released collision-pieces-0-N-16: distinct arrangements have the same
++        // full pawn identity. The fresh-current terms distinguish a rebuild.
++        let a = retained(ordered("7k/6P1/Np1pPn2/4pP2/8/2p5/4P3/K7", "white",
++            &["g7", "e6", "f5", "e2"], &["b6", "d6", "e5", "c3"]), true);
++        let b = retained(ordered("7k/8/N1p2n1P/2p5/7P/1p6/p5PP/K7", "white",
++            &["h2", "g2", "h4", "h6"], &["a2", "b3", "c5", "c6"]), false);
++        let mut fresh_b = b.clone(); fresh_b["clear"] = json!(true);
++        let out = run_retained(vec![a, b.clone(), fresh_b]);
++        assert_eq!(out[0]["identity"]["pawn"], out[1]["identity"]["pawn"]);
++        assert_ne!(out[0]["identity"]["secondary"], out[1]["identity"]["secondary"]);
++        assert_eq!(out[1]["reused"], true);
++        assert_eq!(out[1]["pawn"]["terms"]["white"]["structureScore"], -19);
++        assert_eq!(out[1]["pawn"]["terms"]["black"]["pieceTerm"], 1);
++        assert_eq!(out[1]["pawn"]["candidates"], json!({"white":[],"black":[]}));
++        assert_eq!(out[2]["pawn"]["terms"]["white"]["structureScore"], -28);
++        assert_eq!(out[2]["pawn"]["terms"]["black"]["pieceTerm"], 0);
++        let isolated = run_retained(vec![b]);
++        assert_eq!(isolated[0]["pawn"], out[2]["pawn"]);
++    }
++
++    #[test]
++    fn repeated_hits_recompute_phase_selected_piece_work_even_with_zero_weights() {
++        let mut gated = retained(ordered("1r5q/8/8/3R4/8/8/P6P/K6k", "white",
++            &["a2", "h2"], &[]), false);
++        gated["phase"] = json!({"opening":0,"middlegame":16,"endgame":240});
++        gated["weights"] = json!({"white":{"structure":0,"progress":0},"black":{"structure":0,"progress":0}});
++        let mut active = gated.clone();
++        active["phase"] = json!({"opening":17,"middlegame":0,"endgame":239});
++        let out = run_retained(vec![gated.clone(), active.clone(), active, gated]);
++        assert_eq!(out[0]["pawn"]["relationQueries"], 0);
++        assert_eq!(out[1]["reused"], true);
++        assert_eq!(out[1]["pawn"]["terms"]["white"]["pieceTerm"], 1);
++        assert_eq!(out[1]["pawn"]["relationQueries"], 1);
++        assert_eq!(out[2]["pawn"]["relationQueries"], 1);
++        assert_eq!(out[1]["pawn"], out[2]["pawn"]);
++        assert_eq!(out[3]["pawn"]["relationQueries"], 0);
++        assert_eq!(out[3]["pawn"]["terms"]["white"]["pieceTerm"], 0);
++    }
++
++    #[test]
++    fn search_root_context_stays_fixed_across_current_side_phase_and_count_changes() {
++        for side in ["white", "black"] {
++            let root = ordered(START, side, &["a2","b2","c2","d2","e2","f2","g2","h2"],
++                &["a7","b7","c7","d7","e7","f7","g7","h7"]);
++            let a = ordered("7k/8/8/8/8/8/P7/K7", "white", &["a2"], &[]);
++            let b = ordered("7k/8/8/8/8/8/P7/K7", "black", &["a2"], &[]);
++            let mut input = search(vec![root.clone(), a.clone(), b.clone()], side);
++            input["averageDepth"] = json!(-100);
++            for owner in ["own", "opponent"] {
++                for name in scores::NAMES { input["percentages"][owner][name] = json!(1000); }
++            }
++            // Ownership is asymmetric, and produced coefficients reach 10240.
++            input["percentages"]["opponent"]["pawnStructure"] = json!(0);
++            let out = run_search(&input);
++            for (index, current) in [root, a, b].iter().enumerate() {
++                let query = json!({"rootPlacement":START,"placement":current["placement"],
++                    "rootSide":side,"sideToMove":current["sideToMove"],"averageDepth":-100,
++                    "percentages":input["percentages"],"pawnOrder":current["pawnOrder"]});
++                let expected = dispatch("evaluation.contextPawnSubtotal", &json!({"queries":[query]})).unwrap();
++                for field in ["rootPhase", "currentPhase", "materialScore", "pawn", "central"] {
++                    assert_eq!(out[index][field], expected["results"][0][field], "{side}/{index}/{field}");
++                }
++            }
++            assert_eq!(out[1]["rootPhase"], json!({"opening":256,"middlegame":0,"endgame":0}));
++            assert_eq!(out[1]["currentPhase"], json!({"opening":0,"middlegame":0,"endgame":256}));
++            assert_eq!(out[1]["materialScore"], out[2]["materialScore"]);
++            assert_eq!(out[2]["reused"], true);
++        }
++    }
++
++    #[test]
++    fn search_collision_retains_structure_but_uses_current_piece_positions_and_fresh_request_state() {
++        let a = ordered("1q5k/6P1/Np1pPn2/4pP2/8/2p5/4P3/KQ6", "white",
++            &["g7","e6","f5","e2"], &["b6","d6","e5","c3"]);
++        let b = ordered("1q5k/8/N1p2n1P/2p5/7P/1p6/p5PP/KQ6", "white",
++            &["h2","g2","h4","h6"], &["a2","b3","c5","c6"]);
++        let input = search(vec![a.clone(), b.clone(), b.clone(), a], "white");
++        let out = run_search(&input);
++        assert_eq!(out[0]["reused"], false);
++        assert_eq!(out[1]["reused"], true);
++        assert_eq!(out[1]["identity"]["pawn"], out[0]["identity"]["pawn"]);
++        assert_eq!(out[0]["pawn"]["terms"]["black"]["pieceTerm"], 1);
++        assert_eq!(out[1]["pawn"]["terms"]["black"]["pieceTerm"], 0);
++        assert_eq!(out[1]["pawn"]["terms"]["white"]["structureScore"], -19);
++        assert_eq!(out[1]["pawn"]["candidates"], json!({"white":[],"black":[]}));
++        assert_eq!(out[1], out[2]);
++        assert_eq!(run_search(&input), out);
++        let isolated = run_search(&search(vec![b], "white"));
++        assert_eq!(isolated[0]["reused"], false);
++        assert_ne!(isolated[0]["pawn"]["terms"], out[1]["pawn"]["terms"]);
++    }
++
++    #[test]
++    fn pawnless_zero_identity_is_reused_against_cleared_state_in_each_operation() {
++        let position = ordered("7k/8/8/8/8/8/8/K7", "black", &[], &[]);
++        let a = run_retained(vec![retained(position.clone(), true)]);
++        let b = run_search(&search(vec![position], "black"));
++        for result in [&a[0], &b[0]] {
++            assert_eq!(result["identity"]["pawn"], 0);
++            assert_eq!(result["reused"], true);
++            assert_eq!(result["pawn"]["terms"], json!({"white":{"structureScore":0,"pieceTerm":0},"black":{"structureScore":0,"pieceTerm":0}}));
++            assert_eq!(result["pawn"]["candidates"], json!({"white":[],"black":[]}));
++            assert_eq!(result["pawn"]["relationQueries"], 0);
++        }
++    }
++
++    #[test]
++    fn retained_whole_schema_and_late_ignored_context_fields_validate_before_state() {
++        let good = retained(ordered(TIED, "white", &["a7","c7"], &["a2"]), false);
++        for (field, value) in [("clear",json!(1)), ("phase",json!({"opening":0,"middlegame":16,"endgame":239})),
++            ("materialScore",json!(10001)), ("rootSide",json!("white")), ("sideToMove",json!("White"))] {
++            let mut bad = good.clone(); bad[field] = value;
++            assert!(RetainedStep::parse(&json!({"steps":[good.clone(),bad]})).is_err(), "{field}");
++        }
++        for order in [json!(["a7"]),json!(["a7","a7"]),json!(["a7","h8"])] {
++            let mut bad = good.clone(); bad["pawnOrder"]["white"] = order;
++            assert!(RetainedStep::parse(&json!({"steps":[good.clone(),bad]})).is_err());
++        }
++        let mut bad = good.clone(); bad["weights"]["black"]["progress"] = json!(10001);
++        bad["phase"] = json!({"opening":256,"middlegame":0,"endgame":0});
++        assert!(RetainedStep::parse(&json!({"steps":[good.clone(),bad]})).is_err());
++        assert!(RetainedStep::parse(&json!({"steps":[]})).is_err());
++        assert!(RetainedStep::parse(&json!({"steps":vec![good;4097]})).is_err());
++    }
++
++    #[test]
++    fn search_rejects_late_fields_incomplete_percentages_and_root_mismatch_before_context() {
++        let position = ordered(TIED, "white", &["a7","c7"], &["a2"]);
++        let good = search(vec![position.clone(), position], "white");
++        for field in ["phase","weights","materialScore","clear","rootSide"] {
++            let mut bad = good.clone(); bad["positions"][1][field] = Value::Null;
++            assert!(SearchSequence::parse(&bad).is_err(), "{field}");
++        }
++        for value in [json!(-1),json!(1001),json!(1.5),Value::Null] {
++            let mut bad = good.clone(); bad["percentages"]["opponent"]["king"] = value;
++            assert!(SearchSequence::parse(&bad).is_err());
++        }
++        let mut bad = good.clone(); bad["percentages"]["own"].as_object_mut().unwrap().remove("mobility");
++        assert!(SearchSequence::parse(&bad).is_err());
++        let mut bad = good.clone(); bad["positions"][1]["pawnOrder"]["white"] = json!(["a7"]);
++        assert!(SearchSequence::parse(&bad).is_err());
++        let mut bad = good.clone(); bad["rootSide"] = json!("black");
++        assert!(SearchSequence::parse(&bad).is_err());
++        let mut bad = good.clone(); bad["averageDepth"] = json!(101);
++        assert!(SearchSequence::parse(&bad).is_err());
++        let mut bad = good.clone(); bad["positions"] = json!([]);
++        assert!(SearchSequence::parse(&bad).is_err());
++        let mut bad = good.clone(); bad["positions"] = json!(vec![good["positions"][0].clone();4097]);
++        assert!(SearchSequence::parse(&bad).is_err());
++    }
++
++    #[test]
++    fn component_placements_admit_adjacent_kings_but_keep_bounded_material_limits() {
++        let adjacent = ordered("8/8/8/8/8/8/k7/K7", "white", &[], &[]);
++        assert!(SearchSequence::parse(&search(vec![adjacent.clone()], "white")).is_ok());
++        assert!(RetainedStep::parse(&json!({"steps":[retained(adjacent,false)]})).is_ok());
++        for placement in ["P6k/8/8/8/8/8/8/K7", "7k/8/8/8/8/NNNNNNNN/NNN5/K7",
++            "7k/8/8/8/8/8/PPPPPPPP/KP6"] {
++            let bad = ordered(placement, "white", &[], &[]);
++            assert!(SearchSequence::parse(&search(vec![bad.clone()], "white")).is_err());
++            assert!(RetainedStep::parse(&json!({"steps":[retained(bad,false)]})).is_err());
++        }
++    }
++}

@@ -289,7 +289,7 @@ and production review remain requirements alongside optimization.
     useful measured CPU gain. See
     `evidence/q-material-reuse-cpu-pilot-20261018/README.md`.
 
-17. **Checked bounded reply order: generic pilot advances to own PGO.**
+17. **Checked bounded reply order: generic and own PGO support adoption.**
     Two production consumers need only the saturated count, with exact complete
     zero/one replies reused by Q. A checked-only LIMIT2 trial preserves EP first,
     tries existing king evasions early and skips their duplicate final pass.
@@ -299,7 +299,13 @@ and production review remain requirements alongside optimization.
     combined code and peak stack do not establish a win. The balanced generic
     60-lifetime pilot independently reconciles14.679567s control d38ff037 versus
     14.4964515s candidate61fdefb3 in summed medians,1.247418% lower. Five medians
-    improve, one rises and four observed ranges are separated. Advance to new
-    exact-source own-PGO profiles for both sides before selecting. No adoption,
-    old8d profile transfer or complete cost result is claimed. See
+    improve, one rises and four observed ranges are separated. New exact-source
+    own-PGO profiles each pass54 strict replays/eight-wire and independent
+    byte-identical profile remerging. Their matched60-lifetime pilot reconciles
+    13.544937s controle4921975 versus13.340055s candidate52ec6b9e:1.512609%
+    lower, all six medians lower, five ranges separated and profile29 overlapping.
+    Select adoption contingent fresh composition validation with current88.
+    No old8d profile transfer or complete cost result is claimed. See
     `evidence/bounded-reply-king-first-cpu-pilot-20261018/README.md`.
+    Exact own-PGO evidence is in
+    `evidence/pgo-bounded-reply-cpu-pilot-20261018/README.md`.
