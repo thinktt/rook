@@ -81,6 +81,40 @@ from both debug tests and production executable measurements.
 
 ## CPU/wall development recording
 
+`account_native.py --engine ENGINE --record FRESH.json --known-single-process`
+is a transparent supervisor for the released ordinary correctness replays.
+Engine launch flags follow those arguments. The native child inherits the
+comparator's stdin/stdout/stderr directly, without relaying bytes. The supervisor
+uses housekeeping CPUs; the child uses CPU14. Its private placement pipe and
+post-exec observation check the child identity, affinity and one native task.
+Direct kernel wait4 accounting includes native startup, setup, search,
+destruction and a small Python child pre-exec prefix. It excludes the waiting
+supervisor and comparator. External bounded supervision remains required.
+The declared source must perform work in that one native process; one task
+observation is not continuous descendant supervision. Do not use this launcher
+with the released main-PID CPU benchmark, which would sample the supervisor.
+
+`compare_ordinary.py --variant NAME=ENGINE ... --case profile-01 --output
+evidence/fresh-pilot` uses that supervisor and the unchanged released strict
+replay checker. It freezes one warmup per variant followed by four alternating
+forward/reverse measured rounds, stops at the first failed run, and retains
+native receipts and full comparator output. It is a local balanced pilot,
+not the full54 schedule or a performance acceptance decision. Its process,
+time, stream and accounting limits are recorded before launch.
+
+Recorder controls:
+
+```sh
+python3 -m unittest discover -s tools -p test_account_native.py -v
+```
+
+`clock_profile.py` is a diagnostic gprofng launcher that routes collector
+messages away from ordinary output and preserves native streams. Initial
+controls reported a changed/unreliable timer, including on a separate native
+CPU control. Those sampled percentages are not a qualified hotspot profile.
+Instruction simulation is also a separate diagnostic and must not be labeled
+retired instructions or native cycles.
+
 `measure.py --help` describes the known-single-process, noninteractive recorder.
 It pins the child to CPU14 and its recorder to the housekeeping mask. Supply
 `--fidelity`, `--semantic-description` and any input/build-record identities.
