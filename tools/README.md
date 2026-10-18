@@ -128,3 +128,9 @@ fidelity stages and the retained synthetic validation. Recorder branch controls:
 ```sh
 python3 -m unittest discover -s tools -p test_measure.py -v
 ```
+
+`archive_build.py evidence/BUILD` packages the exact pre-build source/tool bytes
+already retained by `build.py`. It verifies every recorded hash before archiving,
+reads the completed archive back, and checks the locally frozen executable
+against the build identity. Archives are fresh files with normalized metadata;
+the helper neither runs the engine nor invents an external dependency closure.

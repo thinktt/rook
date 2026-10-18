@@ -69,6 +69,72 @@ const DIRECTIONS: [(i8, i8); 8] = [
     (1, 0),
     (-1, 0),
 ];
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+struct Ray {
+    squares: [u8; 7],
+    len: u8,
+}
+
+#[repr(align(64))]
+struct RayTable([[Ray; 8]; 64]);
+
+const fn attack_rays() -> RayTable {
+    let empty = Ray {
+        squares: [0; 7],
+        len: 0,
+    };
+    let mut table = [[empty; 8]; 64];
+    let mut square = 0;
+    while square < 64 {
+        let mut direction = 0;
+        while direction < 8 {
+            let (df, dr) = DIRECTIONS[direction];
+            let mut cursor = Square(square as u8);
+            while let Some(next) = cursor.offset(df, dr) {
+                let ray = &mut table[square][direction];
+                ray.squares[ray.len as usize] = next.0;
+                ray.len += 1;
+                cursor = next;
+            }
+            direction += 1;
+        }
+        square += 1;
+    }
+    RayTable(table)
+}
+
+#[derive(Clone, Copy)]
+struct Leaps {
+    squares: [u8; 8],
+    len: u8,
+}
+
+const fn knight_sources() -> [Leaps; 64] {
+    let mut table = [Leaps {
+        squares: [0; 8],
+        len: 0,
+    }; 64];
+    let mut square = 0;
+    while square < 64 {
+        let mut direction = 0;
+        while direction < 8 {
+            let (df, dr) = KNIGHT[direction];
+            if let Some(from) = Square(square as u8).offset(df, dr) {
+                let leaps = &mut table[square];
+                leaps.squares[leaps.len as usize] = from.0;
+                leaps.len += 1;
+            }
+            direction += 1;
+        }
+        square += 1;
+    }
+    table
+}
+
+static ATTACK_RAYS: RayTable = attack_rays();
+static KNIGHT_SOURCES: [Leaps; 64] = knight_sources();
 const PROMOTIONS: [PieceKind; 4] = [
     PieceKind::Queen,
     PieceKind::Rook,
@@ -111,34 +177,36 @@ fn find_attackers<const LIMIT: usize>(board: &[Piece; 64], square: Square, by: C
             }
         }
     }
-    for (df, dr) in KNIGHT {
-        if let Some(from) = square.offset(df, dr) {
-            if has_piece(board, from, by, PieceKind::Knight) && result.add::<LIMIT>(from) {
-                return result;
-            }
+    let leaps = &KNIGHT_SOURCES[square.0 as usize];
+    let knight = Piece::new(by, PieceKind::Knight);
+    for &from in &leaps.squares[..leaps.len as usize] {
+        debug_assert!(from < 64);
+        if board[(from & 63) as usize] == knight && result.add::<LIMIT>(Square(from)) {
+            return result;
         }
     }
-    for (direction, &(df, dr)) in DIRECTIONS.iter().enumerate() {
-        let mut next = square.offset(df, dr);
-        let mut adjacent = true;
-        while let Some(from) = next {
-            let piece = board[from.0 as usize];
+    let queen = Piece::new(by, PieceKind::Queen);
+    let king = Piece::new(by, PieceKind::King);
+    for (direction, ray) in ATTACK_RAYS.0[square.0 as usize].iter().enumerate() {
+        let slider = Piece::new(
+            by,
+            if direction < 4 {
+                PieceKind::Bishop
+            } else {
+                PieceKind::Rook
+            },
+        );
+        for (distance, &from) in ray.squares[..ray.len as usize].iter().enumerate() {
+            debug_assert!(from < 64);
+            let piece = board[(from & 63) as usize];
             if !piece.is_empty() {
-                if piece.color() == by {
-                    let kind = piece.kind();
-                    let slider = kind == PieceKind::Queen
-                        || (direction < 4 && kind == PieceKind::Bishop)
-                        || (direction >= 4 && kind == PieceKind::Rook);
-                    if (slider || (adjacent && kind == PieceKind::King))
-                        && result.add::<LIMIT>(from)
-                    {
-                        return result;
-                    }
+                if (piece == queen || piece == slider || (distance == 0 && piece == king))
+                    && result.add::<LIMIT>(Square(from))
+                {
+                    return result;
                 }
                 break;
             }
-            adjacent = false;
-            next = from.offset(df, dr);
         }
     }
     result
@@ -223,6 +291,119 @@ pub(crate) fn check_routes(
 fn add_if_legal(position: &Position, list: &mut MoveList, king: Square, mv: Move) {
     if legal_after(position, mv, king) {
         list.push(mv);
+    }
+}
+
+/// Valid only for this immutable position and this one generation call.
+struct GenerationSafety {
+    king: Square,
+    checked: bool,
+    pinned: u64,
+    evasion_destinations: u64,
+}
+
+impl GenerationSafety {
+    fn new(position: &Position, king: Square, checkers: Checkers) -> Self {
+        let checked = checkers.len != 0;
+        let mut evasion_destinations = 0;
+        if checkers.len == 1 {
+            let checker = checkers.squares[0];
+            evasion_destinations = 1u64 << checker.0;
+            let df = checker.file() as i8 - king.file() as i8;
+            let dr = checker.rank() as i8 - king.rank() as i8;
+            if df == 0 || dr == 0 || df.abs() == dr.abs() {
+                let mut cursor = king.offset(df.signum(), dr.signum());
+                while let Some(square) = cursor {
+                    if square == checker {
+                        break;
+                    }
+                    evasion_destinations |= 1u64 << square.0;
+                    cursor = square.offset(df.signum(), dr.signum());
+                }
+            }
+        }
+        let mut pinned = 0;
+        let enemy = position.side.opponent();
+        if !checked
+            && [PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen]
+                .iter()
+                .any(|kind| position.counts[enemy.index()][kind.index()] != 0)
+        {
+            let queen = Piece::new(enemy, PieceKind::Queen);
+            for (direction, ray) in ATTACK_RAYS.0[king.0 as usize].iter().enumerate() {
+                let slider = Piece::new(
+                    enemy,
+                    if direction < 4 {
+                        PieceKind::Bishop
+                    } else {
+                        PieceKind::Rook
+                    },
+                );
+                let mut blocker = 0;
+                for &square in &ray.squares[..ray.len as usize] {
+                    let piece = position.board[(square & 63) as usize];
+                    if piece.is_empty() {
+                        continue;
+                    }
+                    if blocker == 0 {
+                        if piece.color() == position.side {
+                            blocker = 1u64 << square;
+                            continue;
+                        }
+                    } else if piece == queen || piece == slider {
+                        pinned |= blocker;
+                    }
+                    break;
+                }
+            }
+        }
+        Self {
+            king,
+            checked,
+            pinned,
+            evasion_destinations,
+        }
+    }
+
+    #[inline]
+    fn accepts(&self, position: &Position, movement: Move) -> bool {
+        #[cfg(test)]
+        if FORCE_PROJECTION.with(|forced| forced.get()) {
+            return legal_after(position, movement, self.king);
+        }
+        if movement.from() != self.king
+            && matches!(movement.kind(), MoveKind::Ordinary | MoveKind::Promotion(_))
+        {
+            if self.checked {
+                // With the king fixed, a two-square change must capture the
+                // lone checker or fill a square on its current ray. No single
+                // destination resolves two existing geometric routes. EP has
+                // another removed square and is deliberately excluded here.
+                if self.evasion_destinations & (1u64 << movement.to().0) == 0 {
+                    return false;
+                }
+                // A necessary evasion is not sufficient: keep full projection
+                // for any source pin or other newly exposed attack.
+            } else if self.pinned & (1u64 << movement.from().0) == 0 {
+                // Only vacating a sole ray blocker can expose a new attack on
+                // the safe stationary king. The destination stays occupied by
+                // our piece, including captures and promotions.
+                return true;
+            }
+        }
+        legal_after(position, movement, self.king)
+    }
+}
+
+#[inline]
+fn add_if_safe(
+    position: &Position,
+    list: &mut MoveList,
+    safety: &GenerationSafety,
+    movement: Move,
+) {
+    if safety.accepts(position, movement) {
+        list.push(movement);
     }
 }
 
@@ -330,17 +511,16 @@ fn castles<const LIMIT: usize>(
 fn pawn_destination<const LIMIT: usize>(
     position: &Position,
     list: &mut MoveList,
-    king: Square,
+    safety: &GenerationSafety,
     from: Square,
     to: Square,
 ) {
     if to.rank() == 0 || to.rank() == 7 {
         // Promotion type cannot alter whether an opposing piece attacks our
         // king: each choice has identical occupancy and color at the target.
-        if legal_after(
+        if safety.accepts(
             position,
             Move::new(from, to, MoveKind::Promotion(PieceKind::Queen)),
-            king,
         ) {
             for kind in PROMOTIONS {
                 list.push(Move::new(from, to, MoveKind::Promotion(kind)));
@@ -350,16 +530,16 @@ fn pawn_destination<const LIMIT: usize>(
             }
         }
     } else {
-        add_if_legal(
+        add_if_safe(
             position,
             list,
-            king,
+            safety,
             Move::new(from, to, MoveKind::Ordinary),
         );
     }
 }
 
-fn pawns<const LIMIT: usize>(position: &Position, list: &mut MoveList, king: Square) {
+fn pawns<const LIMIT: usize>(position: &Position, list: &mut MoveList, safety: &GenerationSafety) {
     let step = if position.side == Color::White { 1 } else { -1 };
     let files = if position.side == Color::White {
         [1, -1]
@@ -375,7 +555,7 @@ fn pawns<const LIMIT: usize>(position: &Position, list: &mut MoveList, king: Squ
                     && victim.color() != position.side
                     && victim.kind() != PieceKind::King
                 {
-                    pawn_destination::<LIMIT>(position, list, king, from, to);
+                    pawn_destination::<LIMIT>(position, list, safety, from, to);
                     if list.len >= LIMIT {
                         return;
                     }
@@ -384,17 +564,17 @@ fn pawns<const LIMIT: usize>(position: &Position, list: &mut MoveList, king: Squ
         }
         if let Some(to) = from.offset(0, step) {
             if position.board[to.0 as usize].is_empty() {
-                pawn_destination::<LIMIT>(position, list, king, from, to);
+                pawn_destination::<LIMIT>(position, list, safety, from, to);
                 if list.len >= LIMIT {
                     return;
                 }
                 if from.rank() == initial_rank {
                     let twice = from.offset(0, 2 * step).unwrap();
                     if position.board[twice.0 as usize].is_empty() {
-                        add_if_legal(
+                        add_if_safe(
                             position,
                             list,
-                            king,
+                            safety,
                             Move::new(from, twice, MoveKind::Ordinary),
                         );
                         if list.len >= LIMIT {
@@ -410,7 +590,7 @@ fn pawns<const LIMIT: usize>(position: &Position, list: &mut MoveList, king: Squ
 fn pieces<const LIMIT: usize>(
     position: &Position,
     list: &mut MoveList,
-    king: Square,
+    safety: &GenerationSafety,
     kind: PieceKind,
 ) {
     let directions: &[(i8, i8)] = match kind {
@@ -431,10 +611,10 @@ fn pieces<const LIMIT: usize>(
                 {
                     break;
                 }
-                add_if_legal(
+                add_if_safe(
                     position,
                     list,
-                    king,
+                    safety,
                     Move::new(from, to, MoveKind::Ordinary),
                 );
                 if list.len >= LIMIT {
@@ -525,8 +705,9 @@ fn generate_bounded<const LIMIT: usize>(position: &Position, list: &mut MoveList
     if list.len >= LIMIT {
         return;
     }
+    let safety = GenerationSafety::new(position, king, checkers);
     let pawn_start = list.len;
-    pawns::<LIMIT>(position, list, king);
+    pawns::<LIMIT>(position, list, &safety);
     if list.len >= LIMIT {
         return;
     }
@@ -550,11 +731,18 @@ fn generate_bounded<const LIMIT: usize>(position: &Position, list: &mut MoveList
         PieceKind::Queen,
         PieceKind::King,
     ] {
-        pieces::<LIMIT>(position, list, king, kind);
+        pieces::<LIMIT>(position, list, &safety, kind);
         if list.len >= LIMIT {
             return;
         }
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    // Independent old admission route over exactly the same pseudo-candidates.
+    // Compiles out of production and is isolated between parallel test threads.
+    static FORCE_PROJECTION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(test)]
@@ -568,6 +756,135 @@ mod tests {
         let mut moves = MoveList::new();
         generate_legal(&position, &mut moves);
         moves.as_slice().iter().map(ToString::to_string).collect()
+    }
+
+    fn compare_projection(position: &Position, context: &str) {
+        let mut fast = MoveList::new();
+        let mut old = MoveList::new();
+        let mut capped = MoveList::new();
+        generate_legal(position, &mut fast);
+        legal_replies_up_to_two(position, &mut capped);
+        FORCE_PROJECTION.with(|forced| forced.set(true));
+        generate_legal(position, &mut old);
+        FORCE_PROJECTION.with(|forced| forced.set(false));
+        assert_eq!(
+            fast.as_slice(),
+            old.as_slice(),
+            "ordered inventory: {context}"
+        );
+        assert_eq!(capped.len, old.len.min(2), "bounded count: {context}");
+        if old.len < 2 {
+            assert_eq!(
+                capped.as_slice(),
+                old.as_slice(),
+                "bounded reuse: {context}"
+            );
+        }
+    }
+
+    #[test]
+    fn generation_summary_matches_projection_on_joined_witnesses() {
+        for (fen, movement, admitted) in [
+            ("k7/8/8/4KPpr/8/8/8/8 w - g6 0 1", "f5g6", false),
+            ("k7/8/8/4KPnr/8/8/8/8 w - g6 0 1", "f5g6", false),
+            ("7k/8/8/8/8/8/3rP3/K7 w - d3 0 1", "e2d3", true),
+            ("1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1", "c5d6", true),
+            ("R3r2k/8/8/8/8/8/4N3/4K3 w - - 0 1", "e2c3", false),
+            ("k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1", "e2e8", true),
+            ("k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1", "e2e3", true),
+            ("k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1", "e2d2", false),
+            ("1b5k/P7/8/8/8/8/7K/8 w - - 0 1", "a7b8q", true),
+            ("1b5k/P7/8/8/8/8/7K/8 w - - 0 1", "a7a8q", false),
+            ("4k3/8/8/8/4B3/8/8/K3R3 w - - 0 1", "e4f5", true),
+            ("k7/8/8/8/8/8/8/2K5 b - - 0 1", "a8a7", true),
+        ] {
+            let position = Position::from_fen(fen).unwrap();
+            compare_projection(&position, fen);
+            assert_eq!(
+                inventory(fen).iter().any(|mv| mv == movement),
+                admitted,
+                "witness {fen}: {movement}"
+            );
+        }
+        for fen in [
+            START,
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            "4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1",
+            "7k/6Q1/5K2/8/8/8/8/8 b - - 0 1",
+        ] {
+            let position = Position::from_fen(fen).unwrap();
+            compare_projection(&position, fen);
+            let mut moves = MoveList::new();
+            generate_legal(&position, &mut moves);
+            for &mv in moves.as_slice() {
+                compare_projection(&position.played_unchecked(mv), &format!("{fen} / {mv}"));
+            }
+        }
+    }
+
+    #[test]
+    fn generation_summary_matches_projection_on_constructed_setups() {
+        // Construct admitted placements, including attacked nonmoving kings,
+        // adjacent kings, promoted material, and geometrically pinned attackers.
+        // This intentionally does not restrict coverage to legal game histories.
+        let mut seed = 0x496d7032c6a40f71u64;
+        let mut random = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for sample in 0..10_000 {
+            let mut board = [Piece::EMPTY; 64];
+            for side in [Color::White, Color::Black] {
+                let mut count = [0u8; 6];
+                for index in 0..1 + random() % 13 {
+                    let kind = if index == 0 {
+                        PieceKind::King
+                    } else {
+                        PieceKind::ALL[(random() % 5) as usize]
+                    };
+                    if kind == PieceKind::Pawn && count[0] == 8 {
+                        continue;
+                    }
+                    let square = loop {
+                        let square = (random() % 64) as usize;
+                        if board[square].is_empty()
+                            && (kind != PieceKind::Pawn || (8..56).contains(&square))
+                        {
+                            break square;
+                        }
+                    };
+                    board[square] = Piece::new(side, kind);
+                    count[kind.index()] += 1;
+                }
+            }
+            let mut placement = String::new();
+            for rank in (0..8).rev() {
+                if rank != 7 {
+                    placement.push('/');
+                }
+                let mut empty = 0u8;
+                for file in 0..8 {
+                    let piece = board[rank * 8 + file];
+                    if piece.is_empty() {
+                        empty += 1;
+                    } else {
+                        if empty != 0 {
+                            placement.push((b'0' + empty) as char);
+                            empty = 0;
+                        }
+                        placement.push(piece.fen_char());
+                    }
+                }
+                if empty != 0 {
+                    placement.push((b'0' + empty) as char);
+                }
+            }
+            let side = if sample % 2 == 0 { 'w' } else { 'b' };
+            let fen = format!("{placement} {side} - - 0 1");
+            compare_projection(&Position::from_fen(&fen).unwrap(), &fen);
+        }
     }
 
     fn perft(position: &Position, depth: u8) -> u64 {

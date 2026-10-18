@@ -16,7 +16,8 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
 - Audit learned-memory consumption of uncertified/colliding cache hints. The
   current empty-source guard avoids indexing an absent piece; behavior in that
   broader completed-node combination remains unqualified.
-- Extend the production requirement/test map beyond finite examples. The live
+- Expand the initial [production ownership map](production-map.md) to individual
+  normative requirements and close their review/test obligations beyond finite examples. The live
   host now publishes immediately at real captures, polls one available line
   per4096 units, supports current-path/null status and active time updates, and
   preserves abort/finish/fallback ownership. All54 natural fine-work replays,
@@ -30,8 +31,12 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
   includes natural POSIX acquisition, persistent gate overrides and fine-work
   posts. Exceptional king-victim and zero-root fatal exits have literal
   process-level controls. None of these replaces full gameplay qualification.
-- Measure controlled representation/restoration alternatives at suitable
-  fidelity; complete production mapping/review and mandatory conformance.
+- Continue measured representation/restoration work at suitable fidelity.
+  A local generation-summary/evasion algorithm now retains the existing Position
+  layout and copy-child ownership, with all54 replay regression and a four-case
+  whole-native CPU pilot. That decision is documented in
+  [decision0002](decisions/0002-geometric-legality.md); it does not close full
+  performance collection, production mapping/review or mandatory conformance.
 - Establish scoped PMU/calibration capabilities and qualified measurement
   boundaries, then run both complete whole-engine performance collections.
   The first CPU pilot used a selected-move/checkpoint endpoint. A new direct
