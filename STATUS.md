@@ -1,6 +1,35 @@
 # Implementation status
 
-## Current stage — 2026-10-18
+## Current stage — activity destination values, 2026-10-18
+
+The exact validated activity destination-value source is now integrated. Root
+source112 (native46/tools23/cold43) equals graph
+`d49e7e3fb4b2af77da9ab5e9ee801ba3e9d6673d00be8e73e0389afba9260b03`.
+Only native `src/activity.rs` changes from the complete117 checkpoint. Immutable
+256-byte physical-square inputs remove repeated destination orientation and
+value selection; there is no maintained node state or semantic charge change.
+
+All7673 original cases/117 operations/115 whole files freshly pass on exact
+adapter0e5eb3e0, with independent request/raw/expected/exit reconciliation.
+The209 diagnostic unit tests and adapter build are reused from the green
+children of preserved failed metadata attempt01; continuation02 corrects
+crate-local tools0 versus separately pinned root tools23. Source equality also
+binds178 native tests and existing generic7cf39800 strict54/eight-wire24.
+Own-PGOd5ee1f3f has fresh training/remerge/use54/eight-wire evidence and a matched
+seven-case pilot1.309570% lower in summed medians (six lower, one higher).
+This source promotion does not claim a canonical-path rebuild or transfer that
+pilot to full54/12 qualification. Exact artifacts and actual terminals are in
+[integration](evidence/activity-value-inputs-integration-20261018/source-promotion.json)
+and [decision0012](docs/decisions/0012-activity-destination-values.md).
+
+The latest full54/12 costs and12-game pre-gate still belong to previous6a5ce6e2.
+Repeat final-artifact qualification after selecting further changes. The separate
+pawn forward-scan fusion541d324c passes178 native tests,54 strict replays and
+eight-wire24 with independent source/raw verification. Its backend removes the
+duplicate walk and old raw call, while growing the candidates local frame48B;
+its CPU benefit remains unmeasured. It is not composed with activity.
+
+## Previous complete117 checkpoint and history
 
 The repository now contains the complete117-operation semantic checkpoint.
 Its shared native timed controller owns root attempts/retries, capture/publication,

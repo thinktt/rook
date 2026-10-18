@@ -1,7 +1,14 @@
 # Remaining performance investigations
 
-Current117 has mandatory7673-case/117-operation success and a generic12-game
-pre-gate pass. Own-PGO6a5ce6e2 also passes its own fresh54/eight-wire and12-game
+Current117 integrates activity destination values after178 native/209 diagnostic
+units and fresh7673-case/117-operation success. Own-PGOd5ee1f3f passes its own
+54/eight-wire and a matched seven-case pilot1.309570% lower in summed medians;
+final-artifact full54/12 costs and12-game pre-gate remain. The separate pawn
+fusion541d324c passes178/54/eight-wire with independent closure but has no CPU
+measurement or adoption yet. See [decision0012](../decisions/0012-activity-destination-values.md).
+
+Previous complete117 has mandatory7673-case/117-operation success and a generic12-game
+pre-gate pass. Its own-PGO6a5ce6e2 also passes its own fresh54/eight-wire and12-game
 pre-gate checks. Its54 CPU collection independently reconciles216 lifetimes,
 76.090895s summed medians versus published63.431779s: raw cross-hardware
 ratio1.199571. Its12-game CPU collection also independently reconciles all48
