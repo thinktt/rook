@@ -1,9 +1,12 @@
 # Remaining performance investigations
 
 Current117 has mandatory7673-case/117-operation success and a generic12-game
-pre-gate pass. Its own-PGO, codegen review and complete54/12 costs are pending;
-none of the historical measurements below transfers to that source. CPU-only
-opaque calibration preparation is accepted; no local calibration has run yet.
+pre-gate pass. Own-PGO6a5ce6e2 passes fresh54/eight-wire validation; its12-game
+pre-gate and complete54/12 CPU costs are pending. The
+bounded codegen review is complete. None of the historical measurements below
+transfers to that source. CPU-only
+opaque calibration passes216 lifetimes with per-case local/reference ratios
+0.906–0.972; this is fixed-program hardware context, not engine acceptance.
 
 Date: 2026-10-18. Statuses below distinguish adopted experiments from hypotheses; none promises
 a qualified speedup. The latest complete54 collection, on frozen8d9dddc5,

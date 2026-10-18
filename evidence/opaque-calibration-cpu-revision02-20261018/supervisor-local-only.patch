@@ -1,0 +1,94 @@
+--- a/account_native.py
++++ b/account_native.py
+@@ -14,6 +14,9 @@
+ import signal
+ import sys
+ import time
++
++sys.dont_write_bytecode = True
++from guard import file_identity, status_fields, unprivileged
+ 
+ 
+ def sha(path):
+@@ -32,11 +35,19 @@
+     parser.add_argument('--engine', type=Path, required=True)
+     parser.add_argument('--record', type=Path, required=True)
+     parser.add_argument('--known-single-process', action='store_true', required=True)
++    parser.add_argument('--expected-engine-sha256', required=True)
++    parser.add_argument('--expected-file-identity', required=True)
+     args, engine_args = parser.parse_known_args()
+     engine, receipt = args.engine.resolve(), args.record.resolve()
+     if receipt.exists() or not receipt.parent.is_dir():
+         parser.error('receipt must be fresh, in an existing directory')
+     engine_hash = sha(engine)
++    expected_file = json.loads(args.expected_file_identity)
++    file_before = file_identity(engine)
++    if engine_hash != args.expected_engine_sha256 or file_before != expected_file:
++        parser.error('engine hash or file owner/mode/xattr changed')
++    if not unprivileged(status_fields(Path('/proc/self/status').read_text())):
++        parser.error('supervisor must remain UID1000 with no acquired capabilities')
+     parent_affinity = sorted(os.sched_getaffinity(0))
+     helpers = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13}
+     if not (helpers & set(parent_affinity)):
+@@ -94,6 +105,7 @@
+         else:
+             placement = value
+     observed = None
++    observation_error = None
+     # exec success normally precedes the first read. Short processes may have
+     # already exited; such a missing observation is explicit and invalid here.
+     for _ in range(50):
+@@ -102,15 +114,24 @@
+             if native_path == str(engine):
+                 observed = dict(path=native_path, affinity=sorted(os.sched_getaffinity(pid)),
+                                 pgid=os.getpgid(pid),
+-                                tasks=sorted(p.name for p in Path(f'/proc/{pid}/task').iterdir()))
++                                tasks=sorted(p.name for p in Path(f'/proc/{pid}/task').iterdir()),
++                                privileges=status_fields(Path(f'/proc/{pid}/status').read_text()))
+                 break
+         except (FileNotFoundError, ProcessLookupError):
++            break
++        except OSError as error:
++            observation_error = repr(error)
+             break
+         time.sleep(0.001)
+     _, status, usage = os.wait4(pid, 0)
+     end = time.monotonic_ns()
+     exit_code = os.waitstatus_to_exitcode(status)
+     after_hash = sha(engine)
++    try:
++        file_after = file_identity(engine)
++        file_after_error = None
++    except (OSError, ValueError) as error:
++        file_after, file_after_error = None, repr(error)
+     failure = None
+     if exec_error:
+         failure = 'native-exec-error'
+@@ -118,20 +139,26 @@
+         failure = 'pre-exec-placement-unverified'
+     elif observed is None or observed['affinity'] != [14] or observed['pgid'] != os.getpgrp():
+         failure = 'native-post-exec-placement-unverified'
++    elif not unprivileged(observed['privileges']) or observed['privileges']['ppid'] != os.getpid():
++        failure = 'native-post-exec-UID-capability-parent-unverified'
+     elif observed['tasks'] != [str(pid)]:
+         failure = 'native-threads-need-separate-review'
++    elif file_after != file_before or file_after_error:
++        failure = 'engine-file-owner-mode-capability-changed'
+     elif after_hash != engine_hash:
+         failure = 'engine-artifact-changed'
+     elif exit_code != 0 or signals:
+         failure = 'abnormal-native-or-supervisor-termination'
+-    record = dict(schema='rook2-native-wait4-v1', engine=str(engine),
++    record = dict(schema='rook2-native-wait4-opaque-cpu-revision02', engine=str(engine),
+                   engine_sha256_before=engine_hash, engine_sha256_after=after_hash,
++                  engine_file_before=file_before, engine_file_after=file_after, engine_file_after_error=file_after_error,
+                   launcher_sha256=sha(Path(__file__)), python_executable=sys.executable,
+                   python_executable_sha256=sha(Path(sys.executable)),
+                   argv=[str(engine), *engine_args], supervisor_pid=os.getpid(), native_pid=pid,
+                   supervisor_affinity=sorted(os.sched_getaffinity(0)),
+                   inherited_supervisor_affinity=parent_affinity,
+                   native_pre_exec=placement, native_post_exec=observed,
++                  native_post_exec_observation_error=observation_error,
+                   started_utc=started_utc, start_monotonic_ns=start, reaped_monotonic_ns=end,
+                   wall_ns=end-start, user_cpu_s=usage.ru_utime, system_cpu_s=usage.ru_stime,
+                   total_cpu_s=usage.ru_utime+usage.ru_stime, maxrss_linux_kib=usage.ru_maxrss,

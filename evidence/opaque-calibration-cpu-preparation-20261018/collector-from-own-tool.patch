@@ -1,0 +1,74 @@
+--- tools/collect_ordinary.py
++++ evidence/opaque-calibration-cpu-preparation-20261018/collect.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""All54 reported-only whole-native CPU collection with the released strict oracle.
++"""All54 opaque fixed-calibrator CPU collection with the released strict oracle.
+ 
+ One excluded warmup followed by three measured fresh-process repetitions per
+ case, in stored corpus order. No reference qualification or PMU claim.
+@@ -14,10 +14,11 @@
+ import sys
+ import time
+ 
++sys.path.insert(0, "/home/legolas/rook2/tools")
+ from compare_ordinary import sha, stop_owned, write
+ from measure import cgroup_snapshot
+ 
+-ROOT = Path(__file__).resolve().parents[1]
++ROOT = Path('/home/legolas/rook2')
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ HELPERS = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13}
+ 
+@@ -34,15 +35,20 @@
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument('--engine', required=True, type=Path)
+-    parser.add_argument('--build-record', required=True, type=Path)
++    parser.add_argument('--identity-record', required=True, type=Path)
++    parser.add_argument('--launch-authority', required=True, type=Path)
+     parser.add_argument('--output', required=True, type=Path)
+     args = parser.parse_args()
+-    engine, build_path = args.engine.resolve(strict=True), args.build_record.resolve(strict=True)
+-    build = json.loads(build_path.read_text())
++    engine, identity_path = args.engine.resolve(strict=True), args.identity_record.resolve(strict=True)
++    identity = json.loads(identity_path.read_text())
+     engine_sha = sha(engine)
+-    if (build['outcome'] != 'build-succeeded-with-stable-input-snapshot'
+-            or build['binary_output']['sha256'] != engine_sha):
+-        parser.error('engine must match a successful stable build record')
++    if identity != json.loads((Path(__file__).resolve().parent/'artifact-identity.json').read_text()) or identity['kind'] != 'approved-opaque-calibrator' or engine_sha != identity['sha256'] or str(engine) != identity['path']:
++        parser.error('opaque artifact must match the approved exact identity; no synthetic build record')
++    authority = json.loads(args.launch_authority.read_text())
++    if authority.get('authorized') is not True or authority.get('scope') != 'opaque-fixed-calibrator-cpu-only' or authority.get('collector_sha256') != sha(Path(__file__)) or authority.get('all_conflicting_owned_jobs_closed') is not True:
++        parser.error('exact collector authority and a closed measurement window are required')
++    if os.geteuid() != 1000 or int(next(s.split(':',1)[1] for s in Path('/proc/self/status').read_text().splitlines() if s.startswith('CapEff:')),16) != 0 or engine.stat().st_mode & 0o6000:
++        parser.error('engine/controller must remain UID1000 with no effective capabilities or set-ID executable')
+     workloads = json.loads((SPEC/'workloads.json').read_text())
+     case_ids = [c['id'] for c in workloads['cases']]
+     if len(case_ids) != 54 or len(set(case_ids)) != 54:
+@@ -55,10 +61,12 @@
+     dependencies = [Path(__file__).resolve(), ROOT/'tools/account_native.py',
+                     ROOT/'tools/compare_ordinary.py', ROOT/'tools/measure.py',
+                     SPEC/'replay-check.mjs', SPEC/'workloads.json', SPEC/'replay-oracle.json',
+-                    build_path, Path('/usr/bin/node').resolve(), Path(sys.executable).resolve()]
++                    identity_path, args.launch_authority.resolve(), Path(__file__).resolve().parent/'profile.json',
++                    Path('/home/legolas/spec-issues/v2.5.0/2026-10-16-performance-handoff/calibration/calibration-data.json'),
++                    Path('/usr/bin/node').resolve(), Path(sys.executable).resolve()]
+     schedule = [dict(case=c, repeat=i, warmup=i == 0) for c in case_ids for i in range(4)]
+-    manifest = dict(schema='rook2-whole-native54-v1', engine=str(engine), engine_sha256=engine_sha,
+-                    build_record=str(build_path), schedule=schedule,
++    manifest = dict(schema='rook2-opaque-calibration54-cpu-v1', engine=str(engine), engine_sha256=engine_sha,
++                    opaque_identity_record=str(identity_path), schedule=schedule,
+                     input_sha256={str(p):sha(p) for p in dependencies},
+                     limits=dict(seconds_per_run=960, aggregate_seconds=3600,
+                                 bytes_per_comparator_stream=8388608,
+@@ -68,7 +76,7 @@
+                     behavior='Unchanged released strict comparator asserts every case/run',
+                     accounting='Direct native wait4 user+system lifetime plus small Python child pre-exec prefix; no byte relay',
+                     ownership='Known single-process native engine; one post-exec task/placement observation, not continuous descendant monitoring',
+-                    measurement='Local reported-only CPU/work evidence; resource/uncertainty/calibration qualification remains open',
++                    measurement='CPU-only per-case planning calibration; no PMU, cross-hardware qualification or universal conversion; lifetime wall boundaries differ from attached reference',
+                     environment={k:os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE']})
+     write(args.output/'manifest.json', manifest)
+     write(args.output/'context-before.json', context())

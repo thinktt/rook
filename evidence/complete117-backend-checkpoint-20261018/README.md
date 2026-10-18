@@ -1,0 +1,3 @@
+The bounded backend review found no blocker to separate own-PGO validation. It preserves actual code-size, initialization and allocation-lifetime concerns for measurement; it establishes no CPU, copy or allocation neutrality. See [review](../complete117-codegen-review-20261018/review.md).
+
+`backend-evidence.tar.gz` preserves all 515 original preparation, binding, capture and review files, including the reviewed own-engine artifacts and code. `manifest.json` records original paths, sizes and SHA256; every archive member and original was rehashed after packaging. Extraction at the repository root restores the evidence paths. Original rlib provenance limitations and all actual terminal records are retained.

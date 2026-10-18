@@ -11,25 +11,29 @@ and [pre-gate](../evidence/complete117-generic-pregate-20261018/README.md).
 
 Remaining work:
 
-- Review actual emitted shared-controller/default/false-IIO code, recursive
-  errors/ABI, copies, frames and PV/ranking allocation lifetimes. Source sharing
-  and unchanged public layouts do not prove free lowering.
-- Train/build the selected exact source with its own generic PGO profile, then
-  freshly regress its production artifact. Generic pre-gate success cannot be
-  transferred to that future image.
+- Measure the bounded codegen review's actual risks: root body growth, three
+  root-local initialization stores and longer PV/ranking allocation overlap.
+  Retry child reuse and return/error-tag handling are consistent; no CPU,
+  allocation or copy neutrality is claimed.
+- Finish the12-game pre-gate for own-PGO6a5ce6e2, whose fresh54 strict and
+  eight interruption/24-search regression and independent profile checks now
+  pass. Generic pre-gate success cannot be transferred to that image.
 - Collect current complete54-search and12-game whole-lifetime CPU costs under
   the fixed measurement profile. Retain every case, warmup, sample and failure.
-  Run approved opaque per-case hardware calibration; PMU remains unavailable
-  pending a separately authorized deployed collector. Cross-hardware calibration
+  Approved opaque per-case calibration now passes all216 lifetimes with independent
+  raw/reference reconciliation; PMU remains unavailable pending a separately
+  authorized deployed collector. Cross-hardware calibration
   is interpretive evidence, not qualified KingRE acceptance.
 - Freeze and validate the comparison, repeatability/uncertainty and finite
   follow-up procedure before applying aggregate1.10/every-case1.25 limits.
   Both54-search and12-game limits apply independently; no offsets or universal
   hardware factor are permitted.
-- Finish normative production review beyond finite fixtures: TT-origin/window
-  induction, conditional empty-source remembered-hint composition, interruption
+- Finish normative production review beyond finite fixtures: TT semantic, search-window,
+  remaining-depth and lifecycle obligations, conditional empty-source remembered-hint
+  composition, interruption
   and natural IIO-path coverage. Current numerical review supports retained P/G,
-  selected late bounds and actual relation-charge ownership, with raw counter
+  selected late bounds, actual relation-charge ownership and TT normalized-score
+  capacity10063 under actual production callers, with raw counter
   capacity explicitly scoped. See [numerical crosswalk](../evidence/production-retained117-numerical-crosswalk-20261018-score-context/review.md)
   and [hint gap](research/uncertified-hint-completion.md).
 - Prepare exact source/build/artifact/evidence handoff for the external full

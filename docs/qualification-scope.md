@@ -24,9 +24,13 @@ installed PMU collector was found in the memo's bounded system-location check;
 this does not establish an exhaustive absence or resolve self-open denial.
 The delivered deployment templates are not a live-qualified Vic service.
 
-No local calibration run or new privileged deployment has occurred. The handoff
-memo selects the original Rook artifact only as a fixed timing calibrator;
-KingRE remains the performance reference. CPU-only calibration must retain its
-separate measurement scope and per-case ratios. Administrative PMU deployment
-requires its own authorization. Do not inspect Imp1 source or private
-architecture.
+The approved CPU-only calibration now completed all216 lifetimes/54 cases,
+with independent original-raw/reference reconciliation. Per-case local/reference
+CPU ratios are0.906–0.972 for that fixed program; the descriptive ratio of summed
+case medians is0.938863. See
+[calibration evidence](../evidence/opaque-calibration-cpu-reconciliation-20261018-01/README.md).
+The original Rook artifact remains only a timing calibrator; KingRE remains the
+performance reference. These ratios are program/case specific, not universal
+hardware conversion or qualified acceptance. No privileged deployment occurred;
+PMU remains unavailable. Administrative deployment requires its own authorization.
+Do not inspect Imp1 source or private architecture.
