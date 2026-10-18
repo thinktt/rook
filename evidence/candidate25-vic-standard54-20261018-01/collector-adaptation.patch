@@ -1,0 +1,108 @@
+--- /home/legolas/rook2/tools/collect_ordinary.py
++++ /home/legolas/rook2/evidence/candidate25-vic-standard54-20261018-01/collect54.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""All54 reported-only whole-native CPU collection with the released strict oracle.
++"""Candidate25 local54 whole-native and search CPU collection with the strict oracle.
+ 
+ One excluded warmup followed by three measured fresh-process repetitions per
+ case, in stored corpus order. No reference qualification or PMU claim.
+@@ -14,10 +14,12 @@
+ import sys
+ import time
+ 
++sys.path.insert(0, '/home/legolas/rook2/tools')
+ from compare_ordinary import sha, stop_owned, write
+ from measure import cgroup_snapshot
+ 
+-ROOT = Path(__file__).resolve().parents[1]
++ROOT = Path('/home/legolas/rook2')
++sys.path.insert(0, str(ROOT/'tools'))
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ HELPERS = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13}
+ 
+@@ -54,10 +56,12 @@
+     os.sched_setaffinity(0, HELPERS & initial_affinity)
+     dependencies = [Path(__file__).resolve(), ROOT/'tools/account_native.py',
+                     ROOT/'tools/compare_ordinary.py', ROOT/'tools/measure.py',
+-                    SPEC/'replay-check.mjs', SPEC/'workloads.json', SPEC/'replay-oracle.json',
++                    SPEC/'replay-check.mjs', SPEC/'benchmark.mjs', SPEC/'workloads.json', SPEC/'replay-oracle.json',
++                    ROOT/'tools/tap_wire.mjs',
+                     build_path, Path('/usr/bin/node').resolve(), Path(sys.executable).resolve()]
++    oracle = json.loads((SPEC/'replay-oracle.json').read_text())
+     schedule = [dict(case=c, repeat=i, warmup=i == 0) for c in case_ids for i in range(4)]
+-    manifest = dict(schema='rook2-whole-native54-v1', engine=str(engine), engine_sha256=engine_sha,
++    manifest = dict(schema='rook2-candidate25-native-and-search54-v1', engine=str(engine), engine_sha256=engine_sha,
+                     build_record=str(build_path), schedule=schedule,
+                     input_sha256={str(p):sha(p) for p in dependencies},
+                     limits=dict(seconds_per_run=960, aggregate_seconds=3600,
+@@ -80,13 +84,19 @@
+             directory = args.output/f"{index:03d}-{step['case']}-r{step['repeat']}"
+             directory.mkdir()
+             receipt = directory/'native.json'
+-            command = ['/usr/bin/node', str(SPEC/'replay-check.mjs'), '--case', step['case'], '--',
++            command = ['/usr/bin/node', '--import', str(ROOT/'tools/tap_wire.mjs'), str(SPEC/'replay-check.mjs'), '--case', step['case'], '--',
+                        sys.executable, str(ROOT/'tools/account_native.py'), '--engine', str(engine),
+                        '--record', str(receipt), '--known-single-process']
++            config_path = directory/'wire-config.json'
++            config = dict(version=1, expectedArgv=command[7:]+oracle['mode'],
++                          maxRawBytes=8388608, tickHz=os.sysconf('SC_CLK_TCK'),
++                          directory=str(directory/'wire'), nativeExecutable=str(engine))
++            write(config_path, config)
++            env = dict(os.environ, ROOK2_WIRE_TAP_CONFIG=str(config_path))
+             stdout_path, stderr_path = directory/'comparator.stdout', directory/'comparator.stderr'
+             failure = None
+             with stdout_path.open('xb') as stdout, stderr_path.open('xb') as stderr:
+-                process = subprocess.Popen(command, stdout=stdout, stderr=stderr, start_new_session=True)
++                process = subprocess.Popen(command, stdout=stdout, stderr=stderr, start_new_session=True, env=env)
+                 run_deadline = min(aggregate_deadline, time.monotonic()+960)
+                 try:
+                     while process.poll() is None:
+@@ -118,6 +128,19 @@
+                 assert native['failure'] is None and native['native_exit_code'] == 0, 'native accounting invalid'
+                 assert native['engine_sha256_before'] == native['engine_sha256_after'] == engine_sha, 'native changed'
+                 assert native['launcher_sha256'] == manifest['input_sha256'][str(ROOT/'tools/account_native.py')], 'recorder changed'
++                wire = json.loads((directory/'wire/receipt.json').read_text())
++                assert wire['failure'] is None and wire['pending'] is None, 'wire recorder failed'
++                assert wire['launcherExit'] == dict(code=0, signal=None), 'wire launcher failed'
++                assert len(wire['searches']) == 1, 'expected exactly one search'
++                search = wire['searches'][0]
++                expected = next(c for c in oracle['cases'] if c['id'] == step['case'])
++                assert search['move'] == expected['move'], 'wire selected move mismatch'
++                assert search['cpuSeconds'] is not None and search['cpuUnavailableReason'] is None, 'search CPU unavailable'
++                assert search['beforeWrite']['pid'] == search['afterData']['pid'] == native['native_pid'], 'native PID mismatch'
++                assert wire['raw']['stderr']['bytes'] == 0, 'native stderr'
++                assert (directory/'wire/stdout.raw').read_text() == comparator['results'][0]['stdout'], 'raw comparator stream mismatch'
++                row.update(search_cpu_s=search['cpuSeconds'], search_wall_ns=search['wallNs'],
++                           wire_receipt_sha256=sha(directory/'wire/receipt.json'))
+                 row.update(cpu_s=native['total_cpu_s'], user_s=native['user_cpu_s'], system_s=native['system_cpu_s'],
+                            wall_ns=native['wall_ns'], native_receipt_sha256=sha(receipt), comparator_sha256=sha(stdout_path))
+             except (AssertionError, OSError, ValueError, KeyError) as error:
+@@ -131,6 +154,9 @@
+                 samples = [r['cpu_s'] for r in report['runs'] if r['case'] == step['case'] and not r['warmup']]
+                 v = dict(samples=samples, median=statistics.median(samples), minimum=min(samples), maximum=max(samples))
+                 v['range_over_median'] = (v['maximum']-v['minimum'])/v['median']
++                for metric in ['search_cpu_s', 'search_wall_ns', 'wall_ns']:
++                    values = [r[metric] for r in report['runs'] if r['case'] == step['case'] and not r['warmup']]
++                    v[metric] = dict(samples=values, median=statistics.median(values), minimum=min(values), maximum=max(values))
+                 report['case_summaries'][step['case']] = v
+                 print(json.dumps(dict(case=step['case'], **v)), flush=True)
+             write(args.output/'summary.json', report)
+@@ -142,12 +168,16 @@
+         report['retained_comparator_stream_bytes'] = retained_stream_bytes
+         if report['complete']:
+             report['sum_case_medians_s'] = sum(report['case_summaries'][c]['median'] for c in case_ids)
++            report['sum_case_search_cpu_medians_s'] = sum(report['case_summaries'][c]['search_cpu_s']['median'] for c in case_ids)
++            report['sum_case_search_wall_medians_s'] = sum(report['case_summaries'][c]['search_wall_ns']['median'] for c in case_ids)/1e9
++            report['sum_case_native_wall_medians_s'] = sum(report['case_summaries'][c]['wall_ns']['median'] for c in case_ids)/1e9
+         write(args.output/'summary.json', report)
+         write(args.output/'context-after.json', context())
+     finally:
+         os.sched_setaffinity(0, initial_affinity)
+     print(json.dumps(dict(complete=report['complete'], failure=report['failure'],
+-                          sum_case_medians_s=report.get('sum_case_medians_s'))))
++                          sum_case_medians_s=report.get('sum_case_medians_s'),
++                          sum_case_search_cpu_medians_s=report.get('sum_case_search_cpu_medians_s'))))
+     return 0 if report['complete'] else 1
+ 
+ 
