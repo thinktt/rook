@@ -116,12 +116,11 @@ Current artifact-specific evidence:
   in [generation pilot](evidence/generation-cpu-pilot-20261018/README.md) and
   [PGO pilot](evidence/pgo-cpu-pilot-20261018/README.md). These are local pilots,
   not complete performance collections or qualified cross-host ratios.
-- The current8c4619a7 profile-01 Callgrind run passes the strict oracle and
-  reports12,027,315,634 simulated instructions. The earlier3660fecf run reported
-  13,607,144,696; changes in code/profile/inlining prevent isolated attribution.
-  Source-line evidence identifies activity as a continuing investigation target.
-  This is instruction simulation, with no PMU instructions/cycles claim.
-  [Profile evidence](evidence/callgrind-eval-kernels-20261018/README.md).
+- Current8d9dddc5 passes the strict profile-01 oracle under Callgrind and
+  independently reconciles11,603,840,314 simulated instructions,3.520946% fewer
+  than previous8c. Source-row attribution includes inlining and supplies no
+  PMU instructions/cycles or native CPU claim.
+  [Current profile evidence](evidence/callgrind-activity-specialization-20261018/README.md).
 
 A complete canonical8c4619a7 local54 CPU collection retains216 normal,
 strict-oracle lifetimes(one excluded warmup and three measured per case).
@@ -166,8 +165,8 @@ parked; no source adoption or PGO benefit is inferred.
 The isolated static-kind activity trial passes134 native tests,10,000 coordinate
 oracle placements and54 strict replays on genericc946104a. Its independently
 reconciled60-lifetime pilot is2.707839% lower in summed medians, with all six
-medians lower and four disjoint observed ranges(profile02/29 overlap). A separate
-own-profile PGO trial is underway; canonical native source remains unchanged.
+medians lower and four disjoint observed ranges(profile02/29 overlap). Its own
+PGO and canonical results are complete above; see decision0007.
 Earlier partial timings below are historical development checkpoints.
 
 The isolated compact relation kernel now passes133 native tests and all54
@@ -370,3 +369,12 @@ The destination-table pilot now reconciles60 native lifetimes and gives only
 0.231190% lower summed medians, with all six observed ranges overlapping and
 profile05 higher. It is parked without PGO/adoption. Canonical8d9dddc5 remains
 the current production cost checkpoint.
+
+The isolated shared evaluation observers now pass134 native tests,64 diagnostic
+operations/3470 cases/58 units,54 strict generic replays and eight interruption
+fixtures. Its only native changes extract existing material/square interpolation
+and expose existing raw shelter components. Generic2c741929 and adapter1f5a0ceb
+retain separate source/build identities. The first external attempt failed a
+missing fixture version header before external execution; the corrected fresh
+attempt and original failure are both retained. These proposals are not yet
+integrated and carry no new performance result.
