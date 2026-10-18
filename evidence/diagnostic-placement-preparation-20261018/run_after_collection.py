@@ -63,6 +63,12 @@ def main():
     native_before = source_snapshot(ROOT)
     if native_before != reference['source_sha256_before']:
         parser.error('native library differs from the declared source closure; retain a new explicit plan')
+    preparation = HERE/plan['adapter_preparation']
+    prepared = json.loads(preparation.read_text())
+    if source_snapshot(ROOT/'diagnostic') != prepared['adapter_source_sha256']:
+        parser.error('adapter source differs from the reviewed preparation')
+    if sha(HERE/prepared['archive']) != prepared['archive_sha256'] or sha(Path(__file__)) != prepared['planned_verifier_sha256']:
+        parser.error('prepared archive or verifier differs from the declared identity')
     output = ROOT/'evidence'/('diagnostic-placement-'+args.label)
     build = ROOT/'evidence'/('diagnostic-placement-build-'+args.label)
     if output.exists() or build.exists(): parser.error('attempt output/build must be absent')
@@ -72,7 +78,8 @@ def main():
     helpers = {0,1,2,3,4,5,8,9,10,11,12,13}
     os.sched_setaffinity(0, os.sched_getaffinity(0) & helpers)
     adapter_before = source_snapshot(ROOT/'diagnostic')
-    dependencies = [Path(__file__), HERE/'plan.json', ROOT/'tools/build.py', ROOT/'tools/archive_build.py',
+    dependencies = [Path(__file__), HERE/'plan.json', preparation, HERE/prepared['archive'],
+                    ROOT/'tools/build.py', ROOT/'tools/archive_build.py',
                     Path('/home/legolas/king-spec/conformance/run.mjs'), terminal,
                     *map(Path,plan['fixtures'])]
     before = {str(p):sha(p) for p in dependencies}

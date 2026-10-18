@@ -229,9 +229,10 @@ adoption is rejected. Both frozen experiments and all attempted samples are
 retained; production native source remains unchanged by them.
 
 
-Cold diagnostic source now prepares nine more existing-native routes (placement
-terms, ordered pawn progress/endings and work ledger). Source formatting/archive
-is complete; compilation and the planned17-unit/843-case regression wait for
+Cold diagnostic source now prepares eleven more existing-native routes (placement
+terms, ordered pawn progress/endings, work ledger, cutoff learning and retained
+results). Source formatting/archive is complete; compilation and the planned
+21-unit/1022-case regression wait for
 the live game CPU collection to terminate. The current accepted diagnostic
 result remains the separate15-operation/510-case frozen artifact. Native
 production source is unchanged. See

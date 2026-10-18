@@ -1,11 +1,12 @@
-# Diagnostic placement/progress/work routes — unverified source preparation
+# Diagnostic placement/progress/work/learning routes — unverified source preparation
 
 The last verified adapter remains93293f8d:15 operations/510 cases. This source
-prepares nine additional mandatory routes using existing native APIs, with no
+prepares eleven additional mandatory routes using existing native APIs, with no
 production search/library changes: clock.workSequence, evaluation.activity,
 evaluation.boardPatterns, evaluation.centralInfluenceBalance,
 evaluation.positionCentralBalance, evaluation.pawnProgress,
-evaluation.pawnCandidates, evaluation.pawnCandidateEnding and evaluation.pawnEnding.
+evaluation.pawnCandidates, evaluation.pawnCandidateEnding, evaluation.pawnEnding,
+search.cutoffMemory and search.rememberedResults.
 No fixture IDs/expected-answer lookup or fixture reads enter adapter runtime.
 
 Decimal work counts avoid floating-point conversion and preserve native unsigned
@@ -15,11 +16,23 @@ candidate membership/uniqueness checks preserve supplied order; path measures
 remain independent while absence and promotion-terminal domains are validated.
 All math and charge-producing decisions call the existing native library.
 
+Learning events enforce the supplied-candidate component domain without adding
+complete chess legality. Initial killer/hint descriptors need not fit a board.
+Remembered-result labels map injectively to opaque native identities and groups;
+the sixteen-group bound spans the entire request, including clears. Native
+policy retains bounds, score-miss distinction, mate mutation and hint endpoints.
+This direct component transport does not resolve the separate uncertified-hint
+composition question in `docs/research/uncertified-hint-completion.md`.
+
 The source was formatted but not compiled or tested while the full12 CPU
 collection runs. The source archive was read back against every adapter file
-hash. `plan.json` binds a planned843-case unchanged external regression across
-18 complete fixture files plus the prior25-case phase/identity selection, and
-17 adapter unit tests. Those are planned counts, not pass claims.
+hash. `plan.json` now binds a planned1022-case unchanged external regression
+across21 complete fixture files plus the prior25-case phase/identity selection,
+and21 adapter unit tests. Those are planned counts, not pass claims.
+The original nine-route source archive, metadata, plan and verifier remain as
+the first unexecuted preparation. `prepared-adapter-v2.tar.gz` and
+`source-preparation-v2.json` bind the eleven-route source and updated verifier;
+the verifier rejects an adapter/archive/verifier mismatch before building.
 
 After the existing collection tool handle37105 is authoritatively terminal,
 `run_after_collection.py` refuses overlapping collection/native processes,

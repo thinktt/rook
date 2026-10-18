@@ -45,9 +45,10 @@ and placement influence builder, with operation-specific charge counts; neither
 fixtures nor expected answers are read at runtime.
 
 
-The current source also prepares nine additional placement, pawn-progress and
-clock-ledger routes. They are uncompiled/unverified while the full12 timing
+The current source also prepares eleven additional placement, pawn-progress,
+clock-ledger, cutoff-learning and remembered-result routes. They are
+uncompiled/unverified while the full12 timing
 collection runs; the15-operation/510-case claim above belongs to the frozen
-93293f8d adapter. The deferred17-unit/843-case verification plan is retained in
+93293f8d adapter. The deferred21-unit/1022-case verification plan is retained in
 `evidence/diagnostic-placement-preparation-20261018/`. Do not count these routes
 as mandatory acceptance until the actual frozen build/results pass.
