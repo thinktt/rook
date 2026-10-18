@@ -1,0 +1,30 @@
+--- /home/legolas/rook2/evidence/complete117-callgrind-preparation-20261018/profile.py
++++ /home/legolas/rook2/evidence/candidate25-callgrind-preparation-20261018-01/profile.py
+@@ -1,4 +1,4 @@
+-"""Future fixed two-case diagnostic simulation. Inert until main/parent launch."""
++"""Fixed two-case candidate25 diagnostic instruction attribution."""
+ from pathlib import Path
+ import argparse,hashlib,json,os,subprocess,sys,tarfile
+ HERE=Path(__file__).resolve().parent
+@@ -8,9 +8,9 @@
+ def write(path,value):
+  with Path(path).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
+ def main():
+- a=argparse.ArgumentParser();a.add_argument('--cpu12-terminal',required=True,type=Path);args=a.parse_args()
+- t=load(args.cpu12_terminal)
+- assert t.get('actual_tool_terminal_observed') is True and t['exit_code']==0 and t['session_id']==PLAN['cpu12_expected_session'] and (t.get('terminal_chunk_id') or t.get('chunk_id'))
++ a=argparse.ArgumentParser();a.add_argument('--cpu54-terminal',required=True,type=Path);args=a.parse_args()
++ t=load(args.cpu54_terminal)
++ assert t['collector']['exit_code']==0 and t['collector']['initial_session_id']==PLAN['cpu54_expected_session'] and t['collector']['terminal_chunk_id']=='31b2cb'
+  assert sorted(os.sched_getaffinity(0))==PLAN['helper_affinity'] and os.environ.get('TMPDIR')=='/home/legolas/rook2-build-tmp'
+  assert not os.environ.get('LLVM_PROFILE_FILE') and not os.environ.get('LD_PRELOAD') and not os.environ.get('LD_LIBRARY_PATH') and not os.environ.get('NODE_OPTIONS')
+  out=Path(PLAN['output']);assert not out.exists()
+@@ -29,7 +29,7 @@
+  tools=[prefix/'bin/valgrind',prefix/'bin/callgrind_annotate',prefix/'libexec/valgrind/callgrind-amd64-linux']
+  tools+=sorted((prefix/'libexec/valgrind').glob('vgpreload*callgrind*'))+sorted((prefix/'libexec/valgrind').glob('vgpreload_core*'))
+  assert len(tools)>=4 and all(p.is_file() for p in tools)
+- for p in tools+[HERE/'profile.py',HERE/'verify.py',HERE/'recheck.mjs',HERE/'plan.json',args.cpu12_terminal,Path(PLAN['node']).resolve()]:inputs[p]=sha(p)
++ for p in tools+[HERE/'profile.py',HERE/'verify.py',HERE/'recheck.mjs',HERE/'plan.json',args.cpu54_terminal,Path(PLAN['node']).resolve()]:inputs[p]=sha(p)
+  before={str(p):digest for p,digest in inputs.items()};out.mkdir()
+  env=dict(os.environ,VALGRIND_LIB=str(prefix/'libexec/valgrind'))
+  commands=[]

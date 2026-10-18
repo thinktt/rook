@@ -1,16 +1,49 @@
 # Remaining qualification work
 
-Current candidate25 projected Boolean source has complete mandatory fixture
-success:117 operations,7673 cases/115 whole files and209 fresh diagnostic units,
-with178 native tests reused by exact source69 equality. Root source112 graph
-is `c33fc447`. Own-PGO51529ceb has its own54-case profile/remerge, fresh strict54
-and eight interruption fixtures/24 searches. Its matched seven-case pilot is
-2.074767% lower than fullbyte79d, all seven medians lower. The same exact image
-passes12-game pre-gate/632 searches, continuity8 and required seed controls,
-independently reconciled. Full54/12 performance qualification, production domain
-review and external full3288 gate remain open. The two-binary candidate25 package
-is prepared for original-hardware benchmarking; see
-[decision0015](decisions/0015-ordinary-projected-bit-checks.md).
+Current candidate25 projected Boolean source passes the complete mandatory
+fixture set: 117 operations, 7673 cases across 115 whole files, and 209 fresh
+diagnostic units. Its 178 native tests are reused by exact source69 equality;
+the root source112 graph is `c33fc447`. Own-PGO `51529ceb` has its own 54-case
+training profile/remerge, fresh strict54 replay and eight interruption fixtures
+covering 24 searches. The same exact image passes the 12-game pre-gate with
+632 searches, continuity8 and the required seed controls, independently
+reconciled. See [decision0015](decisions/0015-ordinary-projected-bit-checks.md).
+
+The immutable two-binary package completed the authorized Bee benchmark round
+trip. The audited Bee standard54 report gives 75.770 seconds in summed median
+search CPU. The exact same production binary now has a complete Vic standard54
+collection: 72.630 seconds search CPU and 73.059178 seconds whole-native CPU,
+with all 216 fresh lifetimes passing and 162 measured samples after 54 excluded
+warmups. All original samples, strict checks and recorder inputs independently
+reconcile. Bee took 4.323% longer in aggregate for this candidate and corpus;
+that observation does not isolate VM overhead or establish a universal conversion.
+See the [Vic report](../evidence/candidate25-vic-standard54-20261018-01/README.md)
+and [audited Bee report](../../spec-issues/v2.5.0/2026-10-18-imp2-candidate25-benchmark-results/README.md).
+
+The correct performance reference is Rust KingRE v1.1.1 generic PGO
+`bf71485c`, whose released 54-case totals are 63.277733 seconds search CPU and
+63.431779 seconds whole-process CPU. The historical GCC/Clang columns in the
+returned Bee CSV are not this reference. Candidate25's Bee search total is
+19.742% above the Rust reference search total, across different measurement
+windows/accounting mechanisms. Its earlier 2.074767% local seven-case improvement
+was measured against our retained fullbyte `79d` production baseline, not
+experiment24. Experiment numbers are not consecutive releases.
+
+The separate audited functional packet passes 88 requests across 22 of 23
+public functional units. The sibling-restoration composition is unavailable,
+not an observed behavioral failure. Those timings include startup, parsing and
+complete diagnostic output; prepared component timings and PMU remain unavailable.
+See the [functional packet](../../spec-issues/v2.5.0/2026-10-18-imp2-candidate25-functional-results/README.md).
+The [coverage crosswalk](../evidence/candidate25-functional-coverage-review-20261018-01/review.md)
+finds that the 22 units exercise six already-passed mandatory operations.
+Existing raw responses verify both child states used by the missing unit, and
+native value-copy tests support parent preservation. They do not record the
+complete parent/child/restored-parent/sibling/restored-parent composition in one
+invocation; that callable coverage gap remains open.
+
+Full54/12 performance qualification, current-candidate 12-game CPU timing,
+production domain review and the external full3288 gate remain open. Complete
+finite fixture success does not establish every admitted production input.
 
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
@@ -36,7 +69,7 @@ Remaining work:
   and required seed controls, plus fresh54 strict/eight interruption24-search
   regression. Independent profile and complete raw checks pass. Preserve exact
   identity when collecting its current costs; another image needs its own gates.
-- Both current CPU collections independently reconcile their full schedules:
+- Both historical own-PGO6a CPU collections independently reconcile their full schedules:
   all54 search cases/216 lifetimes at76.090895s versus63.431779s (raw1.199571),
   and all12 games/48 lifetimes at768.200873s versus644.222971s (raw1.192446).
   These cross-hardware results remain reported-only; further optimization and
@@ -57,6 +90,12 @@ Remaining work:
   capacity10063 under actual production callers, with raw counter
   capacity explicitly scoped. See [numerical crosswalk](../evidence/production-retained117-numerical-crosswalk-20261018-score-context/review.md)
   and [hint gap](research/uncertified-hint-completion.md).
+  A [focused current remembered-result review](../evidence/candidate25-remembered-production-review-20261018-01/review.md)
+  finds no score/depth/window mismatch at the four ordinary store sites: each
+  preserves the original query despite running-window changes. Quiescence has
+  no remembered-result probe/store. Root transformations can produce collapsed
+  windows, so this review does not assume a universal open-window premise or
+  close the remaining capacity induction, collision reachability and hint gap.
 - Prepare exact source/build/artifact/evidence handoff for the external full
   3288-game gate. The owner explicitly assigned that gate off Vic; do not run
   it here. Local12-game success does not claim the external gate passed.

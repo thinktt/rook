@@ -1,0 +1,53 @@
+# Candidate25 functional sibling-restoration coverage review
+
+The unavailable unit is a **callable composition/measurement gap, not an observed behavioral failure**. Current candidate25 evidence verifies both requested parent→child transitions and strong parent-preservation invariants. It does **not** already contain the complete observed parent→child1→restored-parent→child2→restored-parent sequence, so neither the22-unit packet nor the mandatory suite should be relabeled23-unit functional coverage.
+
+The audited [README](/home/legolas/spec-issues/v2.5.0/2026-10-18-imp2-candidate25-functional-results/README.md) and [results](/home/legolas/spec-issues/v2.5.0/2026-10-18-imp2-candidate25-functional-results/results.json) report22/23 units,88 fresh requests PASS (22 excluded warmups,66 measured requests), on exact diagnostic `f1f7f5d9c899ebf3881d4033f437f7780e8f9bcf542d10db14a7f37d804ebb79`. Their unavailable wording correctly concerns the missing delivered callable composition. These are whole diagnostic request costs, not prepared-local loops; the packet expressly disclaims component/reference speed ratios and full measurement qualification.
+
+## Exact missing obligation
+
+[Released workload prose](/home/legolas/king-spec/performance/functional-workloads.md:80) and `functional-workloads.json` require the common start parent, child `h2h4`, actual restored parent, sibling `b1c3`, actual restored parent. Observe all eight public state fields plus `inCheck` at all five states; compute `parentRestored` from both restoration observations. There is no evaluation, retained-score, search, undo-function or shared physical representation requirement. The source evaluation requests deliberately have different evaluation contexts. Copying or recomputation is expressly permitted; [measurement boundaries](/home/legolas/king-spec/performance/functional-workloads.md:151) keep the checkpoint, both transitions and both restoration observations inside the local composition. Initial normalization alone may be separately prepared.
+
+## What current evidence actually establishes
+
+[Candidate25 independent full117 proof](/home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/reconciliation/independent-verification.json), SHA `99e27fbde4773f297145ab258a2ed4a5e6ac6be22cfcf3f1472b2e2a7100ef60`, binds exact native69 graph `d4bb0f948c650f9675b050410a3a4d2811dcc58357ceb2fc1c4f99f21f2fff50`, cold43/full112 graph `c33fc44748780ed24b8f56ddec160ff02e0e7b8a14253fbb76d0f9577eabd7f7`,178 native units and209 diagnostic units, plus all117 operations/7673 original cases/115 whole files and raw expected/actual/exits. Existing native178/strict54/eightwire24 are separately identity-reused and independently rechecked, not fresh executions in this review.
+
+The two exact source cases occur in that run as:
+
+| Source case | Raw ordinal / PID | Observed live states | What remains absent |
+| --- | --- | --- | --- |
+| `evaluation-moves-generated-0` |1673 /564011 |common parent and `h2h4` child, including all9 fields |restoration and sibling observations in this lifetime |
+| `evaluation-moves-generated-16` |1675 /564015 |common parent and `b1c3` child, including all9 fields |restoration and first branch in this lifetime |
+
+[Existing-observation check](existing-observation-check.json) compares the already retained responses to the released parent and corresponding child projections; all match. It records zero restoration observations and does not manufacture a `restoredParents` output. [Raw1673](/home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/diagnostic/raw-cases/001673.stdout) and [raw1675](/home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/diagnostic/raw-cases/001675.stdout) are separate processes. Concatenating those outputs and cloning either parent JSON twice would not establish the missing invocation or its cost.
+
+Native source supplies stronger implementation reasoning than board-only output matching: [Position](/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj/src/position.rs:20) is a value `Copy`/`Eq` aggregate containing board, chronological lists/counts, rule state, all identities, starting units and attack bits. [played_unchecked](/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj/src/position.rs:245) copies `*self`, then mutates only the child; no shared heap/interior mutable position state is present. Thus a real checkpoint assignment restores the entire native value, and projecting its public fields/phase/check again is sufficient for the requested state semantics. That is a source-level ownership argument, **not evidence that a measurement adapter ran the sequence**.
+
+The executed native [test log](/home/legolas/rook2/evidence/ordinary-projected-bits-native-validation-20261018-01/lib-tests.stdout:108) contains `quiet_slot_capture_survivor_order_and_parent_copy` PASS: [test source](/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj/src/position.rs:608) saves the complete native parent, creates a quiet child, asserts parent equality, then creates another child from the same parent. Its position/moves differ; it does not emit the released5-state projection or explicitly reobserve a second restoration. The [movegen test](/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj/src/movegen.rs:1143) enumerates children including the start position, checks legality and unchanged parent board; attack-plane tests separately check immutable parent views. None substitutes for the exact composite output. The rich session undo test at frozen `diagnostic/src/persistent_sessions.rs:609` checks an A/B/A search lifecycle with actual play/force/undo and inherited settings; it is different state/output scope, not this five-state unit.
+
+## Bounded crosswalk of the other22 units
+
+[Operation crosswalk](operation-crosswalk.json) locates every selected source ID in the current mandatory raw ledger. The22 covered units map to six already-passed operations:
+
+| Functional family | Units | Existing complete source operation |
+| --- | ---: | --- |
+| setup/history, promotion capture, Black EP, counter wrap |4 | `position.setupMoveSequence` |
+| generated legal inventories |4 | `search.produceAndOrderCandidates` |
+| null/refresh and opening evaluation |2 | `evaluation.moveSequence` |
+| remembered event lifetimes/bounds |6 | `search.rememberedResults` |
+| influence observations |3 | `evaluation.influence` |
+| three controlled completed-search projections |3 | `search.ordinaryIterations` |
+
+The full mandatory operation passes exceed some functional projections, but they do not establish comparable local timing scope, repetitions or seed-control availability. In particular, the packet's fixed `rnd0` search requests are not independent evidence of a supplied external benchmark-seed0 facility. The [local12 pre-gate](/home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/pregate/independent-raw-reconciliation.json) is separate game/continuity/seed-control coverage and does not fill this optional composition observation.
+
+## Smallest legitimate next step
+
+Prepare an **isolated optional cold composition mode** beside the current diagnostic (for example an explicit CLI flag plus one small module in a new cold-source copy), leaving the delivered `f1f7…` image and candidate25 native46/tools23 unchanged. Do not add a pretend mandatory operation or change production Position/Search/Session. Reuse frozen [sequence_position / advance_with_move](/home/legolas/rook2-work/imp2-candidate25-final117-diagnostic-20261018-01/diagnostic/src/positions.rs:203), [state](/home/legolas/rook2-work/imp2-candidate25-final117-diagnostic-20261018-01/diagnostic/src/positions.rs:90), and native [in_check](/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj/src/movegen.rs:136). Existing `evaluation.moveSequence` at `diagnostic/src/move_evaluation.rs:48` is forward-only and performs unrequested evaluations; it is not a state-only restoration primitive.
+
+Accept only semantic `fen` and `children[].moves` inputs, with eager schema/coordinate checks. Normalize the parent once. Inside each invocation create a real native checkpoint/current value, observe current parent, apply the first branch through native legal moves, observe child, assign current from the checkpoint, **call state+in_check again on current**, repeat for the second branch, and observe the restored current again. Return the actual parent/children/restoredParents and derive `parentRestored` from observed equality; never clone serialized parent observations as restoration evidence. No source-case IDs, expected projections, percentages or evaluator are runtime inputs. Use a generic composition implementation rather than hardcoding these two moves.
+
+A focused regression should execute this exact sequence and compare all9 public fields, while additional state/chronology witnesses ensure a skipped reset is detectable (wrong side, pawn/quiet halfmove difference, ordered lists). A deliberate missing-restoration or corrupted-restoration control must fail the checker. Then compile a separately identified adapter, record native source equality and its actual invocation/raw output/exit, and compare the actual projection with the released expected data **only on the checker side**. Existing production binary need not be rebuilt just to expose cold composition; the new adapter has a new artifact identity and must not be called the unchanged delivered diagnostic.
+
+For immediate completion of the published partial packet, one excluded warmup plus three fresh whole-request lifetimes would match its existing descriptive request scope, with all bytes/exits and overhead retained; it would still not become prepared-loop or full functional-measurement qualification. A prepared-local benchmark is a separate later step: declare/calibrate repetitions, include checkpoint/transition/restore/observation work in each repetition, consume every projection, report setup separately and retain the complete-lifetime guard. The released [checker](/home/legolas/king-spec/performance/check-functional-output.mjs:69) checks projection/declaration agreement, not actual execution or lifetime enforcement. Do not obtain a PASS by populating its before/after fields with stored answers.
+
+No implementation, engine/build/test/profiler/Git action or benchmark occurred in this review. Normal speed is the stated policy; no runtime speed verification is available. All sources/results remain unchanged; new files are confined to this review directory.
