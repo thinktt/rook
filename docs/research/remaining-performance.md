@@ -215,7 +215,7 @@ and production review remain requirements alongside optimization.
     The probe is tied to8c source, not a timing artifact for new specialization.
     See `evidence/null-influence-opportunity-20261018/`.
 
-13. **Destination-table non-pawn generation: validated hypothesis.**
+13. **Destination-table non-pawn generation: measured and parked.**
     Current pieces() repeatedly derives coordinates for each candidate. An
     isolated source uses existing ordered knight destinations and attack rays,
     preserving runtime kind dispatch, occupied-square stops, king-victim
@@ -226,3 +226,9 @@ and production review remain requirements alongside optimization.
     has its own54 pass, explicitly reused. Table loads/slices can offset saved
     coordinate operations; no benefit, PGO result or adoption is claimed.
     See `evidence/generation-rays-preparation-20261018/`.
+
+    The balanced generic60-lifetime pilot independently reconciles14.639909s
+    control versus14.606063s rays,0.231190% lower. Five medians decrease,
+    profile05 increases, and all six sample ranges overlap. Symbols grow
+    1817/1856 bytes and total text3656 bytes. This is insufficient evidence
+    for PGO or adoption; preserve canonical8d source unchanged.

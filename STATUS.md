@@ -365,3 +365,8 @@ full and capped ordered comparisons, and54 strict replays. Generic control
 c946104a is the identical already-validated activity-specialized artifact; its
 prior54 replay is explicitly reused. The prototype is not adopted and has no
 performance claim before its balanced pilot.
+
+The destination-table pilot now reconciles60 native lifetimes and gives only
+0.231190% lower summed medians, with all six observed ranges overlapping and
+profile05 higher. It is parked without PGO/adoption. Canonical8d9dddc5 remains
+the current production cost checkpoint.
