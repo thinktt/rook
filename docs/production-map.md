@@ -21,7 +21,7 @@ agreement is not a proof over every admitted setup or a full gameplay pass.
 | N/R charges, natural4096 polls, captures, terminal work and publication | `work_clock`, `engine`, `timed`, `host`, `session` | External native timing fixtures, active-time native tests, all54 work-post replays and eight literal interruption fixtures. Review every pre/post-capture interrupted ownership boundary. |
 | Persistent game/clock/parameters/seed lifetime and ordinary command meaning | `session`, `clock`, `parameters`, `timing` | Persistent native sequences, literal seed controls, same-artifact focused12/632 plus continuity. Full3288-game gate and admitted command-domain audit remain. |
 | Framing, nonblocking queue/polls, live records, result/fatal exits, PV/score spelling | `wire`, `host`, `output`, `bin/rook2` | Literal process controls, eight wire interruption fixtures, complete all54 and focused replay. Full ordinary protocol requirement review remains. |
-| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozenfab90bb7 passes29 operations/1214 cases across23 complete files plus25 selected cases from two partial files, with25 adapter units, linked to integrated native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
+| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozen0f8c7226 passes33 operations/1262 cases across27 complete files plus25 selected cases from two partial files, with29 adapter units, linked to integrated native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
 | Owned whole-engine cost, repeatability, cross-host calibration and final performance | External measurement tools and frozen build artifacts | Direct wait4 controls, balanced local pilots and a complete54-case local CPU collection; PMU unavailable through disabled self-opens. Final measurement profile, calibration and complete54/12 collections remain separate obligations. |
 
 Production search uses static generic diagnostic/host specialization. Ordinary
@@ -52,6 +52,8 @@ source. It proves those arithmetic ranges without closing score storage or
 uncertified-hint eligibility. Frozen adapterfab90bb7 now verifies fourteen more
 native-backed routes, including ledger, placement/pawn terms, learned/table
 sequences and supplied candidate/priority/capture ordering:25 units and1214 external cases pass.
+The subsequent0f8c7226 expansion adds root randomization/aspiration, quiescence
+capture policy and PV line boundaries:29 units/1262 cases across33 operations.
 That closes the transport subset that was still pending at the scalar review's
 original checkpoint; its immutable source-review receipt remains historical.
 The first1022-case attempt and its12 unsupported ordering failures are retained.

@@ -7,11 +7,12 @@ parsing/serialization uses pinned
 [serde_json](https://docs.rs/serde_json/1.0.154/serde_json/); this dependency is
 outside the ordinary engine crate and is not linked into `rook2`.
 
-The current29 operations cover time schedule/allowance, parameters and output
+The current33 operations cover time schedule/allowance, parameters and output
 scores; position setup/history/identity and phase; influence and relations;
 activity, board patterns, central balances and pawn progress/endings; work
 ledger sequences; selective depth, cutoff memory, retained results and supplied
-candidate ordering, priority-sequence permutation and capture preference.
+candidate ordering, priority-sequence permutation and capture preference;
+root randomization/aspiration, quiescence capture policy and PV line length.
 Other operations fail explicitly until implemented. This
 is not complete mandatory diagnostic acceptance.
 
@@ -35,11 +36,11 @@ exit nonzero with diagnostic stderr and no substitute result.
 The position adapter preserves established raw flags for lower moveSequence and
 normalizes requested flags for setup history. Setup/history admission domains
 remain distinct, and per-type diagnostic limits do not narrow ordinary ingress.
-The current1214-case external result comprises23 complete fixture files plus
-25 unchanged selected cases from two partially supported files. All25 adapter
+The current1262-case external result comprises27 complete fixture files plus
+25 unchanged selected cases from two partially supported files. All29 adapter
 unit tests pass. Frozen adapter SHA256 is
-`fab90bb7c2a7dc6cc16b6dd7dc666537ebabf2d8849784a807545244cacbb7c6`.
-See `evidence/diagnostic-bitplanes-20261018/`; linked native source and all
+`0f8c7226aea4a98b8023943ed840fdc5ce3ffec6e02bbbfd8b0909568c536363`.
+See `evidence/diagnostic-policies-20261018/`; linked native source and all
 declared dependencies remain unchanged. The original25-case selection provenance
 remains in `diagnostic-positions-20261018-02/`.
 

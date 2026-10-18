@@ -18,6 +18,7 @@ mod ledger;
 mod moves;
 mod ordering;
 mod pawn_progress;
+mod policies;
 mod position_terms;
 mod positions;
 mod relations;
@@ -96,6 +97,10 @@ fn schedule(v: &Value) -> Result<Schedule> {
 
 fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     match operation {
+        "search.rootRandomization"
+        | "search.rootAspiration"
+        | "search.quiescenceCapturePolicy"
+        | "output.pvLine" => policies::dispatch(operation, input),
         "ordering.prioritySequence" | "tactics.capturePreferenceOrder" => {
             ordering::dispatch(operation, input)
         }

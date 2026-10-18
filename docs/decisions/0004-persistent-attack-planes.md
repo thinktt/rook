@@ -1,7 +1,8 @@
 # Placement-owned attack planes
 
 Status: adopted in source;133 native tests and25 adapter units/1214 external
-cases pass after integration. Canonical PGO build/timing qualification is pending.
+cases pass after integration. Canonical PGO passes54 replays/eight interruption
+fixtures and its own six-case pilot; final cost qualification remains open.
 Date:2026-10-18. Imp2 owns this decision. The bounded independent critique in
 `evidence/bitplane-preparation-20261018/archive.json` identified the required
 constructor audit and matched storage comparison; it was not an approval gate.
@@ -57,9 +58,13 @@ observation, not a confidence interval or universal noise allowance. Exact
 samples, source/build/profile identities and independent raw reconciliation
 are in `evidence/pgo-bitplanes-cpu-pilot-20261018/`.
 
-This evidence supports source integration and canonical validation. The canonical
-repository will train/build its own PGO artifact at its declared crate path;
-trial timings do not transfer to a different binary hash. Complete54/12 cost
+This evidence supported source integration. The canonical repository trained
+its own54-case profile at its declared crate path and built915f83e4, which passes
+all54 strict replays and eight interruption fixtures/24 searches. Its separately
+reconciled60-lifetime pilot sums14.907624s versus15.388885s baseline1dc996b2,
+ratio0.968726714(3.127329% lower). All six medians are lower; profile04 ranges
+overlap. Trial timings do not transfer to this different binary hash. Canonical
+evidence is in `evidence/production-bitplanes-cpu-pilot-20261018/`. Complete54/12 cost
 qualification, current-artifact focused/continuity/full3288 gameplay, remaining
 mandatory diagnostics, production audit and resource/observer/uncertainty/
 calibration/PMU obligations remain open. A different measured kernel/layout can

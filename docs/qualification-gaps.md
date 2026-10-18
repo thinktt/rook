@@ -6,9 +6,10 @@ literal controls, interruptions and short continuous switching evidence at
 the frozen `5357563` checkpoint. These observations do not close the mission.
 
 - Complete the mandatory external DIAG adapter and its admitted domains.
-  The separate `diagnostic/` crate now implements29 native-backed operations,
+  The separate `diagnostic/` crate now implements33 native-backed operations,
   including placement/pawn terms, work ledger, learned/table sequences and
-  supplied candidate/priority/capture order, with1214 external cases. Every other mandatory operation still needs
+  supplied candidate/priority/capture order, root randomization/aspiration,
+  quiescence capture policy and PV line length, with1262 external cases. Every other mandatory operation still needs
   transport/schema implementation and exact fixture success; native projection
   checks are not replacements for the mandatory adapter.
 - Extend exact composed-search comparisons beyond the ten first-root and nine
@@ -57,11 +58,12 @@ the frozen `5357563` checkpoint. These observations do not close the mission.
 These open items permit substantial local progress while PMU support is
 investigated. No hardware limitation currently blocks engine implementation.
 
-The latest complete local54 collection retains216 normal strict-oracle/native
-lifetimes and all per-case samples; its sum of54 case medians is97.685122s.
-The raw uncalibrated reference planning ratio is1.5400. This changes optimization
-priorities and does not close final comparison or uncertainty requirements.
-That collection belongs to3660fecf. The newer1dc996b2 shared-geometry PGO artifact
+The latest complete local54 collection on canonical915f83e4 retains216 normal
+strict-oracle/native lifetimes and independently reconciles all raw samples.
+Its sum of54 case medians is88.486549s, raw uncalibrated reference ratio1.394988.
+The earlier97.685122s collection belongs to3660fecf. These observations guide
+optimization and do not close final comparison/uncertainty requirements.
+The prior1dc996b2 shared-geometry PGO artifact
 has all54 strict replay and wire-interruption agreement, plus a six-case pilot;
 its complete12-game CPU collection now independently reconciles48 lifetimes/
 2528 searches, summing941.928787s in game CPU medians (raw uncalibrated ratio
@@ -70,7 +72,7 @@ qualification transfers to it. The collection remains reported-only, including
 the disclosed inherited-affinity helper limitation recorded under
 `evidence/production12-cpu-analysis-preparation-20261018/`.
 
-The integrated fresh diagnostic attempt passes25 units and1214 cases across29
+The integrated fresh diagnostic attempt passes29 units and1262 cases across33
 operations. Prior attempts and12 missing-transport failures remain preserved.
 Both matched bitplane variants pass133
 tests and54 replays; their90-lifetime generic pilot favors persistent by2.13%
@@ -78,8 +80,12 @@ over baseline, while local is0.48% higher. Persistent's independently trained
 PGO trial passes54 replays/eight interruption fixtures and its60-lifetime pilot
 is3.21% lower in summed medians. Persistent160/176 source is now integrated and
 passes133 canonical native tests plus the29-operation adapter regression.
-Canonical repository PGO uses its own source/crate profile identity and still
-needs exact binary replay/timing evidence. The compact relation-state lookup
-remains unexecuted. The original CPU collection is terminal,
+Canonical repository PGO915f83e4 uses its own source/crate profile identity,
+passes54 strict replays/eight interruption fixtures and independently reconciles
+its60-lifetime pilot(3.127329% lower summed case medians; profile04 ranges
+overlap). Its complete54 CPU collection independently reconciles216 lifetimes,
+summing88.486549s; this does not close final timing qualification. A compact
+relation-state lookup has a fresh isolated preparation on the integrated
+source, with correctness/build verification pending. The original CPU collection is terminal,
 and all57 verified own lead/client threads are now confined to housekeeping
 CPUs. This later correction does not qualify the prior measurements.

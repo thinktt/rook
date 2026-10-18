@@ -1,8 +1,9 @@
 # Remaining performance investigations
 
 Date: 2026-10-18. Statuses below distinguish adopted experiments from hypotheses; none promises
-a qualified speedup. Full local54 PGO CPU costs total97.685122s versus the published
-63.431779s sum (raw uncalibrated ratio1.5400). Calibration/profile differences
+a qualified speedup. Current canonical915f83e4 full local54 PGO CPU costs total
+88.486549s versus the published63.431779s sum(raw uncalibrated ratio1.394988).
+The earlier3660 collection totaled97.685122s. Calibration/profile differences
 remain unresolved. The current profile-01 simulated total is13.607B Ir;
 activity and influence are prominent after legality reuse and compiler PGO.
 Function attribution changed through inlining, so source-line evidence matters.
@@ -41,18 +42,17 @@ Function attribution changed through inlining, so source-line evidence matters.
    common opponent-zero shortcut and adjusted subtraction on the original byte.
    The generator uses the general formula, never fixture answers. Source/archive
    preparation is complete under `evidence/relation-states-preparation-20261018/`;
-   compilation, the existing exhaustive digit-model oracle, all54 replays and
-   a matched generic CPU pilot await a separate bounded experiment. It has no
+   a fresh isolated preparation now uses the integrated attack-plane source
+   under `evidence/relation-states-bitplanes-preparation-20261018/`. Compilation,
+   the existing exhaustive digit-model oracle, all54 replays and a matched
+   generic CPU pilot proceed as a separate bounded experiment. It has no
    measured benefit yet; two dependent class loads can offset lower footprint.
 
-4. **Placement bitplanes/other representations.** A private four-u64 bit-sliced
-   piece/color encoding could support occupancy and attack masks with32B extra
-   Position payload, rather than twelve full piece bitboards. This is an
-   independently considered alternative, not an adopted representation. All
-   maintenance, projected legality, copy/restoration and other-consumer costs
-   need whole-pipeline measurement. Current evidence does not select it over
-   the mailbox or justify its larger state. First determine the remaining true
-   attack opportunity after inlining and local summaries.
+4. **Placement bitplanes/other representations.** The independently developed
+   four-u64 Piece-tag representation has now passed a matched storage comparison
+   and is adopted under decision0004. The mailbox and chronology retain their
+   other consumers. Item7 records the measured scope and limits; other layouts
+   remain alternatives requiring their own complete maintenance/copy/query cost.
 
 The reported-only full12 collection on1dc996b2 now reconciles48 lifetimes/
 2528 searches, summing941.928787s in game CPU medians (raw uncalibrated
@@ -102,8 +102,11 @@ and production review remain requirements alongside optimization.
    trial14.805304s versus baseline1dc996b2 sum15.296771s, ratio0.967871193.
    Persistent source is integrated after133 native tests and25 adapter units/
    1214 cases; this explicit local strategy is parked. Canonical repository
-   PGO has its own training/build identity and still needs artifact-specific
-   replay/timing validation. No final54/12 qualification follows yet.
+   PGO915f83e4 has its own54-case profile and passes54 replays/eight interruption
+   fixtures. Its own60-lifetime pilot sums14.907624s versus15.388885s baseline,
+   ratio0.968726714(3.127329% lower), with profile04 ranges overlapping. A complete
+   canonical54 CPU collection now independently reconciles216 lifetimes,
+   summing88.486549s. No final54/12 qualification follows yet.
    See `evidence/bitplanes-20261018/` and its exact preparation/source archives.
 
 8. **Counts-guided mailbox Boolean attacks: alternative kernel hypothesis.**

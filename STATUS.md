@@ -9,7 +9,8 @@ learned state and specified root scheduling. Ordinary `Session<false>` excludes
 development tracing; cold JSON is a separate adapter package. Position160/Node176
 now owns exact placement attack planes while retaining copied-child ownership.
 The matched storage experiments and independent PGO trial support this source
-integration; canonical binary validation/timing and final qualification remain.
+integration. Canonical915f83e4 passes54 strict replays, eight interruption
+fixtures and its own six-case timing pilot; final qualification remains.
 
 A generation-local pin summary and necessary check-evasion screen now avoid
 redundant full projection under explicit geometric conditions; king/EP/uncertain
@@ -20,20 +21,25 @@ Shared immutable geometry is now also used by influence and activity. Its
 10,000-position coordinate-oracle check and all54 replays pass; a separate
 six-case generic CPU pilot gives a2.25% sum-of-medians reduction. See
 [decision0003](docs/decisions/0003-shared-evaluation-geometry.md). A separately trained PGO comparison also improves the six-case sum by3.19%.
-The latest production PGO artifact1dc996b2 passes all54 strict replays and eight
-interruption fixtures; the complete54 CPU collection below remains attached to
-the prior3660 artifact. A reproducible generic x86-64 compiler-PGO build is available
+The latest production PGO artifact915f83e4 passes all54 strict replays and eight
+interruption fixtures; its complete54 CPU collection is recorded below.
+A reproducible generic x86-64 compiler-PGO build is available
 through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
 
 - Integrated persistent-bitplane source passes131 native library tests and two
-  development-CLI tests. Adapterfab90bb7 passes25 units and1214 cases/29 operations
+  development-CLI tests. Adapter0f8c7226 passes29 units and1262 cases/33 operations
   against that source. The isolated PGO trialf4a2f8bf passes54 strict replays and
   eight interruption fixtures/24 searches; its independently reconciled60-lifetime
   pilot sums14.805304s versus15.296771s baseline1dc996b2(ratio0.967871193).
-  Canonical repository training/build uses its own source/crate profile identity;
-  trial timings do not transfer to a different binary. See
+  Canonical repository artifact915f83e4 has its own54-case training profile,
+  passes54 strict replays/eight interruption fixtures and independently
+  reconciles60 CPU pilot lifetimes. Its sum of six case medians is14.907624s
+  versus15.388885s baseline1dc996b2(ratio0.968726714,3.127329% lower), with
+  profile04 sample ranges overlapping. Its complete54 CPU collection independently
+  reconciles216 lifetimes and sums88.486549s in case medians. Trial timings do
+  not transfer to a different binary. See
   [decision0004](docs/decisions/0004-persistent-attack-planes.md).
 
 - Previous PGO ordinary artifact `1dc996b2a78854f7138142eff62cbc16cbbbb051ab9f0b8d74ea0b82d6584a89`
@@ -56,9 +62,9 @@ Current artifact-specific evidence:
   with full gameplay qualification false. See
   [focused replay](evidence/focused-games-20261018-first/README.md).
   This observation is not transferred to the newer artifacts.
-- The separate external DIAG adapterfab90bb7 implements29 operations and passes1214
-  cases across23 complete fixture files plus25 unchanged selected cases
-  from two partially supported files. All25 adapter unit tests pass. The first
+- The separate external DIAG adapter0f8c7226 implements33 operations and passes1262
+  cases across27 complete fixture files plus25 unchanged selected cases
+  from two partially supported files. All29 adapter unit tests pass. The first
   expanded attempt and its12 unsupported ordering failures remain retained;
   prior attempts and their source links remain preserved. Other mandatory operations
   remain explicitly unsupported. See [diagnostic scope](diagnostic/README.md).
@@ -76,12 +82,14 @@ Current artifact-specific evidence:
   This is a simulated diagnostic, with no PMU instructions/cycles claim.
   [Profile evidence](evidence/callgrind-pgo-20261018/README.md).
 
-A complete local54 CPU collection now retains216 normal, strict-oracle lifetimes
-(one excluded warmup and three measured per case). Its sum of case medians is
-97.685122s, with all raw receipts independently revalidated. The raw published
-reference sum is63.431779s (uncalibrated planning ratio1.5400); this is not a
-qualified performance pass/fail. See
-[whole-native54 collection](evidence/production54-cpu-20261018-pgo/README.md).
+A complete canonical915f83e4 local54 CPU collection now retains216 normal,
+strict-oracle lifetimes(one excluded warmup and three measured per case).
+All raw receipts reconcile independently; the sum of case medians is88.486549s.
+The published reference sum is63.431779s(raw uncalibrated ratio1.394988).
+The earlier3660 collection summed97.685122s; that sequential historical
+comparison spans multiple changes and is not attack-plane attribution. No
+qualified performance pass/fail follows. See
+[canonical whole-native54 collection](evidence/production54-cpu-bitplanes-20261018/README.md).
 
 A complete12 whole-native CPU collection on artifact1dc996b2 has completed
 48 fresh lifetimes/2528 searches with independent original-byte, normal-exit and
@@ -250,7 +258,10 @@ progress/endings, work ledger, cutoff learning, retained results and supplied
 candidate/priority/capture ordering) now pass25 units/1214 cases in frozenfab90bb7.
 The first1022-case attempt passed1010 and exposed12 missing candidate-order
 transport calls; it remains preserved with its original source/build/report.
-The identical frontend also passes against the integrated persistent source. See
+The identical frontend also passes against the integrated persistent source.
+The subsequent native-backed policy expansion0f8c7226 passes29 units/1262 cases
+across33 operations, adding root randomization/aspiration, quiescence capture
+policy and PV line boundaries. See
 [deferred verification](evidence/diagnostic-placement-preparation-20261018/README.md).
 
 Both matched bitplane variants pass133 native tests and54 strict replays. Their
@@ -260,5 +271,7 @@ higher. The independent raw reconciliation and all samples are retained in
 [matched trial](evidence/bitplanes-20261018/README.md). Persistent advances to a
 separate PGO training/build/regression and pilot, which finds3.21% lower summed
 medians across60 lifetimes. Persistent source is integrated; its canonical root
-PGO artifact remains under validation. No trial result is transferred to final
+PGO artifact915f83e4 also passes54 replays/eight interruption fixtures and its
+own60-lifetime pilot(3.13% lower summed medians; one case's ranges overlap).
+No trial result is transferred to final
 54/12 performance qualification.
