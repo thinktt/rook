@@ -14,22 +14,30 @@ redundant full projection under explicit geometric conditions; king/EP/uncertain
 cases retain projection. The independent advisor's bounded critique was
 incorporated; Imp2 owns the decision. See
 [decision0002](docs/decisions/0002-geometric-legality.md).
-A reproducible generic x86-64 compiler-PGO build is available through the staged
-[build procedure](tools/README.md#staged-compiler-pgo).
+Shared immutable geometry is now also used by influence and activity. Its
+10,000-position coordinate-oracle check and all54 replays pass; a separate
+six-case generic CPU pilot gives a2.25% sum-of-medians reduction. See
+[decision0003](docs/decisions/0003-shared-evaluation-geometry.md). A separately trained PGO comparison also improves the six-case sum by3.19%.
+The latest production PGO artifact1dc996b2 passes all54 strict replays and eight
+interruption fixtures; the complete54 CPU collection below remains attached to
+the prior3660 artifact. A reproducible generic x86-64 compiler-PGO build is available
+through the staged [build procedure](tools/README.md#staged-compiler-pgo).
 
 Current artifact-specific evidence:
 
-- Latest PGO ordinary artifact `3660fecfa0c4a681e6a7152009417199d91706fa9acf0508e073c76427e18438`
+- Latest PGO ordinary artifact `1dc996b2a78854f7138142eff62cbc16cbbbb051ab9f0b8d74ea0b82d6584a89`
   passes all54 strict profiling replays and all eight wire interruption fixtures
   (24 searches). Its compiler profile was trained on54 unchanged ordinary
   replays; raw process identities, source, merge and profile inputs are verified,
   archived and bound to the build. No missing-function warnings were emitted.
-  See [PGO build](evidence/pgo-use-build-20261018/README.md).
+  See [PGO build](evidence/pgo-eval-geometry-use-build-20261018/README.md).
 - The same native source's generic artifact
-  `670b965a29c063e1849eb0d790ba33dfb792fff2a13370b467f1235acf0d66a2`
-  passes all54 strict replays, the eight wire interruption fixtures and130 native
-  unit tests. New tests compare ordered inventories with the old full-projection
-  admission over10,000 constructed setups plus joined-domain witnesses.
+  `e734494836337f86d84fe166ae4952d192f3dc07346d482d5ecbb3a22831260c`
+  passes all54 strict replays and130 native unit tests. Tests compare ordered
+  inventories with full-projection admission over10,000 constructed setups;
+  a separate10,000-placement check compares influence/activity fields and R
+  counts with prior coordinate loops. The newer PGO binary owns its interruption
+  evidence separately.
 - Earlier frozen artifact
   `da82041f29091ed8db54f2cd2ffd0c338da5ae5216cae3caea6130974573e648`
   passes all12 focused games/632 searches, combined with its same-artifact
@@ -201,3 +209,9 @@ component diagnostics does not establish production or gameplay conformance.
 
 These identify the starting inputs, not a claim of a completed package audit.
 Updates must preserve which version supported each experiment or decision.
+
+The diagnostics-only full-evaluation opportunity probe matches all54 replays:
+18,569 of37,094,821 full calls enter at retained age0 (0.050058%, including
+first-root calls). The proposed same-produced-node component cache was rejected
+as the next target; no cache was implemented. An isolated pure material/phase
+input-reuse prototype is being tested instead, without adding node state.

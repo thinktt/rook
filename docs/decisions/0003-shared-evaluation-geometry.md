@@ -41,3 +41,10 @@ attributing that benefit to the production PGO profile. Older PGO artifact3660
 and its54-case CPU collection remain separate baselines. Full gameplay,
 mandatory conformance, calibration and final performance qualification remain
 open; this decision does not select a permanent mutable position layout.
+
+The independent matched-PGO procedure also completed60 strict-oracle lifetimes.
+Its sum of six case medians changed from16.001395s to15.4905955s (ratio0.968078,
+3.19% lower), with every median improving. New production PGO artifact1dc996b2
+passes all54 strict replays and the eight wire interruption fixtures. Keep the
+source decision; full54/12 cost collections under the final qualification
+profile remain separate. The prior3660 full54 collection stays a baseline.

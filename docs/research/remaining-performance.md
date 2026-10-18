@@ -18,9 +18,13 @@ Function attribution changed through inlining, so source-line evidence matters.
    under decision0003; production PGO impact remains to be measured. Position/Node
    layout, copied-child ownership and mutable search state remain unchanged.
 
-2. **Measure repeated full evaluation before adding a cache.** Consider a
-   diagnostics-only count of full evaluations entering with retained age0 as an
-   opportunity estimate. Root initialization is an exception; prove the scope
+2. **Repeated full evaluation: measured and rejected as next cache target.**
+   A diagnostic-only D=true ordinary derivative matches all54 replays and counts
+   18,569 age0 entries out of37,094,821 full evaluations (0.050058%, including
+   first-root calls). Evidence is under `evidence/evaluation-opportunity-20261018/`.
+   That is too small an opportunity for the proposed same-produced-node cache.
+   No cache was implemented. The broader theoretical validity constraints below
+   remain relevant to any different future cache proposal. Root initialization is an exception; prove the scope
    before interpreting it. The existing evaluator shares influence within one
    invocation but local derived state does not survive every scout/full or IIO
    revisit of the same produced node. A pure-component cache could reuse activity,
