@@ -1,116 +1,84 @@
 # Production ownership and qualification map
 
-Status: initial review map, 2026-10-18; not a completed requirement audit.
-The released KingRE v2.5.0 contracts remain authoritative. Each row identifies
-the production owner and existing evidence class, with the remaining obligation.
-A native seam check is not mandatory external DIAG acceptance, and finite replay
-agreement is not a proof over every admitted setup or a full gameplay pass.
+Current retained implementation: candidate43, 2026-10-19. This is an engineering
+review map, not a completed clause-by-clause qualification audit. The released
+KingRE v2.5.0 package remains behavioral authority. The [historical map and
+chronological notes](production-map-history-20261019-01.md) preserve the
+previous document exactly; its earlier unsupported-operation and timing counts
+are historical.
 
-| Contract responsibility | Native owner | Existing evidence and remaining review |
+## Current integrated evidence
+
+The [source-promotion checkpoint](../evidence/influence-bitsliced-sum-qualification-20261019-01/final-state.json)
+binds native/tools graph `e89dcb33`, combined native/tools/diagnostic graph
+`8a49fa28`, ordinary own-PGO image `36251ecf` and diagnostic image `b024c045`.
+The exact isolated tested images are retained; source promotion does not claim
+a separate canonical rebuild. Candidate44 is an isolated, unbuilt construction
+experiment and is not production.
+
+Fresh [mandatory validation](../evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/validation-summary.json)
+passes189 native tests,209 diagnostic tests and7,673 cases across117 operations
+and115 whole fixture files. The ordinary image separately passes all54 strict
+replays, eight interruption fixtures/24 searches, the12-game/632-search pre-gate,
+eight continuity searches,11 seed children and three persistence searches.
+Original raw observations, exact inputs and actual exits were independently
+reconciled. These finite results do not establish every admitted production
+state or complete the external3,288-game gate.
+
+The [complete standard54 report](../evidence/influence-bitsliced-sum-standard54-20261019-01/README.md)
+records216 fresh lifetimes,54 excluded warmups and162 measurements. Summed case
+medians are69.809672s whole-native user+system CPU and69.380000s search CPU.
+The historical Rust-PGO whole-native reference is63.431779s; the raw1.100547
+ratio spans different hardware/windows and is reported only. The [complete current43 whole12 report](../evidence/influence-bitsliced-sum-games12-results-20261019-01/README.md)
+records701.276947s whole-native CPU across48 lifetimes/2,528 searches. Its raw
+historical reference ratio is1.088562; it is reported only. The earlier source-promotion
+JSON intentionally retains its earlier cost-incomplete flags; the later
+[timing state](../evidence/influence-bitsliced-sum-qualification-20261019-01/timing-state-after-standard54.json)
+records standard54 closure, and the [later whole12 state](../evidence/influence-bitsliced-sum-qualification-20261019-01/timing-state-after-games12.json)
+records whole12 closure. Final performance qualification remains open.
+
+## Production responsibilities and remaining work
+
+| Responsibility | Native owner | Evidence and remaining obligation |
 | --- | --- | --- |
-| Placement/chronology, FEN admission, rights/EP, local transition, phase and identities | `position`, `types`, `identity` | Native special-move/ordering/derived-field tests and component projections. Audit every broader ordinary-ingress clause, including exceptional king-victim continuation in `session`. |
-| Geometric attacks and ordered ordinary legal candidates | `attacks`, `movegen`, placement setters/recompute | Integrated persistent planes pass133 native tests; independent tag/query/projection and broad-generation comparisons support the new Boolean kernel. Ordered checker identities and quiescence mailbox reuse remain separate. [Decision0004](decisions/0004-persistent-attack-planes.md) retains matched generic/PGO evidence and limits. [Capacity/source review](decisions/0002-geometric-legality.md#source-review-production-capacity-and-bounded-lists) proves a conservative417-slot ordinary bound within512; the shared-producer oracle does not independently prove pseudo-candidate completeness. |
-| Influence radix, relations and semantic charging | `influence`, `relation_table`, consuming evaluators | Formula-derived compact relations pass exhaustive normalized-code checks; typed-list influence matches mailbox and independent coordinate oracles across10,000 broad placements, including per-type order reversal. Both are integrated with134 native tests and49-operation regression; decisions0005/0006 retain cost/domain evidence. Confirm every consumer owns its charge even when computation is reused; geometric legality must never use evaluation influence. |
-| Frozen root context, material, square values, full/fast retained state and age | `evaluation`, `evaluator` | External native full/fast and composed-root checks, plus ordinary replay anchors. Complete mandatory adapter evaluation operations and review branch ownership through retries/null/IIO. |
-| Pawn structure/retention/collisions, progress/race, subtotals and current penalties | `pawn_structure`, `pawn_terms`, `pawn_progress`, `evaluator` | External native evaluation/lifetime sequences and unit checks. Verify admitted collision/initial-zero behavior and all ordered reuse seams through mandatory DIAG. |
-| Activity/pressure, shelter, positional patterns, endgame adjustments and bounds | `activity`, `shelter`, `positional_terms`, `endgame`, `evaluator` | Native and external component fixtures. Final formula/range/rounding audit and complete evaluation-stage traces remain. |
-| Search history, repetition/draw admission, learned history/killers and TT policy | `history`, `remembered`, `ordinary_policy`, search owners | Native replacement/reset/collision and policy fixtures. Explicit review of uncertified/colliding endpoint hints remains; an empty-source guard is not a completed semantics audit. [Conditional composed-call gap](research/uncertified-hint-completion.md) remains unresolved; direct diagnostic candidates require occupied sources. |
-| Quiescence entry, fast/full selection, tactical production, pruning and reply probes | `quiescence`, `quiescence_policy`, `tactical` | Native recursive tests and composed ordinary anchors. Complete required quiescence traces, broader admitted states and interruption boundaries. Optimistic estimates may precede later own-king rejection. |
-| Ordinary entry, extension/depth policy, null, scout/full retry and IIO tail | `ordinary`, `ordinary_policy`, `engine` | Native policy fixtures, integrated search and all54 replay anchors. Check full IIO/extension/retention composition beyond finite examples and expose mandatory trace operations. |
-| First root iteration, rankings/windows, aspiration/randomization and work scheduling | `first_iteration`, `engine`, `timed`, `timing` | Native root/timed sequences, all54 exact posts and focused games. Complete diagnostic root families and a naturally reached first-root fallback witness. |
-| N/R charges, natural4096 polls, captures, terminal work and publication | `work_clock`, `engine`, `timed`, `host`, `session` | External native timing fixtures, active-time native tests, all54 work-post replays and eight literal interruption fixtures. Review every pre/post-capture interrupted ownership boundary. |
-| Persistent game/clock/parameters/seed lifetime and ordinary command meaning | `session`, `clock`, `parameters`, `timing` | Persistent native sequences, literal seed controls, same-artifact focused12/632 plus continuity. Full3288-game gate and admitted command-domain audit remain. |
-| Framing, nonblocking queue/polls, live records, result/fatal exits, PV/score spelling | `wire`, `host`, `output`, `bin/rook2` | Literal process controls, eight wire interruption fixtures, complete all54 and focused replay. Full ordinary protocol requirement review remains. |
-| External mandatory JSON schemas and operation transport | Separate `diagnostic/` crate calling native owners | Frozenef406db7 passes59 operations/3236 cases across49 complete files plus25 selected cases from two partial files, with49 adapter units, linked to current integrated compact-relation/typed-list/static-kind activity native source. All remaining mandatory operations are explicitly unsupported; admission/schema audit is incomplete. |
-| Owned whole-engine cost, repeatability, cross-host calibration and final performance | External measurement tools and frozen build artifacts | Direct wait4 controls, balanced local pilots and canonical8d9dddc5 complete54 CPU collection:216 strict lifetimes,81.131004s summed case medians. PMU unavailable through disabled self-opens. Final measurement profile, calibration, qualified54/12 costs and current-artifact gameplay remain separate obligations. |
+| Placement, chronological lists, tags/planes and transitions | `position`, `types`, `identity`, `session` | Current structural coherence review covers admitted roots and enumerated owned descendants. Broader legality, history and every ordinary-ingress clause remain separate. |
+| Attack geometry, ordinary candidates and quiescence routes | `attacks`, `movegen`, `tactical`, `quiescence` | Persistent planes and finite generation checks are integrated. Candidate capacity, ordered checker identities and pseudo-candidate completeness retain their individual proof scopes. |
+| Influence profiles, relations and semantic charges | `influence`, `relation_table`, evaluators |43 uses local bit-sliced wrapping accumulation with fixed transpose when sliders exist; the scalar no-slider branch remains. Arithmetic review covers the changed producer. Consumer charge/demand and complete geometric-domain obligations remain distinct. |
+| Root context, full/fast retained evaluation, pawn reuse and endgame bounds | `evaluation`, `evaluator`, pawn/activity/shelter/positional/endgame modules | Complete finite component transport now passes. Source review of all formula ranges, cache collisions, ages and lifecycle composition is not inferred from those fixtures. |
+| History, repetition, learned ordering and remembered results | `history`, `remembered`, `ordinary_policy` | Finite policy and collision checks pass. The conditional uncertified-hint completion gap remains unresolved; no source type, skip or fallback is invented. |
+| Ordinary recursion, extensions, null/scout retries and IIO | `ordinary`, `ordinary_policy`, `engine` | Bounded IIO lifecycle and numeric reviews exist alongside current fixtures. Full admission, extension/TT/age/stop composition and natural reachability beyond controlled witnesses remain open. |
+| Quiescence evaluation, pruning, reply probes and interruption | `quiescence`, `quiescence_policy`, `tactical` | Current mandatory traces pass. Full admitted-state and interrupted ownership review remains separate from finite traces. |
+| Root iterations, aspiration/randomization and work scheduling | `first_iteration`, `engine`, `timed`, `timing`, `work_clock` | Current replay, root and timing fixtures pass. All production poll/capture/publication boundaries require source review at their actual owners. |
+| Persistent game, seed, clock and ordinary command meaning | `session`, `clock`, `parameters`, `timing` | Current pre-gate, continuity and seed evidence pass. Admitted command-domain review and external full-game qualification remain open. |
+| Input framing, queues, live records and process outcomes | `wire`, `host`, `output`, `bin/rook2` | Current strict/interruption controls pass. The bounded current framing/polling source review is accepted; directed boundary/fragment/multi-poll/late-idle runtime witnesses and the full ordinary protocol remain separate. |
+| Mandatory JSON operation admission and transport | Separate `diagnostic/` crate calling native owners |117-operation finite fixture closure is current. It does not close every schema/admission combination or substitute diagnostic results for ordinary production paths. |
+| Owned whole-engine work and final performance | Native synchronous process and external measurement tools | Bounded source audit supports direct wait4 accounting under the declared native profile. Same-hardware qualification, uncertainty/resource validation and external gameplay remain open; PMU is unavailable on Vic. |
 
-Production search uses static generic diagnostic/host specialization. Ordinary
-`Session<false>` has no development counters/traces; `NoHost` is zero-sized when
-not serving live input. Cold JSON is in a separate Cargo package, with a pinned
-public parser dependency, and is not linked into the ordinary executable.
+The [current arithmetic review](../evidence/influence-bitsliced-sum-production-review-20261019-01/review.md)
+proves the changed modulo256 accumulation and transpose, including overlap,
+multiplicity and color separation; it imports existing geometric and admission
+premises. The [coherent permission/descendant review](../evidence/coherent-permission-descendant-review-20261019-01/review.md)
+and [owned-work review](../evidence/native-owned-work-review-20261019-01/review.md)
+have a bounded [parent disposition](../evidence/production-source-audit-parent-review-20261019-01/decision.json).
+Structural coherence means mailbox/list/canonical-tag/plane agreement, not a
+proof of all chess legality or history. Normal Result cleanup is not an RAII
+unwind guard for arbitrary user callbacks. The exact release native profile
+aborts on panic and has no identified engine-owned thread/service route; its
+stdlib/libc/loader/environment and finite observation limits remain explicit.
 
-Current frozen baseline evidence is under
-`evidence/live-wire-build-20261018-frozen/`,
-`evidence/live-wire-check-20261018-frozen/`,
-`evidence/live-interruption-wire-20261018-frozen/`,
-`evidence/focused-games-20261018-first/` and
-`evidence/diagnostic-20261018-first/`. Each experiment/build receipt identifies
-its actual code/artifact; passing observations are not silently transferred to
-a later binary. This map must be expanded to individual normative clauses and
-closed with executed evidence and production review before mission completion.
+The [current framing review](../evidence/production-wire-framing-review-20261019-01/review.md)
+and its [parent disposition](../evidence/production-wire-framing-parent-review-20261019-01/decision.json)
+confirm current-source continuity and single-line poll ownership. They add no
+runtime framing pass; the listed directed schedules remain open.
 
+Earlier scalar, score-capacity, depth, IIO and ingress reviews remain linked in
+the historical map, with their original source/artifact identities and limits.
+The [uncertified-hint composition issue](research/uncertified-hint-completion.md)
+remains a specification question without an established public reachable
+witness. The new uncertainty proposal is an unadopted mathematical draft and
+changes no historical result or execution authority.
 
-A narrower [scalar source review](research/scalar-production-review.md) now
-maps WC-LEDGER arithmetic/reset/snapshot and historical repetition/reversal
-predicates to the exact1dc996b2 source at that review checkpoint, including
-admitted arithmetic bounds. This closes that source-review subset only; remaining scalar DIAG and
-all charging, observation, lifecycle and interruption consumers remain open.
-
-A separate [depth/history range review](research/depth-range-review.md) binds
-ordinary recursive depth/target and learned-history capacity to this same native
-source. It proves those arithmetic ranges without closing score storage or
-uncertified-hint eligibility. Frozen adapterfab90bb7 now verifies fourteen more
-native-backed routes, including ledger, placement/pawn terms, learned/table
-sequences and supplied candidate/priority/capture ordering:25 units and1214 external cases pass.
-The subsequent0f8c7226 expansion adds root randomization/aspiration, quiescence
-capture policy and PV line boundaries:29 units/1262 cases across33 operations.
-The supplied-context expansiona3c94922 adds material balance, capture exception/
-defense/allowance, frontier estimate, king pressure and fast cutoff, producing
-32 units/1475 cases across41 operations with the same native source closure.
-The admission/history/extensions expansionbb872509 passes34 units/1968 cases
-across44 operations. Native production source remains unchanged.
-Five endgame components produce36 units/2215 cases across49 operations in
-137a71e9. The identical frontend then passes against integrated pure kernels
-in ab8b7c3c, with both source closures and all original reports retained.
-That closes the transport subset that was still pending at the scalar review's
-original checkpoint; its immutable source-review receipt remains historical.
-The first1022-case attempt and its12 unsupported ordering failures are retained.
-
-The subsequent four score/weight transports in9c8780c9 pass39 units and2496
-cases across53 operations against unchanged canonical native source. Supplied
-final-score context remains distinct from placement-derived fresh evaluation.
-The full signed32 coefficient conversion and narrower composed central domain
-retain separate admission. This extends finite component transport coverage;
-production context lifecycle and global arithmetic review remain open.
-
-Four selected/full endgame-bound transports bring frozenf8e0b7b0 to57
-operations,2868 cases and42 units, including contradictory intervals and
-strict material eligibility. Current ordinary8c4619a7 separately passes fresh
-focused12/632, continuity4/8 and both public seed controls. Full gameplay and
-qualified performance remain open.
-
-A bounded [current-source score review](../evidence/score-range-review-20261018/score-range-cold-review-20261018-imp2-subagent.md)
-proves selected FULL race/queen endpoint bounds and distinguishes the discarded
-ply63 FAST endpoints. A subsequent [production TT-origin review](../evidence/store-origin-review-20261018/production-tt-origin-cold-proof-20261018-store-origin-review.md), independently reviewed against the current native source, closes normalized TT score capacity at +/-10062 through actual store sites, root windows and table lifetime. It imports the consumed endpoint bounds and valid completed upstream arithmetic; global retained/intermediate bounds remain open. These cold reviews identify no reachable runtime defect.
-
-Current static-kind activity integration passes134 native tests. Canonical
-8d9dddc5 has verified own54-case PGO training and passes54 strict replays/eight
-interruption fixtures. Its fresh60-lifetime pilot independently reconciles
-2.052997% lower summed CPU medians than8c, with profile29 slightly higher and
-overlapping. The unchanged57-operation adapter freshly relinks as e31263ac
-and passes2868 unique cases/42 units against this same native source. Complete
-cost and current-artifact gameplay are separate from these observations.
-
-The linked [production score-capacity review](research/production-score-capacity.md)
-connects the bounded endpoint, retained producer, raw search-intermediate and
-TT/window proofs. This closes the stated numeric premises under admitted
-position/root invariants, without closing full lifecycle or source-global audit.
-
-Fresh8d9dddc5 full54 cost now independently reconciles216 normal strict
-lifetimes:81.131004s summed medians,0.852305% below the previous81.828432s.
-There are41 lower and13 higher case medians. The raw uncalibrated reference
-ratio1.279027725 and maximum finite spread2.398788% do not close qualification.
-
-A bounded [current40 IIO lifecycle review](../evidence/production-iio-lifecycle-review-20261019-01/review.md),
-independently checked at the phase/ordering/main-loop boundaries, maps the
-released production initial/tail phases, fresh-versus-accumulated extensions,
-stable suffix promotion, retained child/scout retry, parentPV and Result history
-restoration. No concrete reachable discrepancy was identified in that subset.
-It supplies a source argument beyond finite117 fixtures; it does not close the
-whole ordinary domain, every extension/TT/age/stop state, arbitrary Host panic
-unwind, natural reachability of the controlled tail witness or the known
-uncertified-hint gap. Parent scope is explicit in parent-review.json; no new
-runtime or tests were executed for this audit. Frozen40 native72 graph216c8f51
-and ordinaryc3166899 retain their separate existing artifact evidence.
-
-The bounded [ingress review](../evidence/production-ingress-transition-review-20261019-01/review.md) maps setup counters, actual EP victims, active chronology and the exact king-victim continuation. Its separate [public-process closure](../evidence/production-ingress-transition-review-20261019-01/public-process-closure.json) observes current40 normal CLI exit1 with complete empty stdout/stderr after all61 command bytes, while stdin remains open. This one normative exceptional witness does not qualify other kingless states or the complete parser.
+Before completion, expand this map to individual normative clauses and close
+each with evidence of matching scope. Final performance qualification and the
+external3,288-game functional gate are still required. Intermediate fixture
+passes and speedups are progress rather than mission completion.

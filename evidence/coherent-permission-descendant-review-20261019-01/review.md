@@ -1,0 +1,70 @@
+# Current43 coherent permission and descendant closure
+
+**Finding:** for the current owned search routes, structural mailbox/list/attack-plane coherence is inductive from successful root validation through every actual child constructor. No current call site was found that can send an unvalidated caller-owned Position to the private producer with permission true. This closes the *named production-call coherence premise* imported by the43 arithmetic review, subject to safe exclusive ownership and normal completed transitions. It does not prove all chess legality, move-list completeness, legal-history acceptance, or panic recovery.
+
+Exact source72 graph is `e89dcb3315e4d8aaa5089ec445d0a7d0bda7f0928001c502c6343899a5195aa5`. Seventeen small current-root source files were hashed and byte-bound to the exact43 tree and closed ownPGO49-file before/after map (input-bindings.json). The entire49 map is copied from that immutable receipt; no large artifact/archive/binary/profile was hashed. This was source-only during whole12 CPU collection89321, never another native run.
+
+## Predicate and root base
+
+Let C(P) mean: every nonempty mailbox Piece is a canonical color/kind tag; grouped lists/counts name every occupied square exactly once with the same tag; every active list square lies0..63; unused list tails are NO_SQUARE; the maintained four planes encode exactly those64 mailbox tags. This is exactly the representation required by Influence::build_coherent (`influence.rs:39–43`). It does **not** require that the side not to move is safe, a legal history, an effective EP victim, or rights that currently permit a castle. Influence is placement-only and includes pinned/occupied targets (released evaluation-relations.md46–80).
+
+`Position::validate` (`position.rs:431–481`) first bounds per-color population≤16, pawns≤8 and one king, then reconstructs a fresh canonical board from the grouped lists, rejects duplicates/out-of-range squares and pawns on end ranks, checks unused tails and exact mailbox equality, and independently decodes planes against mailbox (`attacks.rs:148–155`). Thus a returned Ok directly implies C, including rejection of high-bit raw aliases. It additionally checks fingerprints/start/flag representation; those do not weaken C. This argument needs success⇒C, not a claim that every malformed public input reaches a normal Err instead of another failure.
+
+Only two non-test bind sites exist: fixed/seeded root `ordinary.rs:573` and actual timed root `timed.rs:518`. Both wrappers clear permission before entering their body; the bind assigns precisely validate().is_ok() (`engine.rs:121–131`). They then prepare that same by-value Position, with Node::root copying it and changing only Retained (`quiescence.rs:138–158`; evaluator.rs38–45). No caller-supplied Node is substituted after the check. Failed validation keeps the old scalar route for that entire search; it does not grant speculative permission to later children.
+
+## Primitive transition induction
+
+For each *completed admitted structural transition*, C(parent) supplies the actual source/list member and any actual victim member. The transition's needed preconditions are source-side nonempty; distinct in-board source/destination; empty target or opposing nonking victim; and appropriate special-square/type geometry. These local facts are established by the generators below; proving that every such move is king-safe is stronger than required here.
+
+`played_unchecked` copies the whole Position then applies the move (`position.rs:251–254`). `set_square` reads the actual old mailbox Piece and updates planes before storing the same new Piece (`231–247`). For each square/plane bit, `replace` XORs old_tag XOR new_tag at that square (`attacks.rs:139–144`): from old agreement, resulting bit is old XOR old XOR new=new. All other squares/bits are unchanged. Canonical inputs produce canonical outputs. XOR fingerprints and per-pawn keys use the same old/new pair. Starting occupancy subtracts the credit actually present and adds the new credit; all board placements have total credit≤32 (14 qualifying back-rank squares×2 plus4 central home-pawn squares), so the update cannot underflow/overflow from a coherent board. These derived facts are ancillary; C itself needs the plane/mailbox equality.
+
+- **Ordinary quiet/capture:** actual opposite-color victim, if any, is removed from its matching group and board first; mover's existing list coordinate changes from F to T; board F becomes empty and T receives the same canonical mover (`275–301,314–321`). Removing the opposing group cannot invalidate the mover's group offsets. `remove_ordered` shifts its own suffix, writes one sentinel and decrements exactly that kind count (`201–217`). Unique placement and list chronology are preserved.
+- **Promotion, including capture:** after any opposing victim removal, remove the pawn from its group, append the canonical Q/R/B/N tag to the end of that kind group, then replace F/T (`302–321`). Removing the pawn leaves capacity≤15 before append, even when the parent has16 pieces; own total stays constant, pawns decrease, kings stay unchanged. `append_ordered` shifts the group suffix and increments only its kind count (`219–227`). No transient list/mailbox mismatch is exposed to Influence between these straight-line updates.
+- **EP, including admitted nonpawn victim:** F,T and behind are distinct; T is empty; behind holds an actual opposite nonking tag. Removal uses that tag's real group, not an assumed pawn; mover is the actual source pawn (`282–300,314–321`). Three-square updates preserve C. EP target ranks3/6 keep pawn destinations interior. An absent/same-color/king victim is never emitted by these search generators.
+- **Castle:** generator establishes actual home king/rook and distinct empty king/rook destinations. The king uses the ordinary list update, then the rook's matching list entry moves and both rook squares use set_square (`322–334`). No invented rook/tag or occupied-target overwrite is admitted.
+- **Null:** `null_child` copies all placement/list/count/plane/key/start fields unchanged; it only flips side, clears EP and wraps halfmove (`354–359`). Node.null_child only additionally advances retained age (`evaluator.rs:93–100`). Null may not be legal chess, but C is identical.
+
+Ordinary/promotion/EP/castle steps preserve the population/king/pawn-end-rank conditions too. Rights only lose bits, newly retained double-push EP is an empty intermediate square, and clocks wrap as specified (`335–351`). It is unnecessary to infer C from successful test runs or to run validate at every child.
+
+## Why actual move sources satisfy the structural preconditions
+
+`movegen::pawns/pawn_destination` uses actual source pawn lists, bounded offset destinations, empty pushes (both squares for double pushes), and opposing nonking captures. Every end-rank arrival is encoded as one of Q/R/B/N promotions (`movegen.rs:486–562`). `pieces` uses actual typed source lists and offsets/rays, stops on own/king occupants, and emits only distinct empty or opposite nonking destinations (`565–604`). These facts hold independently of correctness/completeness of the later king-safety filter.
+
+EP prefix verifies empty T, in-board behind, opposing nonempty nonking victim and actual own pawn at an adjacent source (`385–417`). It expressly permits the broader joined nonpawn victim. Castle requires actual home king, actual same-color rook and path/destination emptiness (`420–479`). Thus unsupported retained rights cannot fabricate a castle. The special king-victim ingress is not this generator: Session sets its fatal marker and prepare_go returns before search (`session.rs:243–260,436–438`); the updater also asserts against ordinary king removal. This is a source separation argument, not a rerun of the already closed public process witness.
+
+Q noncheck tactical generation is pseudo-legal for king safety but structurally valid: EP has the same actual-source/victim/empty-target checks, normal captures exclude own/king victims, promotions are canonical queen promotions, and quiet moves land on empty bounded destinations (`tactical.rs:28–159`). Its special quiet checking-pawn prefix requires both an in-board source behind the target and the enemy king one forward diagonal beyond it, so its ordinary pawn target cannot be an end rank. The ordinary pawn loop uses promotion kind on end-rank arrivals. A prepared Q child used for reply counting before later own-king rejection is therefore coherent even if chess-unsafe; later recursion additionally screens king safety (`quiescence.rs:383–443`). Checked Q uses the ordinary legal generator. Completeness and perfect legality of these generators are not claimed by this C proof.
+
+## Call-site closure, siblings, retries and IIO
+
+The current true-path production callers are exhausted by this list:
+
+| Owner | Position source and preservation |
+| --- | --- |
+| Root preparation | Same validated Position copied into Node::root; local None scratch (`quiescence.rs:147–158`). |
+| Fixed/seeded root children | Original generated root moves; Node.child (`ordinary.rs:576–615`). |
+| Timed root/retry | ActualEffects indexes the immutable initial generated list and constructs one actual child; retry reuses that same Position (`timed.rs:609–631`). |
+| Ordinary null | Node.null_child (`ordinary.rs:837–854`). |
+| Ordinary checking probe/main/scout/retry | Candidate comes from current node's generated legal inventory; actual Node.child or same completed child (`865–885,912–931,1006–1066`). |
+| Initial/tail/multipass IIO | Same candidate inventory permuted only, Node.child at p+1 (`1139–1175`). |
+| Q prepared or direct child | Current tactical/legal inventory; completed prepared child or Node.child (`quiescence.rs:408–465`). |
+| FULL/FAST/selection | Read current Position; only Retained/evaluation/search statistics change. No assignment to an actual node Position. |
+
+All recursion uses child-owned copies, not parent unmake. Siblings therefore start from the untouched coherent parent, and returning/stopping a child cannot partially mutate that parent. Refreshed scout retries keep the same child Position and only retain newly produced P/G/age. IIO permutations move existing complete Move descriptors; they do not synthesize instructions. History push/pop reads identities and tracks path without writing Position.
+
+A remembered hint enters `priority` only as an endpoint-matching score for each already generated candidate (`ordinary_policy.rs:497–508`); `tactical::order_by` merely permutes those descriptors (`313–337`). No hint is passed straight to Node.child. Stale/colliding metadata can change search order, not invalidate this structural move-source closure. This does not resolve the separate hint-completion semantic obligation.
+
+The counts-only hypothetical `quiescence_policy::allowance` Position is intentionally incoherent after counts decrement (`88–103`), but goes only to RootContext.material; it never enters a Node or private Influence builder. Projected AttackBits/mailboxes used for safety are likewise separate query values, not replacement semantic Positions. Hence the theorem is about actual positions passed to true map construction, not every temporary named Position in search.
+
+## Public/custom boundaries and cleanup limit
+
+New Search starts false; map_host always stores false. Public prepare_root, begin_sequence, continue_subtree and observed subtree clear before accepting caller-owned state or assertions (`engine.rs:65,79–131`; quiescence.rs133–218). FirstIteration uses those public false paths. Public Evaluator ensure/select/observed selection explicitly pass false; full consumes its explicit map. In both trusted and untrusted ensure, Some(map) is returned before any construction branch, preserving custom bytes and the lazy fill-event boundary (`evaluator.rs:306–335,556–617`). Thus externally mutable public Node/Position/Session.states or custom maps do not independently attest permission.
+
+The owned root APIs hold &mut Search and local copied Positions throughout; safe callbacks receive scores/records/commands, not mutable Nodes or permission access. Host command variants do not include board/root mutation (`host.rs`; timed.rs400–458). Outside unsafe aliasing/reentrant memory corruption, callers cannot alter the owned placement while that borrow is live. Public field mutation between calls is revalidated or enters a false path.
+
+Normal Ok/Err returns clear permission in fixed/timed outer wrappers (`ordinary.rs:550–560`; timed.rs490–501), including stop/abort/host/resource errors. **These clears are not RAII unwind guards.** In an unwind-enabled library, a panic in run_seeded_iterations's user observe_raw callback (`ordinary.rs:618`) can bypass the post-call clear, leaving the private bool true. This is a concrete limit on the stronger assertion “flag is false after every caught panic,” not a foreign true-build witness: every public position-taking re-entry clears/revalidates, public Evaluator calls force false, and map_host resets. Default production panic=abort also prevents a resumed post-panic search. No general panic recovery claim is made or needed for the successful-call C induction. An actual newly exposed unchecked true entry would reopen it.
+
+## Disposition
+
+The imported43 premise can be narrowed from an unexplained trust assumption to this source-level induction over the enumerated root and descendant owners. Remaining assumptions are ordinary Rust safe exclusive ownership, the stated generated structural transition facts and completed operations; full chess/legal/history/search/protocol qualification is separate. No coherent43 descendant counterexample or source repair is identified. No finite tests were used to prove arbitrary-domain coherence, and no test/engine was run.
+
+Only this evidence directory was written. Light source/text and small source hashes used housekeeping0–5,8–13 during the parent measurement; no large archive/image/profile hash, runtime/build/test/profiler/binutils/Git/Herdr or source mutation occurred.

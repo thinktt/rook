@@ -1,0 +1,29 @@
+# Draft uncertainty and bounded followup policy — not adopted
+
+This is a mathematical proposal for a future, freshly frozen comparison, not a decision about any existing observation. It supplies neither execution authority nor a complete qualified measurement profile. Current three-repetition observations remain reported-only. It changes neither the 1.10 aggregate / 1.25 individual CPU-cost limits nor behavioral requirements. The released policy explicitly leaves uncertainty, repeatability and followup choices unset [acceptance-policy.md:13–32,86–93; owner-choices.md:30–47]. No external reference execution or full3288-game authority follows.
+
+## Proposed estimand and fixed schedule
+
+Freeze one exact candidate and the owner-selected exact reference, the original54 search cases and12 whole-game units, and a compatible same-hardware whole-owned-lifetime user+system CPU profile. For uncertainty, propose the fixed lower population median `theta = inf{x: F(x)>=1/2}` of each artifact/unit's measured CPU distribution under that profile. This interpretation of the underlying estimand needs owner approval; the released finite-sample ratio remains reported alongside it. It does not estimate mean CPU, a median of total CPU, unmeasured gameplay or a cross-hardware conversion.
+
+There are132 median parameters:66 units times2 artifacts. Initially retain one excluded warmup and13 measured fresh lifetimes per parameter. For each parameter sort measured observations and use the closed interval `[X_(1), X_(13)]`. Compute all unit and collection ratio bounds below. A collection is complete only with every required unit, full original output assertions, actual native exits and valid accounting.
+
+If and only if a complete valid collection is performance-inconclusive, perform its one predeclared followup: one further retained excluded warmup and six measured fresh lifetimes for *every unit of that collection, for both artifacts*. Pool its original13 and new6 measured samples, and use `[X_(2), X_(18)]` of19. No selective unit retry, intermediate14–18 looks, second followup, replacement of slow samples, candidate switching or favorable stopping is allowed. A collection already classified at its first look is not retested under this rule. All raw observations, warmups and failed/incomplete attempts remain visible. This proposal uses a fresh warmup at each executed stage; the 2,640-lifetime single-warmup alternative is not selected.
+
+Predeclare the exact stored unit order and balanced artifact order within fixed repetition blocks, including the followup order. Neither randomization nor alternation proves iid sampling. Warmups are excluded by stage/index before observing their values; no discretionary warmup extension is allowed. Fresh processes preserve each game's specified internal persistence and natural seed acquisition.
+
+## Ratio intervals and disposition
+
+Write each candidate median interval `[LC_i, UC_i]` and reference interval `[LR_i, UR_i]`. Whole-lifetime CPU is nonnegative, and resolved reference lower endpoints must be strictly positive. Then each unit ratio lies in `[LC_i/UR_i, UC_i/LR_i]`, and each separate collection ratio lies in `[sum(LC_i)/sum(UR_i), sum(UC_i)/sum(LR_i)]`. Equal unit multiplicity and all original units are retained. No extra probability union is needed for these deterministic consequences of joint median coverage. There are66 individual and2 aggregate constraints, not an extra68 independent confidence constructions.
+
+For a *valid* collection, performance-pass requires its aggregate upper bound <=1.10 and every unit upper bound <=1.25. Performance-fail requires its aggregate lower bound >1.10 or any unit lower bound >1.25. Otherwise it is inconclusive, including after the sole followup. Both collections must pass for an overall performance-pass; neither compensates for the other. Equality is admitted at the limit. Use exact ratios of recorded CPU units or conservative outward rounding, not a rounded display to decide a boundary. Report the sample-median ratios and target1.00 separately.
+
+A zero/unresolved reference denominator cannot yield a finite upper ratio: retain an unavailable/unbounded interval and resolve measurement validity; never substitute a zero-cost ratio. Behavior mismatch and measurement-invalid/incomplete outcomes remain separate from the performance interval. A failed assertion is not an outlier. A resource cutoff does not license replacement or conditioning the target distribution on completed fast runs.
+
+## What the mathematical guarantee does and does not say
+
+Under the stated within-parameter iid/stationarity assumptions, the simultaneous two-look median coverage is at least95.770263671875%; the proof is in math-proof.md. Cross-unit, cross-artifact and cross-look independence is not required. The result is an unconditional repeated-experiment guarantee for this fixed family; it is not a posterior probability of a pass, conditional95% coverage among followup-selected collections, or coverage across arbitrarily many screened candidates.
+
+These intervals are deliberately conservative extreme-order bounds, not a precision guarantee. Followup bounds need not nest initial bounds and can remain wide;19 samples do not guarantee a decision near either limit. Second-extreme endpoints use all19 observations in a predeclared order-statistic rule: they do not erase the two extremes from raw evidence or dispersion reporting. There is no empirical noise allowance. Slow observations can widen bounds without automatically proving a regression.
+
+The unproved assumptions and remaining owner decisions are explicit in owner-choices-needed.md. In particular, a quiet core, renewed warmups and thirteen repeats do not establish a stationary iid distribution. No claim is made that current collector accounting, timer resolution or environmental controls already validate this proposal.

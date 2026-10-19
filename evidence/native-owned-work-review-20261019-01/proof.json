@@ -1,0 +1,57 @@
+{
+  "complete": true,
+  "scope": "Read-only source/accounting ownership audit, no runtime or platform/stdlib proof",
+  "native_source_root": "/home/legolas/rook2-work/imp2-influence-bitsliced-sum-20261019-01",
+  "native_source_files_hashed": 49,
+  "source72_graph": "e89dcb3315e4d8aaa5089ec445d0a7d0bda7f0928001c502c6343899a5195aa5",
+  "Cargo_dependencies": {},
+  "Cargo_lock_packages": [
+    "rook2@0.1.0"
+  ],
+  "build_rs_absent": true,
+  "release_panic": "abort",
+  "artifact_identity_from_closed_receipt_only": "36251ecf12cfdc9437c9bfc5b7a571c1992471bee611cab024fc692ac79e91b2",
+  "ELF_rehashed_or_inspected": false,
+  "profile_mode": "profile-use",
+  "compiler_flags_from_receipt": [
+    "-C",
+    "target-cpu=x86-64",
+    "-C",
+    "profile-use=/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-training-20261019-01/merged.profdata",
+    "-C",
+    "llvm-args=-pgo-warn-missing-function"
+  ],
+  "explicit_own_native_thread_or_subprocess_creation_route_found": false,
+  "normal_entry": "src/bin/rook2.rs main->run->Session<false>::go_live<WireHost>->run_work_timed->ordinary/Q/evaluator",
+  "production_FFI": [
+    "dup",
+    "fcntl",
+    "poll"
+  ],
+  "production_custom_Drop": [
+    "wire::Input restores descriptor flags; File standard destructor owns close"
+  ],
+  "test_only_false_positives": [
+    "evaluator::COHERENT_BUILDS thread_local",
+    "movegen::FORCE_PROJECTION thread_local",
+    "post_lifecycle tests::Tracked Drop"
+  ],
+  "other_false_positives": [
+    "host::Command is a protocol enum, not std::process::Command",
+    "Vec/PV clone calls are value copies, not OS clone",
+    "rook2-dev explicit process::exit belongs to a different binary"
+  ],
+  "runtime_proc_scans_or_observations_here": 0,
+  "parent_reported_point_observation": "9b60af/0, four processes/fourteen tasks; not independently reobserved",
+  "continuous_descendant_monitoring_proven": false,
+  "no_runtime_receipt_modified": true,
+  "current_measurement_data_read": false,
+  "conclusion": "Known single-process/single-thread premise is supported by exact normal native source under standard runtime/platform/environment assumptions; wait4 is not promoted to arbitrary descendant-complete ownership or qualification proof.",
+  "remaining_limits": [
+    "stdlib/platform/dynamic-loader implementation not audited",
+    "interposition/sanitizer/runtime changes require separate review; collectors record selected environment but do not themselves prohibit every injection",
+    "one early task/affinity snapshot and finite boundary checks cannot exclude a later short-lived/escaped worker",
+    "library consumers supplying arbitrary custom Host/observers are outside the exact ordinary WireHost profile",
+    "child wait4 counters include small preexec child prefix, not Python/Node parent CPU or unrelated/asynchronous kernel work"
+  ]
+}

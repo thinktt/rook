@@ -1,0 +1,19 @@
+INERT experiment44 generic compiler/focused preparation only.
+
+run.py minimally adapts the accepted43 parent-review recipe: same root tools/build.py generic x86-64 release4-job build, source snapshot verification, immutable0555 exact image, archive_build.py source72 archive, and separately selected11 frozen focused tests. The new44 freeze has a different schema; the helper reads its accepted source map/graph without treating historical build_authorized_now=false as runtime authority. plan.json binds that exact source-freeze and source72graph260fed7a4120863e9046b54e3c30e36d575d542af4e35127983421d56b12c7ed. Only the2 changed source files and small closed metadata were read/hashed here. No source/native/tool/ELF tree was recopied or scanned.
+
+The closed43 generic receipt supplies exact compiler/toolchain hashes, mode, target,4 jobs and rust_flags. Future build must match those fields; Cargo profile/config and tools23 are covered by the exact72 source map and actual source/config checks. The default remains generic x86-64/O3/thin LTO/CGU1/panic-abort/debug1, not PGO. The nested actual child runner is AST-identical to the accepted method; full helper-adaptation.patch exposes namespace/schema/guard changes. No actual output identity is known: image/receipt/archive/focused hashes remain null.
+
+All launch flags are false; execution-clearance.json is absent. Before ANY runtime or output directory creation, parent must preserve/review these inert bytes, bind CLOSED current43 whole12 collector and independent proof+standard actual-terminal pairs, then grant an explicit mode-specific matching plan/helper clearance. Both prerequisite path/hash pairs remain null. The collector proof must include legacy games12.exit_code0 and a nonempty actual_terminal_chunk equal to the standard observed terminal. Independent proof must be complete with failures[], exact native36251ecf,48 lifetimes and2528 searches. Parent has identified eventual collector-tool-terminal.json/collector-terminals.json and reconciliation/result.json/independent-tool-terminal.json under the43 games12 preparation; those live/future files were NOT opened or pinned here. No flag alone substitutes for actual proof/terminal checks.
+
+Admit build only first. A separately bound completed generic backend acceptance+actual terminal must allow_focused_validation and match the exact frozen generic image before focused Cargo can execute. Thus generic emitted-mechanism review MUST precede focused execution/timing; source admission is not runtime authority. Identical/absent copy-removal mechanism parks44 without tests/timing. Focus remains the same11 test names,187 library declarations (186 filtered per focused test),2 dev unselected,189 total; no full suite or new tests are implied. No timing collector, own-PGO or gameplay work exists here.
+
+Future parent commands, only after reviewed exact activation:
+
+```sh
+taskset -c 0-5,8-13 env PATH=/usr/bin:/bin TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/influence-direct-fill-compiler-preparation-20261019-01/run.py build
+```
+
+Observe/record its actual outer terminal. After successful frozen-image backend review and separate focused activation, use the same command with focused. They are never automatically chained. Output dirs will be influence-direct-fill-generic-build[-execution]-20261019-01 and influence-direct-fill-focused-native-check-20261019-01. Build result includes actual child PIDs/returns and raw stdout/stderr; parent must record the actual outer tool terminal, never infer it from result files.
+
+Preparation Python AST and source-text checks only; no helper import/execution, Rust parse, compiler/version/build/test/engine/binutils/profile/archive/Git. All future paths/hashes remain null and all actual12 closure bindings are deferred. Stop closed for root review; no runtime authority now.

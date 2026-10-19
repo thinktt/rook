@@ -1,0 +1,25 @@
+# Current43 production wire framing review
+
+No new admitted-domain framing or queue defect was found. This bounded source review confirms continuity with the closed111 wire review; it is not a new runtime pass or universal protocol proof. No engine, diagnostic, library test, process observation or live collector output was used.
+
+The current root copies of seven reviewed native files match the frozen43 source72 manifest and trial source, recorded in source-proof.json. The entire `src/wire.rs` and actual `WireHost::command` body are byte-identical to frozen111. The earlier ordinary-wire-production-review already covered framing, EOF and one-command polling; ingress-transition concerns numeric/admission state transitions, and the IIO review concerns recursive search ownership. Their findings are not reopened or relabeled as current artifact passes.
+
+## Authority and exact framing
+
+Released `ordinary-xboard-wire.md:23–45` requires ASCII, space/tab-separated tokens, LF/CRLF, at most40 tokens and1023 total bytes including the terminator, immediate availability of a completed record, and silent idle EOF/quit. Its malformed-record exclusions include NUL, non-ASCII, embedded CR, overlength and unterminated final records. Lines151–165 require FIFO dispatch, at most one complete available line per work poll, and handling lines after the final poll as idle input. `interrupted-sessions.md:3–8` fixes polls at4096 charged search units; its controlled diagnostic queue at42–68 is not a transport implementation requirement.
+
+`wire.rs:68–110` first searches the unconsumed suffix for LF. It checks that record's `end+1 <=1023` before stripping one final CR, then rejects invalid bytes and more than40 space/tab tokens. Thus1022 payload bytes+LF and1021+CRLF fit; a valid earlier record is not rejected because later records share its4096-byte read. A completed record returns immediately at85–86, without another read or idle poll. Blank records return a real empty string.
+
+Without LF, a suffix of1023 bytes is already too long even before a future terminator; shorter partial input remains buffered. WouldBlock returns None, Interrupted retries, and an eventual LF completes the retained prefix. EOF returns complete buffered records first; once no LF remains, an empty suffix returns None, while a nonempty final suffix errors. EOF never becomes Finish. Unsupported/malformed input has no promised permissive parity; EOF/quit during search is expressly excluded as a substitute for controls.
+
+## Queue ownership and visibility
+
+There is one Input in the actual CLI (`bin/rook2.rs:80–85`). During synchronous `Session::go_live`, WireHost borrows that same Input at106–114; no reader thread, second queue or competing native dispatch is introduced. `Input::new:51–64` sets O_NONBLOCK for the descriptor lifetime. Idle `line:113–131` waits with poll only after try_line has exhausted currently available data. Drop restores shared open-file flags at134–138. This does not establish guarantees for arbitrary library callers sharing other descriptor aliases.
+
+Read-ahead is distinct from command visibility: a4096-byte read can fetch several lines, but try_line returns only the first. The consumed offset advances only for that returned record. `drain:98–100` removes exactly the delivered prefix only when the remaining suffix needs more input, retaining any partial record. Complete buffered successors remain queued. No loop skips blank or ignored commands.
+
+The production `WireHost::command:35–39` calls try_line once, then search_command once. The latter maps blank/otim to Ignore (`wire.rs:196–214`). `charge_search_unit:7–13` checks configured limit before increment and requests a poll at positive multiples4096; `engine.rs:149–153` forwards only those due polls. `timed.rs:400–458` checks timing, calls the active host once, and handles that one command; Ignore does not trigger a drain. A partial line is not consumed and can become visible at a later poll after completion. A line arriving after the final poll remains for idle dispatch. Search completion applies the selected move at `session.rs:612` before returning to the next idle read. Clock arithmetic, stop-selection and complete protocol command semantics are outside this audit.
+
+## Limits and remaining directed witnesses
+
+No new tests were run. The earlier review's directed gaps remain appropriately scoped: boundary-length LF/CRLF with immediate availability; fragmented input and final EOF; a sufficiently deep search reaching four queued blank/otim/status/force polls; and a complete queued successor retained for idle after the final search poll. Existing finite54/eight-wire fixture passes cannot substitute for those particular schedules. Custom Host may supply commands directly and diagnostic queues prescribe deterministic availability; neither proves native byte framing. Public Session::idle accepts an already-framed string and performs its separate payload checks at317–335. This review establishes source ownership/order, not universal OS scheduling, transport latency or full search conformance.

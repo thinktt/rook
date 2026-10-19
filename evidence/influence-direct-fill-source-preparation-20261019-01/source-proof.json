@@ -1,0 +1,54 @@
+{
+  "complete": true,
+  "only_changed_files": [
+    "src/influence.rs",
+    "src/influence/coherent.rs"
+  ],
+  "baseline_source72_graph_sha256": "e89dcb3315e4d8aaa5089ec445d0a7d0bda7f0928001c502c6343899a5195aa5",
+  "candidate_source72_graph_sha256": "260fed7a4120863e9046b54e3c30e36d575d542af4e35127983421d56b12c7ed",
+  "baseline_and_canonical_sources_before_after_unchanged": true,
+  "source72_copied_before_edits_exact": true,
+  "all_other70_files_unchanged": true,
+  "literal_inversion": {
+    "src/influence.rs": {
+      "literal_inverse_exact_baseline": true,
+      "before_sha256": "fa01b22dc312b5e9161ce405571172b5d272c8ecc2bcca1ce3de1cf7f66eb7fa",
+      "after_sha256": "71491f74471e12ec5b87187e62f3408e02ff6cbf1c381ea052c1894a4d74fb7b",
+      "literal_changes": [
+        {
+          "old": "    pub(crate) fn build_coherent(position: &Position) -> Self {\n        coherent::build(position)\n    }",
+          "new": "    pub(crate) fn build_coherent(position: &Position) -> Self {\n        let mut result = Self { profiles: [[0; 64]; 2] };\n        coherent::fill(&mut result, position);\n        result\n    }"
+        }
+      ]
+    },
+    "src/influence/coherent.rs": {
+      "literal_inverse_exact_baseline": true,
+      "before_sha256": "b4155e4b65beb0eb9aea822bae714b1222accde3b7be574d50ecf56da980ef64",
+      "after_sha256": "de3fe72d0cd6a95301ddeaaf1d92eefb78a17028e709fa6ded7d2de40c4a48f2",
+      "literal_changes": [
+        {
+          "old": "pub(super) fn build(position: &Position) -> Influence {\n    let mut result = Influence { profiles: [[0; 64]; 2] };",
+          "new": "pub(super) fn fill(result: &mut Influence, position: &Position) {"
+        },
+        {
+          "old": "        sums.store(&mut result.profiles[side.index()]);\n    }\n    result\n}",
+          "new": "        sums.store(&mut result.profiles[side.index()]);\n    }\n}"
+        }
+      ]
+    }
+  },
+  "public_build_coherent_signature_unchanged": true,
+  "public_scalar_build_unchanged": true,
+  "all_arithmetic_loops_order_and_helpers_exact_under_ownership_reversal": true,
+  "all_inlining_attributes_unchanged": true,
+  "all_test_sources_and_test_bodies_unchanged": true,
+  "new_tests": 0,
+  "existing_native_declarations": 189,
+  "single_zero_initialization_moved_to_wrapper": true,
+  "no_zeroing_in_worker": true,
+  "only_worker_caller_is_wrapper": true,
+  "result_published_by_existing_ensure_after_completion": true,
+  "all_evaluator_option_permission_stats_charges_callers_unchanged": true,
+  "unsafe_blocks_unchanged": true,
+  "source_only_no_Rust_parse_build_test_native_or_codegen": true
+}
