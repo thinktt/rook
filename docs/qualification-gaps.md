@@ -20,8 +20,11 @@ Experiment41 is parked after fixed generic70 misses the advancement rule:
 0.130993%higher summed CPU,4of7lower. All70 strict outputs and six shelter
 controls pass; no own-PGO, full185/209/117, games or source promotion follows.
 See [decision0032](decisions/0032-static-shelter-ring-base-lookup.md).
-Experiment42 is selected for source-only borrowed-placement activity geometry
-work; no build, timing or qualification evidence exists yet.40 remains current.
+Experiment42 borrowed-placement activity geometry is parked: source/algebra,
+backend, focused12 and strict70 pass, but generic CPU is0.600465%higher/1of7lower.
+Full189(187lib+2dev), diagnostic/117 and games were not run; no own-PGO or promotion
+follows. See [decision0033](decisions/0033-borrowed-activity-slider-geometry.md).
+40 remains current; its final performance/domain/external qualification gaps remain.
 
 Previous candidate37 was retained after185native/209diagnostic tests, complete original
 7673cases/117operations/115wholefiles, fresh optimized54/eight-wire24 and

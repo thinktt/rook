@@ -10,7 +10,11 @@ for35/08; it is not PMU or CPU timing. Experiment41 static ring lookup passes so
 outputs, but its fixed generic70 is0.130993%higher with4of7lower; park without
 PGO or promotion. Selected42 borrows coherent placement for activity slider
 geometry with scalar public/custom-state fallback and unchanged supplied
-Influence authority.42 is source/proof only; no build or timing result exists.
+Influence authority.42 source/algebra, emitted mechanism, focused12 and all70
+original outputs pass, but fixed generic70 is0.600465%higher/1of7lower. Park
+without own-PGO or promotion. The ordinary-glue source review also finds no
+justified local hoist trial. Future screening policy is under bounded independent
+critique; no43 source experiment is selected.
 Current40 stays retained. The27 radix formula
 and32 king-ray tables are historical failed trials, not fresh ideas to retry
 without distinct current evidence. A minimal borrowed-plane activity geometry

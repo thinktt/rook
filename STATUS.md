@@ -31,9 +31,13 @@ Experiment41 static shelter ring-base lookup is parked after its fixed generic70
 0.130993%higher CPU and4of7lower. Source/emitted256-byte proofs, six focused
 tests and all70 original replays pass; no PGO, broader qualification or adoption
 follows. See [decision0032](docs/decisions/0032-static-shelter-ring-base-lookup.md).
-Experiment42 borrowed-placement activity slider geometry is selected for source
-proof/prototyping only, with existing coherence permission and public scalar
-fallback. No42 build or timing result exists. Production40 remains current.
+Experiment42 borrowed-placement activity slider geometry is parked after
+source/algebra, emitted-mechanism and12focused tests pass: fixed generic70 is
+0.600465%higher CPU,1of7lower. All70 original replays and native receipts
+independently reconcile. No own-PGO, full189/diagnostic/117/game validation or
+promotion follows. See [decision0033](docs/decisions/0033-borrowed-activity-slider-geometry.md).
+Production40 and its complete54/12 costs remain current. A bounded independent
+critique of the future generic/PGO screening policy is pending; no43 is selected.
 
 ## Previous candidate37 coherent Influence, 2026-10-19
 
