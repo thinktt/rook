@@ -1,0 +1,309 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -198,19 +198,22 @@
+ }
+ 
+ #[inline]
+-fn capture_priority(kind: PieceKind, victim: Piece, category: i64) -> i64 {
++fn forced_capture_category(kind: PieceKind, victim: Piece) -> Option<u8> {
+     if victim.is_empty() {
+-        return category;
+-    }
+-    match (kind, victim.kind()) {
+-        (PieceKind::Knight | PieceKind::Bishop, PieceKind::Knight | PieceKind::Bishop) => 2,
+-        (
+-            PieceKind::Knight | PieceKind::Bishop,
+-            PieceKind::Rook | PieceKind::Queen | PieceKind::King,
+-        ) => 3,
+-        (PieceKind::Rook, PieceKind::Rook) => 2,
+-        (PieceKind::Rook, PieceKind::Queen | PieceKind::King) => 3,
+-        _ => category,
++        return None;
++    }
++    match kind {
++        PieceKind::Knight | PieceKind::Bishop => match victim.kind() {
++            PieceKind::Knight | PieceKind::Bishop => Some(2),
++            PieceKind::Rook | PieceKind::Queen | PieceKind::King => Some(3),
++            _ => None,
++        },
++        PieceKind::Rook => match victim.kind() {
++            PieceKind::Rook => Some(2),
++            PieceKind::Queen | PieceKind::King => Some(3),
++            _ => None,
++        },
++        _ => None,
+     }
+ }
+ 
+@@ -221,6 +224,10 @@
+     target: Square,
+     victim: Piece,
+ ) -> i64 {
++    // Elide only an unused pure category value; logical query/work rules stay unchanged.
++    if let Some(category) = forced_capture_category(kind, victim) {
++        return i64::from(category);
++    }
+     let own = influence.code(color, target);
+     let opponent = influence.code(color.opponent(), target);
+     let shortcut = if kind == PieceKind::Queen {
+@@ -233,7 +240,7 @@
+     } else {
+         adjusted_relation(own, opponent, removal(kind), kind) as i64
+     };
+-    capture_priority(kind, victim, category)
++    category
+ }
+ 
+ #[inline]
+@@ -310,15 +317,15 @@
+             if !friendly {
+                 let category = if additional {
+                     result.queries += 1;
+-                    capture_priority(
+-                        kind,
+-                        victim,
++                    if let Some(category) = forced_capture_category(kind, victim) {
++                        i64::from(category)
++                    } else {
+                         relation(
+                             influence.code(color, target),
+                             influence.code(color.opponent(), target),
+                             kind,
+-                        ) as i64,
+-                    )
++                        ) as i64
++                    }
+                 } else {
+                     let category = direct_category(influence, color, kind, target, victim);
+                     result.categories += category;
+@@ -828,3 +835,230 @@
+         }
+     }
+ }
++
++
++#[cfg(test)]
++mod experiment46_tests {
++    use super::*;
++
++    #[inline]
++    fn original_capture_priority(kind: PieceKind, victim: Piece, category: i64) -> i64 {
++        if victim.is_empty() {
++            return category;
++        }
++        match (kind, victim.kind()) {
++            (PieceKind::Knight | PieceKind::Bishop, PieceKind::Knight | PieceKind::Bishop) => 2,
++            (
++                PieceKind::Knight | PieceKind::Bishop,
++                PieceKind::Rook | PieceKind::Queen | PieceKind::King,
++            ) => 3,
++            (PieceKind::Rook, PieceKind::Rook) => 2,
++            (PieceKind::Rook, PieceKind::Queen | PieceKind::King) => 3,
++            _ => category,
++        }
++    }
++
++    fn original_direct_category(
++        influence: &Influence,
++        color: Color,
++        kind: PieceKind,
++        target: Square,
++        victim: Piece,
++    ) -> i64 {
++        let own = influence.code(color, target);
++        let opponent = influence.code(color.opponent(), target);
++        let shortcut = if kind == PieceKind::Queen {
++            opponent == 0 || (!victim.is_empty() && victim.kind() == PieceKind::Queen)
++        } else {
++            opponent == 0 && (kind == PieceKind::Knight || victim.is_empty())
++        };
++        let category = if shortcut {
++            2
++        } else {
++            adjusted_relation(own, opponent, removal(kind), kind) as i64
++        };
++        original_capture_priority(kind, victim, category)
++    }
++
++    fn original_destinations_kind<const KIND: usize>(
++        position: &Position,
++        influence: &Influence,
++        color: Color,
++        source: Square,
++        values: &[u8; 64],
++        marks: &mut Marks,
++    ) -> Mobility {
++        let kind = PieceKind::ALL[KIND];
++        let mut result = Mobility::default();
++        if kind == PieceKind::Knight {
++            let targets = &KNIGHT_SOURCES[source.0 as usize];
++            for &target in &targets.squares[..targets.len as usize] {
++                debug_assert!(target < 64);
++                let target = Square(target & 63);
++                let victim = position.board[target.0 as usize];
++                if !victim.is_empty() && victim.color() == color {
++                    continue;
++                }
++                let category = original_direct_category(influence, color, kind, target, victim);
++                result.categories += category;
++                result.total += category * values[target.0 as usize] as i64;
++                mark(marks, color, kind, target, category);
++            }
++            return result;
++        }
++        let directions = match kind {
++            PieceKind::Bishop => 0..4,
++            PieceKind::Rook => 4..8,
++            PieceKind::Queen => 0..8,
++            _ => unreachable!("non-activity piece"),
++        };
++        for direction in directions {
++            let step = DIRECTIONS[direction];
++            let mut additional = false;
++            let ray = &ATTACK_RAYS.0[source.0 as usize][direction];
++            for &target in &ray.squares[..ray.len as usize] {
++                debug_assert!(target < 64);
++                let target = Square(target & 63);
++                let victim = position.board[target.0 as usize];
++                let friendly = !victim.is_empty() && victim.color() == color;
++                if !friendly {
++                    let category = if additional {
++                        result.queries += 1;
++                        original_capture_priority(
++                            kind,
++                            victim,
++                            relation(
++                                influence.code(color, target),
++                                influence.code(color.opponent(), target),
++                                kind,
++                            ) as i64,
++                        )
++                    } else {
++                        let category = original_direct_category(influence, color, kind, target, victim);
++                        result.categories += category;
++                        mark(marks, color, kind, target, category);
++                        category
++                    };
++                    let value = values[target.0 as usize];
++                    let vertical = if kind == PieceKind::Rook && step.0 == 0 {
++                        2
++                    } else {
++                        1
++                    };
++                    result.total += category * value as i64 * vertical;
++                }
++                if !victim.is_empty() {
++                    if !transparent(color, kind, step, victim) {
++                        break;
++                    }
++                    additional = true;
++                }
++            }
++        }
++        result
++    }
++
++    #[test]
++    fn experiment46_direct_categories_match_original_for_all_profile_bytes() {
++        let target = Square(27);
++        for color in [Color::White, Color::Black] {
++            let mut victims = vec![Piece::EMPTY];
++            for side in [Color::White, Color::Black] {
++                for kind in PieceKind::ALL {
++                    victims.push(Piece::new(side, kind));
++                }
++            }
++            for kind in [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++                for &victim in &victims {
++                    let mut influence = Influence { profiles: [[0; 64]; 2] };
++                    for own in 0..=255u8 {
++                        influence.profiles[color.index()][target.0 as usize] = own;
++                        for opposing in 0..=255u8 {
++                            influence.profiles[color.opponent().index()][target.0 as usize] = opposing;
++                            assert_eq!(direct_category(&influence, color, kind, target, victim),
++                                original_direct_category(&influence, color, kind, target, victim),
++                                "color={color:?} kind={kind:?} victim={victim:?} own={own} opposing={opposing}");
++                        }
++                    }
++                }
++            }
++        }
++    }
++
++    fn reflected_placement(placement: &str) -> String {
++        placement.split('/').rev().map(|rank| {
++            rank.chars().map(|c| {
++                if c.is_ascii_uppercase() { c.to_ascii_lowercase() }
++                else { c.to_ascii_uppercase() }
++            }).collect::<String>()
++        }).collect::<Vec<_>>().join("/")
++    }
++
++    fn compare_destinations<const KIND: usize>(
++        position: &Position, influence: &Influence, color: Color, source: Square,
++    ) -> u64 {
++        let values = piece_destination_values::<KIND>(position, color, &DESTINATION_VALUES[color.index()]);
++        let mut marks = [[0u8; 64]; 2];
++        let mut original_marks = [[0u8; 64]; 2];
++        let actual = destinations_kind::<KIND>(position, influence, color, source, values, &mut marks);
++        let original = original_destinations_kind::<KIND>(position, influence, color, source, values, &mut original_marks);
++        assert_eq!((actual.categories, actual.total, actual.queries),
++                   (original.categories, original.total, original.queries));
++        assert_eq!(marks, original_marks);
++        actual.queries
++    }
++
++    #[test]
++    fn experiment46_capture_fallback_and_additional_work_match_original() {
++        // Preserve the old priority helper for every valid raw alias, including arbitrary fallback scalars.
++        let fallbacks = [i64::MIN, -3, -1, 0, 1, 2, 3, 7, i64::MAX];
++        let mut aliases = 0;
++        for raw in 0..=255u8 {
++            let victim = Piece(raw);
++            if !victim.is_empty() && !(1..=6).contains(&(raw & 7)) { continue; }
++            aliases += 1;
++            for kind in [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++                for category in fallbacks {
++                    let actual = forced_capture_category(kind, victim).map_or(category, i64::from);
++                    assert_eq!(actual, original_capture_priority(kind, victim, category));
++                }
++            }
++        }
++        assert_eq!(aliases, 193);
++
++        // Actual old/new destination owners cover forced captures behind transparent blockers,
++        // with custom supplied maps; these need not be realizable attack profiles.
++        for color in [Color::White, Color::Black] {
++            for (placement, source_name, kind, additional) in [
++                ("7k/8/4p3/3r4/8/2N5/8/K7", "c3", PieceKind::Knight, false),
++                ("7k/8/8/8/8/4r3/3N4/K1B5", "c1", PieceKind::Bishop, true),
++                ("7k/8/8/8/8/4b3/3p4/K1B5", "c1", PieceKind::Bishop, true),
++                ("7k/8/3q4/3B4/3R4/8/8/K7", "d4", PieceKind::Rook, true),
++                ("7k/8/3r4/3R4/3R4/8/8/K7", "d4", PieceKind::Rook, true),
++                ("7k/8/3q4/8/3Q4/8/8/K7", "d4", PieceKind::Queen, false),
++            ] {
++                let placement = if color == Color::White { placement.to_owned() }
++                                else { reflected_placement(placement) };
++                let side = if color == Color::White { "w" } else { "b" };
++                let position = Position::from_fen(&format!("{placement} {side} - - 0 1")).unwrap();
++                let mut source = Square::parse(source_name).unwrap();
++                if color == Color::Black { source.0 ^= 56; }
++                for seed in 0..=255u8 {
++                    let mut influence = Influence { profiles: [[0; 64]; 2] };
++                    for square in 0..64 {
++                        influence.profiles[0][square] = seed.wrapping_add((square as u8).wrapping_mul(17));
++                        influence.profiles[1][square] = (255 - seed).wrapping_add((square as u8).wrapping_mul(29));
++                    }
++                    let queries = match kind {
++                        PieceKind::Knight => compare_destinations::<1>(&position, &influence, color, source),
++                        PieceKind::Bishop => compare_destinations::<2>(&position, &influence, color, source),
++                        PieceKind::Rook => compare_destinations::<3>(&position, &influence, color, source),
++                        PieceKind::Queen => compare_destinations::<4>(&position, &influence, color, source),
++                        _ => unreachable!(),
++                    };
++                    if additional { assert!(queries > 0); }
++                }
++            }
++        }
++    }
++}
