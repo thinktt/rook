@@ -3,8 +3,10 @@
 Retained production is candidate25. Subsequent experiments26–36 are parked.
 Experiment37 now passes its complete guarded-coherent Influence generic70 at
 1.455622%lower,7/7lower after7focused controls and bounded actual backend.
-It advances only to a separate own-source thinPGO experiment; no PGO or broad
-qualification result is inherited. See [decision0028](../decisions/0028-coherent-influence-masks.md).
+Its fresh own-source thinPGO70 also passes:2.147243%lower/5of7,worst1.006744;
+all70 strict replay/accounting and all185 native tests pass. It advances to
+broad local qualification; no full-corpus timing or historical qualification
+result is inherited. See [decision0028](../decisions/0028-coherent-influence-masks.md).
 
 Experiment36 manifest-only fatLTO passes generic70 at2.541759%lower/7of7,
 then fails its independent own-fatPGO70 at0.414725%higher/3of7. Own54training/

@@ -1,8 +1,10 @@
 # Remaining qualification work
 
-Experiment37 passes7focused controls and its generic70 at1.455622%lower/7of7,
-then advances only to its own-source thinPGO profile and independent fixed70.
-Production remains25; full185/117/standalone54/wire/games have not run on37.
+Experiment37 passes7focused controls, generic70 at1.455622%lower/7of7,
+and independent own-source thinPGO70 at2.147243%lower/5of7,worst1.006744.
+All70 original replay/accounting checks pass; it advances to broad local gates.
+All185 native tests now pass. Production remains25;
+full117/standalone54/wire/games have not run on37.
 See [decision0028](decisions/0028-coherent-influence-masks.md).
 
 Current candidate25 projected Boolean source passes the complete mandatory
