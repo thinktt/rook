@@ -39,11 +39,14 @@ promotion follows. See [decision0033](docs/decisions/0033-borrowed-activity-slid
 Production40 and its complete54/12 costs remain current. The bounded independent
 critique of future screening is closed. Generic remains the default; one future
 mechanism-specific PGO-sensitive exception may be admitted prospectively under
-[decision0034](docs/decisions/0034-prospective-pgo-sensitive-screen.md). None is
-admitted and no43 is selected. Closed ordinary source-cost reviews led to a narrow existing-machine check of
+[decision0034](docs/decisions/0034-prospective-pgo-sensitive-screen.md). No exception is
+admitted;43 below uses the default lane. Closed ordinary source-cost reviews led to a narrow existing-machine check of
 generated-move tag predicates: both sites already use raw shift/mask/zero tests.
-That idea is closed without a source experiment. The next read-only investigation
-partitions the current coherent Influence producer; no new timing is live.
+That idea is closed without a source experiment. The coherent Influence cost partition and exact carry/transpose algebra are
+closed. Experiment43 is selected for isolated source preparation: local wrapping
+bit-plane accumulation with the old scalar zero-slider path. It remains on the
+default generic funnel; no build or timing is authorized yet. See
+[selection](evidence/influence-bitsliced-sum-parent-review-20261019-01/selection.json).
 
 ## Previous candidate37 coherent Influence, 2026-10-19
 

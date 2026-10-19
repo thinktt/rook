@@ -15,8 +15,16 @@ original outputs pass, but fixed generic70 is0.600465%higher/1of7lower. Park
 without own-PGO or promotion. The ordinary-glue source review also finds no
 justified local hoist trial. The bounded independent screening critique is closed: generic remains default,
 with at most one future prospectively admitted PGO-sensitive exception under
-[decision0034](../decisions/0034-prospective-pgo-sensitive-screen.md). No exception
-or43 source experiment is selected. The closed types cost partition supports
+[decision0034](../decisions/0034-prospective-pgo-sensitive-screen.md). No PGO-sensitive exception is admitted. Distinct43 is selected on the default
+generic lane for source preparation only: local wrapping bit-plane Influence
+accumulation and a single per-color transpose, with the old scalar no-slider
+path retained. Existing geometry, public fallback, format and all demand/charge
+owners remain. Exact algebra is feasible; eight scalar live counters, spills,
+one-slider costs, code growth and final transpose remain concrete risks, not
+assumed wins. No build or timing is authorized until source review. See the
+[selection](../../evidence/influence-bitsliced-sum-parent-review-20261019-01/selection.json),
+[cost review](../../evidence/coherent-influence-current-cost-review-20261019-01/review.md)
+and [algebra](../../evidence/influence-bitsliced-sum-design-20261019-01/review.md). The closed types cost partition supports
 only a narrow current-machine discriminator for two generated-move tag checks.
 That discriminator is closed NO-GO: both Ordinary paths already use raw tag
 predicates, with reserved-tag checks on nonzero paths. No source experiment or

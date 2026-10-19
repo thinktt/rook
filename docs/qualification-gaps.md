@@ -239,8 +239,9 @@ Remaining work:
   follow-up procedure before applying aggregate1.10/every-case1.25 limits.
   Both54-search and12-game limits apply independently; no offsets or universal
   hardware factor are permitted.
-- Finish normative production review beyond finite fixtures: TT semantic, search-window,
-  remaining-depth and lifecycle obligations, conditional empty-source remembered-hint
+- Finish normative production review beyond finite fixtures: imported production
+  evaluator/endpoints/arithmetic and coherence premises, TT semantics, remaining-depth
+  and lifecycle obligations, conditional empty-source remembered-hint
   composition, interruption
   and natural public tail/multipass/extension IIO composition. Current numerical review supports retained P/G,
   selected late bounds, actual relation-charge ownership and TT normalized-score
@@ -252,7 +253,13 @@ Remaining work:
   preserves the original query despite running-window changes. Quiescence has
   no remembered-result probe/store. Root transformations can produce collapsed
   windows, so this review does not assume a universal open-window premise or
-  close the remaining capacity induction, collision reachability and hint gap.
+  close semantic collision reachability or the hint gap. A later bounded
+[current40 score-capacity review](../evidence/current40-score-capacity-domain-review-20261019-01/review.md)
+rechecks the existing conservative10063 simultaneous beta/return/normalized-record
+induction against current owners. That scalar recurrence closes conditional on
+the explicit coherent-production evaluator/endpoints/intermediate-arithmetic
+premises; it does not prove mate provenance, collision semantics, depth/counter
+capacity or the imported producer premises.
 - Prepare exact source/build/artifact/evidence handoff for the external full
   3288-game gate. The owner explicitly assigned that gate off Vic; do not run
   it here. Local12-game success does not claim the external gate passed.
