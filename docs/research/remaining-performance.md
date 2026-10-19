@@ -1,6 +1,6 @@
 # Remaining performance investigations
 
-Current retained production is43; its exact three-file bit-sliced Influence change passes all fresh local finite gates and source115 equality. Own-PGO70 improves1.160850%/7of7. Full43 whole54/12 costs are pending; no corpus-wide gain is inferred. See [decision0035](../decisions/0035-bit-sliced-influence-accumulation.md).
+Current retained production is43; its exact three-file bit-sliced Influence change passes all fresh local finite gates and source115 equality. Own-PGO70 improves1.160850%/7of7. Full43 standard54 now reconciles69.380search/69.809672whole CPU,1.633122%lower than40's separate full window, all54medians lower. Raw reference ratio1.100547 remains reported-only. Full43 whole12 costs are pending. See [decision0035](../decisions/0035-bit-sliced-influence-accumulation.md).
 
 Previous production40 is an exact256-byte static pressure lookup over
 37. Own-PGO fixed70 improves0.877002%/7of7; all mandatory finite checks,185/209

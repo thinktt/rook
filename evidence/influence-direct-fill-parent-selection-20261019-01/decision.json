@@ -1,0 +1,29 @@
+{
+  "experiment": 44,
+  "status": "Select bounded source-only preparation for one compiler question; runtime held until existing timing windows close",
+  "baseline_candidate": 43,
+  "baseline_source72_graph": "e89dcb3315e4d8aaa5089ec445d0a7d0bda7f0928001c502c6343899a5195aa5",
+  "baseline_own_pgo_sha256": "36251ecf12cfdc9437c9bfc5b7a571c1992471bee611cab024fc692ac79e91b2",
+  "question": "Can one zero-initialized wrapper-owned result plus private destination-first unit-return fill eliminate the actual128-byte producer-local return copy?",
+  "preliminary_judgment": "A small distinct compiler experiment is justified by the exact saved copy and potential temporary/frame reduction; arithmetic or whole-engine benefit is not assumed.",
+  "alternatives": [
+    "Keep current43 if LLVM emits equivalent code",
+    "Reject early Option publication, double zeroing, MaybeUninit/unsafe scratch and persistent-state redesign"
+  ],
+  "source_scope": [
+    "src/influence.rs",
+    "src/influence/coherent.rs"
+  ],
+  "invariants": [
+    "Private build_coherent signature unchanged",
+    "Zero exactly once; constructor fully completes before existing ensure publishes Some",
+    "Public scalar build, admission/custom-map authority, charge/stat/lifetime and all call sites unchanged",
+    "Preserve loops and arithmetic and existing inlining policy; no new ABI/compiler flag/unsafe policy"
+  ],
+  "mechanism_gate": "Before tests/timing inspect complete emitted producer plus actual ensure/ordinary-or-Q call site: copy removed rather than relocated; initialization/calls/frame/stack costs disclosed. Equivalent lowering parks trial.",
+  "screen_policy": "Default generic70 unchanged aggregate<=0.995,at least5of7lower,worst<=1.02; own-source PGO only after generic pass. No posthoc small-gain or PGO exception.",
+  "runtime_authorized": false,
+  "build_authorized": false,
+  "source_preparation_authorized": true,
+  "production_candidate": 43
+}

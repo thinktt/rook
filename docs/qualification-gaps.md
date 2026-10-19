@@ -4,7 +4,8 @@ Current43 passes fresh189native/209diagnostic, all7673 mandatory cases/117operat
 115wholefiles, own-PGO54/eight-wire24 and regular12/632 plus continuity8 and required
 seed11/persistence3 with independent original/raw/exit reconciliation. Exact source115
 is promoted; ordinary36251ecf and diagnosticb024c045 remain the tested artifacts.
-Full43 whole54/12 costs, final same-hardware measurement/performance qualification,
+Full43 standard54 now reconciles69.809672whole CPU (raw cross-hardware ratio1.100547).
+Current43 whole12 costs, final same-hardware measurement/performance qualification,
 remaining production-domain obligations and the external3288 gate remain open.
 See [local validation](../evidence/influence-bitsliced-sum-qualification-20261019-01/README.md).
 

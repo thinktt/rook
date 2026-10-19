@@ -15,10 +15,12 @@ multiplicity, color or transpose gap; unchanged coherence/geometry premises rema
 
 Generic70 improves0.714195%/5of7; fresh own-source PGO70 improves1.160850%/7of7.
 Ordinary36251ecf/profile132fc1fd and diagnosticb024c045 are the exact tested
-isolated-path artifacts, without a canonical rebuild claim. Full43 whole54/12
-costs are pending. The latest complete timings remain40's70.500search/
-70.968677whole54 and712.333390whole12. No full43 timing gain is inferred from
-its seven-case screen. Final same-hardware performance qualification, remaining
+isolated-path artifacts, without a canonical rebuild claim. Full43 standard54 now
+independently reconciles216lifetimes/432offline checks at69.380search/
+69.809672whole-native CPU seconds,1.633122%lower than40's separate full window,
+all54 medians lower. Raw cross-hardware reference ratio1.100547 remains
+reported-only. Current43 full12 costs are pending;40's712.333390 is the latest
+complete12 result. See [whole54 report](evidence/influence-bitsliced-sum-standard54-20261019-01/README.md). Final same-hardware performance qualification, remaining
 production-domain review and the external3288 gameplay gate remain open.
 See [local validation](evidence/influence-bitsliced-sum-qualification-20261019-01/README.md),
 [source promotion](evidence/influence-bitsliced-sum-integration-20261019-01/source-promotion.json)
