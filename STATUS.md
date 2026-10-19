@@ -27,6 +27,14 @@ external3288 gameplay remain open. No new Bee run or transfer is implied.
 See [decision0031](docs/decisions/0031-static-pressure-value-lookup.md) and
 [source promotion](evidence/pressure-value-static-integration-20261019-01/source-promotion.json).
 
+Experiment41 static shelter ring-base lookup is parked after its fixed generic70:
+0.130993%higher CPU and4of7lower. Source/emitted256-byte proofs, six focused
+tests and all70 original replays pass; no PGO, broader qualification or adoption
+follows. See [decision0032](docs/decisions/0032-static-shelter-ring-base-lookup.md).
+Experiment42 borrowed-placement activity slider geometry is selected for source
+proof/prototyping only, with existing coherence permission and public scalar
+fallback. No42 build or timing result exists. Production40 remains current.
+
 ## Previous candidate37 coherent Influence, 2026-10-19
 
 Candidate37 is integrated by exact source72 equality after its own-source

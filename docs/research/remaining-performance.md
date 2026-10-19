@@ -6,9 +6,12 @@ tests, optimized54/wire24 and regular12/632 plus continuity/seed controls pass.
 Current40 whole54 reconciles70.500search/70.968677whole-native CPU seconds;
 complete12 timing now reconciles712.333390whole-native CPU seconds (raw
 reference ratio1.105725). Fresh exact40 simulated-Ir attribution is closed
-for35/08; it is not PMU or CPU timing. Selected41 shelter-ring static byte
-lookup has only source proof and an inert helper so far; build/backend, focused
-checks and separate generic/own-PGO gates remain. Current40 stays retained. The27 radix formula
+for35/08; it is not PMU or CPU timing. Experiment41 static ring lookup passes source/backend/focused6 and70strict
+outputs, but its fixed generic70 is0.130993%higher with4of7lower; park without
+PGO or promotion. Selected42 borrows coherent placement for activity slider
+geometry with scalar public/custom-state fallback and unchanged supplied
+Influence authority.42 is source/proof only; no build or timing result exists.
+Current40 stays retained. The27 radix formula
 and32 king-ray tables are historical failed trials, not fresh ideas to retry
 without distinct current evidence. A minimal borrowed-plane activity geometry
 proposal is feasible but unselected pending40 attribution. All earlier timing

@@ -16,7 +16,14 @@ See [whole12 report](../evidence/pressure-value-static-games12-results-20261019-
 their original artifact scope. Normative domain and external3288 obligations
 remain open. See [decision0031](decisions/0031-static-pressure-value-lookup.md).
 
-Candidate37 is retained after185native/209diagnostic tests, complete original
+Experiment41 is parked after fixed generic70 misses the advancement rule:
+0.130993%higher summed CPU,4of7lower. All70 strict outputs and six shelter
+controls pass; no own-PGO, full185/209/117, games or source promotion follows.
+See [decision0032](decisions/0032-static-shelter-ring-base-lookup.md).
+Experiment42 is selected for source-only borrowed-placement activity geometry
+work; no build, timing or qualification evidence exists yet.40 remains current.
+
+Previous candidate37 was retained after185native/209diagnostic tests, complete original
 7673cases/117operations/115wholefiles, fresh optimized54/eight-wire24 and
 regular12pre-gate/632searches,continuity8 and required seed controls. All raw
 original/expected/actual streams and exits independently reconcile. Root source72
