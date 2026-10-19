@@ -1,0 +1,9 @@
+# Parent review before first native kernel run
+
+Accept the frozen isolated source70 graph a8ab72ed11bf1e664636ddc48444bc9ea91766fb410ffc65a5184c1d1f813439 for focused native validation only. No Search integration or production promotion is implied.
+
+Reviewed the full kernel patch and independent test file. Geometric direction inverse is xor1 for the actual paired DIRECTIONS order; tag-plane predicates select B/Q diagonally and R/Q orthogonally. Both changed origins are replaced once, and unchanged geometric origin/direction pairs are union-deduplicated without blocker/color pruning. Full old/new rays preserve weakening, opposing kings and pawn extras; physical wrapping subtraction is the correct ring operation. The independent target-centric reference examines only strictly intervening cells, which includes occupied ray targets and the pawn extra square correctly. Exact carry witnesses and rank/color reflection are meaningful. The four legal-work roots do not attack the nonmoving king; sparse adversaries intentionally assert geometry/coherence only. Reversing within list groups checks traversal-order independence. No definite semantic defect found on source review.
+
+The existing177 library/dev tests plus the one kernel test make179 total. The new test checks all128 bytes against a separately structured oracle; legal-sample operations are diagnostic economics, not production eligibility, CPU or actual traffic. Sharing the signed ray can affect fresh/Q machine code and must be checked before integrated timing. Provenance still needs both a genuine parent map and genuine child transition, as the separate closed plan records.
+
+This is the first Rust parse/build/native execution authorized for this source. Run only two frozen test images on housekeeping CPUs; no default engine or CPU14 benchmark. Source and immutable preparation pins are checked before/after by native.py.

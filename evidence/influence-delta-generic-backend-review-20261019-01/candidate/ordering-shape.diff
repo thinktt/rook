@@ -1,0 +1,351 @@
+--- 25-address-only-shape
++++ 29-address-only-shape
+@@ -12,7 +12,7 @@
+ mov    (%r8),%rdi
+ mov    0x198(%rsi),%rsi
+ cmp    %rsi,%rdi
+-jae    LOCAL+0x98a
++jae    LOCAL+0x992
+ mov    0x240(%rsp),%r13
+ mov    0x8(%r8),%esi
+ add    %edi,%esi
+@@ -27,9 +27,9 @@
+ sub    %r13,%rcx
+ mov    %rcx,0x60(%rsp)
+ mov    %rsi,0x18(%rsp)
+-jb     LOCAL+0x82f
++jb     LOCAL+0x837
+ cmp    $0x201,%r14
+-jae    LOCAL+0x898
++jae    LOCAL+0x8a0
+ mov    0xb0(%rsp),%rcx
+ add    $0x10,%rcx
+ mov    %rcx,0x28(%rsp)
+@@ -49,9 +49,9 @@
+ mov    %r10,0x68(%rsp)
+ jbe    LOCAL+0x170
+ lea    0x5010(%rdx),%rax
+-mov    %rax,0x110(%rsp)
++mov    %rax,0x128(%rsp)
+ lea    0x1(%rdi),%rax
+-mov    %rax,0x108(%rsp)
++mov    %rax,0x120(%rsp)
+ mov    0xc(%r8),%eax
+ mov    %eax,0x34(%rsp)
+ mov    0x10(%r8),%eax
+@@ -66,12 +66,12 @@
+ mov    %eax,0x88(%rsp)
+ mov    0x10(%rsp),%rax
+ add    $0x18,%rax
+-mov    %rax,0xf0(%rsp)
++mov    %rax,0x108(%rsp)
+ mov    $0x14,%edi
+ xor    %eax,%eax
+ mov    $0xff,%edx
+ lea    RIPREF(%rip),%r10
+-mov    %r14,0x100(%rsp)
++mov    %r14,0x118(%rsp)
+ mov    %ebx,0x78(%rsp)
+ jmp    LOCAL+0x2c5
+ lea    -0x14(%rsi),%ecx
+@@ -101,7 +101,7 @@
+ setb   %al
+ or     %al,%r15b
+ mov    %r12d,%eax
+-jne    LOCAL+0x8fb
++jne    LOCAL+0x903
+ lea    -0x1(%rax),%ecx
+ xor    %edx,%edx
+ cmp    $0x2,%ecx
+@@ -114,7 +114,7 @@
+ je     LOCAL+0x223
+ movzbl %dl,%edx
+ cmp    $0x1,%edx
+-jne    LOCAL+0x8fb
++jne    LOCAL+0x903
+ add    $0xfffffffe,%eax
+ xor    %r15d,%r15d
+ mov    %eax,%r12d
+@@ -125,7 +125,7 @@
+ mov    0x70(%rsp),%rax
+ mov    0x198(%rax),%rsi
+ cmp    %rsi,0x20(%rsp)
+-jae    LOCAL+0x938
++jae    LOCAL+0x940
+ mov    0x190(%rax),%rax
+ add    0x68(%rsp),%rax
+ lea    (%rax,%r13,2),%rdx
+@@ -153,10 +153,10 @@
+ setl   %al
+ or     %al,%r8b
+ mov    $0xffffffff,%eax
+-jne    LOCAL+0x8fb
++jne    LOCAL+0x903
+ add    %edi,%eax
+ cmp    %edi,%eax
+-ja     LOCAL+0x8fb
++ja     LOCAL+0x903
+ xor    %ecx,%ecx
+ cmp    $0x2,%eax
+ setne  %cl
+@@ -167,7 +167,7 @@
+ je     LOCAL+0x2f5
+ movzbl %cl,%ecx
+ cmp    $0x1,%ecx
+-jne    LOCAL+0x8fb
++jne    LOCAL+0x903
+ lea    -0x1(%rax),%edi
+ xor    %r8d,%r8d
+ mov    %esi,%ecx
+@@ -180,7 +180,7 @@
+ mov    0x70(%rsp),%r12
+ mov    0x198(%r12),%rsi
+ cmp    %rsi,0x20(%rsp)
+-jae    LOCAL+0x938
++jae    LOCAL+0x940
+ mov    0x190(%r12),%rax
+ mov    0x68(%rsp),%rbp
+ add    %rbp,%rax
+@@ -206,12 +206,12 @@
+ mov    %r14d,0x38(%rsp)
+ mov    0xb8(%rsp),%r15
+ inc    %r15
+-mov    0x100(%rsp),%r14
++mov    0x118(%rsp),%r14
+ cmp    %r14,%r15
+ je     LOCAL+0x290
+ mov    0x198(%r12),%rsi
+ cmp    %rsi,%rbx
+-jae    LOCAL+0x928
++jae    LOCAL+0x930
+ mov    0x190(%r12),%rax
+ add    %rbp,%rax
+ movzwl (%rax,%r15,2),%ebp
+@@ -221,11 +221,11 @@
+ call   *RIPREF(%rip)
+ mov    0x1a8(%r12),%rsi
+ cmp    %rsi,%rbx
+-jae    LOCAL+0x918
++jae    LOCAL+0x920
+ mov    %eax,%r14d
+ shl    $0x9,%rbx
+ mov    0x1a0(%r12),%rax
+-mov    %rbx,0x118(%rsp)
++mov    %rbx,0x130(%rsp)
+ add    %rbx,%rax
+ movzbl (%r15,%rax,1),%ecx
+ or     %r14b,%cl
+@@ -234,7 +234,7 @@
+ mov    %cl,(%r15,%rax,1)
+ lea    0x148(%rsp),%rdi
+ mov    0xb0(%rsp),%rsi
+-mov    0x110(%rsp),%rdx
++mov    0x128(%rsp),%rdx
+ mov    %ebp,0x3c(%rsp)
+ mov    %ebp,%ecx
+ call   *RIPREF(%rip)
+@@ -248,9 +248,9 @@
+ cmp    (%rdi),%r12
+ jne    LOCAL+0x4a9
+ lea    RIPREF(%rip),%rsi
+-mov    %rax,0xf8(%rsp)
+-call   *RIPREF(%rip)
+-mov    0xf8(%rsp),%rax
++mov    %rax,0x110(%rsp)
++call   *RIPREF(%rip)
++mov    0x110(%rsp),%rax
+ mov    0x10(%rsp),%rdi
+ shl    $0x38,%r13
+ or     %rax,%r13
+@@ -267,7 +267,7 @@
+ mov    0x28(%rdi),%rbx
+ cmp    0x18(%rdi),%rbx
+ jne    LOCAL+0x4f8
+-mov    0xf0(%rsp),%rdi
++mov    0x108(%rsp),%rdi
+ lea    RIPREF(%rip),%rsi
+ call   *RIPREF(%rip)
+ mov    0x10(%rsp),%rdi
+@@ -287,7 +287,7 @@
+ cmp    %ecx,%r14d
+ cmovg  %r14d,%ecx
+ neg    %ecx
+-mov    0x108(%rsp),%rdx
++mov    0x120(%rsp),%rdx
+ mov    %rdx,0xc0(%rsp)
+ mov    %eax,0xc8(%rsp)
+ mov    0x8c(%rsp),%eax
+@@ -299,20 +299,21 @@
+ mov    %eax,0xd4(%rsp)
+ movb   $0x2,0xd9(%rsp)
+ mov    0x28(%rsp),%rax
+-mov    %rax,0x120(%rsp)
++mov    %rax,0xf0(%rsp)
+ mov    0x230(%rsp),%rax
+-mov    %rax,0x128(%rsp)
++mov    %rax,0xf8(%rsp)
+ movzbl 0x238(%rsp),%eax
+-mov    %al,0x134(%rsp)
+-movw   $0x1,0x130(%rsp)
+-mov    %si,0x132(%rsp)
++mov    %al,0x104(%rsp)
++movw   $0x1,0x100(%rsp)
++mov    %si,0x102(%rsp)
++movb   $0x0,0x105(%rsp)
+ lea    0x90(%rsp),%rdi
+ mov    0x70(%rsp),%r12
+ mov    %r12,%rsi
+ lea    0x148(%rsp),%rdx
+ mov    0x10(%rsp),%rcx
+ lea    0xc0(%rsp),%r8
+-lea    0x120(%rsp),%r9
++lea    0xf0(%rsp),%r9
+ call   rook2::ordinary::<impl rook2::engine::Search<_,H
+ mov    0x10(%rsp),%rdx
+ mov    0x10(%rdx),%rax
+@@ -321,18 +322,18 @@
+ cmp    %rcx,%rax
+ mov    0x240(%rsp),%r13
+ mov    0x68(%rsp),%rbp
+-jbe    LOCAL+0x78f
++jbe    LOCAL+0x797
+ dec    %rax
+ mov    %rax,0x10(%rdx)
+ mov    0x28(%rdx),%rax
+ test   %rax,%rax
+-je     LOCAL+0x62d
++je     LOCAL+0x635
+ dec    %rax
+ mov    %rax,0x28(%rdx)
+ movzbl 0x90(%rsp),%eax
+ cmp    $0x6,%al
+ mov    0x20(%rsp),%rbx
+-jne    LOCAL+0x753
++jne    LOCAL+0x75b
+ xor    %r15d,%r15d
+ sub    0x94(%rsp),%r15d
+ cmp    %r15d,%r14d
+@@ -341,14 +342,14 @@
+ jge    LOCAL+0x390
+ mov    0x198(%r12),%rsi
+ cmp    %rsi,%rbx
+-jae    LOCAL+0x94a
++jae    LOCAL+0x952
+ mov    0xb8(%rsp),%r14
+ sub    %r13,%r14
+-jb     LOCAL+0x7d6
++jb     LOCAL+0x7de
+ mov    $0x200,%eax
+ sub    %r14,%rax
+ cmp    %r13,%rax
+-jbe    LOCAL+0x7e8
++jbe    LOCAL+0x7f0
+ mov    0x190(%r12),%rax
+ add    %rbp,%rax
+ lea    (%rax,%r13,2),%rsi
+@@ -358,15 +359,15 @@
+ call   *RIPREF(%rip)
+ mov    0x198(%r12),%rsi
+ cmp    %rsi,%rbx
+-jae    LOCAL+0x95a
++jae    LOCAL+0x962
+ mov    0x190(%r12),%rax
+ add    %rbp,%rax
+ mov    0x3c(%rsp),%ecx
+ mov    %cx,(%rax,%r13,2)
+ mov    0x1a8(%r12),%rsi
+ cmp    %rsi,%rbx
+-mov    0x118(%rsp),%rax
+-jae    LOCAL+0x96a
++mov    0x130(%rsp),%rax
++jae    LOCAL+0x972
+ mov    0x1a0(%r12),%rdi
+ add    %rax,%rdi
+ lea    (%rdi,%r13,1),%rsi
+@@ -376,7 +377,7 @@
+ call   *RIPREF(%rip)
+ mov    0x1a8(%r12),%rsi
+ cmp    %rsi,%rbx
+-jae    LOCAL+0x97a
++jae    LOCAL+0x982
+ add    0x1a0(%r12),%r14
+ movzbl 0x7(%rsp),%eax
+ mov    %al,0x0(%r13,%r14,1)
+@@ -394,7 +395,7 @@
+ mov    %al,(%rsi)
+ mov    %ecx,0x4(%rsi)
+ mov    %rdx,0x8(%rsi)
+-jmp    LOCAL+0x906
++jmp    LOCAL+0x90e
+ lea    RIPREF(%rip),%rax
+ mov    %rax,0xc0(%rsp)
+ movq   $0x1,0xc8(%rsp)
+@@ -419,7 +420,7 @@
+ call   *RIPREF(%rip)
+ lea    -0x14(%rsi),%eax
+ cmp    0x8(%rsp),%eax
+-jge    LOCAL+0x997
++jge    LOCAL+0x99f
+ mov    $0x13,%ecx
+ mov    $0xff,%eax
+ lea    -0x1(%rcx),%edx
+@@ -431,26 +432,26 @@
+ mov    $0x1,%sil
+ mov    %edx,%edi
+ test   %r8b,%r8b
+-je     LOCAL+0x878
++je     LOCAL+0x880
+ movzbl %r8b,%esi
+ cmp    $0x1,%esi
+-jne    LOCAL+0x8fb
++jne    LOCAL+0x903
+ add    $0xfffffffe,%ecx
+ xor    %esi,%esi
+ mov    %ecx,%edi
+ mov    0x18(%rsp),%rcx
+ sub    %edx,%ecx
+ cmp    0x8(%rsp),%ecx
+-jge    LOCAL+0x997
++jge    LOCAL+0x99f
+ cmp    $0x2,%edi
+ setb   %cl
+ or     %cl,%sil
+ mov    %edi,%ecx
+-je     LOCAL+0x846
+-jmp    LOCAL+0x8fb
++je     LOCAL+0x84e
++jmp    LOCAL+0x903
+ lea    -0x14(%rsi),%eax
+ cmp    0x8(%rsp),%eax
+-jge    LOCAL+0x9a9
++jge    LOCAL+0x9b1
+ mov    $0x13,%ecx
+ mov    $0xff,%eax
+ lea    -0x1(%rcx),%edx
+@@ -462,22 +463,22 @@
+ mov    $0x1,%sil
+ mov    %edx,%edi
+ test   %r8b,%r8b
+-je     LOCAL+0x8dd
++je     LOCAL+0x8e5
+ movzbl %r8b,%esi
+ cmp    $0x1,%esi
+-jne    LOCAL+0x8fb
++jne    LOCAL+0x903
+ add    $0xfffffffe,%ecx
+ xor    %esi,%esi
+ mov    %ecx,%edi
+ mov    0x18(%rsp),%rcx
+ sub    %edx,%ecx
+ cmp    0x8(%rsp),%ecx
+-jge    LOCAL+0x9a9
++jge    LOCAL+0x9b1
+ cmp    $0x2,%edi
+ setb   %cl
+ or     %cl,%sil
+ mov    %edi,%ecx
+-je     LOCAL+0x8af
++je     LOCAL+0x8b7
+ mov    0xa0(%rsp),%rax
+ movb   $0x6,(%rax)
+ add    $0x1f8,%rsp

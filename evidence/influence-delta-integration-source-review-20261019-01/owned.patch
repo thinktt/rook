@@ -1,0 +1,250 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -300,11 +300,18 @@
+     ) -> &'a Influence {
+         if scratch.is_none() {
+             *scratch = Some(Influence::build(position));
+-            if DIAGNOSTICS {
+-                self.stats.influence_builds += 1;
+-            }
++            self.record_influence_fill();
+         }
+         scratch.as_ref().unwrap()
++    }
++
++    // Shared event owner for the public scratch and private ordinary scratch.
++    // A delta fill preserves the same lazy construction event as a fresh fill.
++    #[inline]
++    pub(crate) fn record_influence_fill(&mut self) {
++        if DIAGNOSTICS {
++            self.stats.influence_builds += 1;
++        }
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -1,7 +1,7 @@
+ //! Ordinary recursive policy with shared tactical, retained and learned state.
+ //! Fixed-iteration and work-timed callers share this native recursive kernel.
+ use crate::engine::Search;
+-use crate::evaluator::{EvalStats, Node};
++use crate::evaluator::{EvalStats, Evaluator, Node};
+ use crate::first_iteration::Step;
+ use crate::history::SearchHistory;
+ use crate::influence::Influence;
+@@ -75,8 +75,7 @@
+         let raw_first = -direct.visit_ordinary(&mut child, &mut history,
+             Request { ply:1, depth:0, lower:-10000, upper:10000,
+                 previous_extension:0, iteration:1, checked:None },
+-            Predecessor { position:&position, influence:&influence, checked,
+-                movement:Some(movement) }).unwrap();
++            Predecessor::unlinked(&position, &influence, checked, Some(movement))).unwrap();
+         history.pop();
+         let child_pv = direct.pv[1][..direct.pv_len[1]].to_vec();
+         let first_work = direct.work();
+@@ -358,12 +357,7 @@
+                     iteration: 6,
+                     checked: Some(true),
+                 },
+-                Predecessor {
+-                    position: &position,
+-                    influence: &influence,
+-                    checked: false,
+-                    movement: Some(movement),
+-                },
++                Predecessor::unlinked(&position, &influence, false, Some(movement)),
+             )
+             .unwrap();
+         assert!((-10000..10000).contains(&score));
+@@ -389,7 +383,7 @@
+             let result=search.ordering_phase::<false>(&node,&mut history,
+                 Request{ply:0,depth:6,lower:-10000,upper:10000,
+                     previous_extension:0,iteration:6,checked:Some(false)},
+-                Predecessor{position:&position,influence:&map,checked:false,movement:None},
++                Predecessor::unlinked(&position, &map, false, None),
+                 &map,false,start);
+             assert_eq!(result,Err(Stopped::InternalIterativeOrdering));
+             assert_eq!((search.stats.iio_initial_phases,search.stats.iio_tail_phases),
+@@ -434,8 +428,7 @@
+         history.push(&child.position,Some(movement));
+         let request=Request{ply:1,depth:5,lower:-10000,upper:10000,
+             previous_extension:0,iteration:6,checked:Some(true)};
+-        let previous=Predecessor{position:&position,influence:&influence,checked:false,
+-            movement:Some(movement)};
++        let previous=Predecessor::unlinked(&position, &influence, false, Some(movement));
+         let result=match mode {
+             0=>search.visit_ordinary(&mut child,&mut history,request,previous),
+             1=>search.visit_ordinary_impl::<true>(&mut child,&mut history,request,previous),
+@@ -510,10 +503,74 @@
+ 
+ #[derive(Clone, Copy)]
+ pub(crate) struct Predecessor<'a> {
+-    pub(crate) position: &'a Position,
+-    pub(crate) influence: &'a Influence,
+-    pub(crate) checked: bool,
+-    pub(crate) movement: Option<Move>,
++    position: &'a Position,
++    influence: &'a Influence,
++    checked: bool,
++    movement: Option<Move>,
++    ordinary_child: bool,
++}
++
++impl<'a> Predecessor<'a> {
++    /// Raw context preserves supplied pressure/extension inputs without attesting
++    /// either the map's origin or an actual parent-to-child transition.
++    pub(crate) fn unlinked(
++        position: &'a Position,
++        influence: &'a Influence,
++        checked: bool,
++        movement: Option<Move>,
++    ) -> Self {
++        Self { position, influence, checked, movement, ordinary_child: false }
++    }
++
++    /// The sole production caller is colocated with the actual main Node::child.
++    /// Its parent Node position must equal current.position; only Retained may
++    /// have changed since that immutable invocation snapshot was captured.
++    fn main_child(current: TrustedCurrent<'a>, checked: bool, movement: Move) -> Self {
++        Self {
++            position: current.position,
++            influence: current.influence,
++            checked,
++            movement: Some(movement),
++            ordinary_child: movement.kind() == MoveKind::Ordinary,
++        }
++    }
++}
++
++// Invocation-local ownership: no supplied Some or raw getter can certify a map.
++struct CurrentInfluence<'a> {
++    position: &'a Position,
++    map: Option<Influence>,
++}
++
++struct TrustedCurrent<'a> {
++    position: &'a Position,
++    influence: &'a Influence,
++}
++
++impl<'a> CurrentInfluence<'a> {
++    fn new(position: &'a Position) -> Self {
++        Self { position, map: None }
++    }
++
++    fn fill<const D: bool>(&mut self, evaluator: &mut Evaluator<D>, previous: Predecessor<'_>) {
++        if self.map.is_none() {
++            self.map = Some(match (previous.ordinary_child, previous.movement) {
++                (true, Some(movement)) => Influence::derive_ordinary(
++                    previous.position, previous.influence, self.position, movement,
++                ),
++                _ => Influence::build(self.position),
++            });
++            evaluator.record_influence_fill();
++        }
++    }
++
++    // No position argument: the exact map cannot be relabeled after filling.
++    fn trusted(&self) -> TrustedCurrent<'_> {
++        TrustedCurrent {
++            position: self.position,
++            influence: self.map.as_ref().expect("current influence not filled"),
++        }
++    }
+ }
+ 
+ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+@@ -591,12 +648,7 @@
+                         iteration: depth as i32,
+                         checked: None,
+                     },
+-                    Predecessor {
+-                        position: &position,
+-                        influence: &root_influence,
+-                        checked: root_checked,
+-                        movement: Some(movement),
+-                    },
++                    Predecessor::unlinked(&position, &root_influence, root_checked, Some(movement)),
+                 );
+                 history.pop();
+                 let raw_score = -returned.map_err(Error::Stopped)?;
+@@ -760,7 +812,7 @@
+             target,
+         )
+         .adjustment;
+-        let mut scratch = None;
++        let mut scratch = CurrentInfluence::new(&position);
+         if policy::fast_admitted(
+             &position,
+             previous.position,
+@@ -779,7 +831,8 @@
+                     .movement
+                     .is_some_and(|m| quiescence_policy::capture_exception(previous.position, &m)),
+             ) {
+-                let map = self.evaluator.ensure_influence(&position, &mut scratch);
++                scratch.fill(&mut self.evaluator, previous);
++                let map = scratch.trusted().influence;
+                 if !policy::king_pressure(&position, previous.influence, map) {
+                     let trial = adjusted - self.threat(node, map);
+                     if trial >= request.upper {
+@@ -792,7 +845,8 @@
+                 }
+             }
+         }
+-        let map = self.evaluator.ensure_influence(&position, &mut scratch);
++        scratch.fill(&mut self.evaluator, previous);
++        let map = scratch.trusted().influence;
+         let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+@@ -802,12 +856,7 @@
+         if let Some(bound) = bounds.cutoff(request.lower,request.upper) {
+             return Ok(bound.score());
+         }
+-        let current = Predecessor {
+-            position: &position,
+-            influence: map,
+-            checked,
+-            movement: None,
+-        };
++        let current = Predecessor::unlinked(&position, map, checked, None);
+         if request.depth <= adjustment && evaluation.score >= request.upper && !checked {
+             let trial = if request.depth <= 2
+                 && !previous.checked
+@@ -989,10 +1038,9 @@
+             } else {
+                 let mut child = node.child(&self.evaluator.root, movement);
+                 let inherited = child.retained;
+-                let predecessor = Predecessor {
+-                    movement: Some(movement),
+-                    ..current
+-                };
++                // This child is made from this invocation's same node.position
++                // snapshot; intervening evaluation/IIO changes only Retained.
++                let predecessor = Predecessor::main_child(scratch.trusted(), checked, movement);
+                 history.push(&child.position, Some(movement));
+                 let full_window = index == 0
+                     || best <= request.lower
+@@ -1149,12 +1197,7 @@
+                         checked: None,
+                         ..request
+                     },
+-                    Predecessor {
+-                        position,
+-                        influence: map,
+-                        checked,
+-                        movement: Some(movement),
+-                    },
++                    Predecessor::unlinked(position, map, checked, Some(movement)),
+                 );
+                 history.pop();
+                 let score = -returned?;
+@@ -1178,3 +1221,7 @@
+         Ok(())
+     }
+ }
++
++#[cfg(test)]
++#[path = "influence_delta_integration_tests.rs"]
++mod influence_delta_integration_tests;

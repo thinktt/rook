@@ -1,0 +1,269 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -125,6 +125,24 @@
+             }
+             tag == piece.0
+         })
++    }
++
++    /// All matching slider origins whose ray in `direction` crosses F or T.
++    /// Geometric only: blockers, color and legal attacks do not limit influence
++    /// dependencies. F/T themselves are replaced separately by the delta owner.
++    #[inline]
++    pub(crate) fn geometric_slider_origins(
++        &self,
++        from: Square,
++        to: Square,
++        direction: usize,
++    ) -> u64 {
++        let [a, b, c, _] = self.planes;
++        let matching = if direction < 4 { a & (b ^ c) } else { c & !b };
++        let inverse = direction ^ 1;
++        let geometric = MASKS.rays[from.0 as usize][inverse]
++            | MASKS.rays[to.0 as usize][inverse];
++        matching & geometric & !((1u64 << from.0) | (1u64 << to.0))
+     }
+ 
+     #[inline]
+--- a/src/influence.rs
++++ b/src/influence.rs
+@@ -6,7 +6,7 @@
+ 
+ use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+ use crate::position::Position;
+-use crate::types::{Color, Piece, PieceKind, Square};
++use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ #[repr(u8)]
+@@ -29,6 +29,47 @@
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub struct Influence {
+     pub profiles: [[u8; 64]; 2],
++}
++
++// Test-only accounting observes actual kernel operations, not lowered traffic.
++#[cfg(test)]
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++struct DeltaWork {
++    writes: u64,
++    ray_calls: u64,
++    direction_queries: u64,
++    origins_considered: u64,
++    scheduled_copy_bytes: u64,
++}
++
++#[cfg(test)]
++std::thread_local! {
++    static DELTA_WORK: std::cell::Cell<Option<DeltaWork>> = const {
++        std::cell::Cell::new(None)
++    };
++}
++
++#[cfg(test)]
++fn count_work_begin() {
++    DELTA_WORK.with(|counter| {
++        assert!(counter.get().is_none(), "nested influence work count");
++        counter.set(Some(DeltaWork::default()));
++    });
++}
++
++#[cfg(test)]
++fn count_work_end() -> DeltaWork {
++    DELTA_WORK.with(|counter| counter.take().expect("influence work count not started"))
++}
++
++#[cfg(test)]
++fn count_work(update: impl FnOnce(&mut DeltaWork)) {
++    DELTA_WORK.with(|counter| {
++        if let Some(mut work) = counter.get() {
++            update(&mut work);
++            counter.set(Some(work));
++        }
++    });
+ }
+ 
+ impl Influence {
+@@ -91,6 +132,110 @@
+         influence
+     }
+ 
++    /// Derive the pure map for a genuine ordinary two-square transition.
++    ///
++    /// Preconditions: `parent_map` is exactly `Self::build(parent)`, both
++    /// positions have coherent boards/lists/tag planes, and `child` is the true
++    /// result of applying `movement` to `parent`. This kernel does not establish
++    /// that provenance; a synthetic predecessor or supplied map cannot attest it.
++    pub(crate) fn derive_ordinary(
++        parent: &Position,
++        parent_map: &Self,
++        child: &Position,
++        movement: Move,
++    ) -> Self {
++        debug_assert_eq!(movement.kind(), MoveKind::Ordinary);
++        let from = movement.from();
++        let to = movement.to();
++        let mut result = *parent_map;
++        #[cfg(test)]
++        count_work(|work| work.scheduled_copy_bytes += 128);
++
++        // Changed origins are replaced in full, including any captured slider.
++        for source in [from, to] {
++            result.piece_signed::<true>(&parent.board, source);
++        }
++        for source in [from, to] {
++            result.piece_signed::<false>(&child.board, source);
++        }
++
++        // Outside F/T the source tags agree. Discover all geometrically affected
++        // sliders, not merely visible attackers; OR deduplicates a ray whose
++        // origin can reach both changed squares in this direction.
++        let origins = parent.attack_view();
++        for direction in 0..8 {
++            #[cfg(test)]
++            count_work(|work| work.direction_queries += 1);
++            let mut selected = origins.geometric_slider_origins(from, to, direction);
++            while selected != 0 {
++                let source = Square(selected.trailing_zeros() as u8);
++                selected &= selected - 1;
++                #[cfg(test)]
++                count_work(|work| work.origins_considered += 1);
++                let piece = parent.board[source.0 as usize];
++                let contribution = match piece.kind() {
++                    PieceKind::Bishop => Contribution::Minor,
++                    PieceKind::Rook => Contribution::Rook,
++                    PieceKind::Queen => Contribution::Queen,
++                    _ => unreachable!("geometric slider origin"),
++                };
++                result.ray_signed::<true>(
++                    &parent.board, piece.color(), source, direction, contribution,
++                );
++                result.ray_signed::<false>(
++                    &child.board, piece.color(), source, direction, contribution,
++                );
++            }
++        }
++        result
++    }
++
++    // Only the delta path dispatches on a source's kind. Fresh construction
++    // retains its existing side/type loops and specializations.
++    fn piece_signed<const REMOVE: bool>(&mut self, board: &[Piece; 64], source: Square) {
++        let piece = board[source.0 as usize];
++        if piece.is_empty() {
++            return;
++        }
++        let side = piece.color();
++        let index = source.0 as usize;
++        match piece.kind() {
++            PieceKind::Pawn => {
++                let targets = &PAWN_TARGETS[side.index()][index];
++                for &target in &targets.squares[..targets.len as usize] {
++                    self.add_signed::<REMOVE>(side, Square(target & 63), Contribution::Pawn as u8);
++                }
++            }
++            PieceKind::Knight => {
++                let targets = &KNIGHT_SOURCES[index];
++                for &target in &targets.squares[..targets.len as usize] {
++                    self.add_signed::<REMOVE>(side, Square(target & 63), Contribution::Minor as u8);
++                }
++            }
++            PieceKind::King => {
++                let targets = &KING_TARGETS[index];
++                for &target in &targets.squares[..targets.len as usize] {
++                    self.add_signed::<REMOVE>(side, Square(target & 63), Contribution::Weak as u8);
++                }
++            }
++            PieceKind::Bishop => {
++                for direction in 0..4 {
++                    self.ray_signed::<REMOVE>(board, side, source, direction, Contribution::Minor);
++                }
++            }
++            PieceKind::Rook => {
++                for direction in 4..8 {
++                    self.ray_signed::<REMOVE>(board, side, source, direction, Contribution::Rook);
++                }
++            }
++            PieceKind::Queen => {
++                for direction in 0..8 {
++                    self.ray_signed::<REMOVE>(board, side, source, direction, Contribution::Queen);
++                }
++            }
++        }
++    }
++
+     #[inline]
+     pub fn code(&self, side: Color, square: Square) -> u8 {
+         self.profiles[side.index()][square.0 as usize]
+@@ -152,10 +297,22 @@
+ 
+     #[inline]
+     fn add(&mut self, side: Color, target: Square, weight: u8) {
++        self.add_signed::<false>(side, target, weight);
++    }
++
++    #[inline]
++    fn add_signed<const REMOVE: bool>(&mut self, side: Color, target: Square, weight: u8) {
++        #[cfg(test)]
++        count_work(|work| work.writes += 1);
+         let code = &mut self.profiles[side.index()][target.0 as usize];
+-        *code = code.wrapping_add(weight);
+-    }
+-
++        *code = if REMOVE {
++            code.wrapping_sub(weight)
++        } else {
++            code.wrapping_add(weight)
++        };
++    }
++
++    #[inline]
+     fn ray(
+         &mut self,
+         board: &[Piece; 64],
+@@ -164,6 +321,19 @@
+         direction: usize,
+         contribution: Contribution,
+     ) {
++        self.ray_signed::<false>(board, side, source, direction, contribution);
++    }
++
++    fn ray_signed<const REMOVE: bool>(
++        &mut self,
++        board: &[Piece; 64],
++        side: Color,
++        source: Square,
++        direction: usize,
++        contribution: Contribution,
++    ) {
++        #[cfg(test)]
++        count_work(|work| work.ray_calls += 1);
+         let step = DIRECTIONS[direction];
+         let diagonal = direction < 4;
+         let forward = if side == Color::White { 1 } else { -1 };
+@@ -174,7 +344,7 @@
+             debug_assert!(target < 64);
+             let target = Square(target & 63);
+             // Add the old weight before transparency or weakening.
+-            self.add(side, target, weight);
++            self.add_signed::<REMOVE>(side, target, weight);
+             let piece = board[target.0 as usize];
+             if piece.is_empty() {
+                 continue;
+@@ -192,7 +362,7 @@
+                 PieceKind::Pawn if diagonal && step.1 == forward => {
+                     if let Some(&extra) = targets.next() {
+                         debug_assert!(extra < 64);
+-                        self.add(side, Square(extra & 63), weight);
++                        self.add_signed::<REMOVE>(side, Square(extra & 63), weight);
+                     }
+                     break;
+                 }
+@@ -644,3 +814,7 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++#[path = "influence_delta_tests.rs"]
++mod delta_tests;

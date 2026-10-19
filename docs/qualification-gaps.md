@@ -61,6 +61,14 @@ Experiment28 direct child construction is rejected before tests or timing: the
 actual backend relocates and enlarges the copy instead of removing it. Source
 remains unpromoted; see [decision0018](decisions/0018-direct-child-construction-trial.md).
 
+Experiment29 ordinary influence delta is parked after its fixed generic pilot:
+0.316097% lower summed median CPU and3/7 lower cases miss the frozen advancement
+rule. Kernel179 and integrated182 native tests pass; all70 pilot lifetimes pass
+original strict replay checks. Conditional kernel operation reductions do not
+establish production savings. No own-PGO, separate54/wire regression, full117,
+12-game gate or source promotion follows; candidate25 remains retained. See
+[decision0019](decisions/0019-influence-delta-trial.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.

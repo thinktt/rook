@@ -1,0 +1,2404 @@
+--- 25-address-only-shape
++++ 29-address-only-shape
+@@ -10,43 +10,43 @@
+ mov    %rsi,%r14
+ mov    %rdi,%rbp
+ mov    (%r8),%rbx
+-mov    %rbx,0x50(%rsp)
++mov    %rbx,0x48(%rsp)
+ mov    0x8(%r8),%r13d
+ lea    (%rbx,%r13,1),%esi
+ cmp    $0x3f,%rbx
+-je     LOCAL+0x1de
++je     LOCAL+0x1e4
+ test   %r13d,%r13d
+-jle    LOCAL+0x1de
++jle    LOCAL+0x1e4
+ cmp    0x5618(%r14),%rbx
+-jae    LOCAL+0x1de
+-mov    %esi,0x28(%rsp)
+-mov    %r9,0x30(%rsp)
+-lea    0xe0(%rsp),%rdi
++jae    LOCAL+0x1e4
++mov    %esi,0x80(%rsp)
++mov    %r9,0x28(%rsp)
++lea    0x120(%rsp),%rdi
+ mov    %r14,%rsi
+-mov    %rcx,0x80(%rsp)
++mov    %rcx,0xa0(%rsp)
+ mov    %rcx,%rdx
+ call   rook2::engine::Search<_,H
+-movzbl 0xe0(%rsp),%eax
++movzbl 0x120(%rsp),%eax
+ cmp    $0x6,%al
+-jne    LOCAL+0x2a6
+-mov    %rbp,0x58(%rsp)
+-mov    0x50(%rsp),%rbp
++jne    LOCAL+0x2b2
++mov    %rbp,0x90(%rsp)
++mov    0x48(%rsp),%rbp
+ cmp    $0x40,%rbp
+-jae    LOCAL+0x20f7
++jae    LOCAL+0x21ab
+ movq   $0x0,0x2db0(%r14,%rbp,8)
+ lea    0x10(%r15),%rsi
+-lea    0x278(%rsp),%rdi
++lea    0x270(%rsp),%rdi
+ mov    $0xa0,%edx
+-mov    %rsi,0x98(%rsp)
++mov    %rsi,0x58(%rsp)
+ call   *RIPREF(%rip)
+ movzbl 0x19(%r12),%eax
+ cmp    $0x2,%al
+-jne    LOCAL+0x15d
+-movzbl 0x2f0(%rsp),%eax
++jne    LOCAL+0x160
++movzbl 0x2e8(%rsp),%eax
+ lea    (%rax,%rax,1),%ecx
+ lea    (%rcx,%rcx,2),%rdx
+-movd   0x2d8(%rsp,%rdx,1),%xmm0
+-movzbl 0x2dc(%rsp,%rdx,1),%esi
++movd   0x2d0(%rsp,%rdx,1),%xmm0
++movzbl 0x2d4(%rsp,%rdx,1),%esi
+ pxor   %xmm1,%xmm1
+ punpcklbw %xmm1,%xmm0
+ pshufd $0x55,%xmm0,%xmm1
+@@ -56,49 +56,49 @@
+ paddw  %xmm1,%xmm0
+ pextrw $0x0,%xmm0,%ecx
+ add    %rsi,%rcx
+-movzbl 0x2dd(%rsp,%rdx,1),%edx
++movzbl 0x2d5(%rsp,%rdx,1),%edx
+ lea    (%rcx,%rdx,1),%rdi
+ cmp    $0x11,%rdi
+-jae    LOCAL+0x2049
++jae    LOCAL+0x20fd
+ test   %dl,%dl
+-je     LOCAL+0x2126
++je     LOCAL+0x21da
+ mov    %eax,%edx
+ shl    $0x4,%edx
+ add    %rsp,%rdx
+-add    $0x278,%rdx
+-lea    0x2f8(%rsp),%rdi
++add    $0x270,%rdx
++lea    0x2f0(%rsp),%rdi
+ xor    $0x1,%al
+ movzbl 0x40(%rcx,%rdx,1),%esi
+ movzbl %al,%edx
+ call   rook2::attacks::AttackBits::attacked
+-mov    0x50(%rsp),%rbp
+-mov    %r14,0xa0(%rsp)
++mov    0x48(%rsp),%rbp
++mov    %r14,0x88(%rsp)
+ mov    0x562c(%r14),%r14d
+ mov    0x10(%r12),%ecx
+-mov    %ecx,0x24(%rsp)
+-mov    %al,0x23(%rsp)
++mov    %ecx,0x20(%rsp)
++mov    %al,0x1e(%rsp)
+ movzbl %al,%esi
+ and    $0x1,%esi
+-mov    0x80(%rsp),%rdi
+-mov    %esi,0x7c(%rsp)
++mov    0xa0(%rsp),%rdi
++mov    %esi,0x9c(%rsp)
+ call   *RIPREF(%rip)
+ test   %eax,%eax
+-je     LOCAL+0x2c6
++je     LOCAL+0x2d2
+ cmp    $0x2,%rbp
+-mov    0x24(%rsp),%r8d
+-ja     LOCAL+0x307
++mov    0x20(%rsp),%r8d
++ja     LOCAL+0x313
+ test   %r14d,%r14d
+-je     LOCAL+0x307
++je     LOCAL+0x313
+ cmp    $0x2,%eax
+-ja     LOCAL+0x307
++ja     LOCAL+0x313
+ inc    %rbp
+-mov    0xa0(%rsp),%rax
++mov    0x88(%rsp),%rax
+ movl   $0x0,0x6230(%rax,%rbp,4)
+ test   %r8d,%r8d
+-jg     LOCAL+0x318
+-jmp    LOCAL+0x2f0
+-mov    %rbp,0x58(%rsp)
+-mov    %r15,0x48(%rsp)
++jg     LOCAL+0x32a
++jmp    LOCAL+0x2fc
++mov    %rbp,0x90(%rsp)
++mov    %r15,0x40(%rsp)
+ xor    %eax,%eax
+ test   %esi,%esi
+ cmovle %eax,%esi
+@@ -107,63 +107,64 @@
+ movq   0xc(%r12),%xmm0
+ mov    0x562c(%r14),%r15d
+ testb  $0x1,0x10(%r9)
+-je     LOCAL+0x24d
++je     LOCAL+0x256
+ mov    (%r9),%rdi
+ movzwl 0x12(%r9),%eax
+-mov    %ax,0xe0(%rsp)
++mov    %ax,0x120(%rsp)
+ mov    %esi,%r12d
+-lea    0xe0(%rsp),%rsi
++lea    0x120(%rsp),%rsi
+ mov    %rcx,%rbx
+-movdqa %xmm0,0x80(%rsp)
+-call   *RIPREF(%rip)
+-movdqa 0x80(%rsp),%xmm0
++movdqa %xmm0,0xa0(%rsp)
++call   *RIPREF(%rip)
++movdqa 0xa0(%rsp),%xmm0
+ mov    %r12d,%esi
+ mov    %rbx,%rcx
+-mov    0x50(%rsp),%rbx
+-mov    %rbx,0xe0(%rsp)
+-mov    %esi,0xe8(%rsp)
+-mov    %ebp,0xec(%rsp)
+-movq   %xmm0,0xf0(%rsp)
+-mov    %r15d,0xf8(%rsp)
+-mov    %al,0xfc(%rsp)
++mov    0x48(%rsp),%rbx
++mov    %rbx,0x120(%rsp)
++mov    %esi,0x128(%rsp)
++mov    %ebp,0x12c(%rsp)
++movq   %xmm0,0x130(%rsp)
++mov    %r15d,0x138(%rsp)
++mov    %al,0x13c(%rsp)
+ movzbl 0x19(%r13),%r9d
+ movl   $0x0,(%rsp)
+-lea    0xe0(%rsp),%r8
+-mov    0x58(%rsp),%rdi
++lea    0x120(%rsp),%r8
++mov    0x90(%rsp),%rdi
+ mov    %r14,%rsi
+-mov    0x48(%rsp),%rdx
++mov    0x40(%rsp),%rdx
+ call   rook2::quiescence::<impl rook2::engine::Search<_,H
+-jmp    LOCAL+0xc20
+-mov    0xe1(%rsp),%rcx
+-mov    0xe8(%rsp),%rdx
++jmp    LOCAL+0xca2
++mov    0x121(%rsp),%rcx
++mov    0x128(%rsp),%rdx
+ mov    %rdx,0x8(%rbp)
+ mov    %rcx,0x1(%rbp)
+ mov    %al,0x0(%rbp)
+-jmp    LOCAL+0xc20
++jmp    LOCAL+0xca2
+ inc    %rbp
+ cmp    $0x41,%rbp
+-jae    LOCAL+0x2151
+-mov    0xa0(%rsp),%rax
+-mov    0x24(%rsp),%r8d
++jae    LOCAL+0x2205
++mov    0x88(%rsp),%rax
++mov    0x20(%rsp),%r8d
+ movl   $0x0,0x6230(%rax,%rbp,4)
+ test   %r8d,%r8d
+-jg     LOCAL+0x318
+-mov    0x80(%rsp),%rdi
+-call   *RIPREF(%rip)
+-mov    0x24(%rsp),%r8d
++jg     LOCAL+0x32a
++mov    0xa0(%rsp),%rdi
++call   *RIPREF(%rip)
++mov    0x20(%rsp),%r8d
+ test   %al,%al
+-je     LOCAL+0x318
+-mov    0x58(%rsp),%rax
++je     LOCAL+0x32a
++mov    0x90(%rsp),%rax
+ movl   $0x0,0x4(%rax)
+-jmp    LOCAL+0xc1d
++movb   $0x6,(%rax)
++jmp    LOCAL+0xca2
+ xor    %edx,%edx
+-mov    0xa0(%rsp),%r14
++mov    0x88(%rsp),%r14
+ cmp    0x170(%r14),%rdx
+-jo     LOCAL+0x210c
++jo     LOCAL+0x21c0
+ mov    0x180(%r14),%rcx
+-movzbl 0x2f2(%rsp),%eax
++movzbl 0x2ea(%rsp),%eax
+ cmp    $0x3f,%eax
+-ja     LOCAL+0x356
++ja     LOCAL+0x368
+ mov    %eax,%edx
+ shr    $0x2,%edx
+ and    $0xe,%edx
+@@ -171,75 +172,75 @@
+ shl    $0x8,%edx
+ add    $0x100,%edx
+ test   %rcx,%rcx
+-je     LOCAL+0x2119
++je     LOCAL+0x21cd
+ lea    0x170(%r14),%rsi
+-movzbl 0x2f1(%rsp),%edi
++movzbl 0x2e9(%rsp),%edi
+ xor    %eax,%eax
+-cmpb   $0x0,0x2f0(%rsp)
++cmpb   $0x0,0x2e8(%rsp)
+ sete   %al
+ shl    $0x10,%edi
+ or     %edx,%edi
+ shl    $0x14,%eax
+ or     %edi,%eax
+-xor    0x2e4(%rsp),%eax
++xor    0x2dc(%rsp),%eax
+ cmp    %rcx,%rax
+-mov    0x58(%rsp),%rbp
+-jb     LOCAL+0x39c
++mov    0x90(%rsp),%rbp
++jb     LOCAL+0x3b1
+ xor    %edx,%edx
+ div    %ecx
+ mov    %edx,%eax
+-mov    0x2e8(%rsp),%ecx
++mov    0x2e0(%rsp),%ecx
+ mov    0xc(%r12),%edx
+ mov    %rax,0x1d0(%rsp)
+ mov    %ecx,0x1d8(%rsp)
+ mov    %ebx,0x1dc(%rsp)
+-mov    0x28(%rsp),%eax
++mov    0x80(%rsp),%eax
+ mov    %eax,0x1e0(%rsp)
+-mov    %edx,0xac(%rsp)
++mov    %edx,0xb4(%rsp)
+ mov    %edx,0x1e4(%rsp)
+ mov    %r8d,0x1e8(%rsp)
+ mov    0x1e0(%rsp),%eax
+-mov    %eax,0xf0(%rsp)
++mov    %eax,0x130(%rsp)
+ mov    0x1e4(%rsp),%eax
+-mov    %eax,0xf4(%rsp)
++mov    %eax,0x134(%rsp)
+ mov    0x1e8(%rsp),%eax
+-mov    %eax,0xf8(%rsp)
++mov    %eax,0x138(%rsp)
+ mov    0x1ec(%rsp),%eax
+-mov    %eax,0xfc(%rsp)
++mov    %eax,0x13c(%rsp)
+ mov    0x1d0(%rsp),%rax
+-mov    %rax,0xe0(%rsp)
++mov    %rax,0x120(%rsp)
+ mov    0x1d8(%rsp),%eax
+-mov    %eax,0xe8(%rsp)
++mov    %eax,0x128(%rsp)
+ mov    0x1dc(%rsp),%eax
+-mov    %eax,0xec(%rsp)
+-lea    0x220(%rsp),%rdi
+-lea    0xe0(%rsp),%rdx
+-call   *RIPREF(%rip)
+-cmpl   $0x1,0x220(%rsp)
+-jne    LOCAL+0x476
+-mov    0x224(%rsp),%eax
++mov    %eax,0x12c(%rsp)
++lea    0x218(%rsp),%rdi
++lea    0x120(%rsp),%rdx
++call   *RIPREF(%rip)
++cmpl   $0x1,0x218(%rsp)
++jne    LOCAL+0x48e
++mov    0x21c(%rsp),%eax
+ mov    %eax,0x4(%rbp)
+ movb   $0x6,0x0(%rbp)
+-jmp    LOCAL+0xc20
++jmp    LOCAL+0xca2
+ mov    %r13,0x70(%rsp)
+-mov    %r15,0x48(%rsp)
+-movzbl 0x2e1(%rsp),%eax
+-movzbl 0x2db(%rsp),%r8d
+-mov    %rax,0xb0(%rsp)
++mov    %r15,0x40(%rsp)
++movzbl 0x2d9(%rsp),%eax
++movzbl 0x2d3(%rsp),%r8d
++mov    %rax,0xd8(%rsp)
+ lea    (%r8,%rax,1),%ebp
+-movzbl 0x2e0(%rsp),%eax
+-movzbl 0x2da(%rsp),%edi
++movzbl 0x2d8(%rsp),%eax
++movzbl 0x2d2(%rsp),%edi
+ mov    %r14,%rcx
+-mov    %rax,0x40(%rsp)
++mov    %rax,0x38(%rsp)
+ lea    (%rdi,%rax,1),%r14d
+-movzbl 0x2df(%rsp),%esi
+-movzbl 0x2d9(%rsp),%r10d
++movzbl 0x2d7(%rsp),%esi
++movzbl 0x2d1(%rsp),%r10d
+ lea    (%r10,%rsi,1),%r15d
+-movzbl 0x2de(%rsp),%edx
+-movzbl 0x2d8(%rsp),%r11d
++movzbl 0x2d6(%rsp),%edx
++movzbl 0x2d0(%rsp),%r11d
+ add    %edx,%r11d
+-movzbl 0x2dc(%rsp),%r9d
+-movzbl 0x2e2(%rsp),%edx
++movzbl 0x2d4(%rsp),%r9d
++movzbl 0x2da(%rsp),%edx
+ lea    (%rdx,%r9,1),%r13d
+ mov    %r15d,%eax
+ shr    $0x4,%eax
+@@ -259,7 +260,7 @@
+ add    %r11d,%eax
+ lea    (%rax,%r14,4),%eax
+ lea    (%rax,%r15,8),%eax
+-movzbl 0x2f4(%rsp),%r11d
++movzbl 0x2ec(%rsp),%r11d
+ shl    $0x4,%r11d
+ cmp    $0x140,%r11d
+ mov    $0x140,%ebp
+@@ -299,12 +300,16 @@
+ sbb    $0xffffffff,%r15d
+ cmp    $0x69,%ax
+ sbb    $0xffffffff,%r15d
++movzwl 0x228(%rsp),%ecx
++mov    %ecx,0x7c(%rsp)
+ cmp    $0x91,%eax
+ sbb    $0xffffffff,%r15d
++movzwl 0x22a(%rsp),%ecx
++mov    %ecx,0x34(%rsp)
+ cmp    $0xb5,%eax
+ sbb    $0xffffffff,%r15d
+-movzwl 0x230(%rsp),%ecx
+-mov    %ecx,0x6c(%rsp)
++movzbl 0x22c(%rsp),%ecx
++mov    %cl,0x1f(%rsp)
+ cmp    $0xd5,%eax
+ sbb    $0xffffffff,%r15d
+ cmp    $0xe7,%eax
+@@ -323,211 +328,231 @@
+ cmp    $0x2,%eax
+ mov    $0x1,%r11d
+ cmovge %eax,%r11d
+-movzwl 0x232(%rsp),%eax
+-mov    %eax,0x38(%rsp)
+ cmp    %r11d,%ebp
+ cmovl  %ebp,%r11d
+-movzbl 0x234(%rsp),%eax
+-mov    %al,0x22(%rsp)
+-mov    %ebp,0xa8(%rsp)
++mov    %ebp,0xb0(%rsp)
+ sub    %r11d,%ebp
+-mov    %ebp,0xb8(%rsp)
+-movb   $0x0,0x31f(%rsp)
+-mov    0x30(%rsp),%rax
++mov    %ebp,0x54(%rsp)
++lea    0x270(%rsp),%rax
++mov    %rax,0x388(%rsp)
++movb   $0x0,0x390(%rsp)
++lea    0x391(%rsp),%r13
++mov    0x28(%rsp),%rax
+ mov    (%rax),%rcx
+-mov    %rcx,0xd0(%rsp)
++mov    %rcx,0xb8(%rsp)
+ movzwl 0x10(%rax),%ecx
+ movzwl 0x12(%rax),%eax
+-mov    %eax,0x3c(%rsp)
+-mov    %ecx,0xc0(%rsp)
++mov    %eax,0x24(%rsp)
+ cmp    $0x1,%cl
+-jne    LOCAL+0x6c6
+-movzwl 0x3c(%rsp),%r11d
++mov    %ecx,0x64(%rsp)
++jne    LOCAL+0x6f0
++movzwl 0x24(%rsp),%r11d
+ mov    %r11d,%r14d
+ shr    $0xc,%r14d
+ and    $0x7,%r14d
+ lea    -0x1(%r14),%eax
+ cmp    $0x6,%eax
+-jae    LOCAL+0xc32
+-mov    0xa0(%rsp),%r14
+-lea    0x3010(%r14),%rbp
+-cmpb   $0x0,0x31f(%rsp)
+-jne    LOCAL+0x785
+-lea    0xe0(%rsp),%rdi
+-lea    0x278(%rsp),%rsi
+-call   *RIPREF(%rip)
+-movb   $0x1,0x31f(%rsp)
+-movups 0xe0(%rsp),%xmm0
+-movdqu 0xf0(%rsp),%xmm1
+-movups 0x100(%rsp),%xmm2
+-movups 0x110(%rsp),%xmm3
+-movups %xmm0,0x320(%rsp)
+-movdqu %xmm1,0x330(%rsp)
+-movups %xmm2,0x340(%rsp)
+-movups %xmm3,0x350(%rsp)
+-movups 0x120(%rsp),%xmm0
+-movups %xmm0,0x360(%rsp)
+-movups 0x130(%rsp),%xmm0
+-movups %xmm0,0x370(%rsp)
+-movups 0x140(%rsp),%xmm0
+-movups %xmm0,0x380(%rsp)
+-movdqu 0x150(%rsp),%xmm0
+-movdqu %xmm0,0x390(%rsp)
+-lea    0x320(%rsp),%rax
+-lea    0x3e8(%rsp),%rdi
+-mov    %rbp,%rsi
+-mov    %rax,%rbp
+-mov    0x48(%rsp),%rdx
+-mov    %rax,%rcx
+-mov    0x7c(%rsp),%r8d
++jae    LOCAL+0xcb4
++cmpb   $0x0,0x390(%rsp)
++je     LOCAL+0x72e
++mov    0x90(%rsp),%r15
++mov    0x88(%rsp),%r14
++mov    0x40(%rsp),%rbp
++jne    LOCAL+0x808
++lea    RIPREF(%rip),%rdi
++lea    RIPREF(%rip),%rdx
++mov    $0x1c,%esi
++call   *RIPREF(%rip)
++mov    0x28(%rsp),%rax
++test   %cl,0x15(%rax)
++mov    0x90(%rsp),%r15
++mov    0x40(%rsp),%rbp
++je     LOCAL+0x76e
++mov    0x8(%rax),%rdx
++mov    0x388(%rsp),%rcx
++lea    0x120(%rsp),%rdi
++mov    0xb8(%rsp),%rsi
++mov    0x24(%rsp),%r8d
++call   *RIPREF(%rip)
++jmp    LOCAL+0x784
++mov    0x388(%rsp),%rsi
++lea    0x120(%rsp),%rdi
++call   *RIPREF(%rip)
++mov    0x88(%rsp),%r14
++movb   $0x1,0x390(%rsp)
++movups 0x190(%rsp),%xmm0
++lea    0x391(%rsp),%r13
++movups %xmm0,0x70(%r13)
++movups 0x180(%rsp),%xmm0
++movups %xmm0,0x60(%r13)
++movups 0x170(%rsp),%xmm0
++movups %xmm0,0x50(%r13)
++movups 0x160(%rsp),%xmm0
++movups %xmm0,0x40(%r13)
++movdqu 0x120(%rsp),%xmm0
++movdqu 0x130(%rsp),%xmm1
++movups 0x140(%rsp),%xmm2
++movups 0x150(%rsp),%xmm3
++movups %xmm3,0x30(%r13)
++movups %xmm2,0x20(%r13)
++movdqu %xmm1,0x10(%r13)
++movdqu %xmm0,0x0(%r13)
++lea    0x3010(%r14),%rsi
++lea    0x370(%rsp),%rdi
++mov    %rbp,%rdx
++mov    %r13,%rcx
++mov    0x9c(%rsp),%r8d
+ call   rook2::evaluator::Evaluator<_
+-mov    0x28(%rsp),%eax
+-mov    %eax,%r15d
+-shr    $0x1f,%r15d
+-add    %eax,%r15d
+-sar    $1,%r15d
+-cmp    %ebx,%r15d
++mov    0x80(%rsp),%eax
++mov    %eax,%ebp
++shr    $0x1f,%ebp
++add    %eax,%ebp
++sar    $1,%ebp
++cmp    %ebx,%ebp
+ mov    $0xffffd8f0,%edi
+-cmovl  0x3f4(%rsp),%edi
++cmovl  0x37c(%rsp),%edi
+ mov    $0x2710,%esi
+-cmovl  0x3f8(%rsp),%esi
+-mov    0x24(%rsp),%edx
++cmovl  0x380(%rsp),%esi
++mov    0x20(%rsp),%edx
+ cmp    %edx,%edi
+ setl   %al
+-cmp    0xac(%rsp),%esi
++cmp    0xb4(%rsp),%esi
+ setg   %cl
+ test   %cl,%al
+-mov    0x58(%rsp),%rax
+-mov    0x70(%rsp),%r13
+-je     LOCAL+0x9d8
+-mov    %rdi,0x40(%rsp)
+-mov    %esi,0x1fc(%rsp)
+-lea    0x278(%rsp),%rax
+-mov    %rax,0x400(%rsp)
+-mov    %rbp,0x408(%rsp)
+-movzbl 0x23(%rsp),%eax
+-mov    %al,0x414(%rsp)
+-movw   $0x0,0x410(%rsp)
+-cmp    0xb8(%rsp),%r13d
+-jle    LOCAL+0x9e5
++je     LOCAL+0xa59
++mov    %rdi,0x38(%rsp)
++mov    %esi,0x1f4(%rsp)
++lea    0x270(%rsp),%rax
++mov    %rax,0x318(%rsp)
++mov    %r13,0x320(%rsp)
++movzbl 0x1e(%rsp),%eax
++mov    %al,0x32c(%rsp)
++movw   $0x0,0x328(%rsp)
++movb   $0x0,0x32d(%rsp)
++mov    0x54(%rsp),%ecx
++cmp    %ecx,0x70(%rsp)
++mov    %r15,%r13
++jle    LOCAL+0xa6b
+ mov    0x198(%r14),%rsi
+-mov    0x50(%rsp),%rdi
++mov    0x48(%rsp),%rdi
+ cmp    %rsi,%rdi
+-jae    LOCAL+0x2173
++jae    LOCAL+0x2227
+ mov    %rdi,%rax
+ shl    $0xa,%rax
+ lea    (%rax,%rdi,8),%rsi
+ add    0x190(%r14),%rsi
+-lea    0x278(%rsp),%rdi
++lea    0x270(%rsp),%rdi
+ call   *RIPREF(%rip)
+ mov    0x198(%r14),%rsi
+-mov    0x50(%rsp),%rax
++mov    0x48(%rsp),%rax
+ cmp    %rsi,%rax
+-jae    LOCAL+0x2180
++jae    LOCAL+0x2234
+ mov    0x190(%r14),%rdi
+ mov    %rax,%rcx
+ shl    $0xa,%rcx
+ lea    (%rcx,%rax,8),%rax
+-mov    0x400(%rdi,%rax,1),%rsi
+-test   %rsi,%rsi
+-mov    0x24(%rsp),%edx
+-je     LOCAL+0xc05
++mov    0x400(%rdi,%rax,1),%r15
++test   %r15,%r15
++mov    0x20(%rsp),%edx
++je     LOCAL+0xc89
+ lea    -0x270e(%rbx),%ecx
+ cmp    %edx,%ecx
+-jge    LOCAL+0xc15
+-mov    %rsi,0xb0(%rsp)
++jge    LOCAL+0xc99
+ lea    0x5630(%r14),%rdx
+-lea    0x230(%rsp),%rcx
++lea    0x228(%rsp),%rcx
+ add    %rax,%rdi
+ lea    0x1b0(%r14),%rsi
+-lea    0x5010(%r14),%r8
+-lea    0x278(%rsp),%rax
+-mov    %rax,0xe0(%rsp)
+-mov    %r8,0x1f0(%rsp)
+-mov    %r8,0xe8(%rsp)
+-mov    %rdx,0x238(%rsp)
+-mov    %rdx,0xf0(%rsp)
+-mov    %rbp,0xf8(%rsp)
+-lea    0x50(%rsp),%rax
+-mov    %rax,0x100(%rsp)
+-mov    %rcx,0x108(%rsp)
+-lea    0xe0(%rsp),%rdx
++lea    0x5010(%r14),%rax
++lea    0x270(%rsp),%r8
++mov    %r8,0x120(%rsp)
++mov    %rax,0xd0(%rsp)
++mov    %rax,0x128(%rsp)
++mov    %rdx,0x230(%rsp)
++mov    %rdx,0x130(%rsp)
++lea    0x391(%rsp),%rax
++mov    %rax,0x138(%rsp)
++lea    0x48(%rsp),%rax
++mov    %rax,0x140(%rsp)
++mov    %rcx,0x148(%rsp)
++lea    0x120(%rsp),%rdx
+ call   rook2::tactical::order_by
+ mov    0x1a8(%r14),%rsi
+-mov    0x50(%rsp),%rdi
++mov    0x48(%rsp),%rdi
+ cmp    %rsi,%rdi
+-jae    LOCAL+0x2213
+-mov    0xb0(%rsp),%rdx
+-cmp    $0x201,%rdx
+-jae    LOCAL+0x20cd
+-cmp    %ebx,%r15d
++jae    LOCAL+0x2310
++cmp    $0x201,%r15
++jae    LOCAL+0x2181
++cmp    %ebx,%ebp
+ setl   %bpl
+ shl    $0x9,%rdi
+ add    0x1a0(%r14),%rdi
+ xor    %esi,%esi
+-call   *RIPREF(%rip)
+-movzbl 0x2f0(%rsp),%eax
+-mov    %rax,0x198(%rsp)
+-movzbl 0x23(%rsp),%eax
+-or     0x22(%rsp),%al
++mov    %r15,%rdx
++call   *RIPREF(%rip)
++movzbl 0x2e8(%rsp),%eax
++mov    %rax,0x118(%rsp)
++movzbl 0x1e(%rsp),%eax
++or     0x1f(%rsp),%al
+ or     %bpl,%al
+ test   $0x1,%al
+ mov    %r12,0xc8(%rsp)
+-je     LOCAL+0xf9e
+-mov    0x38(%rsp),%eax
+-mov    %eax,0x2c(%rsp)
+-mov    0x80(%rsp),%rcx
+-mov    0x48(%rsp),%rdx
+-mov    0x30(%rsp),%r9
+-jmp    LOCAL+0x1305
++je     LOCAL+0x1027
++mov    0x34(%rsp),%eax
++mov    %eax,0x50(%rsp)
++mov    0xa0(%rsp),%rcx
++mov    0x28(%rsp),%r9
++mov    0x40(%rsp),%rbp
++cmpl   $0x3,0x70(%rsp)
++jg     LOCAL+0x1390
++jmp    LOCAL+0x13f1
+ cmp    %edx,%edi
+ cmovge %edi,%esi
+-mov    %esi,0x4(%rax)
+-jmp    LOCAL+0xc1d
+-mov    0x3f0(%rsp),%ecx
+-cmp    %edx,%ecx
+-jl     LOCAL+0x848
++mov    %esi,0x4(%r15)
++movb   $0x6,(%r15)
++jmp    LOCAL+0xca2
++mov    0x378(%rsp),%r15d
++cmp    %edx,%r15d
++jl     LOCAL+0x8c4
+ test   $0x1,%al
+-jne    LOCAL+0x848
+-cmp    $0x2,%r13d
+-ja     LOCAL+0xa37
+-mov    0x30(%rsp),%rax
++jne    LOCAL+0x8c4
++cmpl   $0x2,0x70(%rsp)
++ja     LOCAL+0xabd
++mov    0x28(%rsp),%rax
+ cmpb   $0x0,0x14(%rax)
+-jne    LOCAL+0xa37
+-mov    0x30(%rsp),%rax
++jne    LOCAL+0xabd
++mov    0x28(%rsp),%rax
+ mov    0x8(%rax),%rsi
+-lea    0x278(%rsp),%rdi
+-mov    %rbp,%rdx
+-mov    %rcx,0xb8(%rsp)
++lea    0x270(%rsp),%rdi
++lea    0x391(%rsp),%rdx
+ call   *RIPREF(%rip)
+ test   %al,%al
+-je     LOCAL+0x1c1f
+-lea    0xf0(%rsp),%rsi
+-mov    0x98(%rsp),%rcx
++je     LOCAL+0x1d10
++lea    0x130(%rsp),%rsi
++mov    0x58(%rsp),%rcx
+ mov    0x70(%rcx),%rax
+-mov    %rax,0x160(%rsp)
++mov    %rax,0x1a0(%rsp)
+ movups 0x60(%rcx),%xmm0
+-movups %xmm0,0x150(%rsp)
++movups %xmm0,0x190(%rsp)
+ movups 0x50(%rcx),%xmm0
+-movups %xmm0,0x140(%rsp)
++movups %xmm0,0x180(%rsp)
+ movups 0x40(%rcx),%xmm0
+-movups %xmm0,0x130(%rsp)
++movups %xmm0,0x170(%rsp)
+ movups (%rcx),%xmm0
+ movups 0x10(%rcx),%xmm1
+ movups 0x20(%rcx),%xmm2
+ movups 0x30(%rcx),%xmm3
+-movups %xmm3,0x120(%rsp)
+-movups %xmm2,0x110(%rsp)
+-movups %xmm1,0x100(%rsp)
+-movups %xmm0,0xf0(%rsp)
+-mov    0x48(%rsp),%r9
++movups %xmm3,0x160(%rsp)
++movups %xmm2,0x150(%rsp)
++movups %xmm1,0x140(%rsp)
++movups %xmm0,0x130(%rsp)
++mov    0x40(%rsp),%r9
+ movzbl 0x89(%r9),%eax
+ movups 0x9c(%r9),%xmm0
+-movups %xmm0,0x17c(%rsp)
++movups %xmm0,0x1bc(%rsp)
+ mov    0xac(%r9),%ecx
+-mov    %ecx,0x18c(%rsp)
++mov    %ecx,0x1cc(%rsp)
+ movups 0x8c(%r9),%xmm0
+-movups %xmm0,0x16c(%rsp)
++movups %xmm0,0x1ac(%rsp)
+ movzbl 0x88(%r9),%ecx
+ xor    $0x1,%cl
+ movzbl 0x8b(%r9),%edx
+@@ -535,57 +560,56 @@
+ movzbl 0xc(%r9),%edi
+ inc    %dil
+ mov    0x8(%r9),%r8d
+-mov    %cl,0x168(%rsp)
+-mov    %al,0x169(%rsp)
+-movb   $0x40,0x16a(%rsp)
+-mov    %dl,0x16b(%rsp)
++mov    %cl,0x1a8(%rsp)
++mov    %al,0x1a9(%rsp)
++movb   $0x40,0x1aa(%rsp)
++mov    %dl,0x1ab(%rsp)
+ mov    (%r9),%rax
+-mov    %rax,0xe0(%rsp)
+-mov    %r8d,0xe8(%rsp)
+-mov    %dil,0xec(%rsp)
+-mov    0x80(%rsp),%rbp
+-mov    %rbp,%rdi
++mov    %rax,0x120(%rsp)
++mov    %r8d,0x128(%rsp)
++mov    %dil,0x12c(%rsp)
++xor    %r13d,%r13d
++mov    0xa0(%rsp),%r15
++mov    %r15,%rdi
+ xor    %edx,%edx
+ call   *RIPREF(%rip)
+-mov    0x50(%rsp),%rax
++mov    0x48(%rsp),%rax
+ inc    %rax
+-cmp    $0x6,%r13d
+-mov    %r13d,%ecx
++mov    0x70(%rsp),%rcx
++cmp    $0x6,%ecx
+ adc    $0xfffffffc,%ecx
+-movd   0x24(%rsp),%xmm0
++movd   0x20(%rsp),%xmm0
+ pshufd $0x50,%xmm0,%xmm0
+ movq   RIPREF(%rip),%xmm1
+ psubd  %xmm0,%xmm1
+-mov    %rax,0x1a0(%rsp)
+-mov    %ecx,0x1a8(%rsp)
+-movq   %xmm1,0x1ac(%rsp)
+-movw   $0x200,0x1b8(%rsp)
+-mov    0xa8(%rsp),%eax
+-mov    %eax,0x1b4(%rsp)
+-lea    0x200(%rsp),%rdi
+-lea    0xe0(%rsp),%rdx
+-lea    0x1a0(%rsp),%r8
+-lea    0x400(%rsp),%r9
++mov    %rax,0xe8(%rsp)
++mov    %ecx,0xf0(%rsp)
++movq   %xmm1,0xf4(%rsp)
++movw   $0x200,0x100(%rsp)
++mov    0xb0(%rsp),%eax
++mov    %eax,0xfc(%rsp)
++lea    0x1f8(%rsp),%rdi
++lea    0x120(%rsp),%rdx
++lea    0xe8(%rsp),%r8
++lea    0x318(%rsp),%r9
+ mov    %r14,%rsi
+-mov    %rbp,%rcx
++mov    %r15,%rcx
+ call   LOCAL+0x0
+-mov    %rbp,%rdi
+-call   *RIPREF(%rip)
+-movzbl 0x200(%rsp),%eax
++mov    %r15,%rdi
++call   *RIPREF(%rip)
++movzbl 0x1f8(%rsp),%eax
+ cmp    $0x6,%al
+-jne    LOCAL+0x12a8
+-xor    %ecx,%ecx
+-sub    0x204(%rsp),%ecx
+-mov    0x70(%rsp),%r13
+-lea    0x320(%rsp),%rbp
+-jmp    LOCAL+0x1c5d
++jne    LOCAL+0x131f
++sub    0x1fc(%rsp),%r13d
++mov    %r13,%r15
++mov    0x90(%rsp),%r13
++jmp    LOCAL+0x1d4d
+ lea    -0x2710(%rbx),%eax
+ xor    %ecx,%ecx
+-testb  $0x1,0x23(%rsp)
++testb  $0x1,0x1e(%rsp)
+ cmovne %eax,%ecx
+-mov    0x58(%rsp),%rax
+-mov    %ecx,0x4(%rax)
+-movb   $0x6,(%rax)
++mov    %ecx,0x4(%r13)
++movb   $0x6,0x0(%r13)
+ add    $0x428,%rsp
+ pop    %rbx
+ pop    %r12
+@@ -595,12 +619,12 @@
+ pop    %rbp
+ ret
+ test   %r14d,%r14d
+-jne    LOCAL+0x21b9
++jne    LOCAL+0x226d
+ shr    $0x6,%r11d
+ and    $0x3f,%r11d
+-mov    0xd0(%rsp),%rax
++mov    0xb8(%rsp),%rax
+ cmpb   $0x0,(%rax,%r11,1)
+-jne    LOCAL+0x6c6
++jne    LOCAL+0x6f0
+ movzwl %r8w,%eax
+ movzwl %r10w,%r8d
+ add    %eax,%r8d
+@@ -611,37 +635,40 @@
+ movzwl %r9w,%edi
+ add    %eax,%edi
+ test   $0xe,%dil
+-jne    LOCAL+0xca1
+-movzwl 0xb0(%rsp),%eax
++jne    LOCAL+0xd27
++movzwl 0xd8(%rsp),%eax
++mov    %ecx,%edi
+ movzwl %si,%ecx
+ add    %eax,%ecx
+-movzwl 0x40(%rsp),%eax
++movzwl 0x38(%rsp),%eax
+ add    %ecx,%eax
+ shr    $0x4,%ecx
+ add    %ecx,%eax
+ movzwl %dx,%ecx
+ add    %eax,%ecx
+ test   $0xe,%cl
+-je     LOCAL+0x6c6
+-mov    0xb8(%rsp),%eax
++mov    %edi,%ecx
++je     LOCAL+0x6f0
++mov    0x54(%rsp),%eax
+ cmp    %eax,0x70(%rsp)
+-jg     LOCAL+0x6c6
++jg     LOCAL+0x6f0
+ mov    %r12,0xc8(%rsp)
+-mov    0x48(%rsp),%r12
++mov    0x40(%rsp),%r12
+ cmpb   $0x0,0x88(%r12)
+ mov    $0x6,%eax
+-mov    $0xfffffffa,%ebp
+-cmove  %eax,%ebp
++mov    $0xfffffffa,%ecx
++cmove  %eax,%ecx
+ xor    %r15d,%r15d
+-testb  $0x1,0x23(%rsp)
+-cmovne %r15d,%ebp
+-mov    0xa0(%rsp),%r14
++testb  $0x1,0x1e(%rsp)
++cmovne %r15d,%ecx
++mov    %ecx,0x38(%rsp)
++mov    0x88(%rsp),%r14
+ lea    0x5010(%r14),%rdi
+-mov    %rdi,0xb0(%rsp)
+-mov    0x98(%rsp),%r13
++mov    %rdi,0xd0(%rsp)
++mov    0x58(%rsp),%r13
+ mov    %r13,%rsi
+ call   *RIPREF(%rip)
+-mov    %eax,0x40(%rsp)
++mov    %eax,0xd8(%rsp)
+ movzbl 0x79(%r12),%eax
+ movzbl 0x73(%r12),%ecx
+ add    %eax,%ecx
+@@ -677,8 +704,8 @@
+ movzbl 0x8c(%r12),%ecx
+ shl    $0x4,%ecx
+ cmp    $0x140,%ecx
+-mov    $0x140,%eax
+-cmovae %eax,%ecx
++mov    $0x140,%ebp
++cmovae %ebp,%ecx
+ cmp    $0x41,%ecx
+ mov    $0x40,%eax
+ cmovb  %eax,%ecx
+@@ -741,8 +768,7 @@
+ movzbl 0x8c(%r12),%ecx
+ shl    $0x4,%ecx
+ cmp    $0x140,%ecx
+-mov    $0x140,%esi
+-cmovae %esi,%ecx
++cmovae %ebp,%ecx
+ lea    (%rdx,%rdi,8),%edx
+ cmp    $0x41,%ecx
+ mov    $0x40,%esi
+@@ -773,119 +799,119 @@
+ mov    0x5610(%r14),%r10d
+ shr    $0x20,%rcx
+ test   %r10,%r10
+-je     LOCAL+0xf3e
++je     LOCAL+0xfbe
+ mov    0x7c(%r12),%r13d
+ xor    0x80(%r12),%r13d
+ lea    0x1(%r10),%r11
+ cmp    %r11,%r13
+-jb     LOCAL+0xf38
+-mov    %eax,%r14d
++jb     LOCAL+0xfb8
++mov    %eax,%ebp
+ mov    %r13d,%eax
+ xor    %edx,%edx
+ div    %r11d
+-mov    %r14d,%eax
++mov    %ebp,%eax
+ mov    %edx,%r13d
+ shr    $1,%r10d
+ sub    %r10d,%r13d
+-mov    %edi,%edx
+-neg    %edx
++mov    %edi,%r10d
++neg    %r10d
+ test   %r9b,%r9b
+-cmove  %edi,%edx
+-add    0x40(%rsp),%ebp
+-add    %esi,%ebp
+-add    %r8d,%ebp
+-add    %edx,%ebp
+-add    %r13d,%ebp
+-add    %eax,%ebp
++cmove  %edi,%r10d
++mov    0x38(%rsp),%edx
++add    0xd8(%rsp),%edx
++add    %esi,%edx
++add    %r8d,%edx
++add    %r10d,%edx
++add    %r13d,%edx
++add    %eax,%edx
+ movzwl %cx,%eax
+ cmp    $0xbf,%eax
+-jbe    LOCAL+0x1d30
++jbe    LOCAL+0x1e1d
+ movl   $0x2710,0x8(%rsp)
+ movl   $0xffffd8f0,(%rsp)
+-lea    0xe0(%rsp),%rdi
+-mov    0x98(%rsp),%rsi
+-mov    %ebp,%edx
+-mov    0x7c(%rsp),%r9d
+-call   *RIPREF(%rip)
+-mov    0xe0(%rsp),%ebp
+-jmp    LOCAL+0x1d42
+-mov    0x28(%rsp),%eax
++lea    0x120(%rsp),%rdi
++mov    0x58(%rsp),%rsi
++mov    0x9c(%rsp),%r9d
++call   *RIPREF(%rip)
++mov    0x120(%rsp),%edx
++jmp    LOCAL+0x1e2f
++mov    0x80(%rsp),%eax
+ add    $0xfffffffd,%eax
+ cmp    %ebx,%eax
+-mov    0x80(%rsp),%rcx
+-mov    0x48(%rsp),%rdx
+-mov    0x30(%rsp),%r9
+-lea    0x320(%rsp),%rbp
+-jl     LOCAL+0x12e1
+-lea    0x2d8(%rsp),%rax
+-mov    0x198(%rsp),%r10
+-lea    (%r10,%r10,2),%rdi
+-movzbl 0x4(%rax,%rdi,2),%r8d
+-shl    $0x10,%r8d
++mov    0xa0(%rsp),%rcx
++mov    0x28(%rsp),%r9
++mov    0x40(%rsp),%rbp
++jl     LOCAL+0x135b
++lea    0x2d0(%rsp),%rax
++mov    0x118(%rsp),%r8
++lea    (%r8,%r8,2),%rdi
++movzbl 0x4(%rax,%rdi,2),%edx
++shl    $0x10,%edx
+ movzbl 0x3(%rax,%rdi,2),%esi
+ shl    $0xc,%esi
+-add    %r8d,%esi
+-movzbl 0x2(%rax,%rdi,2),%r8d
+-shl    $0x8,%r8d
+-add    %esi,%r8d
++add    %edx,%esi
++movzbl 0x2(%rax,%rdi,2),%edx
++shl    $0x8,%edx
++add    %esi,%edx
+ movzbl 0x1(%rax,%rdi,2),%esi
+ shl    $0x4,%esi
+ movzbl (%rax,%rdi,2),%edi
+-or     %r8d,%edi
++or     %edx,%edi
+ add    %esi,%edi
+ cmp    $0x1010,%edi
+-jb     LOCAL+0x12e1
+-mov    %r10d,%edx
++jb     LOCAL+0x135b
++mov    %r8d,%edx
+ xor    $0x1,%dl
+ lea    0x1(%rbx),%esi
+-mov    %esi,0x28(%rsp)
++mov    %esi,0x54(%rsp)
+ movzbl %dl,%esi
+ lea    (%rsi,%rsi,2),%rdx
+-lea    (%rax,%rdx,2),%r12
++lea    (%rax,%rdx,2),%rax
++mov    %rax,0x80(%rsp)
+ shl    $0x4,%esi
+-lea    (%rsp,%rsi,1),%r15
+-add    $0x2b8,%r15
++lea    (%rsp,%rsi,1),%rax
++add    $0x2b0,%rax
++mov    %rax,0x58(%rsp)
+ xor    %ebp,%ebp
+-lea    0x3c8(%rsp),%rbx
+-mov    %r12,0x98(%rsp)
+-jmp    LOCAL+0x1072
+-mov    0x80(%rsp),%rcx
+-mov    0x30(%rsp),%r9
++mov    %r8,%rbx
++jmp    LOCAL+0x10e9
++mov    0xa0(%rsp),%rcx
++mov    0x28(%rsp),%r9
+ inc    %rbp
+-cmp    %rbp,0xb0(%rsp)
+-je     LOCAL+0x12eb
++cmp    %rbp,%r15
++je     LOCAL+0x136f
+ mov    0x198(%r14),%rsi
+-mov    0x50(%rsp),%rdi
++mov    0x48(%rsp),%rdi
+ cmp    %rsi,%rdi
+-jae    LOCAL+0x2166
++jae    LOCAL+0x221a
+ mov    %rdi,%rax
+ shl    $0xa,%rax
+ lea    (%rax,%rdi,8),%rax
+ add    0x190(%r14),%rax
+-movzwl (%rax,%rbp,2),%esi
+-mov    %si,0xc6(%rsp)
+-mov    %esi,%eax
++movzwl (%rax,%rbp,2),%r12d
++mov    %r12w,0xc6(%rsp)
++mov    %r12d,%eax
+ shr    $0xc,%eax
+ and    $0x7,%eax
+ lea    -0x1(%rax),%edx
+ cmp    $0x6,%edx
+-jb     LOCAL+0x1061
+-mov    %esi,0x2c(%rsp)
++jb     LOCAL+0x10dd
+ test   %eax,%eax
+-jne    LOCAL+0x21b9
+-lea    0x2f8(%rsp),%rax
++jne    LOCAL+0x226d
++lea    0x2f0(%rsp),%rax
+ movups (%rax),%xmm0
+ movups 0x10(%rax),%xmm1
+-movaps %xmm1,0xf0(%rsp)
+-movaps %xmm0,0xe0(%rsp)
+-mov    %rbx,%rdi
+-lea    0xe0(%rsp),%rsi
+-lea    0x278(%rsp),%rdx
+-mov    0x2c(%rsp),%ecx
++movaps %xmm1,0x130(%rsp)
++movaps %xmm0,0x120(%rsp)
++lea    0x330(%rsp),%rdi
++lea    0x120(%rsp),%rsi
++lea    0x270(%rsp),%rdx
++mov    %r12d,%ecx
+ call   rook2::attacks::AttackBits::projected
+-movd   (%r12),%xmm0
++mov    0x80(%rsp),%rdx
++movd   (%rdx),%xmm0
+ punpcklbw RIPREF(%rip),%xmm0
+-movzbl 0x4(%r12),%ecx
++movzbl 0x4(%rdx),%ecx
+ pshufd $0x55,%xmm0,%xmm1
+ paddw  %xmm0,%xmm1
+ movdqa %xmm1,%xmm0
+@@ -893,246 +919,266 @@
+ paddw  %xmm1,%xmm0
+ pextrw $0x0,%xmm0,%eax
+ add    %rcx,%rax
+-movzbl 0x5(%r12),%ecx
++movzbl 0x5(%rdx),%ecx
+ lea    (%rax,%rcx,1),%rdi
+ cmp    $0x11,%rdi
+-jae    LOCAL+0x2049
++jae    LOCAL+0x20fd
+ test   %cl,%cl
+-mov    0x198(%rsp),%rdx
+-je     LOCAL+0x2202
+-movzbl (%r15,%rax,1),%esi
+-mov    %rbx,%rdi
++je     LOCAL+0x22ff
++mov    0x58(%rsp),%rcx
++movzbl (%rcx,%rax,1),%esi
++lea    0x330(%rsp),%rdi
++mov    %ebx,%edx
+ call   rook2::attacks::AttackBits::attacked
+ test   %al,%al
+-je     LOCAL+0x1054
++je     LOCAL+0x10d0
++mov    %r12d,%ebx
+ mov    %r15,%r12
+-mov    %rbx,%r15
+-lea    0xe0(%rsp),%rdi
+-mov    0x48(%rsp),%rsi
+-mov    0x1f0(%rsp),%rdx
+-mov    0x2c(%rsp),%ebx
++lea    0x120(%rsp),%rdi
++mov    0x40(%rsp),%rsi
++mov    0xd0(%rsp),%rdx
+ mov    %ebx,%ecx
+ call   *RIPREF(%rip)
+-mov    0x80(%rsp),%r13
+-mov    %r13,%rdi
+-lea    0xf0(%rsp),%rsi
++mov    0xa0(%rsp),%r15
++mov    %r15,%rdi
++lea    0x130(%rsp),%rsi
+ mov    $0x1,%edx
++mov    %ebx,0x50(%rsp)
+ mov    %ebx,%ecx
+ call   *RIPREF(%rip)
+-mov    0x50(%rsp),%rbx
++mov    0x48(%rsp),%rbx
+ inc    %rbx
+-mov    0xa0(%rsp),%rax
++mov    0x88(%rsp),%rax
+ mov    0x562c(%rax),%r14d
+-lea    0x278(%rsp),%rdi
++lea    0x270(%rsp),%rdi
+ lea    0xc6(%rsp),%rsi
+ call   *RIPREF(%rip)
+-mov    %rbx,0x1a0(%rsp)
+-mov    0x28(%rsp),%ecx
+-mov    %ecx,0x1a8(%rsp)
+-mov    0xa8(%rsp),%ecx
+-mov    %ecx,0x1ac(%rsp)
++mov    %rbx,0xe8(%rsp)
++mov    0x54(%rsp),%ecx
++mov    %ecx,0xf0(%rsp)
++mov    0xb0(%rsp),%ecx
++mov    %ecx,0xf4(%rsp)
+ movabs $0xffffdcd9ffffdcd8,%rcx
+-mov    %rcx,0x1b0(%rsp)
+-mov    %r14d,0x1b8(%rsp)
+-mov    0xa0(%rsp),%r14
+-mov    %al,0x1bc(%rsp)
++mov    %rcx,0xf8(%rsp)
++mov    %r14d,0x100(%rsp)
++mov    0x88(%rsp),%r14
++mov    %al,0x104(%rsp)
+ movl   $0x0,(%rsp)
+-lea    0x210(%rsp),%rdi
++lea    0x208(%rsp),%rdi
+ mov    %r14,%rsi
+-lea    0xe0(%rsp),%rdx
+-mov    %r13,%rcx
+-lea    0x1a0(%rsp),%r8
++lea    0x120(%rsp),%rdx
++mov    %r15,%rcx
++lea    0xe8(%rsp),%r8
+ mov    $0x1,%r9d
+ call   rook2::quiescence::<impl rook2::engine::Search<_,H
+-mov    %r13,%rdi
+-call   *RIPREF(%rip)
+-movzbl 0x210(%rsp),%eax
++mov    %r15,%rdi
++call   *RIPREF(%rip)
++movzbl 0x208(%rsp),%eax
+ cmp    $0x6,%al
+-jne    LOCAL+0x1f9d
++jne    LOCAL+0x202d
+ xor    %ebx,%ebx
+-sub    0x214(%rsp),%ebx
++sub    0x20c(%rsp),%ebx
+ cmp    $0x2327,%ebx
+-mov    0x30(%rsp),%r9
+-jg     LOCAL+0x1fcd
+-mov    0x80(%rsp),%rcx
+-mov    0x70(%rsp),%r13
+-mov    %r15,%rbx
++mov    0x28(%rsp),%r9
+ mov    %r12,%r15
+-mov    0x98(%rsp),%r12
+-jmp    LOCAL+0x1061
+-movzbl 0x203(%rsp),%ecx
+-mov    0x58(%rsp),%rsi
++jg     LOCAL+0x2066
++mov    0xa0(%rsp),%rcx
++mov    0x118(%rsp),%rbx
++jmp    LOCAL+0x10dd
++movzbl 0x1fb(%rsp),%ecx
++mov    0x90(%rsp),%rsi
+ mov    %cl,0x3(%rsi)
+-movzwl 0x201(%rsp),%ecx
++movzwl 0x1f9(%rsp),%ecx
+ mov    %cx,0x1(%rsi)
+-mov    0x204(%rsp),%ecx
+-mov    0x208(%rsp),%rdx
++mov    0x1fc(%rsp),%ecx
++mov    0x200(%rsp),%rdx
+ mov    %al,(%rsi)
+ mov    %ecx,0x4(%rsi)
+ mov    %rdx,0x8(%rsi)
+-jmp    LOCAL+0xc20
+-mov    0x38(%rsp),%eax
+-mov    %eax,0x2c(%rsp)
+-jmp    LOCAL+0x130d
+-movb   $0x1,0x22(%rsp)
+-mov    0x38(%rsp),%eax
+-mov    %eax,0x2c(%rsp)
+-mov    0x48(%rsp),%rdx
++jmp    LOCAL+0xca2
++mov    0x34(%rsp),%eax
++mov    %eax,0x50(%rsp)
++cmpl   $0x3,0x70(%rsp)
++jg     LOCAL+0x1390
++jmp    LOCAL+0x13f1
++movb   $0x1,0x1f(%rsp)
++mov    0x34(%rsp),%eax
++mov    %eax,0x50(%rsp)
+ mov    0xc8(%rsp),%r12
+-lea    0x320(%rsp),%rbp
+-cmp    $0x3,%r13d
+-jle    LOCAL+0x1362
+-cmpl   $0x1,0x228(%rsp)
+-jne    LOCAL+0x132a
+-lea    -0x2(%r13),%eax
+-cmp    %eax,0x22c(%rsp)
+-jge    LOCAL+0x1362
+-mov    0x7c(%rsp),%eax
++mov    0x40(%rsp),%rbp
++cmpl   $0x3,0x70(%rsp)
++jle    LOCAL+0x13f1
++cmpl   $0x1,0x220(%rsp)
++jne    LOCAL+0x13ab
++mov    0x70(%rsp),%rax
++add    $0xfffffffe,%eax
++cmp    %eax,0x224(%rsp)
++jge    LOCAL+0x13f1
++mov    0x9c(%rsp),%eax
+ mov    %eax,0x8(%rsp)
+-mov    %rbp,(%rsp)
++lea    0x391(%rsp),%rax
++mov    %rax,(%rsp)
+ movq   $0x0,0x10(%rsp)
+-lea    0xe0(%rsp),%rdi
++lea    0x120(%rsp),%rdi
+ mov    %r14,%rsi
++mov    %rbp,%rdx
+ mov    %r12,%r8
+ call   rook2::ordinary::<impl rook2::engine::Search<_,H
+-movzbl 0xe0(%rsp),%eax
++movzbl 0x120(%rsp),%eax
+ cmp    $0x6,%al
+-jne    LOCAL+0x1bfb
++jne    LOCAL+0x1cef
+ mov    0x198(%r14),%rsi
+-mov    0x50(%rsp),%rdi
++mov    0x48(%rsp),%rdi
+ cmp    %rsi,%rdi
+-jae    LOCAL+0x2220
++jae    LOCAL+0x231d
+ mov    0x190(%r14),%rdx
+ mov    %rdi,%rax
+ shl    $0xa,%rax
+ lea    (%rax,%rdi,8),%rax
+ mov    0x400(%rdx,%rax,1),%rcx
+ cmp    $0x201,%rcx
+-jae    LOCAL+0x20e2
++jae    LOCAL+0x2196
+ add    %rax,%rdx
+ mov    0x18(%r12),%eax
+-mov    0x7c(%rsp),%esi
++mov    0x9c(%rsp),%esi
+ mov    %esi,0x10(%rsp)
+ mov    %eax,0x8(%rsp)
+-mov    0x3c(%rsp),%eax
++mov    0x24(%rsp),%eax
+ mov    %eax,(%rsp)
+ lea    0x418(%rsp),%rdi
+-lea    0x278(%rsp),%rsi
+-mov    0xd0(%rsp),%r8
+-mov    0xc0(%rsp),%r9d
+-call   *RIPREF(%rip)
+-lea    -0x1(%r13),%eax
+-mov    %eax,0xc0(%rsp)
+-mov    0x198(%rsp),%rax
++lea    0x270(%rsp),%rsi
++mov    0xb8(%rsp),%r8
++mov    0x64(%rsp),%r9d
++call   *RIPREF(%rip)
++mov    0x70(%rsp),%rcx
++lea    -0x1(%rcx),%eax
++mov    %eax,0x64(%rsp)
++mov    0x118(%rsp),%rax
+ xor    $0x1,%al
+-mov    %al,0x69(%rsp)
+-mov    0xac(%rsp),%edx
+-cmp    $0xffffd8f1,%edx
++mov    %al,0x6d(%rsp)
++mov    0xb4(%rsp),%esi
++cmp    $0xffffd8f1,%esi
+ setge  %al
+-mov    0x24(%rsp),%ecx
+-cmp    $0x2710,%ecx
+-setl   %sil
+-and    %al,%sil
+-mov    %sil,0x6b(%rsp)
+-neg    %ecx
+-mov    %ecx,0xdc(%rsp)
+-cmpq   $0x1,0xb0(%rsp)
++mov    0x20(%rsp),%edx
++cmp    $0x2710,%edx
++setl   %dil
++and    %al,%dil
++mov    %dil,0x6f(%rsp)
++neg    %edx
++mov    %edx,0xe4(%rsp)
++cmp    $0x1,%r15
+ setne  %al
+-cmp    $0x5,%r13d
++cmp    $0x5,%ecx
+ setge  %cl
+ and    %al,%cl
+-mov    %cl,0x6a(%rsp)
+-mov    0x80(%rsp),%rax
++mov    %cl,0x6e(%rsp)
++andb   $0x1,0x1e(%rsp)
++mov    0xa0(%rsp),%rax
+ add    $0x18,%rax
+-mov    %rax,0x3a0(%rsp)
++mov    %rax,0x310(%rsp)
+ lea    0xdb0(%r14),%rax
+-mov    %rax,0x248(%rsp)
+-mov    %edx,0x38(%rsp)
++mov    %rax,0x240(%rsp)
++lea    0xe8(%rsp),%rbp
++mov    %esi,0x34(%rsp)
+ xor    %ebx,%ebx
+-jmp    LOCAL+0x149a
++mov    %r15,0xd8(%rsp)
++jmp    LOCAL+0x1534
+ mov    %r15d,%eax
+-mov    %rax,0x40(%rsp)
+-mov    0x98(%rsp),%rbx
++mov    %rax,0x38(%rsp)
+ test   %rbx,%rbx
+-mov    0x48(%rsp),%rdx
+-je     LOCAL+0x18e4
++mov    0x40(%rsp),%rdx
++mov    0xd8(%rsp),%r15
++je     LOCAL+0x19c9
+ inc    %rbx
+-cmp    %rbx,0xb0(%rsp)
+-je     LOCAL+0x1cb7
++cmp    %rbx,%r15
++je     LOCAL+0x1da5
+ mov    0x198(%r14),%rsi
+-mov    0x50(%rsp),%rdi
++mov    0x48(%rsp),%rdi
+ cmp    %rsi,%rdi
+-jae    LOCAL+0x2144
++jae    LOCAL+0x21eb
+ mov    %rdi,%rax
+ shl    $0xa,%rax
+ lea    (%rax,%rdi,8),%rax
+ add    0x190(%r14),%rax
+-movzwl (%rax,%rbx,2),%edx
++movzwl (%rax,%rbx,2),%r15d
+ lea    0x418(%rsp),%rdi
+-lea    0x278(%rsp),%rsi
+-mov    %edx,0x28(%rsp)
++lea    0x270(%rsp),%rsi
++mov    %r15d,%edx
+ call   *RIPREF(%rip)
+ mov    0x1a8(%r14),%rsi
+-mov    0x50(%rsp),%rdi
++mov    0x48(%rsp),%rdi
+ cmp    %rsi,%rdi
+-jae    LOCAL+0x2137
++jae    LOCAL+0x21f8
++mov    %rbx,%rcx
+ shl    $0x9,%rdi
+ add    0x1a0(%r14),%rdi
+-movzbl (%rbx,%rdi,1),%ecx
+-or     %al,%cl
+-mov    %rbx,0x98(%rsp)
+-mov    %cl,0xb8(%rsp)
+-mov    %cl,(%rbx,%rdi,1)
++mov    %r15d,0x80(%rsp)
++movzwl %r15w,%ebx
++movzbl (%rcx,%rdi,1),%edx
++or     %al,%dl
++mov    %rcx,0x58(%rsp)
++mov    %dl,0x54(%rsp)
++mov    %dl,(%rcx,%rdi,1)
+ movzbl %al,%eax
+-add    0xc0(%rsp),%eax
++add    0x64(%rsp),%eax
+ mov    $0x2,%cl
+-mov    %ecx,0x3c(%rsp)
+-mov    %eax,0xd0(%rsp)
++mov    %ecx,0x24(%rsp)
++mov    %eax,0xb8(%rsp)
+ test   %eax,%eax
+-mov    0x30(%rsp),%r9
+-jg     LOCAL+0x1573
+-movzwl 0x28(%rsp),%ebx
++mov    0x28(%rsp),%r9
++jg     LOCAL+0x160e
+ mov    %ebx,%eax
+ shr    $0xc,%eax
+ and    $0x7,%eax
+ lea    -0x1(%rax),%ecx
+ cmp    $0x6,%ecx
+-jae    LOCAL+0x1a1e
++jae    LOCAL+0x1b12
+ mov    $0x2710,%r15d
+ mov    $0x2,%al
+-mov    %eax,0x3c(%rsp)
+-mov    0x40(%rsp),%rcx
+-mov    0x38(%rsp),%eax
++mov    %eax,0x24(%rsp)
++mov    0x38(%rsp),%rcx
++mov    0x34(%rsp),%eax
+ cmp    %eax,%ecx
+ cmovg  %ecx,%eax
+ cmp    %eax,%r15d
+-jle    LOCAL+0x1a03
+-lea    0xe0(%rsp),%rdi
+-mov    0x48(%rsp),%rsi
+-mov    0x1f0(%rsp),%rdx
+-mov    0x28(%rsp),%ebx
+-mov    %ebx,%ecx
+-call   *RIPREF(%rip)
+-lea    0x278(%rsp),%rax
++jle    LOCAL+0x1aeb
++lea    0x120(%rsp),%rdi
++mov    0x40(%rsp),%rsi
++mov    0xd0(%rsp),%rdx
++mov    0x80(%rsp),%ebp
++mov    %ebp,%ecx
++call   *RIPREF(%rip)
++cmpb   $0x0,0x390(%rsp)
++je     LOCAL+0x715
++mov    0x388(%rsp),%rax
++shr    $0xc,%ebx
++and    $0x7,%ebx
++lea    RIPREF(%rip),%rcx
++movslq (%rcx,%rbx,4),%rdx
++add    %rcx,%rdx
++mov    0xa0(%rsp),%rcx
++jmp    *%rdx
++xor    %edx,%edx
++mov    %rax,0x258(%rsp)
++lea    0x391(%rsp),%rax
+ mov    %rax,0x260(%rsp)
+-mov    %rbp,0x268(%rsp)
+-movzbl 0x23(%rsp),%eax
+-mov    %al,0x274(%rsp)
+-movw   $0x1,0x270(%rsp)
+-mov    %bx,0x272(%rsp)
+-mov    0x15c(%rsp),%r14d
+-mov    0x168(%rsp),%r13d
+-movzbl 0x169(%rsp),%ebx
+-movzbl 0x16a(%rsp),%r12d
+-movzbl 0x16b(%rsp),%ebp
+-mov    0x80(%rsp),%rcx
++movzbl 0x1e(%rsp),%eax
++mov    %al,0x26c(%rsp)
++movw   $0x1,0x268(%rsp)
++mov    %bp,0x26a(%rsp)
++mov    %dl,0x26d(%rsp)
++mov    0x19c(%rsp),%r14d
++mov    0x1a8(%rsp),%r13d
++movzbl 0x1a9(%rsp),%ebx
++movzbl 0x1aa(%rsp),%r12d
++movzbl 0x1ab(%rsp),%ebp
+ mov    0x10(%rcx),%r15
+ cmp    (%rcx),%r15
+-jne    LOCAL+0x161c
++jne    LOCAL+0x16ef
+ mov    %rcx,%rdi
+ lea    RIPREF(%rip),%rsi
+ call   *RIPREF(%rip)
+-mov    0x80(%rsp),%rcx
++mov    0xa0(%rsp),%rcx
+ shl    $0x38,%r13
+ or     %r14,%r13
+ shl    $0x30,%rbp
+@@ -1147,13 +1193,13 @@
+ mov    %r15,0x10(%rcx)
+ mov    0x28(%rcx),%rbx
+ cmp    0x18(%rcx),%rbx
+-jne    LOCAL+0x166e
+-mov    0x3a0(%rsp),%rdi
++jne    LOCAL+0x1741
++mov    0x310(%rsp),%rdi
+ lea    RIPREF(%rip),%rsi
+ call   *RIPREF(%rip)
+-mov    0x80(%rsp),%rcx
++mov    0xa0(%rsp),%rcx
+ xor    %eax,%eax
+-mov    0x28(%rsp),%esi
++mov    0x80(%rsp),%esi
+ test   %si,%si
+ setne  %al
+ mov    0x20(%rcx),%rdx
+@@ -1161,109 +1207,111 @@
+ mov    %si,0x2(%rdx,%rbx,4)
+ inc    %rbx
+ mov    %rbx,0x28(%rcx)
+-cmpq   $0x0,0x98(%rsp)
++cmpq   $0x0,0x58(%rsp)
+ sete   %al
+-mov    0xac(%rsp),%edx
+-mov    0x40(%rsp),%rsi
+-cmp    %edx,%esi
++mov    0xb4(%rsp),%esi
++mov    0x38(%rsp),%rdi
++cmp    %esi,%edi
+ setle  %bpl
+ or     %al,%bpl
+-mov    0x50(%rsp),%rbx
+-or     0x6b(%rsp),%bpl
+-mov    0xa0(%rsp),%r14
++mov    0x48(%rsp),%rbx
++or     0x6f(%rsp),%bpl
++mov    0x90(%rsp),%r13
++mov    0x88(%rsp),%r14
+ mov    0xc8(%rsp),%r12
+-mov    0x70(%rsp),%r13
+-je     LOCAL+0x16de
+-cmp    %edx,%esi
+-cmovg  %esi,%edx
+-mov    0xdc(%rsp),%eax
+-jmp    LOCAL+0x16ee
+-lea    0x1(%rsi),%eax
+-mov    0x24(%rsp),%edx
++mov    0x20(%rsp),%edx
++je     LOCAL+0x17ba
++cmp    %esi,%edi
++mov    %esi,%edx
++cmovg  %edi,%edx
++mov    0xe4(%rsp),%eax
++jmp    LOCAL+0x17c6
++lea    0x1(%rdi),%eax
+ cmp    %edx,%eax
+ cmovge %edx,%eax
+ neg    %eax
+-mov    %esi,%edx
++mov    %edi,%edx
+ inc    %rbx
+ neg    %edx
+-mov    %rbx,0x3a8(%rsp)
+-mov    0xd0(%rsp),%esi
+-mov    %esi,0x3b0(%rsp)
+-mov    %eax,0x3b4(%rsp)
+-mov    %edx,0x3b8(%rsp)
+-movzbl 0xb8(%rsp),%eax
+-mov    %al,0x3c0(%rsp)
+-mov    0xa8(%rsp),%eax
+-mov    %eax,0x3bc(%rsp)
+-mov    0x3c(%rsp),%eax
+-mov    %al,0x3c1(%rsp)
+-lea    0x250(%rsp),%rdi
++mov    %rbx,0x350(%rsp)
++mov    0xb8(%rsp),%esi
++mov    %esi,0x358(%rsp)
++mov    %eax,0x35c(%rsp)
++mov    %edx,0x360(%rsp)
++movzbl 0x54(%rsp),%eax
++mov    %al,0x368(%rsp)
++mov    0xb0(%rsp),%eax
++mov    %eax,0x364(%rsp)
++mov    0x24(%rsp),%eax
++mov    %al,0x369(%rsp)
++lea    0x248(%rsp),%rdi
+ mov    %r14,%rsi
+-lea    0xe0(%rsp),%rdx
+-lea    0x3a8(%rsp),%r8
+-lea    0x260(%rsp),%r9
++lea    0x120(%rsp),%rdx
++lea    0x350(%rsp),%r8
++lea    0x258(%rsp),%r9
+ call   LOCAL+0x0
+-movzbl 0x250(%rsp),%eax
++movzbl 0x248(%rsp),%eax
+ cmp    $0x6,%al
+-jne    LOCAL+0x1798
++jne    LOCAL+0x186d
+ xor    %r15d,%r15d
+-sub    0x254(%rsp),%r15d
++sub    0x24c(%rsp),%r15d
+ mov    $0x6,%al
+ test   %bpl,%bpl
+-mov    0x30(%rsp),%r9
+-je     LOCAL+0x1936
+-mov    0x80(%rsp),%rcx
+-jmp    LOCAL+0x17d5
+-lea    0x251(%rsp),%rdx
++mov    0x28(%rsp),%r9
++je     LOCAL+0x1a26
++mov    0xa0(%rsp),%rcx
++jmp    LOCAL+0x18aa
++lea    0x249(%rsp),%rdx
+ movzbl 0x2(%rdx),%ecx
+-mov    %cl,0x68(%rsp)
++mov    %cl,0x6c(%rsp)
+ movzwl (%rdx),%ecx
+-mov    %cx,0x66(%rsp)
+-mov    0x254(%rsp),%r15d
+-mov    0x258(%rsp),%rcx
+-mov    %rcx,0x240(%rsp)
+-mov    0x80(%rsp),%rcx
+-mov    0x30(%rsp),%r9
+-lea    0x320(%rsp),%rbp
+-mov    0x40(%rsp),%rdi
++mov    %cx,0x6a(%rsp)
++mov    0x24c(%rsp),%r15d
++mov    0x250(%rsp),%rcx
++mov    %rcx,0x238(%rsp)
++mov    0xa0(%rsp),%rcx
++mov    0x28(%rsp),%r9
++mov    0x38(%rsp),%rdi
++lea    0xe8(%rsp),%rbp
++mov    0x58(%rsp),%rbx
+ mov    0x10(%rcx),%rsi
+ mov    0x30(%rcx),%rdx
+ inc    %rdx
+ cmp    %rdx,%rsi
+-jbe    LOCAL+0x205b
++jbe    LOCAL+0x210f
+ dec    %rsi
+ mov    %rsi,0x10(%rcx)
+ mov    0x28(%rcx),%rdx
+ test   %rdx,%rdx
+-je     LOCAL+0x180d
++je     LOCAL+0x18e7
+ dec    %rdx
+ mov    %rdx,0x28(%rcx)
+ cmp    $0x6,%al
+-jne    LOCAL+0x1bce
++jne    LOCAL+0x1cc3
+ cmp    %edi,%r15d
+-jle    LOCAL+0x1473
+-cmp    0x38(%rsp),%r15d
+-jle    LOCAL+0x146b
+-cmp    0x24(%rsp),%r15d
+-jge    LOCAL+0x1c9f
+-mov    0x50(%rsp),%rbp
++jle    LOCAL+0x1512
++cmp    0x34(%rsp),%r15d
++jle    LOCAL+0x150a
++cmp    0x20(%rsp),%r15d
++jge    LOCAL+0x1d8a
++mov    0x48(%rsp),%rbp
+ lea    0x1(%rbp),%rsi
+ cmp    $0x3f,%rsi
+-ja     LOCAL+0x21a4
++ja     LOCAL+0x2258
+ cmp    $0xffffffffffffffff,%rbp
+-je     LOCAL+0x2190
++je     LOCAL+0x2244
+ mov    0x2db8(%r14,%rbp,8),%rdx
+ mov    %rbp,%rdi
+ shl    $0x7,%rdi
+-mov    0x248(%rsp),%rax
+-mov    0x28(%rsp),%ecx
++mov    0x240(%rsp),%rax
++mov    0x80(%rsp),%ecx
+ mov    %cx,(%rax,%rdi,1)
+ mov    %rdx,%rbx
+ inc    %rbx
+-je     LOCAL+0x20a4
++je     LOCAL+0x2158
+ cmp    $0x40,%rbx
+-ja     LOCAL+0x20b8
+-mov    0x248(%rsp),%rax
++ja     LOCAL+0x216c
++mov    0x240(%rsp),%rax
+ add    %rax,%rdi
+ shl    $0x7,%rsi
+ add    %rax,%rsi
+@@ -1272,151 +1320,155 @@
+ call   *RIPREF(%rip)
+ mov    %rbx,0x2db0(%r14,%rbp,8)
+ mov    $0x1,%ax
+-mov    %eax,0x6c(%rsp)
+-mov    %r15d,0x38(%rsp)
++mov    %eax,0x7c(%rsp)
++mov    %r15d,0x34(%rsp)
+ mov    %r15d,%eax
+-mov    %rax,0x40(%rsp)
+-mov    0x28(%rsp),%eax
+-mov    %eax,0x2c(%rsp)
+-mov    0x80(%rsp),%rcx
+-mov    0x30(%rsp),%r9
+-lea    0x320(%rsp),%rbp
+-jmp    LOCAL+0x1473
+-cmpb   $0x3,0x235(%rsp)
++mov    %rax,0x38(%rsp)
++mov    0x80(%rsp),%eax
++mov    %eax,0x50(%rsp)
++mov    0xa0(%rsp),%rcx
++mov    0x28(%rsp),%r9
++lea    0xe8(%rsp),%rbp
++mov    0x58(%rsp),%rbx
++jmp    LOCAL+0x1512
++cmpb   $0x3,0x22d(%rsp)
+ sete   %al
+-test   %al,0x6a(%rsp)
+-je     LOCAL+0x1489
+-mov    0x7c(%rsp),%eax
++test   %al,0x6e(%rsp)
++je     LOCAL+0x1528
++mov    0x9c(%rsp),%eax
+ mov    %eax,0x8(%rsp)
+-mov    %rbp,(%rsp)
++lea    0x391(%rsp),%rax
++mov    %rax,(%rsp)
+ movq   $0x1,0x10(%rsp)
+-lea    0xe0(%rsp),%rdi
++lea    0x120(%rsp),%rdi
+ mov    %r14,%rsi
+ mov    %r12,%r8
+ call   rook2::ordinary::<impl rook2::engine::Search<_,H
+-movzbl 0xe0(%rsp),%eax
++movzbl 0x120(%rsp),%eax
+ cmp    $0x6,%al
+-je     LOCAL+0x1489
+-jmp    LOCAL+0x1bfb
+-mov    0x40(%rsp),%rdi
++je     LOCAL+0x1528
++jmp    LOCAL+0x1cef
++mov    0x38(%rsp),%rdi
+ lea    0x1(%rdi),%ecx
+ cmp    %r15d,%ecx
+ setg   %cl
+-cmp    %r15d,0x24(%rsp)
++cmp    %r15d,0x20(%rsp)
+ setle  %dl
+ or     %cl,%dl
+-mov    0x80(%rsp),%rcx
+-lea    0x320(%rsp),%rbp
+-jne    LOCAL+0x17e2
++mov    0xa0(%rsp),%rcx
++lea    0xe8(%rsp),%rbp
++jne    LOCAL+0x18b7
+ mov    %edi,%eax
+ neg    %eax
+-mov    %rbx,0x1a0(%rsp)
+-mov    0xd0(%rsp),%edx
+-mov    %edx,0x1a8(%rsp)
+-mov    0xdc(%rsp),%edx
+-mov    %edx,0x1ac(%rsp)
+-mov    %eax,0x1b0(%rsp)
+-movzbl 0xb8(%rsp),%eax
+-mov    %al,0x1b8(%rsp)
+-mov    0xa8(%rsp),%eax
+-mov    %eax,0x1b4(%rsp)
+-mov    0x3c(%rsp),%eax
+-mov    %al,0x1b9(%rsp)
+-lea    0x3c8(%rsp),%rdi
++mov    %rbx,0xe8(%rsp)
++mov    0xb8(%rsp),%edx
++mov    %edx,0xf0(%rsp)
++mov    0xe4(%rsp),%edx
++mov    %edx,0xf4(%rsp)
++mov    %eax,0xf8(%rsp)
++movzbl 0x54(%rsp),%eax
++mov    %al,0x100(%rsp)
++mov    0xb0(%rsp),%eax
++mov    %eax,0xfc(%rsp)
++mov    0x24(%rsp),%eax
++mov    %al,0x101(%rsp)
++lea    0x330(%rsp),%rdi
+ mov    %r14,%rsi
+-lea    0xe0(%rsp),%rdx
+-lea    0x1a0(%rsp),%r8
+-lea    0x260(%rsp),%r9
++lea    0x120(%rsp),%rdx
++mov    %rbp,%r8
++lea    0x258(%rsp),%r9
+ call   LOCAL+0x0
+-movzbl 0x3c8(%rsp),%eax
++movzbl 0x330(%rsp),%eax
+ cmp    $0x6,%al
+-jne    LOCAL+0x1ae2
++jne    LOCAL+0x1bd0
+ xor    %r15d,%r15d
+-sub    0x3cc(%rsp),%r15d
+-jmp    LOCAL+0x1b12
+-mov    0x80(%rsp),%rcx
+-mov    0x40(%rsp),%rdi
++sub    0x334(%rsp),%r15d
++jmp    LOCAL+0x1c00
++mov    0xa0(%rsp),%rcx
++mov    0x38(%rsp),%rdi
++mov    0x58(%rsp),%rbx
+ cmp    %edi,%r15d
+-jle    LOCAL+0x1473
+-jmp    LOCAL+0x181e
++jle    LOCAL+0x1512
++jmp    LOCAL+0x18f8
++mov    $0x1,%dl
++jmp    LOCAL+0x1668
+ test   %eax,%eax
+-jne    LOCAL+0x21b9
+-lea    0x2f8(%rsp),%rax
+-movdqu (%rax),%xmm0
+-movdqu 0x10(%rax),%xmm1
+-movdqa %xmm1,0xf0(%rsp)
+-movdqa %xmm0,0xe0(%rsp)
+-lea    0x1a0(%rsp),%r13
+-mov    %r13,%rdi
+-lea    0xe0(%rsp),%rsi
+-lea    0x278(%rsp),%r15
++jne    LOCAL+0x226d
++lea    0x270(%rsp),%r15
++movdqu 0x80(%r15),%xmm0
++movdqu 0x90(%r15),%xmm1
++movdqa %xmm1,0x130(%rsp)
++movdqa %xmm0,0x120(%rsp)
++mov    %rbp,%rdi
++lea    0x120(%rsp),%rsi
+ mov    %r15,%rdx
+-mov    0x28(%rsp),%ebp
+-mov    %ebp,%ecx
++mov    0x80(%rsp),%r13d
++mov    %r13d,%ecx
+ call   rook2::attacks::AttackBits::projected
+-movzbl 0x69(%rsp),%esi
++movzbl 0x6d(%rsp),%esi
+ mov    %r15,%rdi
+ call   rook2::position::Position::piece_squares
+ test   %rdx,%rdx
+-je     LOCAL+0x222d
++je     LOCAL+0x232a
+ movzbl (%rax),%esi
+-mov    %r13,%rdi
+-mov    0x198(%rsp),%rdx
++mov    %rbp,%rdi
++mov    0x118(%rsp),%rdx
+ call   rook2::attacks::AttackBits::attacked
+-mov    0x3f0(%rsp),%r15d
+-mov    0x48(%rsp),%rdx
++mov    0x378(%rsp),%r15d
++mov    0x40(%rsp),%rdx
+ mov    (%rdx),%ecx
+ mov    0x4(%rdx),%r8d
+-mov    %bp,0xe0(%rsp)
++mov    %r13w,0x120(%rsp)
+ test   %al,%al
+-je     LOCAL+0x1b24
++je     LOCAL+0x1c1c
+ mov    $0x2710,%r15d
+ mov    $0x1,%al
+-mov    %eax,0x3c(%rsp)
+-mov    0x30(%rsp),%r9
+-mov    0x40(%rsp),%rcx
+-mov    0x70(%rsp),%r13
+-lea    0x320(%rsp),%rbp
+-jmp    LOCAL+0x1561
+-lea    0x3c9(%rsp),%rdx
++mov    %eax,0x24(%rsp)
++mov    0x28(%rsp),%r9
++mov    0x38(%rsp),%rcx
++mov    0x90(%rsp),%r13
++jmp    LOCAL+0x15fc
++lea    0x331(%rsp),%rdx
+ movzbl 0x2(%rdx),%ecx
+-mov    %cl,0x68(%rsp)
++mov    %cl,0x6c(%rsp)
+ movzwl (%rdx),%ecx
+-mov    %cx,0x66(%rsp)
+-mov    0x3cc(%rsp),%r15d
+-mov    0x3d0(%rsp),%rcx
+-mov    %rcx,0x240(%rsp)
+-mov    0x30(%rsp),%r9
+-mov    0x80(%rsp),%rcx
+-jmp    LOCAL+0x17dd
+-shr    $0x6,%ebx
+-and    $0x3f,%ebx
+-cmpb   $0x0,0x278(%rsp,%rbx,1)
+-mov    0x70(%rsp),%r13
+-lea    0x320(%rsp),%rbp
+-je     LOCAL+0x1b74
+-mov    0x1f0(%rsp),%rdi
+-lea    0x278(%rsp),%rsi
+-lea    0xe0(%rsp),%rdx
++mov    %cx,0x6a(%rsp)
++mov    0x334(%rsp),%r15d
++mov    0x338(%rsp),%rcx
++mov    %rcx,0x238(%rsp)
++mov    0x28(%rsp),%r9
++mov    0x58(%rsp),%rbx
++mov    0xa0(%rsp),%rcx
++mov    0x38(%rsp),%rdi
++jmp    LOCAL+0x18bc
++mov    %ebx,%eax
++shr    $0x6,%eax
++and    $0x3f,%eax
++cmpb   $0x0,0x270(%rsp,%rax,1)
++mov    0x90(%rsp),%r13
++je     LOCAL+0x1c69
++mov    0xd0(%rsp),%rdi
++lea    0x270(%rsp),%rsi
++lea    0x120(%rsp),%rdx
+ call   *RIPREF(%rip)
+ add    %eax,%r15d
+-movl   $0x0,0x3c(%rsp)
+-mov    0x30(%rsp),%r9
+-jmp    LOCAL+0x155c
+-movzbl 0x2f0(%rsp),%edx
++movl   $0x0,0x24(%rsp)
++mov    0x28(%rsp),%r9
++jmp    LOCAL+0x15f7
++movzbl 0x2e8(%rsp),%edx
+ test   %dl,%dl
+ sete   %al
+ cmp    $0xffffffff,%ecx
+ setl   %sil
+ test   %al,%sil
+-je     LOCAL+0x1b9c
++je     LOCAL+0x1c91
+ mov    %ecx,%eax
+ neg    %eax
+ shr    $1,%eax
+ and    $0x1,%ecx
+ add    %eax,%ecx
+ mov    %ecx,%eax
+-jmp    LOCAL+0x1bb0
++jmp    LOCAL+0x1ca5
+ mov    %ecx,%eax
+ shr    $1,%eax
+ test   %dl,%dl
+@@ -1424,102 +1476,98 @@
+ cmove  %edx,%eax
+ cmp    $0x2,%ecx
+ cmovl  %edx,%eax
+-mov    0x30(%rsp),%r9
+-mov    0x40(%rsp),%rcx
++mov    0x28(%rsp),%r9
++mov    0x38(%rsp),%rcx
+ add    $0x1e,%r15d
+ add    %eax,%r15d
+-movl   $0x0,0x3c(%rsp)
+-jmp    LOCAL+0x1561
+-movzbl 0x68(%rsp),%ecx
+-mov    0x58(%rsp),%rdx
+-mov    %cl,0x3(%rdx)
+-movzwl 0x66(%rsp),%ecx
+-mov    %cx,0x1(%rdx)
+-mov    %al,(%rdx)
+-mov    %r15d,0x4(%rdx)
+-mov    0x240(%rsp),%rax
+-mov    %rax,0x8(%rdx)
+-jmp    LOCAL+0xc20
+-mov    0xe1(%rsp),%rcx
+-mov    0xe8(%rsp),%rdx
+-mov    0x58(%rsp),%rsi
+-mov    %rdx,0x8(%rsi)
+-mov    %rcx,0x1(%rsi)
+-mov    %al,(%rsi)
+-jmp    LOCAL+0xc20
++movl   $0x0,0x24(%rsp)
++jmp    LOCAL+0x15fc
++movzbl 0x6c(%rsp),%ecx
++mov    %cl,0x3(%r13)
++movzwl 0x6a(%rsp),%ecx
++mov    %cx,0x1(%r13)
++mov    %al,0x0(%r13)
++mov    %r15d,0x4(%r13)
++mov    0x238(%rsp),%rax
++mov    %rax,0x8(%r13)
++jmp    LOCAL+0xca2
++mov    0x121(%rsp),%rcx
++mov    0x128(%rsp),%rdx
++mov    %rdx,0x8(%r13)
++mov    %rcx,0x1(%r13)
++mov    %al,0x0(%r13)
++jmp    LOCAL+0xca2
+ lea    0x5010(%r14),%rsi
+-mov    0x48(%rsp),%rax
++mov    0x40(%rsp),%rax
+ mov    0x4(%rax),%ecx
+-mov    0x98(%rsp),%rdi
+-mov    %rbp,%rdx
+-call   *RIPREF(%rip)
+-mov    0xb8(%rsp),%rcx
++mov    0x58(%rsp),%rdi
++lea    0x391(%rsp),%rdx
++call   *RIPREF(%rip)
+ add    %rax,0x55a0(%r14)
+-lea    -0x19(%rcx),%eax
+-add    $0xffffffd8,%ecx
+-cmp    $0x2,%r13d
+-cmovne %eax,%ecx
+-sub    %edx,%ecx
+-cmp    0x24(%rsp),%ecx
+-jl     LOCAL+0x848
++lea    -0x19(%r15),%eax
++add    $0xffffffd8,%r15d
++cmpl   $0x2,0x70(%rsp)
++cmovne %eax,%r15d
++sub    %edx,%r15d
++cmp    0x20(%rsp),%r15d
++jl     LOCAL+0x8c4
+ movl   $0x0,(%rsp)
+-movzbl 0x22(%rsp),%r9d
++movzbl 0x1f(%rsp),%r9d
+ lea    0x1d0(%rsp),%rsi
+ mov    %r14,%rdi
+-mov    %ecx,%edx
+-mov    %rcx,%rbx
+-mov    0x6c(%rsp),%ecx
+-mov    0x38(%rsp),%r8d
++mov    %r15d,%edx
++mov    0x7c(%rsp),%ecx
++mov    0x34(%rsp),%r8d
+ call   rook2::ordinary::<impl rook2::engine::Search<_,H
+-mov    0x58(%rsp),%rax
+-mov    %ebx,0x4(%rax)
+-jmp    LOCAL+0xc1d
++mov    %r15d,0x4(%r13)
++jmp    LOCAL+0xc9d
+ mov    $0x1,%ax
+-mov    %eax,0x6c(%rsp)
++mov    %eax,0x7c(%rsp)
+ mov    %r15d,%eax
+-mov    %rax,0x40(%rsp)
+-mov    0x28(%rsp),%eax
+-mov    %eax,0x2c(%rsp)
+-mov    0x1fc(%rsp),%eax
+-mov    0x40(%rsp),%rcx
++mov    %rax,0x38(%rsp)
++mov    0x80(%rsp),%eax
++mov    %eax,0x50(%rsp)
++mov    0x1f4(%rsp),%eax
++mov    0x38(%rsp),%rcx
+ cmp    %eax,%ecx
+ cmovl  %ecx,%eax
+ mov    %eax,%ebp
+-cmp    0xac(%rsp),%eax
+-mov    0x6c(%rsp),%ebx
+-jle    LOCAL+0x1cfd
+-mov    0x50(%rsp),%rdx
+-lea    0x278(%rsp),%rsi
+-mov    0x238(%rsp),%rdi
+-mov    %r13d,%ecx
++cmp    0xb4(%rsp),%eax
++mov    0x7c(%rsp),%ebx
++mov    0x50(%rsp),%r15d
++jle    LOCAL+0x1df0
++mov    0x48(%rsp),%rdx
++lea    0x270(%rsp),%rsi
++mov    0x230(%rsp),%rdi
++mov    0x70(%rsp),%rcx
+ mov    %ebx,%r8d
+-mov    0x2c(%rsp),%r9d
++mov    %r15d,%r9d
+ call   *RIPREF(%rip)
+ movl   $0x1,(%rsp)
+-movzbl 0x22(%rsp),%r9d
++movzbl 0x1f(%rsp),%r9d
+ lea    0x1d0(%rsp),%rsi
+ mov    %r14,%rdi
+ mov    %ebp,%edx
+ mov    %ebx,%ecx
+-mov    0x2c(%rsp),%r8d
++mov    %r15d,%r8d
+ call   rook2::ordinary::<impl rook2::engine::Search<_,H
+-mov    0x58(%rsp),%rax
+-mov    %ebp,0x4(%rax)
+-jmp    LOCAL+0xc1d
++mov    %ebp,0x4(%r13)
++jmp    LOCAL+0xc9d
+ movabs $0x2710ffffd8f0,%rax
+-mov    %rax,0xe4(%rsp)
++mov    %rax,0x124(%rsp)
+ mov    0xc8(%rsp),%r12
+-mov    0x30(%rsp),%rdx
+-cmp    $0x1edc,%ebp
++mov    0x28(%rsp),%rsi
++cmp    $0x1edc,%edx
+ mov    $0x1edc,%eax
+-cmovl  %ebp,%eax
++cmovl  %edx,%eax
+ cmp    $0xffffe125,%eax
+ mov    $0xffffe124,%r15d
+ cmovge %eax,%r15d
+-mov    0x48(%rsp),%rax
++mov    0x40(%rsp),%rax
+ movzbl 0x8b(%rax),%eax
+ cmp    $0xc,%rax
+-jb     LOCAL+0x1dcf
++mov    0x70(%rsp),%r13
++jb     LOCAL+0x1ec1
+ mov    $0x64,%ecx
+ sub    %rax,%rcx
+ lea    (%rcx,%rcx,2),%rax
+@@ -1541,103 +1589,97 @@
+ add    $0x400,%r15d
+ sar    $0x1f,%r15d
+ add    %eax,%r15d
+-mov    0x48(%rsp),%rax
++mov    0x40(%rsp),%rax
+ movzbl 0x88(%rax),%r14d
+-movzbl 0x14(%rdx),%r13d
+-mov    0x3c(%rsp),%eax
+-mov    %ax,0xe0(%rsp)
+-lea    0xe0(%rsp),%rsi
+-mov    0xd0(%rsp),%rdi
+-call   *RIPREF(%rip)
+-cmpl   $0x2,0x70(%rsp)
+-ja     LOCAL+0x6c6
+-mov    %r15d,%ebp
+-neg    %ebp
++movzbl 0x14(%rsi),%ebp
++mov    0x24(%rsp),%eax
++mov    %ax,0x120(%rsp)
++lea    0x120(%rsp),%rsi
++mov    0xb8(%rsp),%rdi
++call   *RIPREF(%rip)
++cmp    $0x2,%r13d
++lea    0x391(%rsp),%r13
++mov    0x64(%rsp),%ecx
++ja     LOCAL+0x6f0
++mov    %r15d,%ecx
++neg    %ecx
+ test   %r14b,%r14b
+-cmove  %r15d,%ebp
+-lea    -0x96(%rbp),%ecx
+-add    $0xffffff9c,%ebp
++cmove  %r15d,%ecx
++mov    %rcx,%r15
++add    $0xffffff6a,%ecx
++add    $0xffffff9c,%r15d
+ cmpl   $0x1,0x70(%rsp)
+-cmovne %ecx,%ebp
+-cmp    0x24(%rsp),%ebp
++cmovne %ecx,%r15d
++cmp    0x20(%rsp),%r15d
+ setl   %cl
+-movzbl 0x23(%rsp),%esi
+-cmp    %r13b,%sil
++movzbl 0x1e(%rsp),%esi
++cmp    %bpl,%sil
+ setne  %dl
+ or     %al,%dl
+ or     %sil,%dl
+ or     %cl,%dl
++mov    0x64(%rsp),%ecx
+ test   $0x1,%dl
+-jne    LOCAL+0x6c6
+-cmpb   $0x0,0x31f(%rsp)
+-jne    LOCAL+0x1efd
+-lea    0xe0(%rsp),%rdi
+-lea    0x278(%rsp),%rsi
+-call   *RIPREF(%rip)
+-movb   $0x1,0x31f(%rsp)
+-movups 0xe0(%rsp),%xmm0
+-movdqu 0xf0(%rsp),%xmm1
+-movups 0x100(%rsp),%xmm2
+-movups 0x110(%rsp),%xmm3
+-movups %xmm0,0x320(%rsp)
+-movdqu %xmm1,0x330(%rsp)
+-movups %xmm2,0x340(%rsp)
+-movups %xmm3,0x350(%rsp)
+-movups 0x120(%rsp),%xmm0
+-movups %xmm0,0x360(%rsp)
+-movups 0x130(%rsp),%xmm0
+-movups %xmm0,0x370(%rsp)
+-movups 0x140(%rsp),%xmm0
+-movups %xmm0,0x380(%rsp)
+-movdqu 0x150(%rsp),%xmm0
+-movdqu %xmm0,0x390(%rsp)
+-lea    0x320(%rsp),%r14
+-mov    0x30(%rsp),%rax
+-mov    0x8(%rax),%rsi
+-lea    0x278(%rsp),%rdi
+-mov    %r14,%rdx
++jne    LOCAL+0x6f0
++lea    0x388(%rsp),%rdi
++mov    0x28(%rsp),%r14
++mov    %r14,%rsi
++call   rook2::ordinary::CurrentInfluence::fill
++cmpb   $0x0,0x390(%rsp)
++je     LOCAL+0x715
++mov    0x8(%r14),%rsi
++lea    0x270(%rsp),%rdi
++lea    0x391(%rsp),%r13
++mov    %r13,%rdx
+ call   *RIPREF(%rip)
+ test   %al,%al
+-jne    LOCAL+0x6c6
+-mov    0x48(%rsp),%rax
++mov    0x64(%rsp),%ecx
++jne    LOCAL+0x6f0
++mov    0x40(%rsp),%rax
+ mov    0x4(%rax),%ecx
+-mov    0x98(%rsp),%rdi
+-mov    0xb0(%rsp),%rsi
+-mov    %r14,%rdx
+-call   *RIPREF(%rip)
+-mov    0xa0(%rsp),%rcx
++mov    0x58(%rsp),%rdi
++mov    0xd0(%rsp),%rsi
++lea    0x391(%rsp),%rdx
++call   *RIPREF(%rip)
++mov    0x88(%rsp),%rcx
+ add    %rax,0x55a0(%rcx)
+-sub    %edx,%ebp
+-cmp    0x24(%rsp),%ebp
+-jl     LOCAL+0x6c6
++mov    0x64(%rsp),%ecx
++lea    0x391(%rsp),%r13
++sub    %edx,%r15d
++cmp    0x20(%rsp),%r15d
++jl     LOCAL+0x6f0
+ movl   $0x0,(%rsp)
+-movzbl 0x22(%rsp),%r9d
++movzbl 0x1f(%rsp),%r9d
+ lea    0x1d0(%rsp),%rsi
+-mov    0xa0(%rsp),%rdi
+-mov    %ebp,%edx
+-mov    0x6c(%rsp),%ecx
+-mov    0x38(%rsp),%r8d
++mov    0x88(%rsp),%rdi
++mov    %r15d,%edx
++mov    0x7c(%rsp),%ecx
++mov    0x34(%rsp),%r8d
+ call   rook2::ordinary::<impl rook2::engine::Search<_,H
+-mov    0x58(%rsp),%rax
+-mov    %ebp,0x4(%rax)
+-jmp    LOCAL+0xc1d
+-movzbl 0x213(%rsp),%ecx
+-mov    0x58(%rsp),%rsi
+-mov    %cl,0x3(%rsi)
+-movzwl 0x211(%rsp),%ecx
+-mov    %cx,0x1(%rsi)
+-mov    0x214(%rsp),%ecx
+-mov    0x218(%rsp),%rdx
+-jmp    LOCAL+0x12d3
+-cmp    %ebx,0x24(%rsp)
+-mov    0x70(%rsp),%r13
+-jg     LOCAL+0x202f
+-mov    0x50(%rsp),%rdx
+-lea    0x278(%rsp),%rsi
+-mov    0x238(%rsp),%rdi
+-mov    %r13d,%ecx
++mov    0x90(%rsp),%rax
++mov    %r15d,0x4(%rax)
++movb   $0x6,(%rax)
++jmp    LOCAL+0xca2
++movzbl 0x20b(%rsp),%ecx
++mov    %cl,0x3(%r13)
++movzwl 0x209(%rsp),%ecx
++mov    %cx,0x1(%r13)
++mov    0x20c(%rsp),%ecx
++mov    0x210(%rsp),%rdx
++mov    %al,0x0(%r13)
++mov    %ecx,0x4(%r13)
++mov    %rdx,0x8(%r13)
++jmp    LOCAL+0xca2
++cmp    %ebx,0x20(%rsp)
++mov    0x40(%rsp),%rbp
++jg     LOCAL+0x20d0
++mov    0x48(%rsp),%rdx
++lea    0x270(%rsp),%rsi
++mov    0x230(%rsp),%rdi
++mov    0x70(%rsp),%rcx
+ mov    $0x1,%r8d
+-mov    0x2c(%rsp),%ebp
++mov    %rbp,%r12
++mov    0x50(%rsp),%ebp
+ mov    %ebp,%r9d
+ call   *RIPREF(%rip)
+ movl   $0x1,(%rsp)
+@@ -1646,25 +1688,29 @@
+ mov    %ebx,%edx
+ mov    $0x1,%ecx
+ mov    %ebp,%r8d
++mov    %r12,%rbp
+ mov    $0x1,%r9d
+ call   rook2::ordinary::<impl rook2::engine::Search<_,H
+-mov    0x30(%rsp),%r9
++mov    0x28(%rsp),%r9
+ mov    $0x1,%ax
+-mov    %eax,0x6c(%rsp)
+-movb   $0x1,0x22(%rsp)
+-mov    0x80(%rsp),%rcx
+-jmp    LOCAL+0x12f8
++mov    %eax,0x7c(%rsp)
++movb   $0x1,0x1f(%rsp)
++mov    0xa0(%rsp),%rcx
++mov    0xc8(%rsp),%r12
++cmpl   $0x3,0x70(%rsp)
++jg     LOCAL+0x1390
++jmp    LOCAL+0x13f1
+ lea    RIPREF(%rip),%rdx
+ mov    $0x10,%esi
+ call   *RIPREF(%rip)
+ lea    RIPREF(%rip),%rax
+-mov    %rax,0x1a0(%rsp)
+-movq   $0x1,0x1a8(%rsp)
+-movq   $0x8,0x1b0(%rsp)
++mov    %rax,0xe8(%rsp)
++movq   $0x1,0xf0(%rsp)
++movq   $0x8,0xf8(%rsp)
+ pxor   %xmm0,%xmm0
+-movdqu %xmm0,0x1b8(%rsp)
++movdqu %xmm0,0x100(%rsp)
+ lea    RIPREF(%rip),%rsi
+-lea    0x1a0(%rsp),%rdi
++lea    0xe8(%rsp),%rdi
+ call   *RIPREF(%rip)
+ lea    RIPREF(%rip),%rdx
+ mov    $0x1,%edi
+@@ -1674,9 +1720,9 @@
+ mov    $0x40,%esi
+ mov    %rbx,%rdi
+ call   *RIPREF(%rip)
+-mov    %rdx,%rdi
+ lea    RIPREF(%rip),%rdx
+ mov    $0x200,%esi
++mov    %r15,%rdi
+ call   *RIPREF(%rip)
+ lea    RIPREF(%rip),%rdx
+ mov    $0x200,%esi
+@@ -1717,13 +1763,22 @@
+ mov    $0x40,%esi
+ call   *RIPREF(%rip)
+ lea    RIPREF(%rip),%rax
+-mov    %rax,0xe0(%rsp)
+-movq   $0x1,0xe8(%rsp)
+-movq   $0x8,0xf0(%rsp)
++mov    %rax,0x120(%rsp)
++movq   $0x1,0x128(%rsp)
++movq   $0x8,0x130(%rsp)
+ pxor   %xmm0,%xmm0
+-movdqu %xmm0,0xf8(%rsp)
++movdqu %xmm0,0x138(%rsp)
+ lea    RIPREF(%rip),%rsi
+-lea    0xe0(%rsp),%rdi
++lea    0x120(%rsp),%rdi
++call   *RIPREF(%rip)
++lea    RIPREF(%rip),%rax
++mov    %rax,0xe8(%rsp)
++movq   $0x1,0xf0(%rsp)
++movq   $0x8,0xf8(%rsp)
++pxor   %xmm0,%xmm0
++movdqu %xmm0,0x100(%rsp)
++lea    RIPREF(%rip),%rsi
++lea    0xe8(%rsp),%rdi
+ call   *RIPREF(%rip)
+ lea    RIPREF(%rip),%rdx
+ xor    %edi,%edi

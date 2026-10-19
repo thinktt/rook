@@ -1,0 +1,570 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -125,6 +125,24 @@
+             }
+             tag == piece.0
+         })
++    }
++
++    /// All matching slider origins whose ray in `direction` crosses F or T.
++    /// Geometric only: blockers, color and legal attacks do not limit influence
++    /// dependencies. F/T themselves are replaced separately by the delta owner.
++    #[inline]
++    pub(crate) fn geometric_slider_origins(
++        &self,
++        from: Square,
++        to: Square,
++        direction: usize,
++    ) -> u64 {
++        let [a, b, c, _] = self.planes;
++        let matching = if direction < 4 { a & (b ^ c) } else { c & !b };
++        let inverse = direction ^ 1;
++        let geometric = MASKS.rays[from.0 as usize][inverse]
++            | MASKS.rays[to.0 as usize][inverse];
++        matching & geometric & !((1u64 << from.0) | (1u64 << to.0))
+     }
+ 
+     #[inline]
+--- a/src/influence.rs
++++ b/src/influence.rs
+@@ -6,7 +6,7 @@
+ 
+ use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+ use crate::position::Position;
+-use crate::types::{Color, Piece, PieceKind, Square};
++use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ #[repr(u8)]
+@@ -29,6 +29,47 @@
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub struct Influence {
+     pub profiles: [[u8; 64]; 2],
++}
++
++// Test-only accounting observes actual kernel operations, not lowered traffic.
++#[cfg(test)]
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++struct DeltaWork {
++    writes: u64,
++    ray_calls: u64,
++    direction_queries: u64,
++    origins_considered: u64,
++    scheduled_copy_bytes: u64,
++}
++
++#[cfg(test)]
++std::thread_local! {
++    static DELTA_WORK: std::cell::Cell<Option<DeltaWork>> = const {
++        std::cell::Cell::new(None)
++    };
++}
++
++#[cfg(test)]
++fn count_work_begin() {
++    DELTA_WORK.with(|counter| {
++        assert!(counter.get().is_none(), "nested influence work count");
++        counter.set(Some(DeltaWork::default()));
++    });
++}
++
++#[cfg(test)]
++fn count_work_end() -> DeltaWork {
++    DELTA_WORK.with(|counter| counter.take().expect("influence work count not started"))
++}
++
++#[cfg(test)]
++fn count_work(update: impl FnOnce(&mut DeltaWork)) {
++    DELTA_WORK.with(|counter| {
++        if let Some(mut work) = counter.get() {
++            update(&mut work);
++            counter.set(Some(work));
++        }
++    });
+ }
+ 
+ impl Influence {
+@@ -91,6 +132,110 @@
+         influence
+     }
+ 
++    /// Derive the pure map for a genuine ordinary two-square transition.
++    ///
++    /// Preconditions: `parent_map` is exactly `Self::build(parent)`, both
++    /// positions have coherent boards/lists/tag planes, and `child` is the true
++    /// result of applying `movement` to `parent`. This kernel does not establish
++    /// that provenance; a synthetic predecessor or supplied map cannot attest it.
++    pub(crate) fn derive_ordinary(
++        parent: &Position,
++        parent_map: &Self,
++        child: &Position,
++        movement: Move,
++    ) -> Self {
++        debug_assert_eq!(movement.kind(), MoveKind::Ordinary);
++        let from = movement.from();
++        let to = movement.to();
++        let mut result = *parent_map;
++        #[cfg(test)]
++        count_work(|work| work.scheduled_copy_bytes += 128);
++
++        // Changed origins are replaced in full, including any captured slider.
++        for source in [from, to] {
++            result.piece_signed::<true>(&parent.board, source);
++        }
++        for source in [from, to] {
++            result.piece_signed::<false>(&child.board, source);
++        }
++
++        // Outside F/T the source tags agree. Discover all geometrically affected
++        // sliders, not merely visible attackers; OR deduplicates a ray whose
++        // origin can reach both changed squares in this direction.
++        let origins = parent.attack_view();
++        for direction in 0..8 {
++            #[cfg(test)]
++            count_work(|work| work.direction_queries += 1);
++            let mut selected = origins.geometric_slider_origins(from, to, direction);
++            while selected != 0 {
++                let source = Square(selected.trailing_zeros() as u8);
++                selected &= selected - 1;
++                #[cfg(test)]
++                count_work(|work| work.origins_considered += 1);
++                let piece = parent.board[source.0 as usize];
++                let contribution = match piece.kind() {
++                    PieceKind::Bishop => Contribution::Minor,
++                    PieceKind::Rook => Contribution::Rook,
++                    PieceKind::Queen => Contribution::Queen,
++                    _ => unreachable!("geometric slider origin"),
++                };
++                result.ray_signed::<true>(
++                    &parent.board, piece.color(), source, direction, contribution,
++                );
++                result.ray_signed::<false>(
++                    &child.board, piece.color(), source, direction, contribution,
++                );
++            }
++        }
++        result
++    }
++
++    // Only the delta path dispatches on a source's kind. Fresh construction
++    // retains its existing side/type loops and specializations.
++    fn piece_signed<const REMOVE: bool>(&mut self, board: &[Piece; 64], source: Square) {
++        let piece = board[source.0 as usize];
++        if piece.is_empty() {
++            return;
++        }
++        let side = piece.color();
++        let index = source.0 as usize;
++        match piece.kind() {
++            PieceKind::Pawn => {
++                let targets = &PAWN_TARGETS[side.index()][index];
++                for &target in &targets.squares[..targets.len as usize] {
++                    self.add_signed::<REMOVE>(side, Square(target & 63), Contribution::Pawn as u8);
++                }
++            }
++            PieceKind::Knight => {
++                let targets = &KNIGHT_SOURCES[index];
++                for &target in &targets.squares[..targets.len as usize] {
++                    self.add_signed::<REMOVE>(side, Square(target & 63), Contribution::Minor as u8);
++                }
++            }
++            PieceKind::King => {
++                let targets = &KING_TARGETS[index];
++                for &target in &targets.squares[..targets.len as usize] {
++                    self.add_signed::<REMOVE>(side, Square(target & 63), Contribution::Weak as u8);
++                }
++            }
++            PieceKind::Bishop => {
++                for direction in 0..4 {
++                    self.ray_signed::<REMOVE>(board, side, source, direction, Contribution::Minor);
++                }
++            }
++            PieceKind::Rook => {
++                for direction in 4..8 {
++                    self.ray_signed::<REMOVE>(board, side, source, direction, Contribution::Rook);
++                }
++            }
++            PieceKind::Queen => {
++                for direction in 0..8 {
++                    self.ray_signed::<REMOVE>(board, side, source, direction, Contribution::Queen);
++                }
++            }
++        }
++    }
++
+     #[inline]
+     pub fn code(&self, side: Color, square: Square) -> u8 {
+         self.profiles[side.index()][square.0 as usize]
+@@ -152,10 +297,22 @@
+ 
+     #[inline]
+     fn add(&mut self, side: Color, target: Square, weight: u8) {
++        self.add_signed::<false>(side, target, weight);
++    }
++
++    #[inline]
++    fn add_signed<const REMOVE: bool>(&mut self, side: Color, target: Square, weight: u8) {
++        #[cfg(test)]
++        count_work(|work| work.writes += 1);
+         let code = &mut self.profiles[side.index()][target.0 as usize];
+-        *code = code.wrapping_add(weight);
+-    }
+-
++        *code = if REMOVE {
++            code.wrapping_sub(weight)
++        } else {
++            code.wrapping_add(weight)
++        };
++    }
++
++    #[inline]
+     fn ray(
+         &mut self,
+         board: &[Piece; 64],
+@@ -164,6 +321,19 @@
+         direction: usize,
+         contribution: Contribution,
+     ) {
++        self.ray_signed::<false>(board, side, source, direction, contribution);
++    }
++
++    fn ray_signed<const REMOVE: bool>(
++        &mut self,
++        board: &[Piece; 64],
++        side: Color,
++        source: Square,
++        direction: usize,
++        contribution: Contribution,
++    ) {
++        #[cfg(test)]
++        count_work(|work| work.ray_calls += 1);
+         let step = DIRECTIONS[direction];
+         let diagonal = direction < 4;
+         let forward = if side == Color::White { 1 } else { -1 };
+@@ -174,7 +344,7 @@
+             debug_assert!(target < 64);
+             let target = Square(target & 63);
+             // Add the old weight before transparency or weakening.
+-            self.add(side, target, weight);
++            self.add_signed::<REMOVE>(side, target, weight);
+             let piece = board[target.0 as usize];
+             if piece.is_empty() {
+                 continue;
+@@ -192,7 +362,7 @@
+                 PieceKind::Pawn if diagonal && step.1 == forward => {
+                     if let Some(&extra) = targets.next() {
+                         debug_assert!(extra < 64);
+-                        self.add(side, Square(extra & 63), weight);
++                        self.add_signed::<REMOVE>(side, Square(extra & 63), weight);
+                     }
+                     break;
+                 }
+@@ -644,3 +814,7 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++#[path = "influence_delta_tests.rs"]
++mod delta_tests;
+--- /dev/null
++++ b/src/influence_delta_tests.rs
+@@ -0,0 +1,298 @@
++//! Independent kernel qualification, not Search eligibility or a CPU benchmark.
++use super::{count_work_begin, count_work_end, DeltaWork, Influence};
++use crate::evaluation::RootContext;
++use crate::evaluator::Node;
++use crate::movegen::{self, MoveList};
++use crate::position::Position;
++use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
++
++fn sq(name: &str) -> Square { Square::parse(name).unwrap() }
++fn ordinary(from: &str, to: &str) -> Move {
++    Move::new(sq(from), sq(to), MoveKind::Ordinary)
++}
++
++fn from_board(board: &[Piece; 64], side: Color) -> Position {
++    let mut ranks = Vec::new();
++    for rank in (0..8).rev() {
++        let mut text = String::new();
++        let mut empty = 0u8;
++        for file in 0..8 {
++            let piece = board[rank * 8 + file];
++            if piece.is_empty() { empty += 1; }
++            else {
++                if empty != 0 { text.push(char::from(b'0' + empty)); empty = 0; }
++                text.push(piece.fen_char());
++            }
++        }
++        if empty != 0 { text.push(char::from(b'0' + empty)); }
++        ranks.push(text);
++    }
++    Position::from_fen(&format!("{} {} - - 0 1", ranks.join("/"),
++        if side == Color::White { "w" } else { "b" })).unwrap()
++}
++fn setup(pieces: &[(&str, char)]) -> Position {
++    let mut board = [Piece::EMPTY; 64];
++    for &(name, letter) in pieces {
++        let at = sq(name).0 as usize;
++        assert!(board[at].is_empty(), "duplicate setup square {name}");
++        board[at] = Piece::from_fen(letter).unwrap();
++    }
++    from_board(&board, Color::White)
++}
++fn reflect(parent: &Position, movement: Move) -> (Position, Move) {
++    let mut board = [Piece::EMPTY; 64];
++    for (at, &piece) in parent.board.iter().enumerate() {
++        if !piece.is_empty() {
++            board[at ^ 56] = Piece::new(piece.color().opponent(), piece.kind());
++        }
++    }
++    (from_board(&board, parent.side.opponent()), Move::new(
++        Square(movement.from().0 ^ 56), Square(movement.to().0 ^ 56), MoveKind::Ordinary))
++}
++fn reverse_groups(mut parent: Position) -> Position {
++    for side in [Color::White, Color::Black] {
++        let mut start = 0;
++        for kind in PieceKind::ALL {
++            let end = start + parent.counts[side.index()][kind.index()] as usize;
++            parent.squares[side.index()][start..end].reverse();
++            start = end;
++        }
++    }
++    parent.validate().unwrap();
++    parent
++}
++
++// Target-centric: inspect each possible source and ONLY the cells strictly
++// between that source and this one target. No influence ray helper, direction
++// table, attack-bit query or fresh builder is called by this reference.
++fn target_reference(board: &[Piece; 64]) -> [[u8; 64]; 2] {
++    let mut result = [[0u8; 64]; 2];
++    for target in 0..64 {
++        let tf = (target % 8) as i32;
++        let tr = (target / 8) as i32;
++        for (source, &piece) in board.iter().enumerate() {
++            if source == target || piece.is_empty() { continue; }
++            let sf = (source % 8) as i32;
++            let sr = (source / 8) as i32;
++            let (dx, dy) = (tf - sf, tr - sr);
++            let side = piece.color();
++            let forward = if side == Color::White { 1 } else { -1 };
++            let direct = match piece.kind() {
++                PieceKind::Pawn if dx.abs() == 1 && dy == forward => Some(64),
++                PieceKind::Knight if dx.abs() * dy.abs() == 2 => Some(16),
++                PieceKind::King if dx.abs().max(dy.abs()) == 1 => Some(1),
++                _ => None,
++            };
++            let contribution = if let Some(value) = direct { Some(value) } else {
++                let diagonal = dx.abs() == dy.abs();
++                let orthogonal = dx == 0 || dy == 0;
++                let weight = match piece.kind() {
++                    PieceKind::Bishop if diagonal => Some(16),
++                    PieceKind::Rook if orthogonal => Some(4),
++                    PieceKind::Queen if diagonal || orthogonal => Some(2),
++                    _ => None,
++                };
++                weight.and_then(|mut value| {
++                    let distance = dx.abs().max(dy.abs());
++                    let (df, dr) = (dx.signum(), dy.signum());
++                    for step in 1..distance {
++                        let index = ((sr + dr * step) * 8 + sf + df * step) as usize;
++                        let obstacle = board[index];
++                        if obstacle.is_empty() { continue; }
++                        let friendly = obstacle.color() == side;
++                        match obstacle.kind() {
++                            PieceKind::King if !friendly => {},
++                            PieceKind::Queen if friendly => value = 1,
++                            PieceKind::Rook if friendly && orthogonal => {},
++                            PieceKind::Bishop if friendly && diagonal => {},
++                            PieceKind::Pawn if friendly && diagonal && dr == forward => {
++                                // The target itself is included without examining
++                                // its occupant; extra-square occupancy is immaterial.
++                                return (step + 1 == distance).then_some(value);
++                            },
++                            _ => return None,
++                        }
++                    }
++                    Some(value)
++                })
++            };
++            if let Some(weight) = contribution {
++                // Physical weights in Z/256Z, NOT adjusted-relation exclusion.
++                result[side.index()][target] = result[side.index()][target].wrapping_add(weight);
++            }
++        }
++    }
++    result
++}
++
++// Independent two-cell geometry admission for the deliberately broader sparse
++// witnesses. King safety/history reachability is NOT asserted for this group.
++fn ordinary_geometry(parent: &Position, movement: Move) {
++    assert_eq!(movement.kind(), MoveKind::Ordinary);
++    let from = movement.from(); let to = movement.to();
++    let mover = parent.board[from.0 as usize]; let victim = parent.board[to.0 as usize];
++    assert!(!mover.is_empty() && mover.color() == parent.side);
++    assert!(victim.is_empty() || (victim.color() != mover.color() && victim.kind() != PieceKind::King));
++    let dx = to.file() as i32 - from.file() as i32;
++    let dy = to.rank() as i32 - from.rank() as i32;
++    let clear = || {
++        let n = dx.abs().max(dy.abs());
++        (1..n).all(|i| parent.board[((from.rank() as i32 + dy.signum() * i) * 8
++            + from.file() as i32 + dx.signum() * i) as usize].is_empty())
++    };
++    let valid = match mover.kind() {
++        PieceKind::Pawn => {
++            let f = if mover.color() == Color::White { 1 } else { -1 };
++            let start = if mover.color() == Color::White { 1 } else { 6 };
++            to.rank() != 0 && to.rank() != 7 &&
++                ((dx == 0 && victim.is_empty() && (dy == f ||
++                    (dy == 2 * f && from.rank() == start && clear()))) ||
++                 (dx.abs() == 1 && dy == f && !victim.is_empty()))
++        },
++        PieceKind::Knight => dx.abs() * dy.abs() == 2,
++        PieceKind::King => dx.abs().max(dy.abs()) == 1,
++        PieceKind::Bishop => dx.abs() == dy.abs() && clear(),
++        PieceKind::Rook => (dx == 0 || dy == 0) && clear(),
++        PieceKind::Queen => (dx == 0 || dy == 0 || dx.abs() == dy.abs()) && clear(),
++    };
++    assert!(valid, "bad witness geometry: {from}{to}");
++}
++
++fn transition(parent: &Position, movement: Move) -> (Influence, Influence, DeltaWork, DeltaWork) {
++    parent.validate().unwrap();
++    ordinary_geometry(parent, movement);
++    let original = *parent;
++    let parent_map = Influence::build(parent);
++    assert_eq!(parent_map.profiles, target_reference(&parent.board));
++    let original_map = parent_map;
++    let context = RootContext::neutral(parent);
++    let node = Node::root(*parent, &context);
++    let original_node = node;
++    let child = node.child(&context, movement);
++    let original_child = child;
++    child.position.validate().unwrap();
++    // All reference/setup/transition work stays OUTSIDE either count region.
++    let expected = target_reference(&child.position.board);
++    count_work_begin();
++    let fresh = Influence::build(&child.position);
++    let fresh_work = count_work_end();
++    count_work_begin();
++    let derived = Influence::derive_ordinary(parent, &parent_map, &child.position, movement);
++    let delta_work = count_work_end();
++    assert_eq!(fresh.profiles, expected, "fresh oracle: {}{}", movement.from(), movement.to());
++    assert_eq!(derived.profiles, expected, "delta oracle: {}{}", movement.from(), movement.to());
++    assert_eq!(derived.profiles, fresh.profiles); // all128 bytes, both colors.
++    assert_eq!(*parent, original); assert_eq!(parent_map, original_map);
++    assert_eq!(node, original_node); assert_eq!(child, original_child);
++    assert_eq!(fresh_work.scheduled_copy_bytes, 0);
++    assert_eq!(delta_work.scheduled_copy_bytes, 128);
++    (parent_map, derived, fresh_work, delta_work)
++}
++
++fn work_json(work: DeltaWork) -> String {
++    format!("{{\"writes\":{},\"ray_calls\":{},\"direction_queries\":{},\"origins_considered\":{},\"scheduled_copy_bytes\":{}}}",
++        work.writes, work.ray_calls, work.direction_queries, work.origins_considered, work.scheduled_copy_bytes)
++}
++fn next(seed: &mut u64) -> u64 {
++    *seed ^= *seed << 13; *seed ^= *seed >> 7; *seed ^= *seed << 17; *seed
++}
++
++#[test]
++fn ordinary_delta_full_bytes_target_oracle_adversaries_and_legal_sample_work() {
++    let mut witnesses: Vec<(&str, Position, Move)> = vec![
++        ("all_collinear_rooks", setup(&[("h1",'K'),("h8",'k'),("a1",'R'),("b1",'R'),("c1",'Q')]), ordinary("c1","c2")),
++        ("all_collinear_diagonal", setup(&[("h1",'K'),("h8",'k'),("a1",'B'),("b2",'B'),("c3",'Q'),("d4",'Q')]), ordinary("d4","e4")),
++        ("queen_weak_no_restoration", setup(&[("h1",'K'),("h8",'k'),("a1",'R'),("a3",'Q'),("a5",'R'),("a7",'Q')]), ordinary("a3","b3")),
++        ("queen_arrival", setup(&[("h1",'K'),("h8",'k'),("a1",'R'),("b3",'Q'),("a5",'R'),("a7",'Q')]), ordinary("b3","a3")),
++        ("opposing_king_transparent_joined", setup(&[("h3",'K'),("c1",'k'),("a1",'R'),("e1",'Q')]), ordinary("e1","e2")),
++        ("own_king_blocks", setup(&[("c1",'K'),("h8",'k'),("a1",'R'),("e1",'Q')]), ordinary("e1","e2")),
++        ("forward_pawn_extra_occupied", setup(&[("h1",'K'),("h8",'k'),("a1",'B'),("c3",'P'),("d4",'n')]), ordinary("c3","c4")),
++        ("weak_pawn_extra_occupied", setup(&[("h1",'K'),("h8",'k'),("a1",'B'),("b2",'Q'),("c3",'B'),("d4",'P'),("e5",'n')]), ordinary("d4","d5")),
++        ("backward_pawn_no_extra", setup(&[("h1",'K'),("h8",'k'),("a7",'B'),("c1",'R'),("c5",'P')]), ordinary("c5","c6")),
++        ("same_key_from_and_to", setup(&[("h1",'K'),("h8",'k'),("c1",'R'),("c2",'P')]), ordinary("c2","c3")),
++        ("same_origin_two_directions", setup(&[("h2",'K'),("h8",'k'),("a1",'Q'),("a2",'N')]), ordinary("a2","c1")),
++        ("king_complete_contribution", setup(&[("d4",'K'),("h8",'k'),("a7",'b'),("c3",'N')]), ordinary("d4","e4")),
++        ("both_color_crossing_union", setup(&[("a2",'K'),("h8",'k'),("d4",'Q'),("d1",'R'),("a1",'B'),("d8",'r'),("h7",'b'),("e8",'q')]), ordinary("d4","e4")),
++        ("double_pawn_ep_side_effect", setup(&[("a1",'K'),("h8",'k'),("e2",'P'),("d4",'p')]), ordinary("e2","e4")),
++        ("moving_bishop_captures_rook", setup(&[("a1",'K'),("h8",'k'),("c1",'B'),("h6",'r')]), ordinary("c1","h6")),
++        ("opaque_blocker_all_origins", setup(&[("h1",'K'),("h8",'k'),("a1",'R'),("a2",'N'),("a4",'R'),("a6",'Q')]), ordinary("a6","b6")),
++    ];
++    for victim in ['p','n','b','r','q'] {
++        witnesses.push(("captured_complete_source", setup(&[("a1",'K'),("h8",'k'),("c3",'N'),("d5",victim)]), ordinary("c3","d5")));
++    }
++    let mut adversarial = 0;
++    for (_, parent, movement) in &witnesses {
++        for (position, mv) in [(*parent,*movement), reflect(parent,*movement)] {
++            transition(&position,mv); adversarial += 1;
++            transition(&reverse_groups(position),mv); adversarial += 1;
++        }
++    }
++    // Explicit physical carry boundaries, not expected runtime fixture answers.
++    let carry: [(Position, Move, u8, u8); 5] = [
++        (setup(&[("c3",'K'),("h8",'k'),("d8",'R'),("d6",'Q')]), ordinary("c3","b3"), 4, 3),
++        (setup(&[("a1",'K'),("h8",'k'),("d1",'Q'),("d8",'Q')]), ordinary("d1","e1"), 4, 2),
++        (setup(&[("a1",'K'),("h8",'k'),("d1",'R'),("d2",'R'),("d6",'R'),("d8",'R')]), ordinary("d2","e2"), 16, 12),
++        (setup(&[("a1",'K'),("h8",'k'),("b3",'N'),("b5",'N'),("c2",'N'),("c6",'N')]), ordinary("b3","a5"), 64, 48),
++        (setup(&[("a1",'K'),("h8",'k'),("b3",'N'),("b5",'N'),("c2",'N'),("c6",'N'),("e2",'N'),("e6",'N'),("f3",'N'),("f5",'N'),("c3",'P'),("e3",'P')]), ordinary("b3","a5"), 0, 240),
++    ];
++    for (parent,movement,before,after) in carry {
++        let (old,new,_,_) = transition(&parent,movement);
++        assert_eq!(old.code(Color::White,sq("d4")),before);
++        assert_eq!(new.code(Color::White,sq("d4")),after);
++        let (mirror,mv)=reflect(&parent,movement);
++        let (old,new,_,_)=transition(&mirror,mv);
++        assert_eq!(old.code(Color::Black,sq("d5")),before);
++        assert_eq!(new.code(Color::Black,sq("d5")),after);
++        adversarial += 2;
++    }
++
++    // Only this bounded, reproducible group is labelled legal sample economics.
++    // All candidate choices come from the existing complete legal generator.
++    let roots = [
++        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++        "r3k2r/ppp2ppp/2npbn2/3Np3/2B1P3/2N2Q2/PPP2PPP/R3K2R w KQkq - 0 1",
++        "7k/1p3pp1/3r4/3Pp3/1R2P3/6K1/8/8 w - - 0 1",
++        "4k3/3p4/2n1b3/8/3P4/2N1B3/8/4K3 w - - 0 1",
++    ];
++    let mut rows=Vec::new();
++    let (mut writes_lower,mut writes_equal,mut writes_higher,mut zero_delta_writes)=(0,0,0,0);
++    let (mut rays_lower,mut rays_equal,mut rays_higher,mut zero_delta_rays)=(0,0,0,0);
++    let (mut fresh_writes,mut delta_writes,mut fresh_rays,mut delta_rays,mut copy_bytes)=(0u64,0u64,0u64,0u64,0u64);
++    let mut colors=[0usize;2]; let mut captures=0; let mut quiets=0;
++    for (root_index,fen) in roots.iter().enumerate() {
++        let mut parent=Position::from_fen(fen).unwrap();
++        assert!(!movegen::in_check(&parent,parent.side.opponent()));
++        let mut seed=0x6ad3_91f2_8e05_b7c1u64 ^ ((root_index as u64 + 1)*0x1020_3040);
++        for ply in 0..12 {
++            let mut legal=MoveList::new(); movegen::generate_legal(&parent,&mut legal);
++            if legal.len==0 { break; }
++            let ordinary:Vec<Move>=legal.as_slice().iter().copied().filter(|m|m.kind()==MoveKind::Ordinary).collect();
++            let mut selected=Vec::new();
++            if let Some(&m)=ordinary.iter().find(|m|!parent.board[m.to().0 as usize].is_empty()) { selected.push(m); }
++            if let Some(&m)=ordinary.iter().find(|m|parent.board[m.to().0 as usize].is_empty()) { selected.push(m); }
++            if !ordinary.is_empty() {
++                let m=ordinary[(next(&mut seed) as usize)%ordinary.len()];
++                if !selected.contains(&m) { selected.push(m); }
++            }
++            for movement in selected {
++                let (_,_,fresh,delta)=transition(&parent,movement);
++                let victim=parent.board[movement.to().0 as usize]; let captured=!victim.is_empty();
++                colors[parent.side.index()]+=1;
++                if captured {captures+=1;} else {quiets+=1;}
++                if delta.writes<fresh.writes {writes_lower+=1;} else if delta.writes==fresh.writes {writes_equal+=1;} else {writes_higher+=1;}
++                if delta.ray_calls<fresh.ray_calls {rays_lower+=1;} else if delta.ray_calls==fresh.ray_calls {rays_equal+=1;} else {rays_higher+=1;}
++                zero_delta_writes+=usize::from(delta.writes==0);zero_delta_rays+=usize::from(delta.ray_calls==0);
++                fresh_writes+=fresh.writes;delta_writes+=delta.writes;fresh_rays+=fresh.ray_calls;delta_rays+=delta.ray_calls;copy_bytes+=delta.scheduled_copy_bytes;
++                let material:usize=parent.counts.iter().flatten().map(|&n|n as usize).sum();
++                rows.push(format!("{{\"root\":{},\"ply\":{},\"move\":\"{}{}\",\"side\":{},\"mover_kind\":{},\"victim_kind\":{},\"pieces\":{},\"fresh\":{},\"delta\":{}}}",root_index,ply,movement.from(),movement.to(),parent.side.index(),parent.board[movement.from().0 as usize].kind().index(),if captured {victim.kind().index() as i32} else {-1},material,work_json(fresh),work_json(delta)));
++            }
++            // Walk every legal kind; nonordinary walk steps are never delta samples.
++            let choice=(next(&mut seed) as usize)%legal.len;
++            parent=parent.played_unchecked(legal.as_slice()[choice]);
++            parent.validate().unwrap();
++        }
++    }
++    assert!(rows.len()>=32 && rows.len()<=144 && colors.iter().all(|&n|n>0));
++    assert!(captures>0 && quiets>0);
++    println!("INFLUENCE_DELTA_KERNEL_SUMMARY {{\"scope\":\"conditional legal sample work, not production eligibility, CPU or traffic\",\"adversarial_transitions\":{},\"legal_pairs\":{},\"captures\":{},\"quiets\":{},\"white_pairs\":{},\"black_pairs\":{},\"writes_lower_equal_higher\":[{},{},{}],\"rays_lower_equal_higher\":[{},{},{}],\"zero_delta_writes\":{},\"zero_delta_rays\":{},\"fresh_writes\":{},\"delta_writes\":{},\"fresh_ray_calls\":{},\"delta_ray_calls\":{},\"scheduled_copy_bytes\":{},\"rows\":[{}]}}",adversarial,rows.len(),captures,quiets,colors[0],colors[1],writes_lower,writes_equal,writes_higher,rays_lower,rays_equal,rays_higher,zero_delta_writes,zero_delta_rays,fresh_writes,delta_writes,fresh_rays,delta_rays,copy_bytes,rows.join(","));
++}

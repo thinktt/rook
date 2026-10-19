@@ -1,0 +1,26 @@
+# Integrated29 generic versus retained25 — mechanism present, material cost risk
+
+Exact default generic29 image2b0e8ebb81acafc242dc32ca03e670a757300ca4b872db70a88facda47102340 (7,024,624 bytes), compared with retained25 **generic**2940ae5c003fa396b31639749b4c3ba29e52e8aebabfc96a7dde565b6d9abd04. Candidate receipt before/after source/tools are stable; compiler/toolchain/generic flags match the recorded baseline. Parent separately bound frozen source71graph7f604b27, actualbuild48821/b14998 and182-unit13620/494a02; this review runs no native work and transfers no qualification. Baseline source/identity/report remain separate unchanged files.
+
+**Yes: actual incremental mechanism survived lowering.** Default ordinary has an emitted derive call0x3e706→0x211d0 and fresh fallback0x3e71e→0x1ff10. Its other lazy-demand site0x3ff03 calls CurrentInfluence::fill0x3d4d0. The fill tests its ready marker, then input flags, and dispatches through resolved GOT cells0xe26d8→derive0x211d0 or0xe2d00→fresh0x1ff10. candidate/influence-call-windows.txt and fill-resolved-calls.json retain exact operands; no source-only or symbol-absence inference is needed.
+
+Derive is3088 bytes, rsp subtraction280 plus six saved registers. Its emitted old/new ray work calls the two actual signed-ray instances: subtract at0x21fc0/438 bytes and add at0x21de0/475 bytes. Memory instructions concretely subtract/add byte weights (e.g.0x22026/0x21e56). The selected-origin loop includes actual nonzero-origin bit scan0x21c80 and old/new calls0x21c56/0x21c6e; both changed-piece and selected-ray paths are present. Its successful calls are signed rays; other calls resolve to failure handlers. Static call-site multiplicity is NOT calls per node/ray or actual eligibility/demand.
+
+| Scope |25 bytes→29 bytes|Entry rsp subtraction25→29|
+| --- | ---: | ---: |
+| Fresh Influence::build |4787→4787|264→264|
+| Q visit_q_impl |7224→7224|1224→1224|
+| Ordinary visit_ordinary_impl |8766→9019 (+253)|1064→1064|
+| Ordering phase |2494→2502 (+8)|504→504|
+| Full evaluator |2415→2415|312→312|
+| Node::child |937→937|168→168|
+
+All six listed entries retain six register pushes in addition to rsp subtraction. These are entry allocations, not recursive peak stack or spill counts. Fresh ray traversal remains inlined in the fresh builder; all11 literal fresh calls still resolve to the same failure roles. Q's three fresh-build sites0x3b328/0x3b5c4/0x3b768 resolve to the same fresh owner, with no derive call in that captured Q body. Thus shared-ray refactoring did not outline the successful **fresh** ray path or enlarge this Q/fresh extent/frame. Full and Node::child retain extent/frame too.
+
+For orientation, address-only normalized instruction sequences match for fresh/Q/full/child; raw function bytes differ. paired-size-shape.json and shape.diff files expose that limited check. It strips RIP displacements and direct target addresses. Actual selected call referents were separately decoded through ELF relocations; all remaining anonymous/read-only operands were NOT exhaustively compared. Consequently this is not a machine equivalence or neutrality proof, and no gain follows from equal sizes or shape alone.
+
+**Material copy/stack risk remains.** Derive reads eight16-byte parent-map chunks into a local128-byte map (0x211ff–0x21256), mutates that map, then returns it through eight16-byte output stores (0x21cae–0x21d0f). This replaces fresh local zero initialization with parent reads; it does not update a caller map in place. The new outlined fill is158 bytes and, on an unfilled path, pushes rbx and subtracts128 bytes. It calls derive OR fresh into its rsp temporary, then copies128 bytes into CurrentInfluence at offsets+9..+0x79 (0x3d51e–0x3d561). Its ready case returns before allocation. Both signed rays additionally subtract48 and save three registers. Unchanged ordinary frame therefore does not establish unchanged transient call-chain storage or copy cost. The baseline caller also materializes/copies scratch maps; the displayed new copy is not automatically128 extra dynamic traffic versus every old path. Candidate raw copy/return and fill disassembly are retained so the pilot can arbitrate without a fabricated traffic model.
+
+The trusted predecessor transport now affects ordinary/order/timed source, but actual sizeof/field layout remains unknown from this bounded review; no newDWARF scan or probe was performed. No Search/Position/Node growth theorem is inferred from these frames. No source was changed to chase the helper copy. The net result depends on real eligible-demand frequency, repeated old/new ray work, parent-map register lifetime, branch/call cost and copies; the finite kernel counters are separate evidence. This backend review identifies no missing mechanism or massive fresh/Q extent/frame regression, and supplies the concrete copy risk for parent's frozen matched pilot. It does not authorize timing/adoption or claim benefit/neutrality.
+
+Static tools only on housekeeping0–5,8–13/HOME TMPDIR. Candidate capture actualf835f5/0; bounded disassemblyb8ccd4/0; call/copy resolution391c6b/0; fill/shape captureaa2f95/0. All static children returned0. Final small metadata actual is reported after return. No engine/probe/compiler/build/test/profile/archive/Git action or source edit occurred; all owned jobs are closed.
