@@ -1,0 +1,81 @@
+--- closed36generic/capture.py
++++ fat36ownPGO/capture.py
+@@ -6,8 +6,8 @@
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+ CAP=128*1024
+ BODY_CAP=12
+-D={'control':E/'ordinary-projected-bits-generic-build-20261018-01',
+-   'candidate':E/'fat-lto-generic-build-20261019-01'}
++D={'control':E/'ordinary-projected-bits-pgo-use-build-20261018-01',
++   'candidate':E/'fat-lto-pgo-use-build-20261019-01'}
+ def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+ def put(path,value):
+     with path.open('x') as f: json.dump(value,f,indent=2);f.write('\n')
+@@ -15,6 +15,14 @@
+ def terminal(row):
+     assert row['actual_tool_terminal_observed'] is True and row['exit_code']==0
+     assert (row.get('terminal_chunk_id') or row.get('chunk_id') or '').strip()
++def normalized_environment(receipt):
++    env=dict(receipt['build_effective_environment'])
++    profile=receipt['pgo']['profile']
++    for key in ['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS']:
++        assert isinstance(env[key],str) and env[key].count(profile)==1
++        env[key]=env[key].replace(profile,'<OWN_PROFILE>')
++    return env
++
+ def preflight():
+     assert not (P/'capture-failure.json').exists(), 'Preserved failure requires parent review'
+     plan=load(P/'plan.json')
+@@ -29,8 +37,28 @@
+     receipts={}
+     for side,base in D.items():
+         receipt=load(base/'receipt.json');receipts[side]=receipt
+-        assert receipt['cargo_exit_code']==0 and receipt['pgo']['mode']=='none'
+-        assert receipt['rust_flags']==['-C','target-cpu=x86-64']
++        assert receipt['cargo_exit_code']==0 and receipt['mode']=='generic'
++        pgo=receipt['pgo'];assert pgo['mode']=='profile-use'
++        profile=Path(pgo['profile']);training_path=Path(pgo['training_record'])
++        assert receipt['rust_flags']==['-C','target-cpu=x86-64','-C','profile-use='+str(profile),'-C','llvm-args=-pgo-warn-missing-function']
++        assert pgo['input_sha256_before']==pgo['input_sha256_after'] and pgo['inputs_unchanged']
++        assert set(pgo['input_sha256_before'])=={str(profile),str(training_path)}
++        for path,h in pgo['input_sha256_before'].items():
++            assert sha(Path(path))==h;pins[path]=h
++        assert sha(profile)==plan['profile_sha256'][side]
++        training=load(training_path)
++        assert training['schema']=='rook2-pgo-training-v1' and training['complete'] is True
++        assert training['engine_source_sha256']==receipt['source_sha256_before']
++        assert training['target_triple']==receipt['target_triple']
++        assert training['base_rust_flags']==['-C','target-cpu=x86-64']
++        assert training['profile_sha256']==sha(profile) and len(training['raw_profiles_sha256'])==54
++        inst_path=Path(training['instrumented_build_receipt']['path'])
++        assert sha(inst_path)==training['instrumented_build_receipt']['sha256'];pins[str(inst_path)]=sha(inst_path)
++        inst=load(inst_path)
++        assert inst['cargo_exit_code']==0 and inst['pgo']['mode']=='instrumented'
++        assert inst['source_sha256_before']==inst['source_sha256_after']==receipt['source_sha256_before']
++        assert inst['tool_sha256_before']==receipt['tool_sha256_before']
++        assert inst['toolchain']==receipt['toolchain']
+         assert receipt['source_sha256_before']==receipt['source_sha256_after']
+         assert receipt['tool_sha256_before']==receipt['tool_sha256_after']
+         assert len(receipt['source_sha256_before'])==46
+@@ -44,8 +72,11 @@
+             path=base/'source-before'/name;assert sha(path)==h;pins[str(path)]=h
+     a,b=receipts['control'],receipts['candidate']
+     assert a['tool_sha256_before']==b['tool_sha256_before']
+-    for key in ['mode','target_triple','target_cpu','jobs','toolchain','build_effective_environment']:
++    for key in ['mode','target_triple','target_cpu','jobs','toolchain']:
+         assert a[key]==b[key],key
++    assert normalized_environment(a)==normalized_environment(b)
++    assert a['pgo']['profile']!=b['pgo']['profile']
++    assert plan['profile_sha256']['control']!=plan['profile_sha256']['candidate']
+     old,new=a['source_sha256_before'],b['source_sha256_before']
+     assert set(new)==set(old)
+     assert [k for k in old if old[k]!=new[k]]==['Cargo.toml']
+@@ -59,6 +90,8 @@
+         assert len(binary_lines)==1
+         assert '-C lto='+setting+' ' in binary_lines[0]
+         assert '-C codegen-units=1 ' in binary_lines[0]
++        assert '-C profile-use='+receipts[side]['pgo']['profile']+' ' in binary_lines[0]
++        assert not re.search(r'no profile data available|profile data.*out of date|function control flow change detected|hash mismatch',log.read_text(),re.I)
+     for tool in ['nm','objdump','readelf','size']:
+         path=Path('/usr/bin')/tool;pins[str(path)]=sha(path)
+     return pins

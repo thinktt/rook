@@ -1,20 +1,22 @@
-# Test whole-program fat LTO on retained25
+# Park whole-program fat LTO after own-PGO timing
 
-Experiment36 changes only Cargo release lto="thin"→"fat". All44Rust files,
-all178 test bodies,23tools and generic target/compiler/other settings stay
-exact25. The released reference also declares fatLTO. Most library code already
-shares oneCGU; the hypothesis is final crosscrate integration, not first exposing
-all modules together or a guaranteed fraction of the reference gap.
+Experiment36 changes only retained25 Cargo release lto="thin"→"fat". All44Rust
+files,178 test bodies,23tools and generic target/compiler/other settings remain
+exact. The public reference declares fatLTO; oneCGU already covers most library
+code, so the distinct hypothesis was final crosscrate integration.
 
-Actual normal-WireHost code inlines scalar activity and other owners into full
-evaluation. Total text shrinks22080B, while combined full/root frame reservations
-grow and ordinary/Q shrink16B. Copies and scalar work remain; static changes
-supply no speed prediction. Fixed70 strict live/original offline replay and
-independent wait4 accounting pass. Sum case medians14.078437→13.720597s,
-2.541759%lower,7/7lower,worst0.97956294 meets the existing advancement rule.
+Generic fixed70 passes at2.541759%lower summed medians,7/7lower. Fresh own-fat
+PGO then passes54original/raw/PID/remerge checks with profile6b29f4b7 and builds
+use93f4666d. Actual own-PGO integration differs: activity stays outlined, Q grows
+4258B, allfourhot reservations grow16B/root96B, although text shrinks12736B.
+No generic gain is transferred or static saving inferred.
 
-Advance only to fresh own-source fat PGO and a distinct fixed70 against25PGO.
-Native178 has not been rerun; no broad117/54/wire/games or source promotion
-follows from this generic result. Production/root and immutable delivery remain25.
+The separate own-PGO fixed70 passes strict live/original offline checks and
+independent native accounting but sums12.7189200→12.7716685s:0.414725%higher,
+3/7lower,worst1.00948206. Aggregate/lower-case rules fail. Park without retry,
+retuning, full178/117/standaloneuse54/wire/games or promotion. Original metadata
+read/extraction failures and bounded actual capture/provenance remain preserved.
+Production/root and immutable delivery stay25; no PGO profile is reused.
 
-See the [generic decision and identities](../../evidence/fat-lto-generic-decision-20261019-01/README.md).
+See [generic staging](../../evidence/fat-lto-generic-decision-20261019-01/README.md)
+and [final own-PGO decision](../../evidence/fat-lto-pgo-decision-20261019-01/README.md).

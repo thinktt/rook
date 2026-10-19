@@ -133,12 +133,12 @@ production-path mechanism adds substantial setup/frame/code cost. No PGO,
 all186/117/54/wire/games or promotion follows; retained25 is unchanged. See
 [decision0026](decisions/0026-invocation-local-activity-masks.md).
 
-Experiment36 changes only the retained25 release thinLTO setting to fatLTO.
-Its generic fixed70 passes at2.541759%lower summed medians,7/7lower and
-worst0.97956294; all70 strict live/offline replays and native accounting pass.
-All178 native test bodies are preserved but were not rerun for this stage.
-Fresh own-source/config fat PGO and its separate timing screen are next;
-no broader qualification or source promotion follows yet. See
+Experiment36 thin→fatLTO is parked after its own-source PGO fixed70:
+0.414725%higher summed medians,3/7lower,worst1.00948206. Generic had passed
+at2.541759%lower/7of7, but that gain does not transfer. Own54raw/original/PID/
+byte-identical remerge and strict70/accounting pass.178 native tests remain
+source-preserved/unrun for36; no full117/use54/wire/games or source promotion
+follows. Retained25 stays unchanged. See
 [decision0027](decisions/0027-fat-lto.md).
 
 The isolated pure-component cache is parked after its own-PGO pilot fails the

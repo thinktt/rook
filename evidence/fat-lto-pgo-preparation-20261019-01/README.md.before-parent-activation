@@ -1,0 +1,13 @@
+# Experiment36 fat-LTO own-source PGO — INERT
+
+Four serial stages only: instrumented build/freeze/archive; one original54 training replay; offline original54/raw/PID verification plus independent byte-identical profile remerge; use build/freeze/archive. Six helpers minimally derive from accepted weighted-bound-cache33 methods. `raw_model.py` and `recheck.mjs` are byte-identical; `helper-adaptation.patch` exposes every code change. No helper has been parsed, imported or run.
+
+Exact69 source graph59331ad93943a7a2da2ddf6fcd2d2a3b904dc5fef8b46b06807ce7566bde8cbe is candidate25 with only Cargo.toml thin→fat. All native code and178 test bodies remain unchanged; no focused native run is required or claimed for this configuration-only trial. No33 cache change or35 activity change is composed.
+
+The guard pins manifest/source46/tools23/config/toolchain and rejects all CARGO_PROFILE_*, CARGO_TARGET_*, CARGO_BUILD_* and Rust flag overrides. Instrumented and use builds must show actual verbose binary `-C lto=fat` and library `-C linker-plugin-lto`, O3/one codegen unit/panic abort/debug1/x86-64, and their exact fresh profile flag/path. Training and verification rebind these same effective flags. build.py's manifest-inclusive source check prevents use of the old thin25 profile;54 unique PID/raw profiles and independent remerge remain mandatory. Recorded runtime/tool pins are inherited accepted identities to be freshly checked by the future guard, not a claim of version invocation during preparation.
+
+After parent actual-terminal notice, generic70 proof was read/pinned: ratio0.9745824057031331,7/7 lower, worst0.979562935789303, all70 original checks. Parent selected own-PGO, but **all launch clearances remain false**. Parent must finish final runtime/artifact/context pins and canonical independent-terminal binding before activation. The existing closed generic receipt is pinned; the PGO instrumented/profile/use identities remain null. No live or partial pilot data was consumed.
+
+The own-PGO seven-case/70-lifetime declaration is frozen before training against own25PGO51529, with common rule aggregate<=.995,at least5 lower,none>1.02, no retries/outlier deletion. It grants no timing authority. This directory prepares no post-use54/wire/full117/pre-gate/CPU helper and makes no adoption or qualification claim.
+
+A metadata read attempted a nonexistent `reconcile-tool-terminal.json` at the generic pilot path (actualb1ca48/1); no pipeline ran or failed. The existing pilot outer terminal and parent-reported independente64d08/0 are distinguished explicitly; no file/actual was invented.

@@ -1,0 +1,197 @@
+--- weighted-bound-cache/guard.py
++++ fat-lto/guard.py
+@@ -1,5 +1,5 @@
+ """Fail-closed shared admission; importing never executes tools or writes files."""
+-import hashlib,json,os,sys,subprocess
++import hashlib,json,os,sys,subprocess,shlex,tomllib
+ from pathlib import Path
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parents[1]
+@@ -23,18 +23,19 @@
+ 
+ def validate_authority(c):
+  assert c.get('authorized') is True and c.get('all_conflicting_native_work_terminal') is True
+- assert c.get('scope')=='weighted-bound-cache-own-pgo-build-train-no-cpu'
++ assert c.get('scope')=='fat-lto-own-pgo-build-train-no-cpu'
+  assert c['plan_sha256']==sha(HERE/'plan.json')
+  assert c['source_root']==str(SOURCE)
+  assert c['prepared_scripts_sha256']==load(HERE/'script-pins.json')
+- assert c['functional_candidate_accepted'] is True
++ assert c['config_only_source_accepted'] is True
+  assert c['generic_pilot_advance_accepted'] is True
++ assert isinstance(PLAN['generic_candidate_sha256'],str) and len(PLAN['generic_candidate_sha256'])==64
+  assert c['generic_candidate_sha256']==PLAN['generic_candidate_sha256']
+  assert c['generic_pilot_evidence'] and c['generic_pilot_actual_terminals']
+  for path,digest in c['generic_pilot_evidence'].items():assert sha(path)==digest
+  for path,digest in c['generic_pilot_actual_terminals'].items():assert sha(path)==digest;terminal(path)
+- assert c['functional_evidence'] and c['actual_terminals']
+- for path,digest in c['functional_evidence'].items():assert sha(path)==digest
++ assert c['source_and_build_evidence'] and c['actual_terminals']
++ for path,digest in c['source_and_build_evidence'].items():assert sha(path)==digest
+  for path,digest in c['actual_terminals'].items():assert sha(path)==digest;terminal(path)
+  assert c['training_cpu']==14 and c['sibling15_no_owned_task'] is True
+  assert c['quiet_window_and_interference_review']
+@@ -45,9 +46,41 @@
+  assert tool_snapshot(SOURCE)==PLAN['tool_source_sha256']
+  assert tool_snapshot(ROOT)==PLAN['tool_source_sha256']
+  assert cargo_configs(SOURCE)==PLAN['cargo_config_sha256']
++ manifest=tomllib.loads((SOURCE/'Cargo.toml').read_text())
++ assert manifest['profile']['release']==PLAN['manifest_release_profile']
++ assert manifest['profile']['release']['lto']=='fat'
+  assert all(sha(path)==digest for path,digest in PLAN['input_sha256'].items())
+  assert all(sha(HERE/name)==digest for name,digest in load(HERE/'script-pins.json').items())
+ 
++
++def check_fat_build(out,mode):
++ # Source hashing prevents a changed manifest; verbose rustc lines prove the
++ # effective Cargo setting, including an otherwise silent profile override.
++ r=load(Path(out)/'receipt.json')
++ assert r['pgo']['mode']==mode
++ assert r['source_sha256_before']==r['source_sha256_after']==PLAN['engine_source_sha256']
++ assert r['toolchain']==PLAN['toolchain'] and r['cargo_config_sha256_before']==r['cargo_config_sha256_after']==PLAN['cargo_config_sha256']
++ commands=[shlex.split(line.split('Running `',1)[1].rsplit('`',1)[0]) for line in (Path(out)/'build.stderr').read_text().splitlines() if 'Running `' in line and '--crate-name rook2 ' in line]
++ observed={}
++ for source,kind in [('src/lib.rs','lib'),('src/bin/rook2.rs','bin')]:
++  matches=[argv for argv in commands if source in argv]
++  assert len(matches)==1,(source,len(matches))
++  argv=matches[0]; assert argv[argv.index('--crate-type')+1]==kind
++  options={}
++  for i,token in enumerate(argv):
++   if token=='-C': item=argv[i+1]
++   elif token.startswith('-C') and len(token)>2: item=token[2:]
++   else: continue
++   key,sep,value=item.partition('=');assert key not in options,(source,key)
++   options[key]=value if sep else True
++  for key,value in [('opt-level','3'),('panic','abort'),('codegen-units','1'),('debuginfo','1'),('target-cpu','x86-64')]:assert options.get(key)==value,(source,key,options)
++  if kind=='bin': assert options.get('lto')=='fat' and 'linker-plugin-lto' not in options
++  else: assert options.get('linker-plugin-lto') is True and 'lto' not in options
++  profile='profile-generate' if mode=='instrumented' else 'profile-use'
++  expected=str(Path(PLAN['training'])/('raw' if mode=='instrumented' else 'merged.profdata'))
++  assert options.get(profile)==expected and ('profile-use' if mode=='instrumented' else 'profile-generate') not in options
++  observed[source]=options
++ return observed
+ 
+ def require_clearance():
+  c=validate_authority(load(HERE/'execution-clearance.json'))
+--- weighted-bound-cache/build_stage.py
++++ fat-lto/build_stage.py
+@@ -28,6 +28,7 @@
+  assert r['toolchain']==PLAN['toolchain'] and r['mode']=='generic' and r['target_cpu']=='x86-64' and r['target_triple']==PLAN['target_triple'] and r['jobs']==4
+  expected=PLAN['base_flags']+(['-C',f"profile-generate={train/'raw'}"] if stage=='instrumented' else ['-C',f"profile-use={train/'merged.profdata'}",'-C','llvm-args=-pgo-warn-missing-function'])
+  assert r['rust_flags']==expected
++ effective=check_fat_build(out,'instrumented' if stage=='instrumented' else 'profile-use')
+  warning=(out/'build.stderr').read_text().lower()
+  for x in ['no profile data available for function','profile data may be out of date','profile data mismatch','malformed instrumentation profile data','hash mismatch','unprofiled function']:
+   assert x not in warning,x
+@@ -36,5 +37,5 @@
+  run([sys.executable,str(ROOT/'tools/archive_build.py'),str(out)],HERE/(stage+'-archive'))
+  ar=load(out/'archive-receipt.json');assert ar['verified_against_build_before_hashes'] and ar['binary_sha256']==sha(frozen) and sha(out/ar['archive'])==ar['sha256']
+  check_inputs()
+- write(HERE/(stage+'-stage.json'),dict(complete=True,artifact_sha256=sha(frozen),receipt_sha256=sha(out/'receipt.json'),archive_receipt_sha256=sha(out/'archive-receipt.json'),missing_or_stale_profile_warnings=0))
++ write(HERE/(stage+'-stage.json'),dict(complete=True,artifact_sha256=sha(frozen),receipt_sha256=sha(out/'receipt.json'),archive_receipt_sha256=sha(out/'archive-receipt.json'),missing_or_stale_profile_warnings=0,effective_rustc_options=effective))
+ if __name__=='__main__':main()
+--- weighted-bound-cache/train.py
++++ fat-lto/train.py
+@@ -9,14 +9,14 @@
+ import sys
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "weighted-bound-cache-pgo-training-20261019-01"
++OUT = HERE.parent / "fat-lto-pgo-training-20261019-01"
+ ROOT = HERE.parents[1]
+-BUILD = ROOT / 'evidence/weighted-bound-cache-pgo-instrumented-build-20261019-01'
+-SOURCE = Path('/home/legolas/rook2-work/imp2-weighted-bound-cache-20261019-01')
++BUILD = ROOT / 'evidence/fat-lto-pgo-instrumented-build-20261019-01'
++SOURCE = Path('/home/legolas/rook2-work/imp2-fat-lto-20261019-01')
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ sys.dont_write_bytecode=True
+-sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/weighted-bound-cache-pgo-preparation-20261019-01')))
+-from guard import require_clearance,terminal,check_inputs,check_merge_tool
++sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/fat-lto-pgo-preparation-20261019-01')))
++from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_fat_build
+ sys.path.insert(0, str(SOURCE / 'tools'))
+ from build import source_snapshot, cargo_configs, tool_snapshot
+ 
+@@ -36,6 +36,7 @@
+     check_inputs()
+     check_merge_tool()
+     terminal(BUILD/'tool-terminal.json')
++    effective = check_fat_build(BUILD,'instrumented')
+     assert sorted(os.sched_getaffinity(0)) == [0,1,2,3,4,5,8,9,10,11,12,13]
+     build = json.loads((BUILD / 'receipt.json').read_text())
+     assert build['outcome'] == 'build-succeeded-with-stable-input-snapshot'
+@@ -106,6 +107,7 @@
+     check_inputs()
+     assert version.stdout == plan['merge_tool_version']
+     write('training.json', dict(schema='rook2-pgo-training-v1', complete=True,
++                               effective_rustc_options=effective,
+                                engine_source_sha256=source_snapshot(SOURCE),
+                                target_triple=build['target_triple'],
+                                base_rust_flags=build['rust_flags'][:2],
+--- weighted-bound-cache/verify.py
++++ fat-lto/verify.py
+@@ -8,12 +8,12 @@
+ import subprocess
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "weighted-bound-cache-pgo-training-20261019-01"
++OUT = HERE.parent / "fat-lto-pgo-training-20261019-01"
+ ROOT = HERE.parents[1]
+ sys.dont_write_bytecode=True
+-sys.path.insert(0,'/home/legolas/rook2/evidence/weighted-bound-cache-pgo-preparation-20261019-01')
+-from guard import require_clearance,terminal,check_inputs,check_merge_tool,run
+-sys.path.insert(0,'/home/legolas/rook2-work/imp2-weighted-bound-cache-20261019-01/tools')
++sys.path.insert(0,'/home/legolas/rook2/evidence/fat-lto-pgo-preparation-20261019-01')
++from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_fat_build,run
++sys.path.insert(0,'/home/legolas/rook2-work/imp2-fat-lto-20261019-01/tools')
+ from build import source_snapshot,tool_snapshot
+ 
+ 
+@@ -38,8 +38,10 @@
+     terminal(OUT/'tool-terminal.json')
+     training = load(OUT/'training.json')
+     replay = load(OUT/'replay.json')
+-    build_path = ROOT/'evidence/weighted-bound-cache-pgo-instrumented-build-20261019-01/receipt.json'
++    build_path = ROOT/'evidence/fat-lto-pgo-instrumented-build-20261019-01/receipt.json'
+     build = load(build_path)
++    effective = check_fat_build(build_path.parent,'instrumented')
++    assert training['effective_rustc_options']==effective
+     assert training['complete'] and training['schema'] == 'rook2-pgo-training-v1'
+     assert len(training['raw_profiles_sha256']) == 54
+     assert set(training['raw_profiles_sha256']) == {str(p) for p in (OUT/'raw').glob('*.profraw')}
+@@ -55,19 +57,19 @@
+         assert row['exit']=={'code':0,'signal':None} and row['error'] is None and row['stderr']==''
+         assert row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
+     assert not (OUT/'replay.stderr').stat().st_size
+-    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../weighted-bound-cache-pgo-preparation-20261019-01/train.py', 'driver_sha256'),
++    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../fat-lto-pgo-preparation-20261019-01/train.py', 'driver_sha256'),
+                           ('merged.profdata', 'profile_sha256'), ('merged.profdata.gz', 'profile_archive_sha256')]:
+         assert sha(OUT/filename) == training[key]
+     assert gzip.decompress((OUT/'merged.profdata.gz').read_bytes()) == (OUT/'merged.profdata').read_bytes()
+     assert all(sha(Path(p)) == h for p, h in training['input_sha256'].items())
+     assert sha(build_path) == training['instrumented_build_receipt']['sha256']
+     assert sha(build_path.parent/'rook2-exact') == training['instrumented_engine_sha256'] == build['binary_output']['sha256']
+-    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-weighted-bound-cache-20261019-01'))
++    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-fat-lto-20261019-01'))
+     assert sha(Path('/usr/bin/llvm-profdata-19').resolve()) == training['merge_tool_sha256']
+     terminal_receipt = load(OUT/'tool-terminal.json')
+     assert terminal_receipt['exit_code'] == 0
+     assert all(sha(Path(path))==h for path,h in load(OUT/'input-closure.json').items())
+-    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-weighted-bound-cache-20261019-01'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
++    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-fat-lto-20261019-01'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
+     # Reuse the accepted raw protocol model and released original checker on
+     # training only; post-use54/wire is deliberately gated after the CPU pilot.
+     from raw_model import replay as verify_raw_replay
+@@ -82,10 +84,10 @@
+     write('independent-merge-child-terminal.json',dict(actual_child_return_observed=True,exit_code=result.returncode,command=command))
+     assert result.returncode==0 and not (OUT/'independent-merge.stderr').stat().st_size
+     assert merged.read_bytes()==(OUT/'merged.profdata').read_bytes(),'independent remerge differs'
+-    verification = dict(complete=True, independent_remerge_byte_identical=True, independent_remerge_exit_code=result.returncode, independent_remerge_command=command, independent_profile_sha256=sha(merged), strict_replays=54, original_checkReplay_count=54, raw_training_protocol_cases=54, raw_profiles_independently_hashed=54,
++    verification = dict(complete=True, effective_rustc_options=effective, independent_remerge_byte_identical=True, independent_remerge_exit_code=result.returncode, independent_remerge_command=command, independent_profile_sha256=sha(merged), strict_replays=54, original_checkReplay_count=54, raw_training_protocol_cases=54, raw_profiles_independently_hashed=54,
+           merged_profile_sha256=training['profile_sha256'], training_record_sha256=sha(OUT/'training.json'),
+           driver_terminal_sha256=sha(OUT/'tool-terminal.json'), verifier_sha256=sha(Path(__file__)),
+-          scope='Own exact weighted-bound-cache candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
++          scope='Own exact fat-lto candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
+     check_inputs()
+     write('verification.json', verification)
+     print(json.dumps(verification))
