@@ -1,0 +1,56 @@
+--- accepted28/archive_checkpoint.py
++++ 47/archive_checkpoint.py
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env python3
+-"""Exact closed28 trees only; inventory, stream, reopen and recheck originals."""
++"""Exact closed47 generic trees only; inventory, stream, reopen and recheck originals."""
+ from pathlib import Path
+-import hashlib,json,os,stat,sys,tarfile
++import hashlib,json,os,stat,sys,tarfile,gzip
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-TREES=['direct-child-construction-build-validation-20261019-01', 'direct-child-construction-decision-20261019-01', 'direct-child-construction-generic-build-20261019-01', 'direct-child-construction-generic-codegen-review-20261019-01', 'direct-child-construction-preparation-20261019-01', 'direct-child-construction-source-review-20261019-01']
++TREES=['ordinary-position-borrow-backend-preparation-20261019-01', 'ordinary-position-borrow-parent-backend-review-20261019-01', 'ordinary-position-borrow-focused-native-check-20261019-01', 'ordinary-position-borrow-generic-screen-preparation-20261019-01', 'ordinary-position-borrow-generic-screen-20261019-01', 'ordinary-position-borrow-generic-screen-parent-review-20261019-01', 'ordinary-position-borrow-decision-20261019-01']
+ def digest(f):
+  h=hashlib.sha256();n=0
+  for b in iter(lambda:f.read(1048576),b''):h.update(b);n+=len(b)
+@@ -35,18 +35,19 @@
+ def main():
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+- full={p.name for p in ROOT.iterdir() if p.is_dir() and p.name.startswith('direct-child-construction-') and p!=HERE}
+- assert full=={n for n in TREES if n.startswith('direct-child-construction-')}
+  before=inventory();write('member-manifest.json',before)
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_regular_files_no_omissions=True,files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),scope='Closed28 source/backend rejection preservation only; no native/test/timing/PGO/qualification or promotion'))
+- archive=HERE/'closed-direct-child-construction.tar.gz'
+- with tarfile.open(archive,'x:gz',format=tarfile.PAX_FORMAT) as t:
+-  for name,row in before.items():
+-   source=ROOT/name;info=t.gettarinfo(str(source),arcname=name)
+-   assert info.isfile() and info.size==row['bytes'] and stat.S_IMODE(info.mode)==row['mode']
+-   with source.open('rb') as f:
+-    reader=HashReader(f);t.addfile(info,reader)
+-    assert reader.n==row['bytes'] and reader.h.hexdigest()==row['sha256'],name
++ write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_regular_files_no_omissions=True,files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),scope='Closed47 generic mechanism/focused13/fixed70 evidence; own-PGO only decision, no adoption or broad qualification; external runtime/source payloads referenced, not expanded'))
++ archive=HERE/'closed-ordinary-position-borrow-generic.tar.gz'
++ with archive.open('xb') as raw:
++  with gzip.GzipFile(filename='',mode='wb',fileobj=raw,mtime=0) as compressed:
++   with tarfile.open(fileobj=compressed,mode='w',format=tarfile.PAX_FORMAT) as t:
++    for name,row in before.items():
++     source=ROOT/name;info=t.gettarinfo(str(source),arcname=name)
++     assert info.isfile() and info.size==row['bytes'] and stat.S_IMODE(info.mode)==row['mode']
++     info.mtime=0;info.uid=0;info.gid=0;info.uname='';info.gname='';info.pax_headers={}
++     with source.open('rb') as f:
++      reader=HashReader(f);t.addfile(info,reader)
++      assert reader.n==row['bytes'] and reader.h.hexdigest()==row['sha256'],name
+  reopened={}
+  with tarfile.open(archive,'r:gz') as t:
+   members=t.getmembers();assert len(members)==len(before)
+@@ -56,8 +57,6 @@
+    reopened[member.name]=dict(bytes=n,sha256=h,mode=member.mode)
+  assert reopened==before
+  assert inventory()==before,'original closed inputs changed'
+- full_after={p.name for p in ROOT.iterdir() if p.is_dir() and p.name.startswith('direct-child-construction-') and p!=HERE}
+- assert full_after==full
+  write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),scope_sha256=sha(HERE/'scope.json'),all_members_reopened_and_hashed=True,member_manifest_exact=True,originals_rechecked_unchanged=True,all_selected_regular_files_captured=True,no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
+  print((HERE/'verification.json').read_text())
+ if __name__=='__main__':
