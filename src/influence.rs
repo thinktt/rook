@@ -8,6 +8,10 @@ use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAW
 use crate::position::Position;
 use crate::types::{Color, Piece, PieceKind, Square};
 
+mod coherent;
+#[cfg(test)]
+mod coherent_tests;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Contribution {
@@ -32,6 +36,13 @@ pub struct Influence {
 }
 
 impl Influence {
+    /// Private search-only producer. PRECONDITION: canonical mailbox, source
+    /// lists and maintained attack planes describe this same placement.
+    /// Public/custom callers retain the self-sufficient scalar build below.
+    pub(crate) fn build_coherent(position: &Position) -> Self {
+        coherent::build(position)
+    }
+
     pub fn build(position: &Position) -> Self {
         let mut influence = Self {
             profiles: [[0; 64]; 2],

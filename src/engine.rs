@@ -40,6 +40,8 @@ pub struct Search<const DIAGNOSTICS: bool = true, H: Host = NoHost> {
     pub(crate) learning: Learning,
     pub(crate) remembered: Option<RememberedTable>,
     table_bytes: usize,
+    // Valid only inside a guarded owned-root call; never a Node certificate.
+    coherent_geometry: bool,
     pub(crate) pv: [[Move; PLIES]; PLIES],
     pub(crate) pv_len: [usize; PLIES],
     pub(crate) stats: Stats,
@@ -60,6 +62,7 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
             learning: Learning::default(),
             remembered: None,
             table_bytes: 0,
+            coherent_geometry: false,
             pv: [[Move::NONE; PLIES]; PLIES],
             pv_len: [0; PLIES],
             stats: Stats::default(),
@@ -83,6 +86,7 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
             learning,
             remembered,
             table_bytes,
+            coherent_geometry: _,
             pv,
             pv_len,
             stats,
@@ -101,6 +105,7 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
                 learning,
                 remembered,
                 table_bytes,
+                coherent_geometry: false,
                 pv,
                 pv_len,
                 stats,
@@ -111,6 +116,19 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
             },
             previous,
         )
+    }
+
+    pub(crate) fn clear_geometry_permission(&mut self) {
+        self.coherent_geometry = false;
+    }
+
+    pub(crate) fn bind_geometry_permission(&mut self, position: &Position) {
+        self.coherent_geometry = position.validate().is_ok();
+    }
+
+    #[inline]
+    pub(crate) fn geometry_permission(&self) -> bool {
+        self.coherent_geometry
     }
 
     pub(crate) fn ensure_table(&mut self) -> Result<(), String> {
@@ -154,3 +172,7 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
         self.pv_len[ply] = child_len + 1;
     }
 }
+
+#[cfg(test)]
+#[path = "engine/geometry_tests.rs"]
+mod geometry_tests;

@@ -494,7 +494,9 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
         controls: Controls,
         limits: Limits,
     ) -> Result<Outcome, Error> {
+        self.clear_geometry_permission();
         let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
+        self.clear_geometry_permission();
         self.timing = None;
         result
     }
@@ -513,6 +515,7 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
         }
         assert_eq!(history.search_ply(), 0);
         self.ensure_table().map_err(Error::Table)?;
+        self.bind_geometry_permission(&position);
         let (root, influence) = self.prepare_root_with_influence(position);
         let checked = movegen::in_check(&position, position.side);
         let mut legal = MoveList::new();
@@ -530,7 +533,7 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
                 work: 0,
             })
             .collect();
-        self.begin_sequence(limits);
+        self.begin_owned_sequence(limits);
         if H::ACTIVE {
             controls.seed = self
                 .host

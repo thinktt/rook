@@ -15,21 +15,25 @@ The `rook2` executable serves the live King XBoard byte stream, including
 search-time controls/status, natural seed acquisition, gate seed commands and
 fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implements
 117 mandatory operations with7673 cases across115 original whole fixture files.
-The current full-byte relation source has178 native and209 diagnostic tests,
-54 strict replays and eight interruption fixtures/24 searches. Its own-PGO
-artifact79d19ebe has a separately reconciled seven-case development pilot,
-0.702652% lower in summed CPU medians than activity controld5ee1f3f.
-Previous complete117 artifact6a5ce6e2 owns the latest full54/12 CPU collections and12-game pre-gate;
-those results do not transfer to the new artifact. Current-artifact gameplay,
-full performance qualification and the external3288-game gate remain open.
-See [decision0013](docs/decisions/0013-full-byte-relation-table.md).
+Retained candidate37 uses guarded coherent Influence production and projected
+Boolean checks with unchanged Position160/Node176.185native tests,209diagnostic
+tests, all mandatory fixtures, fresh optimized54/eight-wire24 and regular12-game
+pre-gate/632searches plus continuity/seed controls pass independent reconciliation.
+Own-PGO image54be6552 has its own training profile and a paired seven-case screen
+2.147243%lower in summed CPU medians than25. Its complete Vic54 collection sums
+71.050search/71.424373whole-native CPU medians; final performance qualification,
+production-domain audit and external3288-game gate remain open.
+See [decision0028](docs/decisions/0028-coherent-influence-masks.md) and
+[current timing](evidence/coherent-influence-masks-standard54-20261019-01/README.md).
 See [STATUS.md](STATUS.md) for artifact-specific evidence and limitations.
 
 Placement now includes exact attack planes owned by Position160/Node176,
 retaining copied-child state and independent retained evaluation. The measured
 storage/kernel decision and its validation boundaries are recorded in
 [decision0004](docs/decisions/0004-persistent-attack-planes.md).
-Influence uses the coherent typed piece lists adopted in
+Influence retains scalar typed lists for public/untrusted entry and leapers;
+validated native roots borrow existing planes for the guarded slider producer
+under decision0028. Typed-list ownership began in
 [decision0006](docs/decisions/0006-typed-influence-enumeration.md).
 The immutable relation kernel now indexes original profile-byte pairs directly;
 its measured storage/dependency tradeoff is recorded in decision0013.

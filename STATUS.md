@@ -1,6 +1,30 @@
 # Implementation status
 
-## Current stage — candidate25 projected Boolean checks, 2026-10-18
+## Current stage — candidate37 coherent Influence, 2026-10-19
+
+Candidate37 is integrated by exact source72 equality after its own-source
+thinPGO screen,185native/209diagnostic tests, complete mandatory117operations/
+7673cases/115wholefiles, fresh optimized54/eight-wire24 and regular12-game
+pre-gate/632searches,continuity8 and required seed controls. All original/raw
+inputs, outputs and exits independently reconcile. Combined source115 equals
+graphef66acfc…ed281; ordinary54be6552 and diagnostic8b996b73 remain the tested
+isolated-path artifacts. This is source promotion, not a canonical rebuild.
+
+Own-PGO matched70 improves2.147243% at5of7lower. Complete current54 timing
+passes216fresh lifetimes/432offline checks and sums71.050search/71.424373whole
+native CPU medians. Earlier25 Vic72.630/73.059178 is a separate window; these
+reported-only comparisons do not establish final qualification. Rust reference
+search63.277733/whole63.431779 remains the target with disclosed hardware and
+accounting limits. Current12 costs, normative production audit, final54/12
+performance qualification and external3288-game gate remain open.25's external
+binary/bundle bytes are preserved; no new Bee run or package transfer is implied.
+
+See [decision0028](docs/decisions/0028-coherent-influence-masks.md),
+[source promotion](evidence/coherent-influence-masks-integration-20261019-01/source-promotion.json),
+[qualification](evidence/coherent-influence-masks-qualification-20261019-01/README.md)
+and [whole54 timing](evidence/coherent-influence-masks-standard54-20261019-01/README.md).
+
+## Previous candidate25 projected Boolean checks, 2026-10-18
 
 Candidate25 is integrated by exact source equality after its own-PGO trial,
 fresh mandatory117-operation validation and final12-game pre-gate. Only the
@@ -21,7 +45,9 @@ only by exact source69 equality. Companion diagnostic image is `f1f7f5d9`.
 
 The two exact validated executables are packaged outside the repository at
 `/home/legolas/benchmark-handoff/candidate25`, containing only `rook2` and `rook2-diag`.
-Original-hardware benchmarking through cleanroom-gate/rook-tester is pending.
+The authorized original-hardware benchmark round trip completed: Bee25 search
+CPU75.770s; same25 Vic72.630s. The separate audited functional packet also
+completed. Those historical results do not transfer to37.
 Current final54/12 performance qualification, normative production audit and
 external full3288-game gate remain open. See
 [decision0015](docs/decisions/0015-ordinary-projected-bit-checks.md),

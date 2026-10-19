@@ -541,12 +541,26 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         randomness: u32,
         observe_raw: F,
     ) -> Result<Outcome, Error> {
+        self.clear_geometry_permission();
         assert!(randomness <= i32::MAX as u32);
         self.run_iterations_inner::<true, F>(position, history, completed, limits,
             seed, randomness, observe_raw)
     }
 
     fn run_iterations_inner<const SEEDED: bool, F: FnMut(i32)>(
+        &mut self, position: Position, history: &mut SearchHistory,
+        completed: u8, limits: Limits, seed: u32, randomness: u32,
+        observe_raw: F,
+    ) -> Result<Outcome, Error> {
+        self.clear_geometry_permission();
+        let result = self.run_iterations_body::<SEEDED, F>(
+            position, history, completed, limits, seed, randomness, observe_raw,
+        );
+        self.clear_geometry_permission();
+        result
+    }
+
+    fn run_iterations_body<const SEEDED: bool, F: FnMut(i32)>(
         &mut self, position: Position, history: &mut SearchHistory,
         completed: u8, limits: Limits, seed: u32, randomness: u32,
         mut observe_raw: F,
@@ -556,6 +570,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         }
         assert_eq!(history.search_ply(), 0);
         self.ensure_table().map_err(Error::Table)?;
+        self.bind_geometry_permission(&position);
         let (root, root_influence) = self.prepare_root_with_influence(position);
         let root_checked = movegen::in_check(&position, position.side);
         let mut roots = MoveList::new();
@@ -564,7 +579,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
             return Err(Error::NoLegalRoots);
         }
         let initial_candidates = roots.as_slice().to_vec();
-        self.begin_sequence(limits);
+        self.begin_owned_sequence(limits);
         let mut iterations = Vec::with_capacity(completed as usize);
         for depth in 1..=completed {
             let mut ranked = Vec::<(Move, i32)>::with_capacity(roots.len);
@@ -761,6 +776,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         )
         .adjustment;
         let mut scratch = None;
+        let coherent_geometry = self.geometry_permission();
         if policy::fast_admitted(
             &position,
             previous.position,
@@ -779,7 +795,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                     .movement
                     .is_some_and(|m| quiescence_policy::capture_exception(previous.position, &m)),
             ) {
-                let map = self.evaluator.ensure_influence(&position, &mut scratch);
+                let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
                 if !policy::king_pressure(&position, previous.influence, map) {
                     let trial = adjusted - self.threat(node, map);
                     if trial >= request.upper {
@@ -792,7 +808,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                 }
             }
         }
-        let map = self.evaluator.ensure_influence(&position, &mut scratch);
+        let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
         let evaluation = self.evaluator.full(node, map, checked);
         if DIAGNOSTICS {
             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);

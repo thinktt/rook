@@ -1,19 +1,33 @@
-# Prototype a guarded coherent Influence producer
+# Adopt a guarded coherent Influence producer
 
-Experiment37 passes generic70 at1.455622%lower/7of7, then its fresh own-source
-thinPGO70 at2.147243%lower/5of7,worst1.006744. All70 original replay/accounting
-checks pass. Production remains25 while37 advances to fresh broad local gates;
-this seven-case screen does not establish full-corpus performance qualification.
+Retain candidate37 by exact source equality after independent generic70 and
+own-source thinPGO70 screens,185native/209diagnostic tests, the complete
+mandatory7673cases/117operations/115wholefiles, fresh optimized54/eight-wire24
+and regular12pre-gate/632searches with continuity8 and required seed controls.
+Original raw responses, protocol streams, inputs and exits independently reconcile.
 
-The new producer uses existing borrowed placement planes within one validated
-native root lifetime, preserving scalar public/untrusted/custom-map behavior.
-Slider masks retain exact transparency/weakening/pawn-extra semantics and feed
-wrapping SSE2 byte additions. Scalar leapers and all numerical/charge/cache
-owners stay. No new Node/Position state or parentmap reuse is introduced.
-Root entry validation/private permission costs, larger producer frame/table/text
-and map transport are included in the measured source. Seven focused controls, all185 native tests and209 diagnostic tests pass.
-All7673cases/117operations/115wholefiles and fresh post-use54/eight-wire24
-pass independent original/raw reconciliation. Regular12pre-gate is running;
-whole54 timing and source selection remain pending.
+Native search borrows existing placement planes within one validated root
+lifetime. A private revocable Search permission selects the complete Influence
+producer only on that path; public/untrusted entry retains scalar behavior.
+Existing Some maps remain authoritative. Slider masks preserve transparency,
+queen weakening and the extra pawn-ray square, then feed wrapping SSE2 byte
+addition. Scalar leapers, numerical owners, caches, charges and Position/Node
+layout remain unchanged. There is no parent-map reuse.
 
-See [own-PGO decision](../../evidence/coherent-influence-masks-pgo-decision-20261019-01/README.md) and [generic decision](../../evidence/coherent-influence-masks-generic-decision-20261019-01/README.md).
+The actual source includes root validation/permission, a2KiB expansion table,
+producer frame growth and map transport. Generic70 improves1.455622% at7of7lower;
+separate fresh own-PGO70 improves2.147243% at5of7,worst1.006744. Neither result
+transfers to another profile or constitutes full-corpus performance qualification.
+Current54 sums71.050search/71.424373whole-native CPU medians after216lifetimes;
+earlier25 sums72.630/73.059178 are a different Vic window. All samples remain.
+
+The independent advisor's bounded review supports existing coherent planes and
+requires revocation before later public construction; normal cleanup alone is
+not an unwind seal. Source/reentry controls establish that boundary without
+claiming a directly executed callback-unwind composition. Final production-domain
+review, compatible54/12 cost qualification and external3288 remain open.
+
+See [source selection](../../evidence/coherent-influence-masks-integration-20261019-01/README.md),
+[whole54 timing](../../evidence/coherent-influence-masks-standard54-20261019-01/README.md),
+[own-PGO decision](../../evidence/coherent-influence-masks-pgo-decision-20261019-01/README.md)
+and [generic decision](../../evidence/coherent-influence-masks-generic-decision-20261019-01/README.md).

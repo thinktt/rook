@@ -172,6 +172,12 @@ impl Position {
         self.attack_bits
     }
 
+    /// Borrow actual maintained planes; the caller owns placement coherence.
+    #[inline]
+    pub(crate) fn attack_planes(&self) -> &[u64; 4] {
+        self.attack_bits.planes()
+    }
+
     #[inline]
     fn group_start(&self, color: Color, kind: PieceKind) -> usize {
         self.counts[color.index()][..kind.index()]

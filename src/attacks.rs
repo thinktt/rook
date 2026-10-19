@@ -65,7 +65,19 @@ const fn masks() -> Masks {
 
 static MASKS: Masks = masks();
 
+/// Existing immutable geometry for the private coherent evaluation producer.
+/// Return references, not a copied per-source ray row or a rebuilt table.
+#[inline]
+pub(crate) fn influence_rays(square: Square) -> (&'static [u64; 8], &'static [bool; 8]) {
+    (&MASKS.rays[square.0 as usize], &MASKS.increasing)
+}
+
 impl AttackBits {
+    #[inline]
+    pub(crate) fn planes(&self) -> &[u64; 4] {
+        &self.planes
+    }
+
     pub(crate) const fn empty() -> Self {
         Self { planes: [0; 4] }
     }

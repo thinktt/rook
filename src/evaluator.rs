@@ -8,6 +8,16 @@ use crate::position::Position;
 use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
 use crate::{activity, endgame, pawn_progress, pawn_terms, positional_terms, shelter};
 
+#[cfg(test)]
+std::thread_local! {
+    static COHERENT_BUILDS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn coherent_build_count() -> u64 {
+    COHERENT_BUILDS.with(|count| count.get())
+}
+
 pub const OMITTED_TERMS: &str = "production personality/session/protocol binding";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -298,8 +308,26 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         position: &Position,
         scratch: &'a mut Option<Influence>,
     ) -> &'a Influence {
+        self.ensure_influence_for_search(position, scratch, false)
+    }
+
+    /// Only a guarded Search-owned descendant chain may pass true. Supplied
+    /// maps remain authoritative, including on the trusted route.
+    pub(crate) fn ensure_influence_for_search<'a>(
+        &mut self,
+        position: &Position,
+        scratch: &'a mut Option<Influence>,
+        coherent_geometry: bool,
+    ) -> &'a Influence {
         if scratch.is_none() {
-            *scratch = Some(Influence::build(position));
+            *scratch = Some(if coherent_geometry {
+                let map = Influence::build_coherent(position);
+                #[cfg(test)]
+                COHERENT_BUILDS.with(|count| count.set(count.get() + 1));
+                map
+            } else {
+                Influence::build(position)
+            });
             if DIAGNOSTICS {
                 self.stats.influence_builds += 1;
             }
@@ -533,8 +561,23 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         capture_exception: bool,
         scratch: &mut Option<Influence>,
     ) -> Selection {
+        self.select_noncheck_for_search(
+            node, lower, upper, capture_exception, scratch, false,
+        )
+    }
+
+    pub(crate) fn select_noncheck_for_search(
+        &mut self,
+        node: &mut Node,
+        lower: i32,
+        upper: i32,
+        capture_exception: bool,
+        scratch: &mut Option<Influence>,
+        coherent_geometry: bool,
+    ) -> Selection {
         self.select_noncheck_impl::<false, false, _, _, _>(
-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
+            node, lower, upper, capture_exception, scratch, coherent_geometry,
+            |_| {}, |_| {}, |_| {},
         )
     }
 
@@ -556,7 +599,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         G: FnMut(FastDetails),
     {
         self.select_noncheck_impl::<true, false, _, _, _>(
-            node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
+            node, lower, upper, capture_exception, scratch, false, full_observer, fast_observer, |_| {},
         )
     }
 
@@ -571,7 +614,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         observer: F,
     ) -> Selection {
         self.select_noncheck_impl::<false, true, _, _, _>(
-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
+            node, lower, upper, capture_exception, scratch, false, |_| {}, |_| {}, observer,
         )
     }
 
@@ -605,6 +648,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         upper: i32,
         capture_exception: bool,
         scratch: &mut Option<Influence>,
+        coherent_geometry: bool,
         mut full_observer: F,
         mut fast_observer: G,
         mut stage_observer: S,
@@ -624,7 +668,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
                 <= 1
         });
         if sparse {
-            let influence = self.ensure_influence(&node.position, scratch);
+            let influence = self.ensure_influence_for_search(&node.position, scratch, coherent_geometry);
             return Selection {
                 evaluation: if STAGES {
                     self.full_stage_observed(node, influence, |stage| stage_observer(stage))
@@ -647,7 +691,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         };
         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
         let evaluation = if refresh {
-            let influence = self.ensure_influence(&node.position, scratch);
+            let influence = self.ensure_influence_for_search(&node.position, scratch, coherent_geometry);
             if STAGES {
                 self.full_stage_observed(node, influence, |stage| stage_observer(stage))
             } else if OBSERVE {

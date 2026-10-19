@@ -1,0 +1,97 @@
+--- accepted25/run_pregate.py
++++ inert37/run_pregate.py
+@@ -18,15 +18,21 @@
+ ENGINE=Path(APPROVAL['ordinary_artifact']['image'])
+ EXPECTED=APPROVAL['ordinary_artifact']['sha256']
+ assert isinstance(EXPECTED,str) and len(EXPECTED)==64
+-OUT=PREP/'pregate'
++OUT=PREP.parent/'coherent-influence-masks-pregate-20261019-01'
+ MASK={0,1,2,3,4,5,8,9,10,11,12,13}
+ def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(p,d):
+     with Path(p).open('x') as f: json.dump(d,f,indent=2);f.write('\n')
++def terminal(path):
++    row=json.loads(Path(path).read_text())
++    assert row['actual_tool_terminal_observed'] is True and row['exit_code']==0
++    assert (row.get('terminal_chunk_id') or row.get('chunk_id') or '').strip()
+ def pins():
+     names=['run.mjs','combine.mjs','continuous.mjs','seed-command-controls.mjs',
+            'seed-persistence-controls.mjs','accepted-games-v1.json','continuous-switching-v1.json']
+-    files=[KIT/n for n in names]+[PREP/n for n in ['run_pregate.py','direct_wire_tap.mjs','sync_control_tap.mjs','reconcile_pregate.mjs','pregate-clearance.json']]+[BUILD/'receipt.json',BUILD/'archive-receipt.json',ENGINE]
++    files=[KIT/n for n in names]+[PREP/n for n in ['run_pregate.py','direct_wire_tap.mjs','sync_control_tap.mjs','reconcile_pregate.mjs','pregate-clearance.json','pregate-plan.json']]+[BUILD/'receipt.json',BUILD/'archive-receipt.json',ENGINE]
++    plan=json.loads((PREP/'pregate-plan.json').read_text())
++    files += [BUILD/'source-before'/name for name in {**plan['native_sha256'],**plan['tools_sha256']}]
+     files += [Path(path) for path in json.loads((PREP/'pregate-clearance.json').read_text())['dependencies']]
+     return {str(p):sha(p) for p in files}
+ def command(name,argv,env=None):
+@@ -52,30 +58,44 @@
+     assert os.sched_getaffinity(0)==MASK
+     assert sha(ENGINE)==EXPECTED
+     clearance=json.loads((PREP/'pregate-clearance.json').read_text());assert clearance['authorized'] is True
+-    from guard import clearance as functional_clearance,terminal,check_sources
+-    plan=functional_clearance();check_sources(plan)
+-    assert clearance['plan_sha256']==sha(PREP/'validation-plan.json')
++    plan=json.loads((PREP/'pregate-plan.json').read_text())
++    assert clearance['plan_sha256']==sha(PREP/'pregate-plan.json')
+     assert clearance['all_conflicting_native_jobs_closed'] is True
+-    terminal(Path(plan['output']['reconciliation'])/'tool-terminal.json')
+-    summary=json.loads((PREP/'validation-summary.json').read_text())
+-    assert summary['all_original_raw_expected_actual_and_exits_reconciled'] and summary['native_units']==178 and summary['diagnostic_units']==209
+-    proof=json.loads(Path(clearance['ordinary_artifact']['independent_proof']).read_text())
+-    assert proof['complete'] and proof['own_profile_only'] and proof['strict_training54'] and proof['fresh_strict54'] and proof['wire8_searches24']
+-    variant=proof['variants']['ordinary-projected-bits'];assert variant['artifact_sha256']==EXPECTED and variant['source_sha256']==plan['native_sha256']
+-    assert clearance['dependencies']
+-    required=[ENGINE,BUILD/'receipt.json',BUILD/'archive-receipt.json',Path(clearance['ordinary_artifact']['independent_proof']),Path(clearance['ordinary_artifact']['independent_actual_terminal'])]
+-    assert all(str(path) in clearance['dependencies'] for path in required)
+-    terminal(Path(clearance['ordinary_artifact']['independent_actual_terminal']))
++    assert str(OUT)==plan['output'] and str(ENGINE)==plan['ordinary_artifact']['image']
++    assert EXPECTED==plan['ordinary_artifact']['sha256']
++    assert set(clearance['prerequisites'])=={'native','postuse54_wire24','full117','own_pgo70'}
++    required=[ENGINE,BUILD/'receipt.json',BUILD/'archive-receipt.json',BUILD/'tool-terminal.json',
++      Path(plan['source_freeze']),Path(plan['profile']['path']),Path(plan['profile']['training_record'])]
++    required += [PREP/n for n in ['run_pregate.py','direct_wire_tap.mjs','sync_control_tap.mjs','reconcile_pregate.mjs']]
++    required += [KIT/n for n in ['run.mjs','combine.mjs','continuous.mjs','seed-command-controls.mjs',
++      'seed-persistence-controls.mjs','accepted-games-v1.json','continuous-switching-v1.json']]
++    required.append(Path('/usr/bin/node'))
++    for row in clearance['prerequisites'].values():
++        assert row['complete'] is True and row['source_graph_sha256']==plan['source_graph_sha256']
++        assert row['proof'] and row['actual_terminals']
++        required.append(Path(row['proof']))
++        for path in row['actual_terminals']:
++            required.append(Path(path));terminal(path)
++    assert clearance['dependencies'] and all(str(path) in clearance['dependencies'] for path in required)
+     for path,h in clearance['dependencies'].items():assert sha(path)==h
++    terminal(BUILD/'tool-terminal.json')
++    source=json.loads(Path(plan['source_freeze']).read_text())
++    assert source['files_sha256']=={**plan['native_sha256'],**plan['tools_sha256']}
++    assert len(plan['native_sha256'])==49 and len(plan['tools_sha256'])==23
+     b=json.loads((BUILD/'receipt.json').read_text())
+     assert b['outcome']=='build-succeeded-with-stable-input-snapshot'
+     assert b['binary_output']['sha256']==EXPECTED and b['pgo']['mode']=='profile-use' and b['pgo']['inputs_unchanged']
+     assert b['source_sha256_before']==b['source_sha256_after']==plan['native_sha256']
+     assert b['tool_sha256_before']==b['tool_sha256_after']==plan['tools_sha256']
+-    assert b['toolchain']==json.loads(Path(plan['native_reference']['build_receipt']).read_text())['toolchain']
++    assert b['toolchain']==plan['toolchain']
++    assert b['pgo']['profile']==plan['profile']['path']
++    assert b['pgo']['input_sha256_before']==b['pgo']['input_sha256_after']==plan['profile']['input_sha256']
++    assert sha(plan['profile']['path'])==plan['profile']['sha256']
++    for name,h in {**plan['native_sha256'],**plan['tools_sha256']}.items():
++        assert sha(BUILD/'source-before'/name)==h
+     before=pins();OUT.mkdir()
+     write(OUT/'binding.json',{'before':before,'engine_sha256':EXPECTED,'image':str(ENGINE),'affinity':sorted(MASK),
+-      'scope':'Untimed exact own-PGO117 regular pre-gate after stage6 PASS; full3288 external, no CPU qualification.',
++      'scope':'Untimed exact own-PGO117 regular pre-gate after current37 qualification prerequisites PASS; full3288 external, no CPU qualification.',
+       'parallel_independent_games':3})
+     fixture=json.loads((KIT/'accepted-games-v1.json').read_text())
+     games=fixture['games'];assert len(games)==12 and sum(len(g['plies']) for g in games)==632
+--- accepted25/reconcile_pregate.mjs
++++ inert37/reconcile_pregate.mjs
+@@ -13,7 +13,7 @@
+ const hash=data=>createHash('sha256').update(data).digest('hex');
+ const fixture=load(join(kit,'accepted-games-v1.json'));validateFixture(fixture);
+ const binding=load(join(directory,'binding.json'));
+-const approval=load('/home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/pregate-clearance.json');
++const approval=load('/home/legolas/rook2/evidence/coherent-influence-masks-pregate-preparation-20261019-01/pregate-clearance.json');
+ assert.equal(approval.authorized,true);
+ assert.equal(binding.engine_sha256,approval.ordinary_artifact.sha256);
+ assert.equal(hash(readFileSync(approval.ordinary_artifact.image)),binding.engine_sha256);

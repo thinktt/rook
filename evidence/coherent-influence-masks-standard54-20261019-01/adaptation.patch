@@ -1,0 +1,78 @@
+--- accepted25/collect54.py
++++ 37/collect54.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Candidate25 local54 whole-native and search CPU collection with the strict oracle.
++"""Candidate37 local54 whole-native and search CPU collection with the strict oracle.
+ 
+ One excluded warmup followed by three measured fresh-process repetitions per
+ case, in stored corpus order. No reference qualification or PMU claim.
+@@ -61,7 +61,7 @@
+                     build_path, Path('/usr/bin/node').resolve(), Path(sys.executable).resolve()]
+     oracle = json.loads((SPEC/'replay-oracle.json').read_text())
+     schedule = [dict(case=c, repeat=i, warmup=i == 0) for c in case_ids for i in range(4)]
+-    manifest = dict(schema='rook2-candidate25-native-and-search54-v1', engine=str(engine), engine_sha256=engine_sha,
++    manifest = dict(schema='rook2-candidate37-native-and-search54-v1', engine=str(engine), engine_sha256=engine_sha,
+                     build_record=str(build_path), schedule=schedule,
+                     input_sha256={str(p):sha(p) for p in dependencies},
+                     limits=dict(seconds_per_run=960, aggregate_seconds=3600,
+--- accepted25/verify.py
++++ 37/verify.py
+@@ -106,8 +106,9 @@
+                              search_wall_s=search['wallNs'] / 1e9,
+                              native_wall_s=native['wall_ns'] / 1e9))
+     cases = []
+-    with Path('/home/legolas/spec-issues/v2.5.0/2026-10-18-imp2-candidate25-benchmark-results/comparison.csv').open() as stream:
+-        bee = {row['id']: row for row in csv.DictReader(stream)}
++    previous = read(Path('/home/legolas/rook2/evidence/candidate25-vic-standard54-20261018-01/independent-reconciliation.json'))
++    assert previous['verified'] and previous['lifetimes'] == 216
++    prior25 = {r['case']: r for r in previous['case_results']}
+     for case in [c['id'] for c in workloads['cases']]:
+         measured = [r for r in all_rows if r['case'] == case and not r['warmup']]
+         assert len(measured) == 3
+@@ -118,24 +119,24 @@
+                                minimum=min(values), maximum=max(values))
+         assert row['native_cpu_s']['median'] == summary['case_summaries'][case]['median']
+         assert row['search_cpu_s']['median'] == summary['case_summaries'][case]['search_cpu_s']['median']
+-        row['bee_search_cpu_median_s'] = float(bee[case]['Rook_cpuMedianMs']) / 1000
+-        row['bee_div_vic_search_cpu'] = row['bee_search_cpu_median_s'] / row['search_cpu_s']['median']
++        row['previous25_search_cpu_median_s'] = prior25[case]['search_cpu_s']['median']
++        row['previous25_native_cpu_median_s'] = prior25[case]['native_cpu_s']['median']
++        row['candidate_div_previous25_search_cpu'] = row['search_cpu_s']['median'] / row['previous25_search_cpu_median_s']
+         cases.append(row)
+     totals = {metric: sum(c[metric]['median'] for c in cases)
+               for metric in ['native_cpu_s', 'search_cpu_s', 'search_wall_s', 'native_wall_s']}
+     assert totals['native_cpu_s'] == summary['sum_case_medians_s']
+     assert totals['search_cpu_s'] == summary['sum_case_search_cpu_medians_s']
+-    bee_total = sum(c['bee_search_cpu_median_s'] for c in cases)
+-    assert math.isclose(bee_total, 75.77, abs_tol=1e-10)
++    previous25_total = sum(c['previous25_search_cpu_median_s'] for c in cases)
++    assert math.isclose(previous25_total, 72.63, abs_tol=1e-10)
+     before = read(COLLECTION / 'context-before.json')
+     after = read(COLLECTION / 'context-after.json')
+     sibling_delta = [a - b for a, b in zip(cpu_ticks(after, 'cpu15'), cpu_ticks(before, 'cpu15'))]
+     proof = dict(verified=True, engine_sha256=plan['engine_sha256'], cases=54,
+                  lifetimes=216, excluded_warmups=54, measured=162, semantic_posts=posts,
+-                 medians_total_s=totals, bee_search_cpu_medians_total_s=bee_total,
+-                 bee_div_vic_search_cpu=bee_total / totals['search_cpu_s'],
+-                 bee_div_vic_per_case_range=[min(c['bee_div_vic_search_cpu'] for c in cases),
+-                                            max(c['bee_div_vic_search_cpu'] for c in cases)],
++                 medians_total_s=totals, previous25_search_cpu_medians_total_s=previous25_total,
++                 candidate_div_previous25_search_cpu=totals['search_cpu_s'] / previous25_total,
++                 historical_comparison='Separate Vic window and accounting; no paired current-control run or causal whole54 gain claim.',
+                  cpu15_guest_tick_delta=sibling_delta,
+                  cpu15_nonidle_ticks=sum(sibling_delta[:3]) + sum(sibling_delta[4:8]),
+                  context_before=before['utc'], context_after=after['utc'], case_results=cases,
+@@ -145,10 +146,10 @@
+     with (OUT / 'timings.csv').open('w') as stream:
+         writer = csv.writer(stream)
+         writer.writerow(['case', 'vic_search_cpu_median_s', 'vic_native_cpu_median_s',
+-                         'bee_search_cpu_median_s', 'bee_div_vic_search_cpu'])
++                         'previous25_search_cpu_median_s', 'candidate_div_previous25_search_cpu'])
+         for row in cases:
+             writer.writerow([row['case'], row['search_cpu_s']['median'], row['native_cpu_s']['median'],
+-                             row['bee_search_cpu_median_s'], row['bee_div_vic_search_cpu']])
++                             row['previous25_search_cpu_median_s'], row['candidate_div_previous25_search_cpu']])
+     print(json.dumps({k: v for k, v in proof.items() if k != 'case_results'}))
+ 
+ 

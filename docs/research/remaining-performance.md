@@ -1,13 +1,17 @@
 # Remaining performance investigations
 
-Retained production is candidate25. Subsequent experiments26–36 are parked.
-Experiment37 now passes its complete guarded-coherent Influence generic70 at
-1.455622%lower,7/7lower after7focused controls and bounded actual backend.
-Its fresh own-source thinPGO70 also passes:2.147243%lower/5of7,worst1.006744;
-all70 strict replay/accounting,185 native,209 diagnostic and fresh complete117
-checks pass, plus fresh post-use54/eight-wire24 independently reconciled.
-Regular12pre-gate is running; whole54 timing/selection remain pending.
-No full-corpus timing or historical qualification result is inherited. See [decision0028](../decisions/0028-coherent-influence-masks.md).
+Retained production is candidate37 guarded coherent Influence;26–36 are parked.
+37passes generic70 at1.455622%lower/7of7 and independent own-PGO70 at2.147243%
+lower/5of7.185native/209diagnostic,full117 and fresh54/eight-wire24 pass, then
+regular12pre-gate/632searches,continuity8 and required seed controls reconcile.
+Complete current54 totals71.050search/71.424373whole-native CPU medians, versus
+earlier25 Vic72.630/73.059178 in a different window. This supports retention
+without final performance qualification; reference costs and12/per-domain
+obligations remain. See [decision0028](../decisions/0028-coherent-influence-masks.md).
+
+A bounded [packed-four-tier feasibility review](../../evidence/packed-four-tier-relation-design-20261019-01/review.md)
+confirms the previously proposed64KiB table is algebraically exact. No new
+prototype is selected here; smaller payload alone does not establish savings.
 
 Experiment36 manifest-only fatLTO passes generic70 at2.541759%lower/7of7,
 then fails its independent own-fatPGO70 at0.414725%higher/3of7. Own54training/

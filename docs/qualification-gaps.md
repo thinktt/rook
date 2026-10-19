@@ -1,15 +1,21 @@
 # Remaining qualification work
 
-Experiment37 passes7focused controls, generic70 at1.455622%lower/7of7,
-and independent own-source thinPGO70 at2.147243%lower/5of7,worst1.006744.
-All70 original replay/accounting checks pass; it advances to broad local gates.
-All185 native and209 diagnostic tests pass, plus original7673cases/117operations/
-115wholefiles and fresh optimized54/eight-wire24 with independent reconciliation.
-Regular12pre-gate is running; whole54 timing/selection remain pending.
-Production remains25.
-See [decision0028](decisions/0028-coherent-influence-masks.md).
+Candidate37 is retained after185native/209diagnostic tests, complete original
+7673cases/117operations/115wholefiles, fresh optimized54/eight-wire24 and
+regular12pre-gate/632searches,continuity8 and required seed controls. All raw
+original/expected/actual streams and exits independently reconcile. Root source72
+and combined115 exactly equal the tested isolated sources; no canonical rebuild
+or qualification transfer is claimed. See [decision0028](decisions/0028-coherent-influence-masks.md).
 
-Current candidate25 projected Boolean source passes the complete mandatory
+Own-PGO54be6552 passes its separate fixed70 at2.147243%lower/5of7. Current
+whole54 timing independently reconciles216lifetimes/162measured at71.050search
+CPU and71.424373whole-native CPU summed medians. Local current costs remain
+12.282784%/12.600299% above the historical Rust reference; cross-hardware
+accounting/window/comparison limits remain. Current12 costs, final performance
+qualification, remaining production-domain audit and external3288 remain open.
+See [current report](../evidence/coherent-influence-masks-standard54-20261019-01/README.md).
+
+Previous candidate25 projected Boolean source passes the complete mandatory
 fixture set: 117 operations, 7673 cases across 115 whole files, and 209 fresh
 diagnostic units. Its 178 native tests are reused by exact source69 equality;
 the root source112 graph is `c33fc447`. Own-PGO `51529ceb` has its own 54-case

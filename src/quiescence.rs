@@ -131,6 +131,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
     /// This preparation's relation work is excluded by `search_subtree`.
     pub fn prepare_root(&mut self, position: Position) -> Node {
+        self.clear_geometry_permission();
         self.prepare_root_with_influence(position).0
     }
 
@@ -145,7 +146,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         }
         let mut root = Node::root(position, &self.evaluator.root);
         let mut scratch = None;
-        let influence = self.evaluator.ensure_influence(&position, &mut scratch);
+        let coherent_geometry = self.geometry_permission();
+        let influence = self.evaluator.ensure_influence_for_search(
+            &position, &mut scratch, coherent_geometry,
+        );
         self.evaluator.full(
             &mut root,
             influence,
@@ -173,6 +177,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         &mut self, node: &mut Node, history: &mut SearchHistory,
         entry: Entry, limits: Limits, parent_retained: &Retained, observer: &mut O,
     ) -> Result<Outcome, Stopped> {
+        self.clear_geometry_permission();
         assert!((1..PLIES).contains(&entry.ply));
         assert_eq!(entry.ply, history.search_ply());
         assert!(entry.iteration_depth >= 1 && entry.target >= 0);
@@ -186,6 +191,12 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
     /// Start the measured/search-work segment without clearing shared pawns.
     /// Root candidates then use `continue_subtree` in actual visit order.
     pub fn begin_sequence(&mut self, limits: Limits) {
+        self.clear_geometry_permission();
+        self.begin_owned_sequence(limits);
+    }
+
+    /// Native root workers retain their already validated call permission.
+    pub(crate) fn begin_owned_sequence(&mut self, limits: Limits) {
         self.timing = None;
         self.stats = Stats::default();
         self.evaluator.stats = EvalStats::default();
@@ -199,6 +210,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         history: &mut SearchHistory,
         entry: Entry,
     ) -> Result<Outcome, Stopped> {
+        self.clear_geometry_permission();
         assert!((1..PLIES).contains(&entry.ply));
         assert_eq!(entry.ply, history.search_ply());
         assert!(entry.iteration_depth >= 1 && entry.target >= 0);
@@ -253,6 +265,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
             }
 
             let mut influence = None;
+            let coherent_geometry = self.geometry_permission();
             let mut lower = entry.lower;
             let (mut best, standing, evaluation_upper) = if checked {
                 (-10000, -10000, 10000)
@@ -263,8 +276,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                         |stage| observer.stage(stage),
                     )
                 } else {
-                    self.evaluator.select_noncheck(
+                    self.evaluator.select_noncheck_for_search(
                         node, lower, entry.upper, entry.capture_exception, &mut influence,
+                        coherent_geometry,
                     )
                 }.evaluation;
                 if DIAGNOSTICS {
@@ -353,7 +367,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                                 alpha: lower,
                             },
                             || {
-                                let map = self.evaluator.ensure_influence(&position, &mut influence);
+                                let map = self.evaluator.ensure_influence_for_search(
+                                    &position, &mut influence, coherent_geometry,
+                                );
                                 policy::destination_support(&position, map, movement.to())
                             },
                         );
