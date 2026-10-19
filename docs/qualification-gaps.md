@@ -15,6 +15,12 @@ accounting/window/comparison limits remain. Current12 costs, final performance
 qualification, remaining production-domain audit and external3288 remain open.
 See [current report](../evidence/coherent-influence-masks-standard54-20261019-01/README.md).
 
+Experiment38 packed relations is parked at the generic prescreen:0.697096%
+higher summed median CPU and1/7lower. Only its two focused native checks and
+70 strict pilot replays ran; full186/117/54/wire/games and PGO were not run.
+No source or qualification transfers; retained37 remains current. See
+[decision0029](decisions/0029-packed-four-tier-relations.md).
+
 Previous candidate25 projected Boolean source passes the complete mandatory
 fixture set: 117 operations, 7673 cases across 115 whole files, and 209 fresh
 diagnostic units. Its 178 native tests are reused by exact source69 equality;

@@ -9,9 +9,13 @@ earlier25 Vic72.630/73.059178 in a different window. This supports retention
 without final performance qualification; reference costs and12/per-domain
 obligations remain. See [decision0028](../decisions/0028-coherent-influence-masks.md).
 
-A bounded [packed-four-tier feasibility review](../../evidence/packed-four-tier-relation-design-20261019-01/review.md)
-confirms the previously proposed64KiB table is algebraically exact. No new
-prototype is selected here; smaller payload alone does not establish savings.
+The bounded [packed-four-tier feasibility review](../../evidence/packed-four-tier-relation-design-20261019-01/review.md)
+advanced to experiment38. Offline exhaustive checks and two focused native
+controls pass; actual generic code has one64KiB table with unchanged observed
+frames, but numeric activity decoding adds branches or conditional moves.
+Its fixed70 independently reports0.697096%higher summed median CPU and1/7lower,
+failing the rule. Park without retuning, retry, PGO or broad qualification.
+Retained37 stays exact; see [decision0029](../decisions/0029-packed-four-tier-relations.md).
 
 Experiment36 manifest-only fatLTO passes generic70 at2.541759%lower/7of7,
 then fails its independent own-fatPGO70 at0.414725%higher/3of7. Own54training/

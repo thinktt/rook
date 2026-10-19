@@ -1,0 +1,29 @@
+--- a/src/influence.rs
++++ b/src/influence.rs
+@@ -233,7 +233,12 @@
+     if opponent == 0 {
+         return Relation::Favorable;
+     }
+-    crate::relation_table::RELATIONS[tested][((own as usize) << 8) | opponent as usize]
++    let packed = crate::relation_table::RELATIONS[((own as usize) << 8) | opponent as usize];
++    match (packed >> (2 * tested)) & 3 {
++        0 => Relation::Unfavorable,
++        1 => Relation::Contested,
++        _ => Relation::Favorable,
++    }
+ }
+ 
+ /// Exclude from normalized own support, preserving the base map and opponent.
+@@ -246,6 +251,12 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++
++    #[test]
++    #[should_panic(expected = "king has no tested-piece relation tier")]
++    fn experiment38_king_dispatch_precedes_empty_opponent_shortcut() {
++        relation(0, 0, PieceKind::King);
++    }
+ 
+     fn square(text: &str) -> Square {
+         Square::parse(text).unwrap()

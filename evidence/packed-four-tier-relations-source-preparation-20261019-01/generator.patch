@@ -1,0 +1,67 @@
+--- a/scripts/generate_relation_table.py
++++ b/scripts/generate_relation_table.py
+@@ -1,9 +1,9 @@
+ #!/usr/bin/env python3
+-"""Regenerate the immutable relation tables from the general numeric formula.
++"""Regenerate the immutable packed four-tier relation table from the general numeric formula.
+ 
+ This is an offline maintenance helper, not a build/runtime dependency. It never
+ reads fixtures or expected answers. Deterministic formatting reproduces the
+-frozen typed full-byte-pair source without invoking Rust tools.
++packed own-major full-byte-pair source without invoking Rust tools.
+ """
+ import argparse
+ from pathlib import Path
+@@ -21,33 +21,34 @@
+     defenses, own_tier = own
+     attacks, attack_tier = opponent
+     if attacks == 0:
+-        return 'Favorable'
++        return 2
+     if defenses == 0 or attack_tier < tested:
+-        return 'Unfavorable'
++        return 0
+     if attack_tier == tested:
+-        return 'Contested' if attacks <= defenses else 'Unfavorable'
+-    return 'Favorable' if attacks <= defenses or attack_tier > tested + own_tier else 'Unfavorable'
++        return 1 if attacks <= defenses else 0
++    return 2 if attacks <= defenses or attack_tier > tested + own_tier else 0
++
++
++def generate_payload():
++    # Index remains own-major, opponent-minor. Low to high 2-bit fields are
++    # pawn, N/B, rook, queen; each general formula result is exactly 0,1 or2.
++    profiles = [features(code) for code in range(256)]
++    return bytes(sum(relation(own, opponent, tested) << (2 * field)
++                     for field, tested in enumerate([1, 3, 5, 9]))
++                 for own in profiles for opponent in profiles)
+ 
+ 
+ def generate():
+-    # Each row is own-major, opponent-minor: (own << 8) | opponent.
+-    profiles = [features(code) for code in range(256)]
+-    symbols = {'Unfavorable': 'U', 'Contested': 'C', 'Favorable': 'F'}
++    payload = generate_payload()
+     lines = [
+         '//! Generated from the general EVAL-RELATIONS formula; no fixture input.',
+-        '//! Rows: pawn, minor, rook, queen; index: (own << 8) | opponent.',
+-        'use crate::influence::Relation;',
+-        'use crate::influence::Relation::{Contested as C, Favorable as F, Unfavorable as U};',
++        '//! Index: (own << 8) | opponent; 2-bit fields low-to-high: P, N/B, R, Q.',
++        '//! Every field is 0=Unfavorable, 1=Contested or 2=Favorable.',
+         '',
+-        'pub(crate) static RELATIONS: [[Relation; 65_536]; 4] = [',
++        'pub(crate) static RELATIONS: [u8; 65_536] = [',
+     ]
+-    for tested in [1, 3, 5, 9]:
+-        lines.append('    [')
+-        for own in profiles:
+-            row = [symbols[relation(own, opponent, tested)] for opponent in profiles]
+-            for start in range(0, 256, 64):
+-                lines.append('        ' + ', '.join(row[start:start + 64]) + ',')
+-        lines.append('    ],')
++    for start in range(0, len(payload), 32):
++        lines.append('    ' + ', '.join(f'0x{value:02x}' for value in payload[start:start + 32]) + ',')
+     lines.append('];')
+     return '\n'.join(lines) + '\n'
+ 

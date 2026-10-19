@@ -1,0 +1,31 @@
+# #38 packed relation: actual generic backend gate
+
+GO to the parent's fixed70 prescreen after its focused semantic checks, with a concrete activity-decode risk. Packing is emitted and no new decoder call/dependent classification table was observed. Numeric category consumers do pay extra instructions and sometimes a conditional branch. No speed, cache-miss or neutrality prediction follows.
+
+Exact generic37 controlf8343eda98d0114a3a8364e7ae62ee6eed3c5b55f79a6711226fd2b5b2043555 versus candidate287f7d6bdd1e3de9ff4a5ab5b556c5a65320082acd76f77c7f6effbe1be5d203 (6850880B/0555), source72 graph66e553f116fb5fb3307e22786bfec917729190d707387907c9a145e3e965904f. Collector before/after checks passed: same72members/49native+23tools; only influence.rs/relation_table.rs changed, exact Cargo/tools23/compiler/effective environment/target/jobs, noPGO, defaultx86-64 and actual thin-LTO/CGU1. Parent build/source/freeze/archive/actual-terminal pins remain unchanged. No new image execution occurred.
+
+Both raw and demangled nm expose one named RELATIONS object at8c6bc: controlR0x40000=262144B, candidateR0x10000=65536B. Candidate .rodata125384B cannot contain two complete65536B payloads there. This is object/section evidence, not an independent emitted-payload byte oracle. ELF .rodata321968→125384 (-196584B); .text495883→496251 (+368B); .data.rel.ro19992 unchanged; .got2712→2704 (-8B). The section reduction differs from the logical196608B by24B of other read-only contents; no exhaustive attribution is claimed.
+
+| Owner | control→candidate bytes | observed frame reservation |
+|---|---:|---|
+| activity::compute |7884→8252|0x1c8 both|
+| material_threat |1620→1592|0x48 both|
+| priority |1786→1810|0x68 both|
+| raw_piece_terms |2540→2539|0x148 both|
+| full_impl |2415→2415|0x138 both|
+| ordinary/Q |8670→8670 /7316→7316|0x428 /0x4c8 both|
+| normal WireHost run |28669→28669|0x13000+0x4a8 both|
+
+Control full/ordinary/Q/run prologues reuse saved bounded37 text bound to that exactf834 image; candidate prologues are newly captured. Those4old context files are separately pinned, not new captures or arbitrary monomorph matches. Reservations exclude pushes, do not infer Rust layouts, full-body equality or dynamic spill/copy neutrality. Existing Q entry memcpy is still visible; this table change does not remove required Position copies.
+
+Concrete ordinary evaluation route: full_impl416c8 calls GOTb4e60, whose captured relocation resolves to activity::compute18850. Closed source-before bin/rook2.rs:106–113 supplies WireHost→Session.go_live; session.rs:566 calls timed search. Existing native ordinary.rs:686/877 owns material_threat/priority; pawn_terms.rs:382 owns raw_piece_terms. Selected function addresses/relocations and source graph bind these consumers, not a synthetic NoHost probe. Remaining caller subsections are source-bound and uninspected rather than claimed fully disassembled.
+
+**Constant-tier numeric activity cost.** Old18b66 reads the typed minor byte at[table+pair+0x10000] and immediately uses its0/1/2 numeric value. New18bd6 reads packed byte, then18bdb/18bdf shifts2/masks3;18be6–18bf9 adds cmp/setne/test, a conditional jump, integer reconstruction and jump. A second site18c38–18c5a does similar safe enum reconstruction. This is material local extra work, not just a two-instruction extraction. Another numeric site1902a–19044 uses shift/mask, compares/setne/inc/test and cmovne, so the safe match does not universally become a branch. Activity grows368B with unchanged frame. Dynamic branch frequency/profitability remains unknown; do not retune the selected decoder here.
+
+**Predicate consumers specialize more cheaply.** Additional full enum reconstruction is unnecessary when the caller asks only Unfavorable/Favorable. Old activity18dde compares minor rowbyte with0; new18e08 directly tests packed bits0x0c. Material-threshold loops use one packed load, constant shift2 or4 and field tests, e.g.28206–28216 versus old28086–28092. Pawn rook consumer2dc37–2dc4b shifts4/masks3 and tests0/1 rather than calling a decoder; old2dab6 loads row+0x20000 and compares typed byte. Queen favorable priority predicate28ef2–28f08 uses masks/comparisons/set flags in place of old28da2's single rowbyte compare2: extra instructions remain, though it never materializes a full Relation object.
+
+**Variable tier.** Old priority2905b shifts row selector16 and2905f adds the GOT table base, then compares the requested row's byte. New291b2–291d0 loads one packed byte via RIP base, shifts byCL and tests low2bits. Kind branches already supply2/4/6 at29165/2918e/2912b. There is no newly added summary-map read or dependent decoder table; selected sequence instead trades row offset/GOT-base access for variable shift/register shuffling. Existing priority calls remain Piece/material helpers; no new out-of-line relation/enum-decoder call appears in these selected paths. Missing portions of functions are not a whole-body no-new-calls proof.
+
+Source-before influence.rs:225–240 preserves full public kind dispatch and King panic before opponent0, then one packed load and safe match0U/1C/_F. Opponent-zero skips the selected lookup in inspected activity/priority/material paths (e.g.18c01–18c04,2919f–291a2,2810b–2810e). The unused encoded3 also mapsF; exact generated fields0..2 are a source/domain invariant, to be checked by the existing exhaustive independent native digit oracle, not inferred from partial assembly. adjusted_relation:247–248 still saturates original own support; existing consumer charges/capture priority remain outside this pure helper. No packed transmute/unsafe or fallback table is introduced.
+
+Bounded captures: discovery29cd7e/0; windows046d89/e2046d/a85722 all0; analyzer52d2ef/0.18windows/12namedbodies/124652outputB, within12/131072/0x800 caps. All32 recorded binutils children exited0, no collector error/cap hit, all input pins stable. Some starts/tails cut machine instructions (notably41490 and29080); resynchronization artifacts are not real trap/ISA findings, nor are partial-window instruction counts whole-body metrics. Numeric-category decode branches are inside valid decoded sequences, not those artifacts. No additional captures are needed for this gate. Parent owns focused checks, fixed70 and advancement; no engine/test/build/profile/Git/source action or further variant was performed.

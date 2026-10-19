@@ -24,6 +24,12 @@ See [decision0028](docs/decisions/0028-coherent-influence-masks.md),
 [qualification](evidence/coherent-influence-masks-qualification-20261019-01/README.md)
 and [whole54 timing](evidence/coherent-influence-masks-standard54-20261019-01/README.md).
 
+Experiment38 packed64KiB relations is parked after its generic prescreen:
+0.697096%higher whole-native CPU in summed medians,1/7lower. Two focused native
+checks and all70 original strict replays pass; no PGO, full suite or promotion
+follows. Candidate37 stays retained. See
+[decision0029](docs/decisions/0029-packed-four-tier-relations.md).
+
 ## Previous candidate25 projected Boolean checks, 2026-10-18
 
 Candidate25 is integrated by exact source equality after its own-PGO trial,
