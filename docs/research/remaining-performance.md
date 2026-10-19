@@ -1,6 +1,6 @@
 # Remaining performance investigations
 
-Retained production is candidate25. Subsequent experiments26–34 are parked.
+Retained production is candidate25. Subsequent experiments26–35 are parked.
 Experiment32 improves generic timing but fails its own-source PGO pilot at
 0.239039%higher summed medians; broader qualification is not run. Experiment33's
 distinct validated fixed-root weighted cache passes9focused/source/backend and
@@ -12,16 +12,17 @@ stack argument, but generic timing is only0.340478%lower with4/7lower. Focused8
 and strict70 pass; it is parked before PGO or broad qualification.
 
 The current25 checker-prefix rejection is revalidated without a new trial.
-A distinct local activity-category/destination-mask design now has disjoint
-source attribution and an exhaustive offline bitplane algebra model covering
-2,097,152 normalized relation comparisons plus borrowing/capture overrides.
-This is not a production kernel, geometry proof or speed result. Construction,
-public supplied-map/mailbox semantics, per-piece rounding/R multiplicity and
-sparse-position costs remain architectural decisions before implementation.
-See the [design](../../evidence/activity-kernel-current25-design-20261019-01/review.md)
-and [offline model](../../evidence/activity-category-bitplane-model-20261019-01/README.md).
-Current results and qualification limits are in
-[qualification gaps](../qualification-gaps.md) and decisions0016–0025.
+The distinct local activity-category/destination-mask design advanced from its
+exhaustive offline algebra model to complete native experiment35. Shared actual
+mailbox/map SSE2 masks, immutable geometry and per-piece consumers pass8focused
+checks and strict70, but generic timing is3.783800%higher with0/7lower. It is
+parked without PGO/broad qualification. Actual frame/code/setup costs rule out
+adopting this complete local producer; no tuned hybrid or persistent extension
+is selected. The independent advisory critique and preserved fixture/static
+request errors are included in [decision0026](../decisions/0026-invocation-local-activity-masks.md).
+The algebra model remains a correctness result, not evidence of profitable
+native integration. Current qualification limits remain in
+[qualification gaps](../qualification-gaps.md).
 Entries below preserve the historical investigation record and artifact scopes.
 
 Current117 integrates the full-byte relation table after178 native/209 diagnostic

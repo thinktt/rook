@@ -1,0 +1,286 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -5,6 +5,10 @@
+ };
+ use crate::position::{Phase, Position};
+ use crate::types::{Color, Piece, PieceKind, Square};
++
++mod batch;
++#[cfg(test)]
++mod batch_tests;
+ 
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+ pub struct Activity {
+@@ -30,6 +34,29 @@
+ // rook's seventh-rank row. Construction is compile-time only.
+ type DestinationValues = [[u8; 64]; 2];
+ static DESTINATION_VALUES: [DestinationValues; 2] = oriented_destination_values();
++
++// Private immutable geometry only; occupancy/transparency still comes from this
++// invocation's actual mailbox view. No Position/Influence state is maintained.
++static ACTIVITY_RAY_MASKS: [[u64; 8]; 64] = activity_ray_masks();
++
++const fn activity_ray_masks() -> [[u64; 8]; 64] {
++    let mut masks = [[0u64; 8]; 64];
++    let mut source = 0;
++    while source < 64 {
++        let mut direction = 0;
++        while direction < 8 {
++            let (df, dr) = DIRECTIONS[direction];
++            let mut cursor = Square(source as u8);
++            while let Some(target) = cursor.offset(df, dr) {
++                masks[source][direction] |= 1u64 << target.0;
++                cursor = target;
++            }
++            direction += 1;
++        }
++        source += 1;
++    }
++    masks
++}
+ 
+ const fn oriented_destination_values() -> [DestinationValues; 2] {
+     let mut values = [[[0; 64]; 2]; 2];
+@@ -92,6 +119,63 @@
+ 
+ /// Weights are already owned by color; shelter remains the caller's composition.
+ pub fn compute(
++    position: &Position,
++    influence: &Influence,
++    material_score: i32,
++    weights: [i32; 2],
++) -> Activity {
++    debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
++    // Presence follows the scalar source inventory, never inferred mailbox counts.
++    let present = [Color::White, Color::Black].map(|color| {
++        [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen]
++            .map(|kind| !position.piece_squares(color, kind).is_empty())
++    });
++    if !present.iter().flatten().any(|&value| value) {
++        return compute_scalar(position, influence, material_score, weights);
++    }
++    // Decode every mailbox tag without kind() before mixing any batch result.
++    // Malformed/unvisited tags retain the old scalar short-circuit/panic domain.
++    let Some(view) = batch::Inputs::new(position, influence) else {
++        return compute_scalar(position, influence, material_score, weights);
++    };
++    let phase = position.phase();
++    let mut marks = [[0u8; 64]; 2];
++    let mut raw_scores = [0i64; 2];
++    let mut relation_queries = 0;
++    for color in [Color::White, Color::Black] {
++        let [knights, bishops, rooks, queens] = present[color.index()];
++        let values = &DESTINATION_VALUES[color.index()];
++        if knights || bishops {
++            // The numerical direct minor class is shared, not geometry/scores.
++            let class = view.class_views(color, PieceKind::Knight, bishops);
++            if knights {
++                accumulate_batch_kind::<1>(position, influence, &view, &class, color,
++                    values, &mut marks, phase.endgame, &mut raw_scores[color.index()],
++                    &mut relation_queries);
++            }
++            if bishops {
++                accumulate_batch_kind::<2>(position, influence, &view, &class, color,
++                    values, &mut marks, phase.endgame, &mut raw_scores[color.index()],
++                    &mut relation_queries);
++            }
++        }
++        if rooks {
++            let class = view.class_views(color, PieceKind::Rook, true);
++            accumulate_batch_kind::<3>(position, influence, &view, &class, color,
++                values, &mut marks, phase.endgame, &mut raw_scores[color.index()],
++                &mut relation_queries);
++        }
++        if queens {
++            let class = view.class_views(color, PieceKind::Queen, false);
++            accumulate_batch_kind::<4>(position, influence, &view, &class, color,
++                values, &mut marks, phase.endgame, &mut raw_scores[color.index()],
++                &mut relation_queries);
++        }
++    }
++    finish_activity(position, material_score, weights, phase, raw_scores, &marks, relation_queries)
++}
++
++fn compute_scalar(
+     position: &Position,
+     influence: &Influence,
+     material_score: i32,
+@@ -145,16 +229,176 @@
+             &mut relation_queries,
+         );
+     }
++    finish_activity(position, material_score, weights, phase, raw_scores, &marks, relation_queries)
++}
++
++#[inline]
++fn finish_activity(
++    position: &Position,
++    material_score: i32,
++    weights: [i32; 2],
++    phase: Phase,
++    raw_scores: [i64; 2],
++    marks: &Marks,
++    relation_queries: u64,
++) -> Activity {
+     let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
+     Activity {
+         pieces,
+         pressure: [
+-            king_pressure(position, Color::White, &marks),
+-            king_pressure(position, Color::Black, &marks),
++            king_pressure(position, Color::White, marks),
++            king_pressure(position, Color::Black, marks),
+         ],
+         weighted: weighted(pieces, material_score, weights, phase),
+         relation_queries,
+     }
++}
++
++#[inline]
++fn accumulate_batch_kind<const KIND: usize>(
++    position: &Position,
++    influence: &Influence,
++    view: &batch::Inputs,
++    class: &batch::ClassViews,
++    color: Color,
++    values: &'static DestinationValues,
++    marks: &mut Marks,
++    endgame: u16,
++    score: &mut i64,
++    queries: &mut u64,
++) {
++    let kind = PieceKind::ALL[KIND];
++    let mut weak = 0u64;
++    let mut strong = 0u64;
++    for &source in position.piece_squares(color, kind) {
++        let values = piece_destination_values::<KIND>(position, color, values);
++        let (mobility, direct) = batch_destinations::<KIND>(position, view, class, color, source, values);
++        weak |= direct & !class.direct.high;
++        strong |= direct & class.direct.high;
++        let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
++        *score += piece;
++        *queries += work;
++    }
++    // OR-presence across this kind only; no mobility/query cross-source union.
++    for (mut targets, bit) in [(weak, 2 * (KIND - 1)), (strong, 2 * (KIND - 1) + 1)] {
++        while targets != 0 {
++            let target = targets.trailing_zeros() as usize;
++            marks[color.index()][target] |= 1u8 << bit;
++            targets &= targets - 1;
++        }
++    }
++}
++
++#[inline]
++fn category_value_sum(targets: u64, class: batch::Category, values: &[u8; 64]) -> i64 {
++    let mut result = 0i64;
++    // Sparse scans of the existing V row, not a dense bitplane dot product.
++    for category in 1..=3 {
++        let mut selected = targets & class.mask_for(category);
++        while selected != 0 {
++            let target = selected.trailing_zeros() as usize;
++            result += category as i64 * values[target] as i64;
++            selected &= selected - 1;
++        }
++    }
++    result
++}
++
++#[inline]
++fn activity_prefix(ray: u64, occupied: u64, increasing: bool) -> u64 {
++    let blockers = ray & occupied;
++    if blockers == 0 {
++        return ray;
++    }
++    let first = if increasing {
++        blockers & blockers.wrapping_neg()
++    } else {
++        1u64 << (63 - blockers.leading_zeros())
++    };
++    if increasing {
++        ray & (first | first.wrapping_sub(1))
++    } else {
++        ray & !first.wrapping_sub(1)
++    }
++}
++
++/// Exact per-source C/T/R and every direct target, including category zero.
++/// Inputs owns only invocation-local planes of the actual mailbox/supplied map.
++fn batch_destinations<const KIND: usize>(
++    _position: &Position,
++    view: &batch::Inputs,
++    class: &batch::ClassViews,
++    color: Color,
++    source: Square,
++    values: &[u8; 64],
++) -> (Mobility, u64) {
++    let kind = PieceKind::ALL[KIND];
++    let board = &view.board;
++    let friendly = board.colors[color.index()];
++    let enemy = board.colors[color.opponent().index()];
++    let occupied = !board.empty;
++    let mut direct = 0u64;
++    let mut additional = 0u64;
++    let mut vertical_direct = 0u64;
++    let mut vertical_additional = 0u64;
++    if kind == PieceKind::Knight {
++        let targets = &KNIGHT_SOURCES[source.0 as usize];
++        for &target in &targets.squares[..targets.len as usize] {
++            debug_assert!(target < 64);
++            direct |= 1u64 << (target & 63);
++        }
++        direct &= !friendly;
++    } else {
++        let directions = match kind {
++            PieceKind::Bishop => 0..4,
++            PieceKind::Rook => 4..8,
++            PieceKind::Queen => 0..8,
++            _ => unreachable!("non-activity piece"),
++        };
++        for direction in directions {
++            let step = DIRECTIONS[direction];
++            let transparent = match kind {
++                PieceKind::Bishop => enemy | (friendly
++                    & (board.kinds[PieceKind::Knight.index()] | board.kinds[PieceKind::Rook.index()])),
++                PieceKind::Rook => {
++                    let mut allowed = (enemy & !board.kinds[PieceKind::Pawn.index()])
++                        | (friendly & board.kinds[PieceKind::Rook.index()]);
++                    let forward = if color == Color::White { 1 } else { -1 };
++                    if step.0 == 0 && step.1 == forward {
++                        allowed |= friendly & (board.kinds[PieceKind::Knight.index()]
++                            | board.kinds[PieceKind::Bishop.index()] | board.kinds[PieceKind::Queen.index()]);
++                    }
++                    allowed
++                }
++                PieceKind::Queen => 0,
++                _ => unreachable!("non-slider"),
++            };
++            let ray = ACTIVITY_RAY_MASKS[source.0 as usize][direction];
++            let increasing = step.0 as i16 + 8 * step.1 as i16 > 0;
++            let p = activity_prefix(ray, occupied, increasing);
++            let x = activity_prefix(ray, occupied & !transparent, increasing);
++            let d = p & !friendly;
++            let a = (x & !p) & !friendly;
++            // Rays are disjoint for one source. Different sources are never unioned here.
++            direct |= d;
++            additional |= a;
++            if kind == PieceKind::Rook && step.0 == 0 {
++                vertical_direct |= d;
++                vertical_additional |= a;
++            }
++        }
++    }
++    let categories = (direct & class.direct.low).count_ones() as i64
++        + 2 * (direct & class.direct.high).count_ones() as i64;
++    let mut total = category_value_sum(direct, class.direct, values);
++    if kind != PieceKind::Knight && kind != PieceKind::Queen {
++        total += category_value_sum(additional, class.additional, values);
++    }
++    if kind == PieceKind::Rook {
++        total += category_value_sum(vertical_direct, class.direct, values)
++            + category_value_sum(vertical_additional, class.additional, values);
++    }
++    (Mobility { categories, total, queries: additional.count_ones() as u64 }, direct)
+ }
+ 
+ #[inline]

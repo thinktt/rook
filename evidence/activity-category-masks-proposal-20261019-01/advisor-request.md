@@ -1,0 +1,28 @@
+# Bounded critique: invocation-local activity frontend
+
+Sender: Rook2 implementation owner, Vic w1:p1, currently without an assigned Herdr name.
+Recipient: imp2-lead, Vic w1:p9.
+Scope: critical architectural evaluation only; no implementation, builds, runs or routine progress review requested. I retain the final decision.
+
+## Focused question and preliminary judgment
+
+Does the following replacement boundary hide an ownership/domain or per-piece semantic loss that makes it a poor prototype, even before timing? My preliminary judgment is to prototype a self-contained activity frontend with complete construction charged, preserving scalar per-piece nonlinear scoring and the existing pressure/weighting owners. I do not select a persistent layout, new ISA target or runtime Session permission. Profitability is unresolved and sparse positions are a major falsifier. Please challenge this judgment and identify decisive missing obligations; do not solve/implement the kernel.
+
+## Evidence
+
+Retained production is still25, ownPGO51529ceb/source69d4bb0f94. Latest root checkpoint b3b3640e8714e5abe2ae7ddb185e9014c5da7ca1. Experiments26–34 are parked. In particular32 generic improvement vanished after ownPGO;33 weighted cache reached only0.37485%/4of7 after ownPGO;34 actually removed recursive result buffers but generic improved only0.34048%/4of7. All missed frozen screens; none is composed into this proposal. This argues against assuming that another small codegen simplification closes the remaining whole-engine gap.
+
+Current25 exact closed Callgrind profiles35/08 yield disjoint mapped activity-frontend context4.9151%/1.3577% of simulated lifetime Ir, including required work, not removable bounds or CPU predictions. Whole activity21.9% is not this candidate envelope. Source row0/inlining remains partly unassigned. Activity calls are explicit1,574,502/361,835; construction cannot be assumed amortized. See /home/legolas/rook2/evidence/activity-kernel-current25-design-20261019-01/review.md (SHAfd9dfdb6382e4ed8d14590ce71c63b4a2d3dc75cc4c9fbd2145b00bec1fa5c05).
+
+An offline64-lane model has now passed2,097,152 comparisons over all256² normalized byte pairs, four tiers, unadjusted and subtract2/4/16 modes, two lane bijections; independent mixed-radix borrowing and capture/queen overrides also pass. No scalar lane classifier is hidden in the mask kernel. This proves only algebra/model scope, not production geometry, SIMD transpose, codegen or speed. See /home/legolas/rook2/evidence/activity-category-bitplane-model-20261019-01/{README.md,model.py,verify.py,result.json}; model SHA7821f0c40d5968eb5fc80ba16005d573e2e7252feb1509b6271eb0e5e2bdedc9, result dbfafc9d2378e774406aa35018ecb710a67e9d3381ab128a8b1ab9d9a342b483. Actuala5adab/0, all jobs closed.
+
+## Proposed boundary
+
+1. On each actual activity invocation, derive temporary profile planes from the supplied128 Influence bytes and occupancy/type masks from the mailbox. No dependence on possibly stale private Position AttackBits; preserve public/custom supplied maps. A baseline-SSE2 transpose is a possible producer; every input-conversion/guard/temporary/flush cost must be included. Noncanonical/invalid raw tag handling must preserve the current caller domain, potentially via a scalar fallback rather than silently reinterpreting or newly rejecting inputs. No persistent fields, across-call reuse or Session admission flag.
+2. Construct direct adjusted category masks only for actual present activity classes/colors. Normalized exclusion is byte saturation with mixed-radix borrowing, not subtraction from physical attacker counts. Knight and bishop final direct classifications are equal; their geometry/scoring remain separate. Keep exact category0/1/2/3, including capture overrides and queen exception. No unconditional512 scalar LUT prepass.
+3. For each actual source in the chronological inventory, derive D=first-occupied ray prefix minus friendly occupancy (knight targets minus friendly). Let X be the prefix through first nontransparent blocker under the activity-specific transparency rule. A=(X minus first prefix) minus friendly. Rook vertical subsets remain distinct. Different pieces retain their own C/T and additional-square charge cardinality; no union across pieces for scores/charges. Preserve opposing-king/pawn and forward-own-rook-ray transparency, absent blocker and both scan directions.
+4. Sparse value accumulation feeds the unchanged per-piece curve/round/clamp/source-penalty function. Direct weak/strong destination unions may be flushed once per color/kind into fresh byte Marks, preserving category0 weak, type labels and OR presence; A never marks. Charge all A occurrences per piece plus original low-mobility source queries. Existing pressure mailbox traversal/arithmetic, weighted composition and public Activity output remain unchanged.
+
+## Alternatives and limits
+
+Retain current scalar frontend as control/fallback. Reject an unconditional512 lookup producer, dense many-software-popcount dot product and new persistent Influence representation as the first design. No density threshold or profile-based selector is selected from favorable cases. If a hybrid is needed, its rule requires independent construction-inclusive cost justification and freezing before an integrated timing screen. Math equality alone cannot justify runtime selection. First native falsifiers must compare complete construction+geometry+mark flush against an independent coordinate oracle and public custom-map/stale-plane witnesses; actual normal-x86-64 lowering and fixed sparse/dense complete search follow only if the kernel substitutes real work. The existing0.5%/5of7/2% screen and fresh ownPGO remain unchanged.

@@ -1,0 +1,267 @@
+//! Invocation-local category planes over the supplied normalized Influence.
+//! Placement masks come from mailbox bytes, never private derived AttackBits.
+use crate::influence::Influence;
+use crate::position::Position;
+use crate::types::{Color, PieceKind};
+use std::arch::x86_64::{__m128i, _mm_add_epi8, _mm_loadu_si128, _mm_movemask_epi8};
+
+const TIERS: [i32; 5] = [1, 3, 5, 9, 99];
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Category {
+    pub(super) low: u64,
+    pub(super) high: u64,
+}
+
+impl Category {
+    #[inline]
+    pub(super) fn mask_for(self, category: u8) -> u64 {
+        match category {
+            0 => !self.low & !self.high,
+            1 => self.low & !self.high,
+            2 => !self.low & self.high,
+            3 => self.low & self.high,
+            _ => 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Board {
+    pub(super) empty: u64,
+    pub(super) colors: [u64; 2],
+    pub(super) kinds: [u64; 6],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct ClassViews {
+    pub(super) direct: Category,
+    pub(super) additional: Category,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Features {
+    count: [u64; 3],
+    least: [u64; 5],
+    nonzero: u64,
+}
+
+#[derive(Debug)]
+pub(super) struct Inputs {
+    pub(super) board: Board,
+    profiles: [[u64; 8]; 2],
+    unadjusted: [Features; 2],
+}
+
+/// The low bit of every returned plane is physical square0.
+/// SSE2 is part of the existing x86-64 baseline; no expanded target is needed.
+#[inline]
+pub(super) fn transpose64(bytes: &[u8; 64]) -> [u64; 8] {
+    let mut planes = [0u64; 8];
+    for block in 0..4 {
+        // SAFETY: block is0..4, so byte offsets0,16,32,48 each leave16
+        // readable bytes inside this fixed64-byte reference. loadu requires
+        // no alignment. x86-64 guarantees SSE2 for these three intrinsics.
+        let mut lanes = unsafe {
+            _mm_loadu_si128(bytes.as_ptr().add(block * 16).cast::<__m128i>())
+        };
+        for bit in (0..8).rev() {
+            // SAFETY: this only reads the register under baseline SSE2.
+            let mask = unsafe { _mm_movemask_epi8(lanes) } as u32 as u64;
+            planes[bit] |= mask << (block * 16);
+            if bit != 0 {
+                // SAFETY: packed-byte addition is baseline SSE2. Doubling
+                // shifts each byte left modulo256, with no cross-byte carry.
+                lanes = unsafe { _mm_add_epi8(lanes, lanes) };
+            }
+        }
+    }
+    planes
+}
+
+impl Inputs {
+    pub(super) fn new(position: &Position, influence: &Influence) -> Option<Self> {
+        // Explicit initial64-byte copy; its construction is part of the trial.
+        let bytes = position.board.map(|piece| piece.0);
+        let tags = transpose64(&bytes);
+        let nonempty = tags.iter().copied().fold(0, |all, bits| all | bits);
+        let mut kinds = [0u64; 6];
+        let mut valid_nonempty = 0;
+        for tag in 1usize..=6 {
+            let mut mask = nonempty;
+            for bit in 0..3 {
+                mask &= if tag & (1 << bit) != 0 { tags[bit] } else { !tags[bit] };
+            }
+            kinds[tag - 1] = mask;
+            valid_nonempty |= mask;
+        }
+        // Exact byte zero alone is empty. In particular nonzero raw tags with
+        // low kind0/7 must fall back, not become empty or invoke kind().
+        if nonempty & !valid_nonempty != 0 {
+            return None;
+        }
+        let board = Board {
+            empty: !nonempty,
+            colors: [nonempty & !tags[3], nonempty & tags[3]],
+            kinds,
+        };
+        let profiles = [transpose64(&influence.profiles[0]),
+                        transpose64(&influence.profiles[1])];
+        let unadjusted = [features(&profiles[0]), features(&profiles[1])];
+        Some(Self { board, profiles, unadjusted })
+    }
+
+    #[inline]
+    pub(super) fn class_views(&self, color: Color, kind: PieceKind,
+        with_additional: bool) -> ClassViews
+    {
+        let (tested, remove) = match kind {
+            PieceKind::Knight | PieceKind::Bishop => (3, 16),
+            PieceKind::Rook => (5, 4),
+            PieceKind::Queen => (9, 2),
+            _ => unreachable!("non-activity class"),
+        };
+        let own = color.index();
+        let opponent = &self.unadjusted[color.opponent().index()];
+        let adjusted = subtract(&self.profiles[own], remove);
+        let adjusted = features(&adjusted);
+        let mut direct = relation(&adjusted, opponent, tested);
+        // With opponent0, relation is already favorable. Thus N/B's differing
+        // direct shortcuts have identical numbers and no charged-query effect.
+        if kind == PieceKind::Queen {
+            let queens = self.board.kinds[PieceKind::Queen.index()];
+            direct.low &= !queens;
+            direct.high |= queens;
+        }
+        direct = capture_priority(direct, &self.board, kind);
+        let additional = if with_additional && kind != PieceKind::Queen {
+            capture_priority(relation(&self.unadjusted[own], opponent, tested),
+                &self.board, kind)
+        } else {
+            Category::default()
+        };
+        ClassViews { direct, additional }
+    }
+}
+
+#[inline]
+fn add_digit(total: [u64; 4], low: u64, high: u64) -> [u64; 4] {
+    let digit = [low, high, 0, 0];
+    let mut result = [0; 4];
+    let mut carry = 0;
+    for bit in 0..4 {
+        let x = total[bit];
+        let y = digit[bit];
+        result[bit] = x ^ y ^ carry;
+        carry = (x & y) | ((x ^ y) & carry);
+    }
+    result
+}
+
+#[inline]
+fn features(x: &[u64; 8]) -> Features {
+    // Five normalized radix digits sum to0..11. The first two one-bit
+    // digits have this exact half-adder result; the other three are2-bit.
+    let mut total = [x[0] ^ x[1], x[0] & x[1], 0, 0];
+    total = add_digit(total, x[2], x[3]);
+    total = add_digit(total, x[4], x[5]);
+    total = add_digit(total, x[6], x[7]);
+    let high = total[2] | total[3];
+    let count = [total[0] & !high, total[1] & !high, high];
+    let present = [x[6] | x[7], x[4] | x[5], x[2] | x[3], x[1], x[0]];
+    let mut seen = 0;
+    let mut least = [0; 5];
+    for tier in 0..5 {
+        least[tier] = present[tier] & !seen;
+        seen |= present[tier];
+    }
+    Features { count, least, nonzero: seen }
+}
+
+#[inline]
+fn subtract(x: &[u64; 8], amount: u8) -> [u64; 8] {
+    let first = match amount {
+        2 => 1,
+        4 => 2,
+        16 => 4,
+        _ => unreachable!("unsupported activity exclusion"),
+    };
+    let mut result = *x;
+    let mut borrow = !0u64;
+    for bit in first..8 {
+        result[bit] = x[bit] ^ borrow;
+        borrow &= !x[bit];
+    }
+    // A borrow out of bit7 means byte underflow. Clear even lower bits then.
+    for plane in &mut result {
+        *plane &= !borrow;
+    }
+    result
+}
+
+#[inline]
+fn leq(a: &[u64; 3], b: &[u64; 3]) -> u64 {
+    let mut equal = !0u64;
+    let mut less = 0;
+    for bit in (0..3).rev() {
+        less |= equal & !a[bit] & b[bit];
+        equal &= !(a[bit] ^ b[bit]);
+    }
+    less | equal
+}
+
+#[inline]
+fn relation(own: &Features, opponent: &Features, tested: i32) -> Category {
+    let a_le_d = leq(&opponent.count, &own.count);
+    let mut greater = 0;
+    let mut equal_tier = 0;
+    for tier in 0..5 {
+        if TIERS[tier] > tested {
+            greater |= opponent.least[tier];
+        } else if TIERS[tier] == tested {
+            equal_tier = opponent.least[tier];
+        }
+    }
+    let mut greater_sum = 0;
+    for u in 0..5 {
+        let mut allowed = 0;
+        for v in 0..5 {
+            if TIERS[v] > tested + TIERS[u] {
+                allowed |= opponent.least[v];
+            }
+        }
+        greater_sum |= own.least[u] & allowed;
+    }
+    Category {
+        low: opponent.nonzero & own.nonzero & equal_tier & a_le_d,
+        high: !opponent.nonzero | (own.nonzero & greater & (a_le_d | greater_sum)),
+    }
+}
+
+#[inline]
+fn capture_priority(category: Category, board: &Board, kind: PieceKind) -> Category {
+    let (two, three) = match kind {
+        PieceKind::Knight | PieceKind::Bishop => (
+            board.kinds[PieceKind::Knight.index()] | board.kinds[PieceKind::Bishop.index()],
+            board.kinds[PieceKind::Rook.index()] | board.kinds[PieceKind::Queen.index()]
+                | board.kinds[PieceKind::King.index()]),
+        PieceKind::Rook => (board.kinds[PieceKind::Rook.index()],
+            board.kinds[PieceKind::Queen.index()] | board.kinds[PieceKind::King.index()]),
+        PieceKind::Queen => (0, 0),
+        _ => unreachable!("non-activity class"),
+    };
+    let keep = !(two | three);
+    Category { low: (category.low & keep) | three,
+        high: (category.high & keep) | two | three }
+}
+
+#[cfg(test)]
+pub(super) fn relation_for_test(own: &[u8; 64], opponent: &[u8; 64],
+    tested: i32, remove: u8) -> Category
+{
+    assert!(matches!(tested, 1 | 3 | 5 | 9));
+    let own = transpose64(own);
+    let opponent = transpose64(opponent);
+    let own = if remove == 0 { own } else { subtract(&own, remove) };
+    relation(&features(&own), &features(&opponent), tested)
+}

@@ -1,0 +1,82 @@
+--- before-parent-geometry/src/activity.rs
++++ after-parent-geometry/src/activity.rs
+@@ -34,6 +34,29 @@
+ // rook's seventh-rank row. Construction is compile-time only.
+ type DestinationValues = [[u8; 64]; 2];
+ static DESTINATION_VALUES: [DestinationValues; 2] = oriented_destination_values();
++
++// Private immutable geometry only; occupancy/transparency still comes from this
++// invocation's actual mailbox view. No Position/Influence state is maintained.
++static ACTIVITY_RAY_MASKS: [[u64; 8]; 64] = activity_ray_masks();
++
++const fn activity_ray_masks() -> [[u64; 8]; 64] {
++    let mut masks = [[0u64; 8]; 64];
++    let mut source = 0;
++    while source < 64 {
++        let mut direction = 0;
++        while direction < 8 {
++            let (df, dr) = DIRECTIONS[direction];
++            let mut cursor = Square(source as u8);
++            while let Some(target) = cursor.offset(df, dr) {
++                masks[source][direction] |= 1u64 << target.0;
++                cursor = target;
++            }
++            direction += 1;
++        }
++        source += 1;
++    }
++    masks
++}
+ 
+ const fn oriented_destination_values() -> [DestinationValues; 2] {
+     let mut values = [[[0; 64]; 2]; 2];
+@@ -279,6 +302,24 @@
+         }
+     }
+     result
++}
++
++#[inline]
++fn activity_prefix(ray: u64, occupied: u64, increasing: bool) -> u64 {
++    let blockers = ray & occupied;
++    if blockers == 0 {
++        return ray;
++    }
++    let first = if increasing {
++        blockers & blockers.wrapping_neg()
++    } else {
++        1u64 << (63 - blockers.leading_zeros())
++    };
++    if increasing {
++        ray & (first | first.wrapping_sub(1))
++    } else {
++        ray & !first.wrapping_sub(1)
++    }
+ }
+ 
+ /// Exact per-source C/T/R and every direct target, including category zero.
+@@ -332,20 +373,10 @@
+                 PieceKind::Queen => 0,
+                 _ => unreachable!("non-slider"),
+             };
+-            let ray = &ATTACK_RAYS.0[source.0 as usize][direction];
+-            let mut p = 0u64;
+-            let mut x = 0u64;
+-            let mut before_first = true;
+-            for &target in &ray.squares[..ray.len as usize] {
+-                debug_assert!(target < 64);
+-                let bit = 1u64 << (target & 63);
+-                x |= bit;
+-                if before_first { p |= bit; }
+-                if occupied & bit != 0 {
+-                    before_first = false;
+-                    if transparent & bit == 0 { break; }
+-                }
+-            }
++            let ray = ACTIVITY_RAY_MASKS[source.0 as usize][direction];
++            let increasing = step.0 as i16 + 8 * step.1 as i16 > 0;
++            let p = activity_prefix(ray, occupied, increasing);
++            let x = activity_prefix(ray, occupied & !transparent, increasing);
+             let d = p & !friendly;
+             let a = (x & !p) & !friendly;
+             // Rays are disjoint for one source. Different sources are never unioned here.

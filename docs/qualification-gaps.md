@@ -125,6 +125,14 @@ checks reconcile. Full180 was not run. No retry, PGO, broad54/wire/117,
 pre-gate or promotion follows; retained25 is unchanged. See
 [decision0025](decisions/0025-compact-recursive-stop.md).
 
+Experiment35 invocation-local activity masks is parked after generic fixed70:
+3.783800%higher summed medians,0/7lower,worst1.069736. Focused8 and all70 strict
+live/offline replays pass after one test-only illegal FEN fixture correction;
+original failure is retained and native bytes stayed identical. The new
+production-path mechanism adds substantial setup/frame/code cost. No PGO,
+all186/117/54/wire/games or promotion follows; retained25 is unchanged. See
+[decision0026](decisions/0026-invocation-local-activity-masks.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.
