@@ -1,0 +1,11 @@
+--- before-clearance-wording/README.md
++++ README.md
+@@ -6,7 +6,7 @@
+ 
+ Plan pins source49/tools23 and the actual generic build/freeze/archive, source acceptance, backend acceptance, focused11 result/actual, generic70 live+offline actual proof/decision. Baseline c316 own40/profile7f795 is comparison-only; no existing profile is reused. Candidate instrumented/profile/use/verification hashes remain null. Current source72 was read and hashed against the frozen map; no source/tool edits or clones. Existing generic receipt supplies compiler/version/binary identities; no executable/tool-version command was run.
+ 
+-Exactly four future serial stages, each requiring a new parent-created execution-clearance.json with authorized=true and matching plan/helper hashes:
++Exactly four future serial stages share ONE stable parent-created execution-clearance.json with authorized=true and matching plan/helper hashes. Keep that clearance byte-identical throughout all four stages: train.py pins it in input-closure.json and verify.py checks that same hash. Per-stage prerequisite files and actual terminal observations enforce serial order; the guard has no stage key:
+ 
+     taskset -c 0-5,8-13 env PYTHONDONTWRITEBYTECODE=1 TMPDIR=/home/legolas/rook2-build-tmp python3 build_stage.py instrumented
+     taskset -c 0-5,8-13 env PYTHONDONTWRITEBYTECODE=1 TMPDIR=/home/legolas/rook2-build-tmp python3 train.py
