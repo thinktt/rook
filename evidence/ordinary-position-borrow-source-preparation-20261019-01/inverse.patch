@@ -1,0 +1,253 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -336,18 +336,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_parts(&node.position, &mut node.retained, influence, in_check)
+-    }
+-    // Share the default observer types between public Node calls and ordinary search.
+-    // These two fields belong to the same Node; its Position remains immutable.
+-    pub(crate) fn full_parts(
+-        &mut self,
+-        position: &Position,
+-        retained: &mut Retained,
+-        influence: &Influence,
+-        in_check: bool,
+-    ) -> Evaluation {
+-        self.full_impl::<false, _, _>(position, retained, influence, in_check, |_| {}, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -357,7 +346,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(&node.position, &mut node.retained, influence, in_check, observer, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -366,7 +355,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(&node.position, &mut node.retained, influence, in_check, observer, |_| {})
++        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -377,7 +366,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(&node.position, &mut node.retained, influence, in_check, |_| {}, observer)
++        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -387,17 +376,17 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(&node.position, &mut node.retained, influence, in_check, |_| {}, observer)
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+-        position: &Position,
+-        retained: &mut Retained,
++        node: &mut Node,
+         influence: &Influence,
+         in_check: bool,
+         observer: F,
+         details: D,
+     ) -> Evaluation {
++        let position = &node.position;
+         let phase = position.phase();
+         let material = self.root.material(position);
+         let selected = if FRESH {
+@@ -459,7 +448,7 @@
+             material,
+             squares: self
+                 .root
+-                .square_balance_from(position, retained.nonking_squares),
++                .square_balance_from(position, node.retained.nonking_squares),
+             pawn_structure: structure,
+             pawn_progress: progress,
+             activity: activity.weighted,
+@@ -469,9 +458,9 @@
+             patterns: patterns.opening,
+             tempo,
+         };
+-        retained.positional = components.positional();
+-        retained.pawn_progress = progress;
+-        retained.age = 0;
++        node.retained.positional = components.positional();
++        node.retained.pawn_progress = progress;
++        node.retained.age = 0;
+         let queries = pawn.relation_queries + activity.relation_queries;
+         if DIAGNOSTICS {
+             self.stats.full += 1;
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -740,16 +740,16 @@
+             self.stats.ordinary_nodes += 1;
+         }
+         self.pv_len[p] = 0;
+-        let position = &node.position;
++        let position = node.position;
+         let checked = request
+             .checked
+-            .unwrap_or_else(|| movegen::in_check(position, position.side));
++            .unwrap_or_else(|| movegen::in_check(&position, position.side));
+         if policy::early_draw(history,p,checked,self.config.analysis,request.upper,&mut self.learning) {
+             return Ok(0);
+         }
+         let table = self.remembered.as_mut().unwrap();
+         let query = Query {
+-            group: table.group_for(position),
++            group: table.group_for(&position),
+             identity: position.secondary,
+             ply: p as i32,
+             target,
+@@ -778,7 +778,7 @@
+         let mut scratch = None;
+         let coherent_geometry = self.geometry_permission();
+         if policy::fast_admitted(
+-            position,
++            &position,
+             previous.position,
+             previous.movement,
+             request.depth,
+@@ -795,8 +795,8 @@
+                     .movement
+                     .is_some_and(|m| quiescence_policy::capture_exception(previous.position, &m)),
+             ) {
+-                let map = self.evaluator.ensure_influence_for_search(position, &mut scratch, coherent_geometry);
+-                if !policy::king_pressure(position, previous.influence, map) {
++                let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
++                if !policy::king_pressure(&position, previous.influence, map) {
+                     let trial = adjusted - self.threat(node, map);
+                     if trial >= request.upper {
+                         if DIAGNOSTICS {
+@@ -808,8 +808,8 @@
+                 }
+             }
+         }
+-        let map = self.evaluator.ensure_influence_for_search(position, &mut scratch, coherent_geometry);
+-        let evaluation = self.evaluator.full_parts(position, &mut node.retained, map, checked);
++        let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
++        let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+@@ -819,7 +819,7 @@
+             return Ok(bound.score());
+         }
+         let current = Predecessor {
+-            position: position,
++            position: &position,
+             influence: map,
+             checked,
+             movement: None,
+@@ -827,7 +827,7 @@
+         if request.depth <= adjustment && evaluation.score >= request.upper && !checked {
+             let trial = if request.depth <= 2
+                 && !previous.checked
+-                && !policy::king_pressure(position, previous.influence, map)
++                && !policy::king_pressure(&position, previous.influence, map)
+             {
+                 evaluation.score - self.threat(node, map) - if request.depth <= 1 { 25 } else { 40 }
+             } else {
+@@ -862,7 +862,7 @@
+             }
+         }
+ 
+-        movegen::generate_legal(position, &mut self.candidates[p]);
++        movegen::generate_legal(&position, &mut self.candidates[p]);
+         let count = self.candidates[p].len;
+         if DIAGNOSTICS {
+             self.stats.generated += count as u64;
+@@ -875,7 +875,7 @@
+         }
+         tactical::order_by(&mut self.candidates[p], &mut self.ordering, |movement| {
+             policy::priority(
+-                position,
++                &position,
+                 &self.evaluator.root,
+                 map,
+                 &self.learning,
+@@ -901,7 +901,7 @@
+                 if movement.kind() != MoveKind::Ordinary {
+                     continue;
+                 }
+-                let projected = position.attack_view().projected(position, movement);
++                let projected = position.attack_view().projected(&position, movement);
+                 let king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
+                 if !projected.attacked(king, position.side) {
+                     continue;
+@@ -922,7 +922,7 @@
+                         upper: -8999,
+                         analysis: self.config.analysis,
+                         capture_exception: quiescence_policy::capture_exception(
+-                            position, &movement,
++                            &position, &movement,
+                         ),
+                     },
+                     Some(true),
+@@ -933,7 +933,7 @@
+                 if score >= 9000 {
+                     preferred = Some(movement);
+                     if score >= request.upper {
+-                        self.learning.record(position, p, request.depth, preferred);
++                        self.learning.record(&position, p, request.depth, preferred);
+                         self.store_ordinary(query, score, preferred, true, true);
+                     }
+                     break;
+@@ -954,7 +954,7 @@
+         // Main extensions depend on the complete inventory, whose contents do
+         // not change when an ordering phase permutes its unconsumed suffix.
+         let main_extensions = Extensions::new(
+-            position,
++            &position,
+             self.candidates[p].as_slice(),
+             previous.position,
+             previous.movement,
+@@ -967,7 +967,7 @@
+             if DIAGNOSTICS {
+                 self.stats.examined += 1;
+             }
+-            let fresh = main_extensions.for_move(position, movement);
++            let fresh = main_extensions.for_move(&position, movement);
+             let accumulated = self.extension_flags[p][index] | fresh;
+             if DIAGNOSTICS && accumulated != fresh {
+                 self.stats.accumulated_extension_uses += 1;
+@@ -977,7 +977,7 @@
+             let mut child_checked = None;
+             let estimate = if depth <= 0 {
+                 let checking = if movement.kind() == MoveKind::Ordinary {
+-                    let projected = position.attack_view().projected(position, movement);
++                    let projected = position.attack_view().projected(&position, movement);
+                     let king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
+                     let checking = projected.attacked(king, position.side);
+                     child_checked = Some(checking);
+@@ -986,7 +986,7 @@
+                     false
+                 };
+                 Some(policy::frontier_estimate(
+-                    position,
++                    &position,
+                     &self.evaluator.root,
+                     movement,
+                     checking,
+@@ -1090,7 +1090,7 @@
+         }
+         best = best.min(effective_upper);
+         if best > request.lower {
+-            self.learning.record(position, p, request.depth, preferred);
++            self.learning.record(&position, p, request.depth, preferred);
+         }
+         self.store_ordinary(query, best, preferred, quiet_checked, true);
+         Ok(best)

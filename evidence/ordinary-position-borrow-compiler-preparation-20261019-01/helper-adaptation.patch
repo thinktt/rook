@@ -1,0 +1,45 @@
+--- accepted46/run.py
++++ inert47/run.py
+@@ -1,12 +1,12 @@
+ #!/usr/bin/env python3
+-"""Run the frozen46 generic build or its backend-admitted focused controls."""
++"""Run the frozen47 generic build or its backend-admitted focused controls."""
+ from pathlib import Path
+ import datetime, hashlib, json, os, re, shutil, subprocess, sys
+ 
+ R = Path('/home/legolas/rook2')
+ E = R / 'evidence'
+ P = Path(__file__).resolve().parent
+-W = Path('/home/legolas/rook2-work/imp2-activity-capture-override-20261019-01')
++W = Path('/home/legolas/rook2-work/imp2-ordinary-position-borrow-20261019-01')
+ H = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13}
+ sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ load = lambda p: json.loads(Path(p).read_text())
+@@ -54,7 +54,9 @@
+     if mode == 'focused':
+         acceptance, _ = checked_record(plan['focused_backend_acceptance'])
+         assert acceptance['allow_focused_validation'] is True
+-        assert acceptance['forced_capture_relation_read_bypass_observed'] is True
++        for key in ('entry160_snapshot_removed', 'no_equivalent_relocation', 'default_full_parts_shared_owner', 'required_scopes_reviewed'):
++            assert acceptance[key] is True, key
++        assert acceptance['source_graph_sha256'] == plan['source_graph_sha256']
+     assert sha(plan['source_freeze']['path']) == plan['source_freeze']['sha256']
+     return plan
+ 
+@@ -68,13 +70,13 @@
+     plan = admission(mode)  # Closed current43 whole12 + independent proof before any runtime/output.
+     freeze = load(plan['source_freeze']['path'])
+     assert freeze['source_preparation_accepted'] and freeze['source_graph_sha256'] == plan['source_graph_sha256']
+-    assert freeze['changed_files'] == plan['expected_changed_files'] == ['src/activity.rs']
++    assert freeze['changed_files'] == plan['expected_changed_files'] == ['src/evaluator.rs', 'src/ordinary.rs']
+     before = {n: sha(W/n) for n in freeze['files_sha256']}
+     assert before == freeze['files_sha256']
+     assert {n: sha(R/n) for n in before if n.startswith('tools/')} == {n: h for n, h in before.items() if n.startswith('tools/')}
+-    out = E / ('activity-capture-override-' + ('generic-build-execution' if mode == 'build' else 'focused-native-check') + '-20261019-01')
++    out = E / ('ordinary-position-borrow-' + ('generic-build-execution' if mode == 'build' else 'focused-native-check') + '-20261019-01')
+     out.mkdir(exist_ok=False)
+-    build = E / 'activity-capture-override-generic-build-20261019-01'
++    build = E / 'ordinary-position-borrow-generic-build-20261019-01'
+     commands = []
+ 
+     def run(argv, stem, env=None):

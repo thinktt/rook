@@ -1,0 +1,11 @@
+# Experiment47 source preparation
+
+The trial borrows the immutable parent Position at the former snapshot site after the Q handoff and node charge. The only subsequent mutable whole-parent use was full evaluation; ordinary now passes that Position and the same Node’s mutable Retained directly to the crate-private full_parts boundary. Other parent uses remain immutable; recursive calls still receive distinct owned children. No Node, Position, Search, history, retry, or ordering layout/algorithm changed.
+
+All five public full-family Node APIs retain their exact signatures. Public full and ordinary share one full_parts default observer literal site. The four observed/fresh wrappers split the same Node fields into the sole numerical full_impl. Its numerical body is exact after argument/field spelling changes: phase/material, FRESH versus PawnCache selection, pawn/activity/shelter/progress, late retained square read, positional/progress/age writes, stats/R, component observer, base, finish, then details retain their original order. Supplied Influence and FRESH behavior are unchanged. There is no Retained snapshot or new numerical owner.
+
+The copied parent Position was immutable and all later parent reads refer to that same unchanged Position. The short retained write borrow ends with full_parts; later whole-Node reads and owned child/null creation do not require a mutable parent borrow. Source reasoning supports this split, but Rust typing remains untested. All189 prior test bodies are byte-exact, with187 library and2 development declarations, no new tests.
+
+The exact72-member source manifest is based on accepted43, not46. Only evaluator.rs and ordinary.rs differ; all23 tools and70 other source members match. trial.patch and inverse.patch expose the entire change; source-proof.json records exact restoration and public signature checks. The two preserved preparation failures are Python syntax/metadata classification failures, with no Rust/compiler/runtime invocation or production repair.
+
+The selected backend gate must establish whether the actual parent160-byte snapshot disappears without relocation and assess split-argument ABI, aliasing, frames, calls, and default/observed/root/Q effects. This source preparation makes no CPU, copy-frequency, neutrality, conformance, or qualification claim and grants no execution authority.
