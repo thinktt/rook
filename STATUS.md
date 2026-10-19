@@ -26,6 +26,18 @@ See [local validation](evidence/influence-bitsliced-sum-qualification-20261019-0
 [source promotion](evidence/influence-bitsliced-sum-integration-20261019-01/source-promotion.json)
 and [decision0035](docs/decisions/0035-bit-sliced-influence-accumulation.md).
 
+
+Candidate49 is an isolated internal sorting equal-length trial; production43 remains
+accepted. Its generic backend reduces bound-check sites11→6 per inlined caller
+with unchanged frames and+182B selected code. Six existing focused controls and
+all70 live/offline original replay checks pass. The fixed generic screen improves
+0.6650503%,7of7lower,worst0.997841443, and [advances only to fresh own-source PGO](evidence/ordering-equal-length-decision-20261019-01/README.md).
+Fresh54 training/original raw/PID checks, independent byte-identical profile remerge
+and the use build are closed with zero missing/stale warnings. Actual own-PGO
+backend review and its separate fixed screen remain pending. No full189, broader49 qualification or adoption
+is claimed. Generic savings may not transfer because43PGO already inlines sorting.
+The [closed49 generic checkpoint](evidence/ordering-equal-length-generic-checkpoint-20261019-01/README.md) preserves exact originals and actual exits.
+
 ## Previous candidate40 static pressure lookup, 2026-10-19
 
 Candidate40 replaces37 by exact tested source115 equality after185native and

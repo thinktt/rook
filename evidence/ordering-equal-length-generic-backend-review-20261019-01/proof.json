@@ -1,0 +1,105 @@
+{
+  "complete": true,
+  "sorting_bounds_reduction_observed": true,
+  "source_public_false_original_loop_preserved": true,
+  "source_existing189_tests_unchanged": true,
+  "candidate_sha256": "20838ae09b351d3ecc02d308cb1ab7501b8c9b24a60893041506633da63b8ba1",
+  "control_sha256": "ea057f6a4a0c57ddc3ed35667d01363c7f2fc68d2de1d2fa745d2ba16f6e4a23",
+  "source_graph_sha256": "3f60b96129c0a063ffa732ccc3785769085704dead6669ccc6f58afc39f1a8ff",
+  "plan_sha256": "6a026c1e52f3c3fdf0a826275834b3e08628f91d5902dd95c760bcb6702f234f",
+  "summary": {
+    "order-by": {
+      "control": {
+        "address": "0x41060",
+        "bytes": 584,
+        "frame": [
+          "0x48"
+        ],
+        "push_sites": 8,
+        "call_sites": 10
+      },
+      "candidate": {
+        "address": "0x40fc0",
+        "bytes": 914,
+        "frame": [
+          "0x48"
+        ],
+        "push_sites": 8,
+        "call_sites": 13
+      }
+    },
+    "order-with-scratch": {
+      "control": {
+        "address": "0x368d0",
+        "bytes": 1222,
+        "frame": [
+          "0x78"
+        ],
+        "push_sites": 6,
+        "call_sites": 12
+      },
+      "candidate": {
+        "address": "0x366e0",
+        "bytes": 1555,
+        "frame": [
+          "0x78"
+        ],
+        "push_sites": 6,
+        "call_sites": 15
+      }
+    },
+    "sorting-kernel": {
+      "control": {
+        "address": "0x366e0",
+        "bytes": 481,
+        "frame": [],
+        "push_sites": 5,
+        "call_sites": 6
+      }
+    }
+  },
+  "mechanism": {
+    "baseline": "order_by411c1 and order_with_scratch36c44 resolve GOTe39c8 to shared priority_sequence366e0/481B.",
+    "candidate": "Private true kernel inlines into both complete callers; no priority_sequence or priority_sequence_impl sized symbol exists in the normal ELF. No fictitious counterpart/public false emitted proof.",
+    "branch_reduction": "Baseline loop failure sites11 (6+5), each candidate inline copy6 (3+3); source assert folds away rather than adding new runtime assert path.",
+    "call_cost": "Both normal sorting call sites eliminated; priority callback and Move-only final transfer/tail transfer remain. No new normal helper or storage owner.",
+    "unchanged_transfer": "WORD Move16 and DWORD priority32 still separate; stable unsigned previousPriority<savedPriority shifts, gaps6 then1 unchanged.",
+    "code_cost": "Shared481B body gone; order_by584\u2192914 (+330), order_with_scratch1222\u21921555 (+333). Selected total2287\u21922469 (+182), whole.text+176B. Inlining duplicates loop code; frames remain0x48/0x78.",
+    "public_scope": "Public false semantics proven by exact source loop+wrapper; public false monomorph absent from this ELF, so no emitted public equivalence claimed. Caller partition/finalcopy bounds and residual inner checks remain.",
+    "limits": "No dynamic sorting frequency/cost/removable percentage, ISA/storage ABI neutrality or speed claim. No recursive/Q/root complete bodies captured; these are actual sorting consumers."
+  },
+  "branch_proof_sha256": "67e5b04b8a8e8f9a877f673b6d27947d3e186ada60c6a34d22a1cde226e30d4e",
+  "all183_pins_stable": true,
+  "total_complete_bodies": 5,
+  "new_raw_disassembly_bytes": 83232,
+  "max_complete_bodies": 6,
+  "max_new_raw_disassembly_bytes": 1048576,
+  "new_binutils_children": 10,
+  "all_children_exit0": true,
+  "actual_outer_terminals": [
+    {
+      "stage": "discover",
+      "actual_tool_terminal_observed": true,
+      "session_id": null,
+      "terminal_chunk_id": "389671",
+      "exit_code": 0
+    },
+    {
+      "stage": "bodies",
+      "actual_tool_terminal_observed": true,
+      "session_id": null,
+      "terminal_chunk_id": "44f124",
+      "exit_code": 0
+    },
+    {
+      "stage": "analyze",
+      "actual_tool_terminal_observed": true,
+      "session_id": null,
+      "terminal_chunk_id": "9ec268",
+      "exit_code": 0
+    }
+  ],
+  "native_runs": 0,
+  "all_owned_jobs_closed": true,
+  "verdict": "Concrete mechanism present; bounded GO only to parent-admitted focused controls/fixed generic screen, with inlining/code-growth risk. Parent retains admission."
+}
