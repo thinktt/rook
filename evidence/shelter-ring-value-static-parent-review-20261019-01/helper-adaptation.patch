@@ -1,0 +1,47 @@
+--- /home/legolas/rook2/evidence/pressure-value-static-parent-review-20261019-01/run.py
++++ /home/legolas/rook2/evidence/shelter-ring-value-static-parent-review-20261019-01/run.py
+@@ -1,12 +1,12 @@
+ #!/usr/bin/env python3
+-"""Run the frozen40 generic build or its backend-admitted focused controls."""
++"""Run the frozen41 generic build or its backend-admitted focused controls."""
+ from pathlib import Path
+ import datetime, hashlib, json, os, re, shutil, subprocess, sys
+ 
+ R = Path('/home/legolas/rook2')
+ E = R / 'evidence'
+ P = Path(__file__).resolve().parent
+-W = Path('/home/legolas/rook2-work/imp2-pressure-value-static-20261019-01')
++W = Path('/home/legolas/rook2-work/imp2-shelter-ring-value-static-20261019-01')
+ H = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13}
+ sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ load = lambda p: json.loads(Path(p).read_text())
+@@ -28,9 +28,9 @@
+     assert freeze['parent_source_review_passed'] and freeze['generic_build_authorized']
+     before = {n: sha(W/n) for n in freeze['files_sha256']}
+     assert before == freeze['files_sha256']
+-    out = E / ('pressure-value-static-' + ('generic-build-execution' if mode == 'build' else 'focused-native-check') + '-20261019-01')
++    out = E / ('shelter-ring-value-static-' + ('generic-build-execution' if mode == 'build' else 'focused-native-check') + '-20261019-01')
+     out.mkdir(exist_ok=False)
+-    build = E / 'pressure-value-static-generic-build-20261019-01'
++    build = E / 'shelter-ring-value-static-generic-build-20261019-01'
+     commands = []
+ 
+     def run(argv, stem, env=None):
+@@ -64,7 +64,7 @@
+             run(['/usr/bin/python3', str(R/'tools/archive_build.py'), str(build)], 'archive')
+             result['artifact_sha256'] = sha(image)
+         else:
+-            acceptance = load(E/'pressure-value-static-backend-review-20261019-01/parent-acceptance.json')
++            acceptance = load(E/'shelter-ring-value-static-backend-review-20261019-01/parent-acceptance.json')
+             assert acceptance['allow_focused_validation'] is True
+             b = load(build/'receipt.json')
+             assert acceptance['candidate_sha256'] == sha(build/'rook2-exact') == b['binary_output']['sha256']
+@@ -78,7 +78,7 @@
+                 text = (out/(stem+'.stdout')).read_text()
+                 assert 'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 182 filtered out;' in text
+                 assert name in text
+-            result.update(focused_passed=2, library_declarations=183, development_tests_unselected=2,
++            result.update(focused_passed=len(freeze['focused_tests']), library_declarations=183, development_tests_unselected=2,
+                           old185_native_suite_executed=False)
+         assert {n: sha(W/n) for n in before} == before
+         result.update(complete=True, source_unchanged=True)

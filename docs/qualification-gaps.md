@@ -5,8 +5,14 @@ finite checks,185native/209diagnostic tests, fresh optimized54/wire24 and
 regular12/632 plus continuity8 and required seed controls. Own-PGO fixed70
 improves0.877002%; this is a prescreen, not full54/12 qualification. Current40
 whole54 reconciles216lifetimes at70.500search/70.968677whole-native seconds,
-raw cross-hardware reference ratio1.118819. Current12 costs and formal
-performance qualification remain pending. The37 timings below retain
+raw cross-hardware reference ratio1.118819. Current40 complete12 now reconciles
+48lifetimes/2528searches and23204posts at712.333390whole-native CPU seconds,
+raw cross-hardware reference ratio1.105725. All48 original wire streams/native
+exits and all146 authority inputs reconcile. CPU15 has8 nonidle ticks plus
+6 iowait ticks over the collection; this point-in-time accounting is disclosed,
+not an absolute isolation claim.289 measured search intervals have unresolved
+quantized CPU and remain null. Formal performance qualification remains pending.
+See [whole12 report](../evidence/pressure-value-static-games12-results-20261019-01/README.md). The37 timings below retain
 their original artifact scope. Normative domain and external3288 obligations
 remain open. See [decision0031](decisions/0031-static-pressure-value-lookup.md).
 
@@ -94,8 +100,8 @@ multipass/extension and interruption composition remain open. The separate
 confirms that initial/single-target/zero-extension diagnostic restrictions are
 explicit released admission rules; those rejections are not adapter incompleteness.
 
-Full54/12 performance qualification, current-candidate 12-game CPU timing,
-production domain review and the external full3288 gate remain open. Complete
+Full54/12 performance qualification, production domain review and the external
+full3288 gate remain open; current40 whole12 costs are reported above. Complete
 finite fixture success does not establish every admitted production input.
 
 Experiment26 full-evaluation phase sharing is parked after its generic pilot

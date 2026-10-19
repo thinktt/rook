@@ -100,3 +100,17 @@ Fresh8d9dddc5 full54 cost now independently reconciles216 normal strict
 lifetimes:81.131004s summed medians,0.852305% below the previous81.828432s.
 There are41 lower and13 higher case medians. The raw uncalibrated reference
 ratio1.279027725 and maximum finite spread2.398788% do not close qualification.
+
+A bounded [current40 IIO lifecycle review](../evidence/production-iio-lifecycle-review-20261019-01/review.md),
+independently checked at the phase/ordering/main-loop boundaries, maps the
+released production initial/tail phases, fresh-versus-accumulated extensions,
+stable suffix promotion, retained child/scout retry, parentPV and Result history
+restoration. No concrete reachable discrepancy was identified in that subset.
+It supplies a source argument beyond finite117 fixtures; it does not close the
+whole ordinary domain, every extension/TT/age/stop state, arbitrary Host panic
+unwind, natural reachability of the controlled tail witness or the known
+uncertified-hint gap. Parent scope is explicit in parent-review.json; no new
+runtime or tests were executed for this audit. Frozen40 native72 graph216c8f51
+and ordinaryc3166899 retain their separate existing artifact evidence.
+
+The bounded [ingress review](../evidence/production-ingress-transition-review-20261019-01/review.md) maps setup counters, actual EP victims, active chronology and the exact king-victim continuation. Its separate [public-process closure](../evidence/production-ingress-transition-review-20261019-01/public-process-closure.json) observes current40 normal CLI exit1 with complete empty stdout/stderr after all61 command bytes, while stdin remains open. This one normative exceptional witness does not qualify other kingless states or the complete parser.

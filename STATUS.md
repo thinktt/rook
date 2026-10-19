@@ -17,8 +17,12 @@ checks:70.500search CPU/70.968677whole-native CPU summed medians. Previous37
 71.424373whole is a separate window; the0.638012%lower total is descriptive.
 Raw reference whole ratio1.118819 remains cross-hardware reported-only. See
 [whole54 report](evidence/pressure-value-static-standard54-20261019-01/README.md).
-Current12 costs, final
-same-hardware54/12 performance qualification, production-domain audit and
+Current40 complete12 timing now independently reconciles48lifetimes/2528searches
+at712.333390whole-native CPU seconds, raw cross-hardware reference ratio1.105725.
+Against the same older6a build, whole54 improves6.731709% and whole12 improves
+7.272510%; this one cumulative comparison does not establish prediction accuracy.
+See [whole12 report](evidence/pressure-value-static-games12-results-20261019-01/README.md).
+Final same-hardware54/12 performance qualification, production-domain audit and
 external3288 gameplay remain open. No new Bee run or transfer is implied.
 See [decision0031](docs/decisions/0031-static-pressure-value-lookup.md) and
 [source promotion](evidence/pressure-value-static-integration-20261019-01/source-promotion.json).
