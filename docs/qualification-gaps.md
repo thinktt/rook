@@ -26,6 +26,11 @@ Full189(187lib+2dev), diagnostic/117 and games were not run; no own-PGO or promo
 follows. See [decision0033](decisions/0033-borrowed-activity-slider-geometry.md).
 40 remains current; its final performance/domain/external qualification gaps remain.
 
+Distinct43 bit-sliced Influence accumulation passes source review and its first
+generic build only.189 native tests are declared, none run; backend inspection
+is pending before focused validation/timing. No PGO, conformance transfer or
+source promotion follows.40 retains its previously scoped finite-check evidence.
+
 Previous candidate37 was retained after185native/209diagnostic tests, complete original
 7673cases/117operations/115wholefiles, fresh optimized54/eight-wire24 and
 regular12pre-gate/632searches,continuity8 and required seed controls. All raw

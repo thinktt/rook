@@ -21,7 +21,11 @@ accumulation and a single per-color transpose, with the old scalar no-slider
 path retained. Existing geometry, public fallback, format and all demand/charge
 owners remain. Exact algebra is feasible; eight scalar live counters, spills,
 one-slider costs, code growth and final transpose remain concrete risks, not
-assumed wins. No build or timing is authorized until source review. See the
+assumed wins. Source review and the generic build now pass at graph e89dcb33/image ea057f6a.
+189 declarations remain unrun; actual backend review precedes focused controls
+and any timing authority. One new test expectation was corrected3->4 before
+compilation, with original source/evidence preserved; runtime arithmetic did not
+change in that correction. See the
 [selection](../../evidence/influence-bitsliced-sum-parent-review-20261019-01/selection.json),
 [cost review](../../evidence/coherent-influence-current-cost-review-20261019-01/review.md)
 and [algebra](../../evidence/influence-bitsliced-sum-design-20261019-01/review.md). The closed types cost partition supports

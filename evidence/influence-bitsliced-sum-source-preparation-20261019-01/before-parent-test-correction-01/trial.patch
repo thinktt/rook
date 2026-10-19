@@ -1,0 +1,416 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -70,6 +70,22 @@
+ #[inline]
+ pub(crate) fn influence_rays(square: Square) -> (&'static [u64; 8], &'static [bool; 8]) {
+     (&MASKS.rays[square.0 as usize], &MASKS.increasing)
++}
++
++
++/// Existing immutable leaper masks, only for a coherent private producer.
++/// Pawn target direction is the opposite-side source row at this square.
++#[inline]
++pub(crate) fn influence_pawn_targets(side: Color, square: Square) -> u64 {
++    MASKS.pawn_sources[side.opponent().index()][square.0 as usize]
++}
++#[inline]
++pub(crate) fn influence_knight_targets(square: Square) -> u64 {
++    MASKS.knight[square.0 as usize]
++}
++#[inline]
++pub(crate) fn influence_king_targets(square: Square) -> u64 {
++    MASKS.king[square.0 as usize]
+ }
+ 
+ impl AttackBits {
+--- a/src/influence/coherent.rs
++++ b/src/influence/coherent.rs
+@@ -1,74 +1,73 @@
+-//! Private coherent-placement producer: scalar leapers, masked SIMD sliders.
++//! Private coherent-placement producer: scalar zero-slider colors, bit-sliced sums otherwise.
+ //! No cache, parent map, persistent state, relation queries or changed byte format.
+ use super::{Contribution, Influence};
+-use crate::attacks::influence_rays;
++use crate::attacks::{influence_rays, influence_pawn_targets, influence_knight_targets, influence_king_targets};
+ use crate::geometry::{DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+ use crate::position::Position;
+ use crate::types::{Color, PieceKind, Square};
++use std::arch::x86_64::{_mm_cvtsi64_si128, _mm_storeu_si128,
++    _mm_unpacklo_epi8, _mm_unpacklo_epi16, _mm_unpackhi_epi16,
++    _mm_unpacklo_epi32, _mm_unpackhi_epi32};
++#[cfg(test)]
+ use std::arch::x86_64::{__m128i, _mm_add_epi8, _mm_loadu_si128, _mm_or_si128,
+-    _mm_set_epi64x, _mm_slli_epi16, _mm_storeu_si128};
+-
+-// Exactly 256 * 8 = 2048 immutable bytes. Little-endian byte lane i represents
+-// bit i. The only consumers use x86-64 baseline SSE2; no feature dispatch.
+-const fn expansion_table() -> [u64; 256] {
+-    let mut result = [0u64; 256];
+-    let mut pattern = 0;
+-    while pattern < 256 {
+-        let mut lane = 0;
+-        while lane < 8 {
+-            result[pattern] |= (((pattern >> lane) & 1) as u64) << (8 * lane);
+-            lane += 1;
+-        }
+-        pattern += 1;
+-    }
+-    result
+-}
+-static EXPANSION: [u64; 256] = expansion_table();
++    _mm_set_epi64x, _mm_slli_epi16};
+ 
+ pub(super) fn build(position: &Position) -> Influence {
+     let mut result = Influence { profiles: [[0; 64]; 2] };
+     let planes = position.attack_planes();
+     for side in [Color::White, Color::Black] {
+-        // Retain actual scalar P/N/K source lists, targets, order and wrapping.
+-        for &source in position.piece_squares(side, PieceKind::Pawn) {
+-            debug_assert!(source.0 < 64);
+-            let targets = &PAWN_TARGETS[side.index()][(source.0 & 63) as usize];
+-            for &target in &targets.squares[..targets.len as usize] {
+-                result.add(side, Square(target & 63), Contribution::Pawn as u8);
+-            }
+-        }
+-        for &source in position.piece_squares(side, PieceKind::Knight) {
+-            debug_assert!(source.0 < 64);
+-            let targets = &KNIGHT_SOURCES[(source.0 & 63) as usize];
+-            for &target in &targets.squares[..targets.len as usize] {
+-                result.add(side, Square(target & 63), Contribution::Minor as u8);
+-            }
+-        }
+-        for &source in position.piece_squares(side, PieceKind::King) {
+-            debug_assert!(source.0 < 64);
+-            let targets = &KING_TARGETS[(source.0 & 63) as usize];
+-            for &target in &targets.squares[..targets.len as usize] {
+-                result.add(side, Square(target & 63), Contribution::Weak as u8);
+-            }
+-        }
+         let bishops = position.piece_squares(side, PieceKind::Bishop);
+         let rooks = position.piece_squares(side, PieceKind::Rook);
+         let queens = position.piece_squares(side, PieceKind::Queen);
+         if bishops.is_empty() && rooks.is_empty() && queens.is_empty() {
+-            continue; // No slider means no vector load/store/setup for this side.
+-        }
+-        let mut sums = ColorSums::load(&result.profiles[side.index()]);
++            // Retain actual scalar P/N/K source lists, targets, order and wrapping.
++            for &source in position.piece_squares(side, PieceKind::Pawn) {
++                debug_assert!(source.0 < 64);
++                let targets = &PAWN_TARGETS[side.index()][(source.0 & 63) as usize];
++                for &target in &targets.squares[..targets.len as usize] {
++                    result.add(side, Square(target & 63), Contribution::Pawn as u8);
++                }
++            }
++            for &source in position.piece_squares(side, PieceKind::Knight) {
++                debug_assert!(source.0 < 64);
++                let targets = &KNIGHT_SOURCES[(source.0 & 63) as usize];
++                for &target in &targets.squares[..targets.len as usize] {
++                    result.add(side, Square(target & 63), Contribution::Minor as u8);
++                }
++            }
++            for &source in position.piece_squares(side, PieceKind::King) {
++                debug_assert!(source.0 < 64);
++                let targets = &KING_TARGETS[(source.0 & 63) as usize];
++                for &target in &targets.squares[..targets.len as usize] {
++                    result.add(side, Square(target & 63), Contribution::Weak as u8);
++                }
++            }
++            continue; // No bit-counter setup or transpose for this color.
++        }
++        let mut sums = BitSums { planes: [0; 8] };
++        for &source in position.piece_squares(side, PieceKind::Pawn) {
++            debug_assert!(source.0 < 64);
++            sums.add::<6>(influence_pawn_targets(side, source));
++        }
++        for &source in position.piece_squares(side, PieceKind::Knight) {
++            debug_assert!(source.0 < 64);
++            sums.add::<4>(influence_knight_targets(source));
++        }
++        for &source in position.piece_squares(side, PieceKind::King) {
++            debug_assert!(source.0 < 64);
++            sums.add::<0>(influence_king_targets(source));
++        }
+         for &source in bishops {
+             let (normal, weak) = slider_masks::<2>(planes, side, source);
+-            sums.add::<4>(normal, weak); // Minor16.
++            sums.add_slider::<4>(normal, weak);
+         }
+         for &source in rooks {
+             let (normal, weak) = slider_masks::<3>(planes, side, source);
+-            sums.add::<2>(normal, weak); // Rook4.
++            sums.add_slider::<2>(normal, weak);
+         }
+         for &source in queens {
+             let (normal, weak) = slider_masks::<4>(planes, side, source);
+-            sums.add::<1>(normal, weak); // Queen2.
++            sums.add_slider::<1>(normal, weak);
+         }
+         sums.store(&mut result.profiles[side.index()]);
+     }
+@@ -129,7 +128,130 @@
+     (normal, weak)
+ }
+ 
++
++/// Plane b contains bit b of every target's wrapping byte. This is invocation-local.
++struct BitSums { planes: [u64; 8] }
++impl BitSums {
++    #[inline]
++    fn add<const SHIFT: usize>(&mut self, mut carry: u64) {
++        debug_assert!(SHIFT < 8);
++        for bit in SHIFT..7 {
++            let old = self.planes[bit];
++            self.planes[bit] = old ^ carry;
++            carry &= old;
++        }
++        self.planes[7] ^= carry; // Modulo256: discard the final outgoing carry.
++    }
++    #[inline]
++    fn add_slider<const SHIFT: usize>(&mut self, normal: u64, weak: u64) {
++        debug_assert!(SHIFT > 0 && SHIFT < 8);
++        debug_assert_eq!(normal & weak, 0);
++        if weak == 0 {
++            self.add::<SHIFT>(normal);
++        } else {
++            let mut carry = weak;
++            for bit in 0..SHIFT {
++                let old = self.planes[bit];
++                self.planes[bit] = old ^ carry;
++                carry &= old;
++            }
++            // Carry is a subset of weak, so cannot overlap normal at SHIFT.
++            self.add::<SHIFT>(carry | normal);
++        }
++    }
++    #[inline]
++    fn swap<const I: usize, const J: usize, const SHIFT: u32>(&mut self, mask: u64) {
++        let t = ((self.planes[I] >> SHIFT) ^ self.planes[J]) & mask;
++        self.planes[J] ^= t;
++        self.planes[I] ^= t << SHIFT;
++    }
++    #[inline]
++    fn store(&mut self, bytes: &mut [u8; 64]) {
++        // Transpose eight8x8 bit tiles in parallel: plane-index bits exchange
++        // with target-within-byte bits. No second counter array is staged.
++        self.swap::<0,4,4>(0x0f0f_0f0f_0f0f_0f0f);
++        self.swap::<1,5,4>(0x0f0f_0f0f_0f0f_0f0f);
++        self.swap::<2,6,4>(0x0f0f_0f0f_0f0f_0f0f);
++        self.swap::<3,7,4>(0x0f0f_0f0f_0f0f_0f0f);
++        self.swap::<0,2,2>(0x3333_3333_3333_3333);
++        self.swap::<1,3,2>(0x3333_3333_3333_3333);
++        self.swap::<4,6,2>(0x3333_3333_3333_3333);
++        self.swap::<5,7,2>(0x3333_3333_3333_3333);
++        self.swap::<0,1,1>(0x5555_5555_5555_5555);
++        self.swap::<2,3,1>(0x5555_5555_5555_5555);
++        self.swap::<4,5,1>(0x5555_5555_5555_5555);
++        self.swap::<6,7,1>(0x5555_5555_5555_5555);
++        // Word j now contains bytes for targets j,j+8,...,j+56. Transpose this
++        // byte matrix with baseline SSE2, yielding contiguous targets0..63.
++        // SAFETY: x86-64 guarantees SSE2. Four unaligned16B stores cover exactly
++        // the initialized64B destination. cvtsi64 only transfers raw64 bits.
++        unsafe {
++            let a = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[0] as i64), _mm_cvtsi64_si128(self.planes[1] as i64));
++            let b = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[2] as i64), _mm_cvtsi64_si128(self.planes[3] as i64));
++            let c = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[4] as i64), _mm_cvtsi64_si128(self.planes[5] as i64));
++            let d = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[6] as i64), _mm_cvtsi64_si128(self.planes[7] as i64));
++            let ab0 = _mm_unpacklo_epi16(a, b);
++            let ab1 = _mm_unpackhi_epi16(a, b);
++            let cd0 = _mm_unpacklo_epi16(c, d);
++            let cd1 = _mm_unpackhi_epi16(c, d);
++            _mm_storeu_si128(bytes.as_mut_ptr().cast(), _mm_unpacklo_epi32(ab0, cd0));
++            _mm_storeu_si128(bytes.as_mut_ptr().add(16).cast(), _mm_unpackhi_epi32(ab0, cd0));
++            _mm_storeu_si128(bytes.as_mut_ptr().add(32).cast(), _mm_unpacklo_epi32(ab1, cd1));
++            _mm_storeu_si128(bytes.as_mut_ptr().add(48).cast(), _mm_unpackhi_epi32(ab1, cd1));
++        }
++    }
++}
++
++#[cfg(test)]
++pub(super) fn bitplanes_for_test(planes: [u64; 8]) -> [u8; 64] {
++    let mut sums = BitSums { planes };
++    let mut result = [0; 64];
++    sums.store(&mut result);
++    result
++}
++#[cfg(test)]
++pub(super) fn bits_sources_for_test(previous: [u8; 64], sources: &[(usize, u64, u64)]) -> [u8; 64] {
++    let mut sums = BitSums { planes: [0; 8] };
++    for (target, byte) in previous.into_iter().enumerate() {
++        for bit in 0..8 { sums.planes[bit] |= u64::from((byte >> bit) & 1) << target; }
++    }
++    for &(shift, normal, weak) in sources {
++        match shift {
++            0 => { assert_eq!(weak, 0); sums.add::<0>(normal); },
++            1 => sums.add_slider::<1>(normal, weak),
++            2 => sums.add_slider::<2>(normal, weak),
++            4 => sums.add_slider::<4>(normal, weak),
++            6 => { assert_eq!(weak, 0); sums.add::<6>(normal); },
++            _ => panic!("unsupported test contribution"),
++        }
++    }
++    let mut result = [0; 64];
++    sums.store(&mut result);
++    result
++}
++
++// Exactly 256 * 8 = 2048 immutable bytes. Little-endian byte lane i represents
++// bit i. The only consumers use x86-64 baseline SSE2; no feature dispatch.
++#[cfg(test)]
++const fn expansion_table() -> [u64; 256] {
++    let mut result = [0u64; 256];
++    let mut pattern = 0;
++    while pattern < 256 {
++        let mut lane = 0;
++        while lane < 8 {
++            result[pattern] |= (((pattern >> lane) & 1) as u64) << (8 * lane);
++            lane += 1;
++        }
++        pattern += 1;
++    }
++    result
++}
++#[cfg(test)]
++static EXPANSION: [u64; 256] = expansion_table();
++
++#[cfg(test)]
+ struct ColorSums { chunks: [__m128i; 4] }
++#[cfg(test)]
+ impl ColorSums {
+     #[inline]
+     fn load(bytes: &[u8; 64]) -> Self {
+@@ -172,6 +294,7 @@
+         }
+     }
+ }
++#[cfg(test)]
+ #[inline]
+ unsafe fn expand(bits: u16) -> __m128i {
+     // Both scalar table loads are in bounds; low8 squares precede high8.
+--- a/src/influence/coherent_tests.rs
++++ b/src/influence/coherent_tests.rs
+@@ -243,3 +243,125 @@
+     // Deliberately do not call build_coherent on any violated precondition.
+     // Component panic assertions do not imply Session unwind/recovery support.
+ }
++
++
++#[test]
++fn experiment43_actual_bitplanes_transpose_carries_and_multiplicity() {
++    for bit in 0..8 { for target in 0..64 {
++        let mut planes = [0;8]; planes[bit] = 1u64 << target;
++        let mut expected = [0;64]; expected[target] = 1u8 << bit;
++        assert_eq!(coherent::bitplanes_for_test(planes), expected, "bit={bit} target={target}");
++    }}
++    for prior in 0..=255u16 { for shift in [0usize,1,2,4,6] {
++        let normal = 0x55aa_33cc_f00f_0ff0u64;
++        let weak = if (1..=4).contains(&shift) { !normal } else { 0 };
++        let actual = coherent::bits_sources_for_test([prior as u8;64], &[(shift,normal,weak)]);
++        for target in 0..64 {
++            let add = (((normal >> target) & 1) << shift) + ((weak >> target) & 1);
++            assert_eq!(actual[target], ((u64::from(prior)+add)%256) as u8);
++        }
++    }}
++    // All carries can leave bit7: full physical multiplicity must wrap, not cap.
++    let mut sources = vec![(4usize,1u64<<27,0);8];
++    sources.extend([(6,1u64<<27,0);2]);
++    assert_eq!(coherent::bits_sources_for_test([0;64],&sources)[27],0);
++    let mut seed = 0x8c52_b731_e4a9_6d0fu64;
++    let mut next = || { seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17; seed };
++    for _ in 0..64 {
++        let previous = std::array::from_fn(|_| next() as u8);
++        let mut expected = previous;
++        let mut sources = Vec::new();
++        for _ in 0..32 {
++            let shift = [1usize,2,4][(next()%3) as usize];
++            let normal = next(); let weak = next() & !normal;
++            sources.push((shift,normal,weak));
++            for target in 0..64 {
++                let add = (((normal>>target)&1)<<shift) + ((weak>>target)&1);
++                expected[target] = ((u64::from(expected[target])+add)%256) as u8;
++            }
++        }
++        assert_eq!(coherent::bits_sources_for_test(previous,&sources),expected);
++    }
++}
++
++#[test]
++fn experiment43_existing_leaper_masks_match_coordinate_destinations() {
++    const LEAPS: [(i32,i32);8] = [(1,2),(1,-2),(-1,2),(-1,-2),(2,1),(2,-1),(-2,1),(-2,-1)];
++    for source in 0..64 {
++        let mut king = 0; let mut knight = 0;
++        for (df,dr) in STEPS { if let Some(target)=at(source,df,dr) { king |= 1u64<<target; } }
++        for (df,dr) in LEAPS { if let Some(target)=at(source,df,dr) { knight |= 1u64<<target; } }
++        let square = Square(source as u8);
++        assert_eq!(crate::attacks::influence_king_targets(square),king);
++        assert_eq!(crate::attacks::influence_knight_targets(square),knight);
++        for side in [Color::White,Color::Black] {
++            let mut pawn = 0; let forward = if side==Color::White {1} else {-1};
++            for df in [-1,1] { if let Some(target)=at(source,df,forward) { pawn |= 1u64<<target; } }
++            assert_eq!(crate::attacks::influence_pawn_targets(side,square),pawn);
++        }
++    }
++}
++
++#[test]
++fn experiment43_zero_one_and_promoted_slider_full_maps() {
++    use Color::{White as W,Black as B};use PieceKind::*;
++    let pieces = [("d3",W,Pawn),("f3",W,Pawn),("c3",W,Knight),("c5",W,Knight),
++        ("d2",W,Knight),("d6",W,Knight),("f2",W,Knight),("f6",W,Knight),
++        ("g3",W,Knight),("g5",W,Knight)];
++    let zero = described(&pieces);
++    assert!(zero.piece_squares(W,Bishop).is_empty() && zero.piece_squares(W,Rook).is_empty() && zero.piece_squares(W,Queen).is_empty());
++    check(&zero);assert_eq!(Influence::build_coherent(&zero).code(W,sq("e4")),0);
++    let mut one_pieces = pieces.to_vec();one_pieces.push(("a8",W,Bishop));
++    let one = described(&one_pieces);
++    assert_eq!(one.piece_squares(W,Bishop).len(),1);
++    assert!(one.piece_squares(W,Rook).is_empty() && one.piece_squares(W,Queen).is_empty());
++    check(&one);assert_eq!(Influence::build_coherent(&one).code(W,sq("e4")),16);
++    // Three promoted-capable queens on one ray; their contributions stay separate.
++    // Enemy king is transparent after the first friendly queen has weakened it.
++    let queens = described(&[("a4",W,Queen),("c4",W,Queen),("e4",W,Queen),("g4",B,King)]);
++    check(&queens);assert_eq!(Influence::build_coherent(&queens).code(W,sq("h4")),3);
++    for original in [zero,one,queens] {
++        let mut board = [Piece::EMPTY;64];
++        for (i,piece) in original.board.into_iter().enumerate() {
++            if !piece.is_empty() { board[i^56]=Piece::new(piece.color().opponent(),piece.kind()); }
++        }
++        let mirrored = placement(board);check(&mirrored);
++        let before = Influence::build_coherent(&original);let after = Influence::build_coherent(&mirrored);
++        for side in [W,B] { for target in 0..64 {
++            assert_eq!(before.profiles[side.index()][target],after.profiles[side.opponent().index()][target^56]);
++        }}
++    }
++}
++
++#[test]
++fn experiment43_public_and_supplied_maps_keep_their_original_authority() {
++    use crate::evaluator::{Evaluator,Node,coherent_build_count};
++    let position = Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
++    let custom = Influence { profiles: std::array::from_fn(|color| std::array::from_fn(|target| (71*target+113*color+17) as u8)) };
++    assert_ne!(custom.profiles,map_ref(&position));
++    let before = coherent_build_count();
++    let mut evaluator = Evaluator::<true>::new(&position);
++    let mut scratch = Some(custom);
++    assert_eq!(*evaluator.ensure_influence(&position,&mut scratch),custom);
++    assert_eq!(*evaluator.ensure_influence_for_search(&position,&mut scratch,true),custom);
++    assert_eq!(scratch,Some(custom));assert_eq!(coherent_build_count(),before);
++    assert_eq!(evaluator.stats.influence_builds,0);
++    let mut node = Node::root(position,&evaluator.root);let mut observed = None;
++    let actual = evaluator.full_observed(&mut node,&custom,false,|parts| observed=Some(parts));
++    let mut other = Evaluator::<true>::new(&position);let mut other_node = Node::root(position,&other.root);
++    assert_eq!(actual,other.full(&mut other_node,&custom,false));
++    assert!(observed.is_some());assert_eq!(node.retained,other_node.retained);
++    assert_eq!(coherent_build_count(),before);assert_eq!(evaluator.stats.influence_builds,0);
++    let mut empty = None;
++    assert_eq!(evaluator.ensure_influence(&position,&mut empty).profiles,map_ref(&position));
++    assert_eq!(coherent_build_count(),before);assert_eq!(evaluator.stats.influence_builds,1);
++    let mut trusted_empty = None;
++    assert_eq!(evaluator.ensure_influence_for_search(&position,&mut trusted_empty,true).profiles,map_ref(&position));
++    assert_eq!(coherent_build_count(),before+1);assert_eq!(evaluator.stats.influence_builds,2);
++    // A stale private plane at a newly transparent mailbox cell stays public-scalar.
++    let base = described(&[("c1",Color::White,PieceKind::Bishop)]);let mut stale = base;
++    stale.board[sq("d2").0 as usize]=Piece::new(Color::White,PieceKind::Queen);
++    let mut scratch = None;
++    assert_eq!(evaluator.ensure_influence(&stale,&mut scratch).profiles,map_ref(&stale));
++    assert_eq!(coherent_build_count(),before+1);
++}
