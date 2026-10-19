@@ -1,0 +1,122 @@
+--- accepted25/guard.py
++++ trial32/guard.py
+@@ -23,7 +23,7 @@
+ 
+ def validate_authority(c):
+  assert c.get('authorized') is True and c.get('all_conflicting_native_work_terminal') is True
+- assert c.get('scope')=='ordinary-projected-bits-own-pgo-validation-no-cpu'
++ assert c.get('scope')=='pressure-table-traversal-own-pgo-build-train-no-cpu'
+  assert c['plan_sha256']==sha(HERE/'plan.json')
+  assert c['source_root']==str(SOURCE)
+  assert c['prepared_scripts_sha256']==load(HERE/'script-pins.json')
+--- accepted25/build_stage.py
++++ trial32/build_stage.py
+@@ -16,7 +16,7 @@
+  else:
+   terminal(train/'tool-terminal.json');terminal(train/'verify-tool-terminal.json')
+   t=load(train/'training.json');v=load(train/'verification.json')
+-  assert t['complete'] and v['complete'] and v['independent_remerge_byte_identical']
++  assert t['complete'] and v['complete'] and v['independent_remerge_byte_identical'] and v['original_checkReplay_count']==54 and v['raw_training_protocol_cases']==54
+   assert sha(train/'merged.profdata')==t['profile_sha256']==v['merged_profile_sha256']
+   command+=['--pgo-use',str(train/'merged.profdata'),'--training-record',str(train/'training.json')]
+  run(command,HERE/(stage+'-build'),env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1'))
+--- accepted25/train.py
++++ trial32/train.py
+@@ -9,13 +9,13 @@
+ import sys
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "ordinary-projected-bits-pgo-training-20261018-01"
++OUT = HERE.parent / "pressure-table-traversal-pgo-training-20261019-01"
+ ROOT = HERE.parents[1]
+-BUILD = ROOT / 'evidence/ordinary-projected-bits-pgo-instrumented-build-20261018-01'
+-SOURCE = Path('/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj')
++BUILD = ROOT / 'evidence/pressure-table-traversal-pgo-instrumented-build-20261019-01'
++SOURCE = Path('/home/legolas/rook2-work/imp2-pressure-table-traversal-20261019-01')
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ sys.dont_write_bytecode=True
+-sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/ordinary-projected-bits-pgo-preparation-20261018-01')))
++sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/pressure-table-traversal-pgo-preparation-20261019-01')))
+ from guard import require_clearance,terminal,check_inputs,check_merge_tool
+ sys.path.insert(0, str(SOURCE / 'tools'))
+ from build import source_snapshot, cargo_configs, tool_snapshot
+--- accepted25/verify.py
++++ trial32/verify.py
+@@ -8,12 +8,12 @@
+ import subprocess
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "ordinary-projected-bits-pgo-training-20261018-01"
++OUT = HERE.parent / "pressure-table-traversal-pgo-training-20261019-01"
+ ROOT = HERE.parents[1]
+ sys.dont_write_bytecode=True
+-sys.path.insert(0,'/home/legolas/rook2/evidence/ordinary-projected-bits-pgo-preparation-20261018-01')
+-from guard import require_clearance,terminal,check_inputs,check_merge_tool
+-sys.path.insert(0,'/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj/tools')
++sys.path.insert(0,'/home/legolas/rook2/evidence/pressure-table-traversal-pgo-preparation-20261019-01')
++from guard import require_clearance,terminal,check_inputs,check_merge_tool,run
++sys.path.insert(0,'/home/legolas/rook2-work/imp2-pressure-table-traversal-20261019-01/tools')
+ from build import source_snapshot,tool_snapshot
+ 
+ 
+@@ -38,7 +38,7 @@
+     terminal(OUT/'tool-terminal.json')
+     training = load(OUT/'training.json')
+     replay = load(OUT/'replay.json')
+-    build_path = ROOT/'evidence/ordinary-projected-bits-pgo-instrumented-build-20261018-01/receipt.json'
++    build_path = ROOT/'evidence/pressure-table-traversal-pgo-instrumented-build-20261019-01/receipt.json'
+     build = load(build_path)
+     assert training['complete'] and training['schema'] == 'rook2-pgo-training-v1'
+     assert len(training['raw_profiles_sha256']) == 54
+@@ -55,19 +55,26 @@
+         assert row['exit']=={'code':0,'signal':None} and row['error'] is None and row['stderr']==''
+         assert row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
+     assert not (OUT/'replay.stderr').stat().st_size
+-    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../ordinary-projected-bits-pgo-preparation-20261018-01/train.py', 'driver_sha256'),
++    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../pressure-table-traversal-pgo-preparation-20261019-01/train.py', 'driver_sha256'),
+                           ('merged.profdata', 'profile_sha256'), ('merged.profdata.gz', 'profile_archive_sha256')]:
+         assert sha(OUT/filename) == training[key]
+     assert gzip.decompress((OUT/'merged.profdata.gz').read_bytes()) == (OUT/'merged.profdata').read_bytes()
+     assert all(sha(Path(p)) == h for p, h in training['input_sha256'].items())
+     assert sha(build_path) == training['instrumented_build_receipt']['sha256']
+     assert sha(build_path.parent/'rook2-exact') == training['instrumented_engine_sha256'] == build['binary_output']['sha256']
+-    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj'))
++    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-pressure-table-traversal-20261019-01'))
+     assert sha(Path('/usr/bin/llvm-profdata-19').resolve()) == training['merge_tool_sha256']
+     terminal_receipt = load(OUT/'tool-terminal.json')
+     assert terminal_receipt['exit_code'] == 0
+     assert all(sha(Path(path))==h for path,h in load(OUT/'input-closure.json').items())
+-    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
++    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-pressure-table-traversal-20261019-01'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
++    # Reuse the accepted raw protocol model and released original checker on
++    # training only; post-use54/wire is deliberately gated after the CPU pilot.
++    from raw_model import replay as verify_raw_replay
++    verify_raw_replay(OUT/'replay.json',build_path.parent/'rook2-exact',True,OUT/'raw-original54')
++    run(['/usr/bin/node',str(HERE/'recheck.mjs'),str(OUT/'replay.json')],OUT/'original-checkReplay')
++    original=load(OUT/'original-checkReplay.stdout')
++    assert original==dict(offlineOnly=True,originalCheckReplayCount=54)
+     merged=OUT/'independently-merged.profdata';assert not merged.exists()
+     command=['/usr/bin/llvm-profdata-19','merge','-o',str(merged),*sorted(training['raw_profiles_sha256'])]
+     with (OUT/'independent-merge.stdout').open('xb') as a,(OUT/'independent-merge.stderr').open('xb') as b:
+@@ -75,10 +82,10 @@
+     write('independent-merge-child-terminal.json',dict(actual_child_return_observed=True,exit_code=result.returncode,command=command))
+     assert result.returncode==0 and not (OUT/'independent-merge.stderr').stat().st_size
+     assert merged.read_bytes()==(OUT/'merged.profdata').read_bytes(),'independent remerge differs'
+-    verification = dict(complete=True, independent_remerge_byte_identical=True, independent_remerge_exit_code=result.returncode, independent_remerge_command=command, independent_profile_sha256=sha(merged), strict_replays=54, raw_profiles_independently_hashed=54,
++    verification = dict(complete=True, independent_remerge_byte_identical=True, independent_remerge_exit_code=result.returncode, independent_remerge_command=command, independent_profile_sha256=sha(merged), strict_replays=54, original_checkReplay_count=54, raw_training_protocol_cases=54, raw_profiles_independently_hashed=54,
+           merged_profile_sha256=training['profile_sha256'], training_record_sha256=sha(OUT/'training.json'),
+           driver_terminal_sha256=sha(OUT/'tool-terminal.json'), verifier_sha256=sha(Path(__file__)),
+-          scope='Own exact ordinary-projected-bits candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
++          scope='Own exact pressure-table-traversal candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
+     check_inputs()
+     write('verification.json', verification)
+     print(json.dumps(verification))
+--- accepted25/recheck.mjs
++++ trial32/recheck.mjs
+@@ -21,5 +21,5 @@
+    const c=workloads.cases[i],e=oracle.cases.find(x=>x.id===c.id);assert.equal(row.case,c.id);checkReplay(row,c,e);count++;
+   }
+  }
+- assert.equal(count,108);console.log(JSON.stringify({offlineOnly:true,originalCheckReplayCount:count}));
++ assert.equal(count,54);console.log(JSON.stringify({offlineOnly:true,originalCheckReplayCount:count}));
+ }

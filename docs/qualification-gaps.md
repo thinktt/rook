@@ -41,6 +41,14 @@ native value-copy tests support parent preservation. They do not record the
 complete parent/child/restored-parent/sibling/restored-parent composition in one
 invocation; that callable coverage gap remains open.
 
+A [focused current25 IIO review](../evidence/current25-iio-domain-review-20261019-01/review.md)
+binds finite natural native IIO traversal to actual passing source-equal25 logs
+and establishes local tail state/window/work ownership. Public natural tail,
+multipass/extension and interruption composition remain open. The separate
+[diagnostic-domain addendum](../evidence/current25-iio-diagnostic-domain-20261019-01/review.md)
+confirms that initial/single-target/zero-extension diagnostic restrictions are
+explicit released admission rules; those rejections are not adapter incompleteness.
+
 Full54/12 performance qualification, current-candidate 12-game CPU timing,
 production domain review and the external full3288 gate remain open. Complete
 finite fixture success does not establish every admitted production input.
@@ -91,6 +99,13 @@ lower, but only2/7 cases improve; aggregate<=0.995 and>=5lower both fail. No
 PGO, broad178/117, standalone54/wire, games or source promotion follows; see
 [decision0022](decisions/0022-arithmetic-pressure-mark-trial.md).
 
+Experiment32 pressure table traversal passes its generic fixed70 gate:
+0.832364%lower summed case medians,6/7lower,worst1.000171. Focused9 checks
+precede timing; all179 native tests pass afterward. Fresh own-source PGO and a
+separate own-PGO pilot are selected. Generic results do not qualify or promote
+it; retained25 is unchanged. See
+[decision0023](decisions/0023-pressure-table-traversal-trial.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.
@@ -131,7 +146,7 @@ Remaining work:
 - Finish normative production review beyond finite fixtures: TT semantic, search-window,
   remaining-depth and lifecycle obligations, conditional empty-source remembered-hint
   composition, interruption
-  and natural IIO-path coverage. Current numerical review supports retained P/G,
+  and natural public tail/multipass/extension IIO composition. Current numerical review supports retained P/G,
   selected late bounds, actual relation-charge ownership and TT normalized-score
   capacity10063 under actual production callers, with raw counter
   capacity explicitly scoped. See [numerical crosswalk](../evidence/production-retained117-numerical-crosswalk-20261018-score-context/review.md)

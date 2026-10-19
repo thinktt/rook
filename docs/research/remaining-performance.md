@@ -1,8 +1,9 @@
 # Remaining performance investigations
 
 Retained production is candidate25. Subsequent experiments26–31 are parked;
-current results and qualification limits are in
-[qualification gaps](../qualification-gaps.md) and decisions0016–0022.
+experiment32 has passed its generic gate and is selected for fresh own-source PGO.
+Current results and qualification limits are in
+[qualification gaps](../qualification-gaps.md) and decisions0016–0023.
 Entries below preserve the historical investigation record and artifact scopes.
 
 Current117 integrates the full-byte relation table after178 native/209 diagnostic

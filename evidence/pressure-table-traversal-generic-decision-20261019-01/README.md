@@ -1,0 +1,11 @@
+# Advance experiment32 to fresh own-source PGO
+
+Retain production25 while selecting this generic result for the next stage.32 changes only king-pressure coordinate traversal to existing ordered ray/knight target tables, preserving pressure arithmetic, count gates, blockers, masks, marks/R and all other production owners. It does not compose27/31 or failed delta/caching experiments.
+
+Source69graph3c8aeee3 is frozen; generic image24004299 uses exactly the same compiler/settings as25generic2940ae5c. Actual backend confirms the table mechanism. Pressure grows120B and its entry reservation32B; static stack references fall34→29, with four added cold bounds/slice failures. Activity and scoped callers remain unchanged in extent/frame. Those are costs/risks, not a predicted speedup.
+
+The fixed70 native pilot independently passes every original replay, source/input closure and wait4 accounting:14excluded warmups,56measured samples, four per case/variant. Actual747d49/session30588→aa808f/0; offline39b293/0. Summed case medians14.1348095→14.0171565s, ratio0.9916763647 (0.832364%lower),6/7 lower cases, worst1.000171116. All three frozen limbs pass.01/05/35 ranges separate in favor;02/04/29/08 overlap.08's median is0.017112%higher. No samples/outliers/retries are omitted, no statistical-confidence or full-corpus claim follows.
+
+Focused9 activity tests passed before timing, including the new old-coordinate differential and24 complete Activity/R comparisons. After the generic speed gate, all179 native tests pass (177library+0main+2development), actual09fc97/session17583→d3e85d/0, with unchanged source/tools. The exact69 prebuild source archive d44c7624 is verified. All immutable images/raw receipts are retained; CPU15 context is separately bounded, helpersH and nativeCPU14.
+
+Select source-specific PGO generation, original54 training/checks, independent raw-profile closure/remerge, use build and a separate fixed70 own-PGO pilot against unchanged25ownPGO51529. Freeze that rule before training. Generic timing does not transfer. Defer use54/eight-wire, mandatory117/diagnostic,12-game and promotion until the own-PGO pilot passes. No production adoption or performance qualification is claimed by this checkpoint. Source-only feasibility/IIO reviews add no new runtime variant or benchmark.

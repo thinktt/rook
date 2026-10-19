@@ -1,0 +1,28 @@
+--- accepted31/capture.py
++++ trial32/capture.py
+@@ -1,8 +1,8 @@
+-"""Bounded own-image experiment31 static capture; no engine/search execution."""
++"""Bounded own-image experiment32 static capture; no engine/search execution."""
+ from pathlib import Path
+ import hashlib,json,re,subprocess
+ P=Path(__file__).resolve().parent;E=P.parent
+-D={'control':E/'ordinary-projected-bits-generic-build-20261018-01','candidate':E/'activity-mark-byte-generic-build-20261019-01'}
++D={'control':E/'ordinary-projected-bits-generic-build-20261018-01','candidate':E/'pressure-table-traversal-generic-build-20261019-01'}
+ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+ def put(n,v):
+  with (P/n).open('x') as f:json.dump(v,f,indent=2);f.write('\n')
+@@ -22,7 +22,7 @@
+ changed=[n for n,h in rs['control']['source_sha256_before'].items() if rs['candidate']['source_sha256_before'][n]!=h]
+ assert changed==['src/activity.rs']
+ for n in ['review.md','trial.patch','source-proof.json','source-manifest.json','closure.json','plan.json']:
+- p=E/'activity-mark-byte-preparation-20261019-01'/n;pins[str(p)]=sha(p)
++ p=E/'pressure-table-traversal-preparation-20261019-01'/n;pins[str(p)]=sha(p)
+ for n in ['nm','objdump','size']:p=Path('/usr/bin')/n;pins[str(p)]=sha(p)
+ def run(argv,stem):
+  o=P/(stem+'.stdout');e=P/(stem+'.stderr');o.parent.mkdir(exist_ok=True)
+@@ -49,4 +49,4 @@
+  fs[side]=rows
+ assert all(sha(Path(p))==h for p,h in pins.items())
+ put('input-pins.json',pins);put('capture.json',{'complete':True,'commands':cmd,'functions':fs,'only_changed_source':changed,'all_inputs_unchanged':True,'generic_compiler_flags_environment_tools_equal':True})
+-print(json.dumps({s:[{k:v for k,v in r.items() if k not in ['stack_memory_reference_instructions','calls','imuls']}|({'stack_refs':len(r['stack_memory_reference_instructions']),'imul_count':len(r['imuls']),'calls':r['calls']} if r['captured'] else {}) for r in rows] for s,rows in fs.items()},indent=2))
++print(json.dumps({'complete':True,'commands':len(cmd),'functions':{s:[{'symbol':r['symbol'],'address':r['address'],'bytes':r['bytes'],'static_instructions':r['static_instructions'],'stack_refs':len(r['stack_memory_reference_instructions']),'calls':len(r['calls']),'entry_rsp':r['rsp_adjustments'][:1]} for r in rows] for s,rows in fs.items()}},indent=2))

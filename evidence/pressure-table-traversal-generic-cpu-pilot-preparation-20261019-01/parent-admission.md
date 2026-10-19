@@ -1,0 +1,9 @@
+# Activate the32 fixed generic70 pilot
+
+Read the complete actual backend review: ray and knight coordinate work is replaced by existing ordered target tables, while exact25 pressure arithmetic and occupancy gates remain. Pressure grows120B and its entry reservation32B; static stack-reference instructions fall34→29 and four additional calls resolve only to cold bounds/slice failures. Activity and scoped recursive/root callers keep their sizes/frames/counts. This is a real mechanism with costs, not a speed prediction.
+
+All9 activity tests pass on exact source32, actuala56a2d/session24527→bc1959/0. The new coordinate differential covers king locations, class gates, blockers, arbitrary pressure masks and24 complete Activity/R comparisons. Existing8 tests also pass.168 other library tests were filtered;2 development tests did not run.179 is a declaration count only. No broader mandatory117 or full179 claim is made.
+
+Preserve initial plan as plan-before-parent.json, join actual focused/backend/parent proofs and activate only the unchanged seven-case70/14excluded/56measured rule: aggregate<=.995 AND>=5lower AND worst<=1.02. The three helpers mechanically match closed31 methods with docstrings32. Failure parks without retry, PGO, separate54/wire, full179/117/games or source promotion. Root/current25 stay unchanged.
+
+All owned native/build/test/static/profile/Git/archive jobs are terminal. Two bounded source-only reviews may continue on housekeeping CPUs; they run no engine/compiler/static tool. EnginesCPU14, supervisors/helpers0-5,8-13, no owned sibling15 tasks; this is not continuous system-wide/exclusive host isolation. Both exact images and all consumed inputs are pinned/rechecked. No PMU, cycles/CPI or final qualification inference is made. Parent owns admission without advisor approval.
