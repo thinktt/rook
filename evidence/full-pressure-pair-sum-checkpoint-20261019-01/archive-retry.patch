@@ -1,0 +1,32 @@
+--- preserved-archive_checkpoint.py
++++ archive_checkpoint_02.py
+@@ -37,13 +37,13 @@
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  full={p.name for p in ROOT.iterdir() if p.is_dir() and p.name.startswith('full-pressure-pair-sum-') and p!=HERE}
+  assert full=={n for n in TREES if n.startswith('full-pressure-pair-sum-')}
+- before=inventory();write('member-manifest.json',before)
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_regular_files_no_omissions=True,prohibited=['next-ordering review','experiment28 direct-child trees','root source/docs/Git'],files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),scope='Raw diagnostic/development timing preservation only; formal PARK27, no ownPGO/full117/qualification/adoption claim'))
+- archive=HERE/'closed-full-pressure-pair-sum.tar.gz'
++ before=json.loads((HERE/'member-manifest.json').read_text());assert inventory()==before
++ assert json.loads((HERE/'scope.json').read_text())['files']==len(before)
++ archive=HERE/'closed-full-pressure-pair-sum-02.tar.gz'
+  with tarfile.open(archive,'x:gz',format=tarfile.PAX_FORMAT) as t:
+   for name,row in before.items():
+    source=ROOT/name;info=t.gettarinfo(str(source),arcname=name)
+-   assert info.isfile() and info.size==row['bytes'] and info.mode==row['mode']
++   assert info.isfile() and info.size==row['bytes'] and stat.S_IMODE(info.mode)==row['mode']
+    with source.open('rb') as f:
+     reader=HashReader(f);t.addfile(info,reader)
+     assert reader.n==row['bytes'] and reader.h.hexdigest()==row['sha256'],name
+@@ -58,8 +58,8 @@
+  assert inventory()==before,'original closed inputs changed'
+  full_after={p.name for p in ROOT.iterdir() if p.is_dir() and p.name.startswith('full-pressure-pair-sum-') and p!=HERE}
+  assert full_after==full
+- write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),scope_sha256=sha(HERE/'scope.json'),all_members_reopened_and_hashed=True,member_manifest_exact=True,originals_rechecked_unchanged=True,all_selected_regular_files_captured=True,no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
+- print((HERE/'verification.json').read_text())
++ write('verification-02.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),scope_sha256=sha(HERE/'scope.json'),all_members_reopened_and_hashed=True,member_manifest_exact=True,originals_rechecked_unchanged=True,all_selected_regular_files_captured=True,no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
++ print((HERE/'verification-02.json').read_text())
+ if __name__=='__main__':
+  try:main()
+- except BaseException as error:write('failure.json',dict(error=repr(error),archive_attempt_preserved=True));raise
++ except BaseException as error:write('failure-02.json',dict(error=repr(error),archive_attempt_preserved=True));raise

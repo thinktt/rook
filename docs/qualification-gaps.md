@@ -51,6 +51,16 @@ functional gates pass, but no own-PGO build or source promotion follows;
 [decision0016](decisions/0016-full-evaluation-phase-sharing-trial.md) records
 the exact candidate25-generic comparison. Candidate25 remains retained.
 
+Experiment27 pressure digit sums is also parked: 0.232555% lower generic
+seven-case CPU and four lower case medians miss the fixed advancement rule.
+All 179 native tests and pilot strict outputs match; broader qualification is
+not run for this rejected trial. See
+[decision0017](decisions/0017-pressure-pair-sum-trial.md).
+
+Experiment28 direct child construction is rejected before tests or timing: the
+actual backend relocates and enlarges the copy instead of removing it. Source
+remains unpromoted; see [decision0018](decisions/0018-direct-child-construction-trial.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.
