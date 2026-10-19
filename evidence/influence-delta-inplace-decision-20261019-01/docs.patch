@@ -1,0 +1,42 @@
+--- /dev/null
++++ b/docs/decisions/0020-influence-delta-inplace-trial.md
+@@ -0,0 +1,22 @@
++# Park in-place influence delta after experiment30
++
++Retain candidate25. Experiment30 changes experiment29's by-value delta producer
++to update the owned scratch map in place, preserving its private provenance,
++fresh fallback and182 native tests. Actual lowering removes the updater-local
++128-byte map and its return copy. An outlined fill still stages initialization
++through a128-byte temporary, and its frame prologue now precedes the ready check.
++Copy-stage removal alone does not establish a CPU benefit.
++
++The independently matched generic70 pilot reports14.1134935→14.163152 seconds
++in summed median native CPU (0.351851% higher), only2/7 lower case medians and
++worst ratio1.026579. It fails all three frozen advancement criteria: aggregate
++ratio≤0.995, at least5 lower cases, and worst≤1.02. All70 original strict replay
++checks pass live and independently;14 warmups and56 measured samples remain.
++No own-PGO, separate54/wire regression, full117,12-game gate or source promotion
++follows. These local reported-only results do not establish final qualification.
++
++Trials29 and30 use separate matched-control runs; their totals are not a causal
++29→30 CPU comparison. A separately authorized diagnostic demand census is not
++a production candidate or timing claim. See
++[the decision evidence](../../evidence/influence-delta-inplace-decision-20261019-01/README.md)
++and [compact checkpoint](../../evidence/influence-delta-inplace-checkpoint-20261019-01/README.md).
+--- a/docs/qualification-gaps.md
++++ b/docs/qualification-gaps.md
+@@ -68,6 +68,14 @@
+ establish production savings. No own-PGO, separate54/wire regression, full117,
+ 12-game gate or source promotion follows; candidate25 remains retained. See
+ [decision0019](decisions/0019-influence-delta-trial.md).
++
++Experiment30 in-place influence delta is also parked: its independent generic
++pilot is0.351851% higher in summed median CPU, with2/7 lower cases and worst
++ratio1.026579, failing all three frozen advancement criteria. All182 native tests
++and70 original strict pilot replays pass; no own-PGO, standalone54/wire, full117,
++12-game gate or promotion follows. Its matched-control window is separate from29;
++no causal29→30 comparison is claimed. See
++[decision0020](decisions/0020-influence-delta-inplace-trial.md).
+ 
+ The isolated pure-component cache is parked after its own-PGO pilot fails the
+ frozen aggregate advancement threshold (0.357338% lower versus required0.5%).

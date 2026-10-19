@@ -1,0 +1,47 @@
+{
+  "experiment": 30,
+  "utc": "2026-10-19T06:33:02.728019+00:00",
+  "mission": "/home/legolas/imp-perf-mission.md",
+  "hypothesis": "Mutate the private owned current-map payload after copying the genuine parent map directly into it; remove by-value delta return-map producer/copy chain.",
+  "baseline": "retained25generic2940ae5c; ownPGO51529 remains production",
+  "source_basis": "exact frozen29source71 7f604b27289adf889f83294e86300ae42c1a44507f64cf5946fe3a3fdb885637",
+  "trial": "/home/legolas/rook2-work/imp2-influence-delta-inplace-20261019-01",
+  "change_scope": [
+    "src/influence.rs",
+    "src/ordinary.rs"
+  ],
+  "constraints": [
+    "Same private map+transition provenance and lazy demand/event",
+    "No fields/cache/unsafe/eager zero initialization",
+    "Fresh/Q and root/null/IIO/special fallback policy unchanged",
+    "Test-only returning wrapper preserves existing182 tests/oracle",
+    "Do not compose rejected26/27/28"
+  ],
+  "backend_gate": "Before additional native tests or timing, prove the production updater mutates the passed current payload and avoids the by-value128-byte result chain. Reject missing mechanism without qualification.",
+  "native_if_mechanism_survives": 182,
+  "pilot_cases": [
+    "profile-01",
+    "profile-02",
+    "profile-04",
+    "profile-05",
+    "profile-29",
+    "profile-35",
+    "profile-08"
+  ],
+  "pilot_rule": {
+    "max_sum_median_ratio": 0.995,
+    "min_lower_cases": 5,
+    "max_case_ratio": 1.02
+  },
+  "schedule": "70 fresh lifetimes;14excluded/56measured; fixed alternating order; no retries/outlier deletion",
+  "qualification": "Only after useful generic and own-sourcePGO speed evidence: full117/strict54/wire24/12pregate. Full3288 external.",
+  "helpers_sha256": {
+    "native.py": "799047b2c40f5cd52106e9164a455dd4e7eb0f70c91822b65f6e0c26414a728b",
+    "pilot.py": "8a907b2e7670b9d2ecc431570ffd3f93d514c894c82ced82c7f2ef358705ae22",
+    "reconcile_pilot.py": "eea6e7b0291e8f0d321102ba01d83594d511e84c573846b91b05038638d14387",
+    "check_pilot.mjs": "f64b74f3d2c3be2afe240f95dec336bdca3a3a22cc789a1de217c73bafdab30d"
+  },
+  "native_runs": 0,
+  "default_engine_runs": 0,
+  "source_promoted": false
+}

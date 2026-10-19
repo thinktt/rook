@@ -1,0 +1,99 @@
+--- a/src/influence.rs
++++ b/src/influence.rs
+@@ -132,43 +132,31 @@
+         influence
+     }
+ 
+-    /// Test-only value wrapper preserves the independent kernel oracle/work
+-    /// witnesses. Production updates its already-owned payload directly.
+-    #[cfg(test)]
++    /// Derive the pure map for a genuine ordinary two-square transition.
++    ///
++    /// Preconditions: `parent_map` is exactly `Self::build(parent)`, both
++    /// positions have coherent boards/lists/tag planes, and `child` is the true
++    /// result of applying `movement` to `parent`. This kernel does not establish
++    /// that provenance; a synthetic predecessor or supplied map cannot attest it.
+     pub(crate) fn derive_ordinary(
+         parent: &Position,
+         parent_map: &Self,
+         child: &Position,
+         movement: Move,
+     ) -> Self {
+-        let mut result = *parent_map;
+-        count_work(|work| work.scheduled_copy_bytes += 128);
+-        result.update_ordinary(parent, child, movement);
+-        result
+-    }
+-
+-    /// Update an owned exact parent map for a genuine ordinary transition.
+-    ///
+-    /// Preconditions: on entry `*self` is exactly `Self::build(parent)`, both
+-    /// positions have coherent boards/lists/tag planes, and `child` is the true
+-    /// result of applying `movement` to `parent`. This kernel does not establish
+-    /// that provenance; a synthetic predecessor or supplied map cannot attest it.
+-    pub(crate) fn update_ordinary(
+-        &mut self,
+-        parent: &Position,
+-        child: &Position,
+-        movement: Move,
+-    ) {
+         debug_assert_eq!(movement.kind(), MoveKind::Ordinary);
+         let from = movement.from();
+         let to = movement.to();
++        let mut result = *parent_map;
++        #[cfg(test)]
++        count_work(|work| work.scheduled_copy_bytes += 128);
+ 
+         // Changed origins are replaced in full, including any captured slider.
+         for source in [from, to] {
+-            self.piece_signed::<true>(&parent.board, source);
++            result.piece_signed::<true>(&parent.board, source);
+         }
+         for source in [from, to] {
+-            self.piece_signed::<false>(&child.board, source);
++            result.piece_signed::<false>(&child.board, source);
+         }
+ 
+         // Outside F/T the source tags agree. Discover all geometrically affected
+@@ -191,14 +179,15 @@
+                     PieceKind::Queen => Contribution::Queen,
+                     _ => unreachable!("geometric slider origin"),
+                 };
+-                self.ray_signed::<true>(
++                result.ray_signed::<true>(
+                     &parent.board, piece.color(), source, direction, contribution,
+                 );
+-                self.ray_signed::<false>(
++                result.ray_signed::<false>(
+                     &child.board, piece.color(), source, direction, contribution,
+                 );
+             }
+         }
++        result
+     }
+ 
+     // Only the delta path dispatches on a source's kind. Fresh construction
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -554,15 +554,12 @@
+ 
+     fn fill<const D: bool>(&mut self, evaluator: &mut Evaluator<D>, previous: Predecessor<'_>) {
+         if self.map.is_none() {
+-            match (previous.ordinary_child, previous.movement) {
+-                (true, Some(movement)) => {
+-                    self.map = Some(*previous.influence);
+-                    self.map.as_mut().unwrap().update_ordinary(
+-                        previous.position, self.position, movement,
+-                    );
+-                }
+-                _ => self.map = Some(Influence::build(self.position)),
+-            }
++            self.map = Some(match (previous.ordinary_child, previous.movement) {
++                (true, Some(movement)) => Influence::derive_ordinary(
++                    previous.position, previous.influence, self.position, movement,
++                ),
++                _ => Influence::build(self.position),
++            });
+             evaluator.record_influence_fill();
+         }
+     }

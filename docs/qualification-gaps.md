@@ -69,6 +69,14 @@ establish production savings. No own-PGO, separate54/wire regression, full117,
 12-game gate or source promotion follows; candidate25 remains retained. See
 [decision0019](decisions/0019-influence-delta-trial.md).
 
+Experiment30 in-place influence delta is also parked: its independent generic
+pilot is0.351851% higher in summed median CPU, with2/7 lower cases and worst
+ratio1.026579, failing all three frozen advancement criteria. All182 native tests
+and70 original strict pilot replays pass; no own-PGO, standalone54/wire, full117,
+12-game gate or promotion follows. Its matched-control window is separate from29;
+no causal29→30 comparison is claimed. See
+[decision0020](decisions/0020-influence-delta-inplace-trial.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.
