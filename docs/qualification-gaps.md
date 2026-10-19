@@ -26,10 +26,12 @@ Full189(187lib+2dev), diagnostic/117 and games were not run; no own-PGO or promo
 follows. See [decision0033](decisions/0033-borrowed-activity-slider-geometry.md).
 40 remains current; its final performance/domain/external qualification gaps remain.
 
-Distinct43 bit-sliced Influence accumulation passes source review and its first
-generic build only.189 native tests are declared, none run; backend inspection
-is pending before focused validation/timing. No PGO, conformance transfer or
-source promotion follows.40 retains its previously scoped finite-check evidence.
+Distinct43 bit-sliced Influence accumulation passes source/backend review and11
+focused controls. Generic70 passes its declared rule at0.714195%lower CPU,5of7
+lower,worst1.009410959, with all70 original outputs/accounting exact. Full189
+native/diagnostic/117/game checks and own-PGO remain unrun; no conformance or
+performance qualification transfers.40 remains current. See
+[decision0035](decisions/0035-bit-sliced-influence-accumulation.md).
 
 Previous candidate37 was retained after185native/209diagnostic tests, complete original
 7673cases/117operations/115wholefiles, fresh optimized54/eight-wire24 and

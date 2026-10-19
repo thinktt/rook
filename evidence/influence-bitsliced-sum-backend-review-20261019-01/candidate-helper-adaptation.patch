@@ -1,0 +1,77 @@
+--- capture-baseline.py
++++ capture-candidate.py
+@@ -1,9 +1,9 @@
+-"""Authorized BASELINE40 only; no candidate or engine execution."""
++"""Authorized candidate43 static capture; baseline files read-only."""
+ from pathlib import Path
+ import hashlib,json,os,re,subprocess
+ E=Path(__file__).resolve().parent
+-B=E.parent/'pressure-value-static-generic-build-20261019-01'
+-EXPECTED='adbf66a39b710bc0f44db2ceb99cac7b823fc02962e4c23a2d6ec12dfa92d664'
++B=E.parent/'influence-bitsliced-sum-generic-build-20261019-01'
++EXPECTED='ea057f6a4a0c57ddc3ed35667d01363c7f2fc68d2de1d2fa745d2ba16f6e4a23'
+ FN='rook2::influence::Influence::build_coherent'
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ load=lambda p:json.loads(Path(p).read_text())
+@@ -13,13 +13,27 @@
+ assert os.environ['PATH']=='/usr/bin:/bin' and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+ assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
+ r=load(B/'receipt.json');t=load(B/'tool-terminal.json')
+-assert t['actual_tool_terminal_observed'] and t['exit_code']==0 and t['terminal_chunk_id']=='151f6b'
++assert t['actual_tool_terminal_observed'] and t['exit_code']==0 and t['terminal_chunk_id']=='8c4328' and t['session_id']==45113
+ assert r['mode']=='generic' and r['pgo']['mode']=='none' and r['cargo_exit_code']==0
+ assert r['source_sha256_before']==r['source_sha256_after'] and len(r['source_sha256_before'])==49
+ assert r['tool_sha256_before']==r['tool_sha256_after'] and len(r['tool_sha256_before'])==23
+ assert sha(B/'rook2-exact')==r['binary_output']['sha256']==EXPECTED
+ assert r['rust_flags']==['-C','target-cpu=x86-64']
+-pins={str(E/'capture-baseline.py'):sha(E/'capture-baseline.py')}
++pins={str(E/'capture-candidate.py'):sha(E/'capture-candidate.py')}
++freeze=E.parent/'influence-bitsliced-sum-parent-review-20261019-01/source-freeze.json'
++q=load(freeze);pins[str(freeze)]=sha(freeze)
++assert q['source_graph']=='e89dcb3315e4d8aaa5089ec445d0a7d0bda7f0928001c502c6343899a5195aa5'
++assert q['files_sha256']==r['source_sha256_before']|r['tool_sha256_before']
++assert t['source_freeze_sha256']==sha(freeze)
++control=load(E.parent/'pressure-value-static-generic-build-20261019-01/receipt.json')
++for key in ['mode','target_triple','target_cpu','jobs','toolchain','build_effective_environment']:
++    assert r[key]==control[key],key
++assert r['tool_sha256_before']==control['tool_sha256_before']
++assert sorted(f for f,h in r['source_sha256_before'].items() if h!=control['source_sha256_before'][f])==['src/attacks.rs','src/influence/coherent.rs','src/influence/coherent_tests.rs']
++for p,h in load(E/'baseline-capture.json')['input_pins'].items():
++    assert sha(p)==h;pins[p]=h
++for name in ['baseline-closure.json','baseline-capture.json','baseline-analysis.json','baseline-source-map.json','baseline-review.md','baseline-complete-build-coherent.stdout']:
++    pins[str(E/name)]=sha(E/name)
+ for name in ['rook2-exact','receipt.json','tool-terminal.json','frozen-image.json','archive-receipt.json','build.stderr']:
+     pins[str(B/name)]=sha(B/name)
+ for name,digest in (r['source_sha256_before']|r['tool_sha256_before']).items():
+@@ -35,17 +49,21 @@
+         child=subprocess.Popen(argv,stdout=out,stderr=err);code=child.wait()
+     row={'argv':argv,'pid':child.pid,'actual_child_return_observed':True,'exit_code':code,'stdout':stem+'.stdout','stdout_sha256':sha(E/(stem+'.stdout')),'stderr_sha256':sha(E/(stem+'.stderr'))}
+     save(stem+'-command.json',row);assert code==0,row;commands.append(row)
+-for tool in ['nm','objdump','readelf','size']:run(['/usr/bin/'+tool,'--version'],tool+'-version')
+-for tool,args,stem in [('nm',['--numeric-sort','--print-size','--demangle'],'baseline-nm'),('nm',['--numeric-sort','--print-size'],'baseline-nm-mangled'),('size',['-A'],'baseline-size'),('readelf',['-SW'],'baseline-sections'),('readelf',['-rW'],'baseline-relocations')]:
++for tool in ['nm','objdump','readelf','size']:run(['/usr/bin/'+tool,'--version'],'candidate-'+tool+'-version')
++for tool,args,stem in [('nm',['--numeric-sort','--print-size','--demangle'],'candidate-nm'),('nm',['--numeric-sort','--print-size'],'candidate-nm-mangled'),('size',['-A'],'candidate-size'),('readelf',['-SW'],'candidate-sections'),('readelf',['-rW'],'candidate-relocations')]:
+     run(['/usr/bin/'+tool,*args,str(B/'rook2-exact')],stem)
+ symbols=[]
+-for line in (E/'baseline-nm.stdout').read_text().splitlines():
++for line in (E/'candidate-nm.stdout').read_text().splitlines():
+     match=re.match(r'^([0-9a-f]+) ([0-9a-f]+) [tT] (.*)$',line)
+-    if match and match[3]==FN:symbols.append((int(match[1],16),int(match[2],16),match[3]))
+-assert len(symbols)==1
+-address,size,name=symbols[0]
+-run(['/usr/bin/objdump','-d','-l','-w','-C','-Mintel','--no-show-raw-insn','--start-address='+hex(address),'--stop-address='+hex(address+size),str(B/'rook2-exact')],'baseline-complete-build-coherent')
+-assert (E/'baseline-complete-build-coherent.stdout').stat().st_size<=1048576
++    if match and (match[3]==FN or 'BitSums' in match[3]):symbols.append((int(match[1],16),int(match[2],16),match[3]))
++assert 1<=len(symbols)<=4 and sum(name==FN for _,_,name in symbols)==1
++bodies=[]
++for address,size,name in symbols:
++    stem='candidate-complete-'+format(address,'x')
++    run(['/usr/bin/objdump','-d','-l','-w','-C','-Mintel','--no-show-raw-insn','--start-address='+hex(address),'--stop-address='+hex(address+size),str(B/'rook2-exact')],stem)
++    bodies.append({'address':address,'bytes':size,'symbol':name,'raw_body':stem+'.stdout'})
++rawbytes=sum((E/b['raw_body']).stat().st_size for b in bodies)
++assert rawbytes<=1048576
+ assert all(sha(p)==digest for p,digest in pins.items())
+-save('baseline-capture.json',{'complete':True,'baseline_only':True,'candidate_unbound':True,'image_sha256':EXPECTED,'source_graph':hashlib.sha256(json.dumps(r['source_sha256_before']|r['tool_sha256_before'],sort_keys=True,separators=(',',':')).encode()).hexdigest(),'producer':{'address':address,'bytes':size,'symbol':name,'raw_body':'baseline-complete-build-coherent.stdout'},'commands':commands,'raw_disassembly_bytes':(E/'baseline-complete-build-coherent.stdout').stat().st_size,'input_pins':pins,'all_inputs_unchanged':True,'engine_build_test_profile_runs':0})
+-print(json.dumps({'complete':True,'baseline_only':True,'commands':len(commands),'function_address':hex(address),'function_bytes':size,'raw_disassembly_bytes':(E/'baseline-complete-build-coherent.stdout').stat().st_size,'all_inputs_unchanged':True}))
++save('candidate-capture.json',{'complete':True,'candidate_only':True,'image_sha256':EXPECTED,'source_graph':q['source_graph'],'bodies':bodies,'commands':commands,'raw_disassembly_bytes':rawbytes,'input_pins':pins,'all_inputs_unchanged':True,'baseline_namespace_unchanged':True,'generic_settings_match':True,'engine_build_test_profile_runs':0})
++print(json.dumps({'complete':True,'candidate_only':True,'commands':len(commands),'bodies':bodies,'raw_disassembly_bytes':rawbytes,'all_inputs_unchanged':True}))

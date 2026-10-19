@@ -43,12 +43,14 @@ mechanism-specific PGO-sensitive exception may be admitted prospectively under
 admitted;43 below uses the default lane. Closed ordinary source-cost reviews led to a narrow existing-machine check of
 generated-move tag predicates: both sites already use raw shift/mask/zero tests.
 That idea is closed without a source experiment. The coherent Influence cost partition and exact carry/transpose algebra are
-closed. Experiment43 source review and the first generic build pass: local wrapping
-bit-plane accumulation with the old scalar zero-slider path. Exactly three
-files change;189 native tests are declared and unrun. The generic ea057f6a image
-is frozen. Actual backend review is in progress before focused tests or timing.
-It uses the default generic funnel; no timing or PGO is authorized yet. See
-[source admission](evidence/influence-bitsliced-sum-parent-review-20261019-01/source-freeze.json).
+closed. Experiment43 private bit-sliced Influence accumulation passes source/backend review,
+11 focused controls and its single fixed generic70 screen:0.714195%lower CPU,
+5of7lower,worst1.009410959. All70 original outputs and native accounting reconcile.
+The producer adds304 code bytes/48 frame bytes and has real counter-memory and
+transpose costs.189 native tests are declared; the full suite is unrun. No PGO
+or source promotion has occurred. Fresh own-source PGO preparation is next under
+the unchanged gate. See [decision0035](docs/decisions/0035-bit-sliced-influence-accumulation.md).
+40 and its complete54/12 costs remain current.
 
 ## Previous candidate37 coherent Influence, 2026-10-19
 

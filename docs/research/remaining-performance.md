@@ -15,17 +15,14 @@ original outputs pass, but fixed generic70 is0.600465%higher/1of7lower. Park
 without own-PGO or promotion. The ordinary-glue source review also finds no
 justified local hoist trial. The bounded independent screening critique is closed: generic remains default,
 with at most one future prospectively admitted PGO-sensitive exception under
-[decision0034](../decisions/0034-prospective-pgo-sensitive-screen.md). No PGO-sensitive exception is admitted. Distinct43 is selected on the default
-generic lane for source preparation only: local wrapping bit-plane Influence
-accumulation and a single per-color transpose, with the old scalar no-slider
-path retained. Existing geometry, public fallback, format and all demand/charge
-owners remain. Exact algebra is feasible; eight scalar live counters, spills,
-one-slider costs, code growth and final transpose remain concrete risks, not
-assumed wins. Source review and the generic build now pass at graph e89dcb33/image ea057f6a.
-189 declarations remain unrun; actual backend review precedes focused controls
-and any timing authority. One new test expectation was corrected3->4 before
-compilation, with original source/evidence preserved; runtime arithmetic did not
-change in that correction. See the
+[decision0034](../decisions/0034-prospective-pgo-sensitive-screen.md). No PGO-sensitive exception is admitted. Distinct43 uses the default generic lane: local wrapping bit-plane Influence
+accumulation and one per-color transpose, retaining the old scalar no-slider
+path. Source/backend and11focused controls pass. Generic70 independently falls
+0.714195% in summed CPU medians,5of7lower,worst1.009410959; all70 originals pass.
+The actual producer grows304B/48Bframe with real stack-held counters; required
+transpose/output work stays. No performance causality follows from code size.
+Full189/diagnostic/games and own-PGO have not run. Proceed only to separately
+frozen own-source PGO preparation, retaining40. See the
 [selection](../../evidence/influence-bitsliced-sum-parent-review-20261019-01/selection.json),
 [cost review](../../evidence/coherent-influence-current-cost-review-20261019-01/review.md)
 and [algebra](../../evidence/influence-bitsliced-sum-design-20261019-01/review.md). The closed types cost partition supports
