@@ -11,7 +11,9 @@ Slider masks retain exact transparency/weakening/pawn-extra semantics and feed
 wrapping SSE2 byte additions. Scalar leapers and all numerical/charge/cache
 owners stay. No new Node/Position state or parentmap reuse is introduced.
 Root entry validation/private permission costs, larger producer frame/table/text
-and map transport are included in the measured source. Seven focused controls, all185 native tests
-and actual bounded backend pass; full117/post-use54/wire/games remain unrun on37.
+and map transport are included in the measured source. Seven focused controls, all185 native tests and209 diagnostic tests pass.
+All7673cases/117operations/115wholefiles and fresh post-use54/eight-wire24
+pass independent original/raw reconciliation. Regular12pre-gate is running;
+whole54 timing and source selection remain pending.
 
 See [own-PGO decision](../../evidence/coherent-influence-masks-pgo-decision-20261019-01/README.md) and [generic decision](../../evidence/coherent-influence-masks-generic-decision-20261019-01/README.md).

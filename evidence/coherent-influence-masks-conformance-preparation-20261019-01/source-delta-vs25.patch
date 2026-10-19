@@ -1,0 +1,1071 @@
+--- accepted25/src/attacks.rs
++++ coherent37/src/attacks.rs
+@@ -65,7 +65,19 @@
+ 
+ static MASKS: Masks = masks();
+ 
++/// Existing immutable geometry for the private coherent evaluation producer.
++/// Return references, not a copied per-source ray row or a rebuilt table.
++#[inline]
++pub(crate) fn influence_rays(square: Square) -> (&'static [u64; 8], &'static [bool; 8]) {
++    (&MASKS.rays[square.0 as usize], &MASKS.increasing)
++}
++
+ impl AttackBits {
++    #[inline]
++    pub(crate) fn planes(&self) -> &[u64; 4] {
++        &self.planes
++    }
++
+     pub(crate) const fn empty() -> Self {
+         Self { planes: [0; 4] }
+     }
+--- accepted25/src/engine.rs
++++ coherent37/src/engine.rs
+@@ -40,6 +40,8 @@
+     pub(crate) learning: Learning,
+     pub(crate) remembered: Option<RememberedTable>,
+     table_bytes: usize,
++    // Valid only inside a guarded owned-root call; never a Node certificate.
++    coherent_geometry: bool,
+     pub(crate) pv: [[Move; PLIES]; PLIES],
+     pub(crate) pv_len: [usize; PLIES],
+     pub(crate) stats: Stats,
+@@ -60,6 +62,7 @@
+             learning: Learning::default(),
+             remembered: None,
+             table_bytes: 0,
++            coherent_geometry: false,
+             pv: [[Move::NONE; PLIES]; PLIES],
+             pv_len: [0; PLIES],
+             stats: Stats::default(),
+@@ -83,6 +86,7 @@
+             learning,
+             remembered,
+             table_bytes,
++            coherent_geometry: _,
+             pv,
+             pv_len,
+             stats,
+@@ -101,6 +105,7 @@
+                 learning,
+                 remembered,
+                 table_bytes,
++                coherent_geometry: false,
+                 pv,
+                 pv_len,
+                 stats,
+@@ -111,6 +116,19 @@
+             },
+             previous,
+         )
++    }
++
++    pub(crate) fn clear_geometry_permission(&mut self) {
++        self.coherent_geometry = false;
++    }
++
++    pub(crate) fn bind_geometry_permission(&mut self, position: &Position) {
++        self.coherent_geometry = position.validate().is_ok();
++    }
++
++    #[inline]
++    pub(crate) fn geometry_permission(&self) -> bool {
++        self.coherent_geometry
+     }
+ 
+     pub(crate) fn ensure_table(&mut self) -> Result<(), String> {
+@@ -154,3 +172,7 @@
+         self.pv_len[ply] = child_len + 1;
+     }
+ }
++
++#[cfg(test)]
++#[path = "engine/geometry_tests.rs"]
++mod geometry_tests;
+--- accepted25/src/evaluator.rs
++++ coherent37/src/evaluator.rs
+@@ -7,6 +7,16 @@
+ use crate::position::Position;
+ use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+ use crate::{activity, endgame, pawn_progress, pawn_terms, positional_terms, shelter};
++
++#[cfg(test)]
++std::thread_local! {
++    static COHERENT_BUILDS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
++}
++
++#[cfg(test)]
++pub(crate) fn coherent_build_count() -> u64 {
++    COHERENT_BUILDS.with(|count| count.get())
++}
+ 
+ pub const OMITTED_TERMS: &str = "production personality/session/protocol binding";
+ 
+@@ -298,8 +308,26 @@
+         position: &Position,
+         scratch: &'a mut Option<Influence>,
+     ) -> &'a Influence {
++        self.ensure_influence_for_search(position, scratch, false)
++    }
++
++    /// Only a guarded Search-owned descendant chain may pass true. Supplied
++    /// maps remain authoritative, including on the trusted route.
++    pub(crate) fn ensure_influence_for_search<'a>(
++        &mut self,
++        position: &Position,
++        scratch: &'a mut Option<Influence>,
++        coherent_geometry: bool,
++    ) -> &'a Influence {
+         if scratch.is_none() {
+-            *scratch = Some(Influence::build(position));
++            *scratch = Some(if coherent_geometry {
++                let map = Influence::build_coherent(position);
++                #[cfg(test)]
++                COHERENT_BUILDS.with(|count| count.set(count.get() + 1));
++                map
++            } else {
++                Influence::build(position)
++            });
+             if DIAGNOSTICS {
+                 self.stats.influence_builds += 1;
+             }
+@@ -533,8 +561,23 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
++        self.select_noncheck_for_search(
++            node, lower, upper, capture_exception, scratch, false,
++        )
++    }
++
++    pub(crate) fn select_noncheck_for_search(
++        &mut self,
++        node: &mut Node,
++        lower: i32,
++        upper: i32,
++        capture_exception: bool,
++        scratch: &mut Option<Influence>,
++        coherent_geometry: bool,
++    ) -> Selection {
+         self.select_noncheck_impl::<false, false, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
++            node, lower, upper, capture_exception, scratch, coherent_geometry,
++            |_| {}, |_| {}, |_| {},
+         )
+     }
+ 
+@@ -556,7 +599,7 @@
+         G: FnMut(FastDetails),
+     {
+         self.select_noncheck_impl::<true, false, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
++            node, lower, upper, capture_exception, scratch, false, full_observer, fast_observer, |_| {},
+         )
+     }
+ 
+@@ -571,7 +614,7 @@
+         observer: F,
+     ) -> Selection {
+         self.select_noncheck_impl::<false, true, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
++            node, lower, upper, capture_exception, scratch, false, |_| {}, |_| {}, observer,
+         )
+     }
+ 
+@@ -605,6 +648,7 @@
+         upper: i32,
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
++        coherent_geometry: bool,
+         mut full_observer: F,
+         mut fast_observer: G,
+         mut stage_observer: S,
+@@ -624,7 +668,7 @@
+                 <= 1
+         });
+         if sparse {
+-            let influence = self.ensure_influence(&node.position, scratch);
++            let influence = self.ensure_influence_for_search(&node.position, scratch, coherent_geometry);
+             return Selection {
+                 evaluation: if STAGES {
+                     self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+@@ -647,7 +691,7 @@
+         };
+         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
+         let evaluation = if refresh {
+-            let influence = self.ensure_influence(&node.position, scratch);
++            let influence = self.ensure_influence_for_search(&node.position, scratch, coherent_geometry);
+             if STAGES {
+                 self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+             } else if OBSERVE {
+--- accepted25/src/influence.rs
++++ coherent37/src/influence.rs
+@@ -7,6 +7,10 @@
+ use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+ use crate::position::Position;
+ use crate::types::{Color, Piece, PieceKind, Square};
++
++mod coherent;
++#[cfg(test)]
++mod coherent_tests;
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ #[repr(u8)]
+@@ -32,6 +36,13 @@
+ }
+ 
+ impl Influence {
++    /// Private search-only producer. PRECONDITION: canonical mailbox, source
++    /// lists and maintained attack planes describe this same placement.
++    /// Public/custom callers retain the self-sufficient scalar build below.
++    pub(crate) fn build_coherent(position: &Position) -> Self {
++        coherent::build(position)
++    }
++
+     pub fn build(position: &Position) -> Self {
+         let mut influence = Self {
+             profiles: [[0; 64]; 2],
+--- accepted25/src/ordinary.rs
++++ coherent37/src/ordinary.rs
+@@ -541,12 +541,26 @@
+         randomness: u32,
+         observe_raw: F,
+     ) -> Result<Outcome, Error> {
++        self.clear_geometry_permission();
+         assert!(randomness <= i32::MAX as u32);
+         self.run_iterations_inner::<true, F>(position, history, completed, limits,
+             seed, randomness, observe_raw)
+     }
+ 
+     fn run_iterations_inner<const SEEDED: bool, F: FnMut(i32)>(
++        &mut self, position: Position, history: &mut SearchHistory,
++        completed: u8, limits: Limits, seed: u32, randomness: u32,
++        observe_raw: F,
++    ) -> Result<Outcome, Error> {
++        self.clear_geometry_permission();
++        let result = self.run_iterations_body::<SEEDED, F>(
++            position, history, completed, limits, seed, randomness, observe_raw,
++        );
++        self.clear_geometry_permission();
++        result
++    }
++
++    fn run_iterations_body<const SEEDED: bool, F: FnMut(i32)>(
+         &mut self, position: Position, history: &mut SearchHistory,
+         completed: u8, limits: Limits, seed: u32, randomness: u32,
+         mut observe_raw: F,
+@@ -556,6 +570,7 @@
+         }
+         assert_eq!(history.search_ply(), 0);
+         self.ensure_table().map_err(Error::Table)?;
++        self.bind_geometry_permission(&position);
+         let (root, root_influence) = self.prepare_root_with_influence(position);
+         let root_checked = movegen::in_check(&position, position.side);
+         let mut roots = MoveList::new();
+@@ -564,7 +579,7 @@
+             return Err(Error::NoLegalRoots);
+         }
+         let initial_candidates = roots.as_slice().to_vec();
+-        self.begin_sequence(limits);
++        self.begin_owned_sequence(limits);
+         let mut iterations = Vec::with_capacity(completed as usize);
+         for depth in 1..=completed {
+             let mut ranked = Vec::<(Move, i32)>::with_capacity(roots.len);
+@@ -761,6 +776,7 @@
+         )
+         .adjustment;
+         let mut scratch = None;
++        let coherent_geometry = self.geometry_permission();
+         if policy::fast_admitted(
+             &position,
+             previous.position,
+@@ -779,7 +795,7 @@
+                     .movement
+                     .is_some_and(|m| quiescence_policy::capture_exception(previous.position, &m)),
+             ) {
+-                let map = self.evaluator.ensure_influence(&position, &mut scratch);
++                let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+                 if !policy::king_pressure(&position, previous.influence, map) {
+                     let trial = adjusted - self.threat(node, map);
+                     if trial >= request.upper {
+@@ -792,7 +808,7 @@
+                 }
+             }
+         }
+-        let map = self.evaluator.ensure_influence(&position, &mut scratch);
++        let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+         let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+--- accepted25/src/position.rs
++++ coherent37/src/position.rs
+@@ -170,6 +170,12 @@
+     #[inline]
+     pub(crate) fn attack_view(&self) -> AttackBits {
+         self.attack_bits
++    }
++
++    /// Borrow actual maintained planes; the caller owns placement coherence.
++    #[inline]
++    pub(crate) fn attack_planes(&self) -> &[u64; 4] {
++        self.attack_bits.planes()
+     }
+ 
+     #[inline]
+--- accepted25/src/quiescence.rs
++++ coherent37/src/quiescence.rs
+@@ -131,6 +131,7 @@
+     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
+     /// This preparation's relation work is excluded by `search_subtree`.
+     pub fn prepare_root(&mut self, position: Position) -> Node {
++        self.clear_geometry_permission();
+         self.prepare_root_with_influence(position).0
+     }
+ 
+@@ -145,7 +146,10 @@
+         }
+         let mut root = Node::root(position, &self.evaluator.root);
+         let mut scratch = None;
+-        let influence = self.evaluator.ensure_influence(&position, &mut scratch);
++        let coherent_geometry = self.geometry_permission();
++        let influence = self.evaluator.ensure_influence_for_search(
++            &position, &mut scratch, coherent_geometry,
++        );
+         self.evaluator.full(
+             &mut root,
+             influence,
+@@ -173,6 +177,7 @@
+         &mut self, node: &mut Node, history: &mut SearchHistory,
+         entry: Entry, limits: Limits, parent_retained: &Retained, observer: &mut O,
+     ) -> Result<Outcome, Stopped> {
++        self.clear_geometry_permission();
+         assert!((1..PLIES).contains(&entry.ply));
+         assert_eq!(entry.ply, history.search_ply());
+         assert!(entry.iteration_depth >= 1 && entry.target >= 0);
+@@ -186,6 +191,12 @@
+     /// Start the measured/search-work segment without clearing shared pawns.
+     /// Root candidates then use `continue_subtree` in actual visit order.
+     pub fn begin_sequence(&mut self, limits: Limits) {
++        self.clear_geometry_permission();
++        self.begin_owned_sequence(limits);
++    }
++
++    /// Native root workers retain their already validated call permission.
++    pub(crate) fn begin_owned_sequence(&mut self, limits: Limits) {
+         self.timing = None;
+         self.stats = Stats::default();
+         self.evaluator.stats = EvalStats::default();
+@@ -199,6 +210,7 @@
+         history: &mut SearchHistory,
+         entry: Entry,
+     ) -> Result<Outcome, Stopped> {
++        self.clear_geometry_permission();
+         assert!((1..PLIES).contains(&entry.ply));
+         assert_eq!(entry.ply, history.search_ply());
+         assert!(entry.iteration_depth >= 1 && entry.target >= 0);
+@@ -253,6 +265,7 @@
+             }
+ 
+             let mut influence = None;
++            let coherent_geometry = self.geometry_permission();
+             let mut lower = entry.lower;
+             let (mut best, standing, evaluation_upper) = if checked {
+                 (-10000, -10000, 10000)
+@@ -263,8 +276,9 @@
+                         |stage| observer.stage(stage),
+                     )
+                 } else {
+-                    self.evaluator.select_noncheck(
++                    self.evaluator.select_noncheck_for_search(
+                         node, lower, entry.upper, entry.capture_exception, &mut influence,
++                        coherent_geometry,
+                     )
+                 }.evaluation;
+                 if DIAGNOSTICS {
+@@ -353,7 +367,9 @@
+                                 alpha: lower,
+                             },
+                             || {
+-                                let map = self.evaluator.ensure_influence(&position, &mut influence);
++                                let map = self.evaluator.ensure_influence_for_search(
++                                    &position, &mut influence, coherent_geometry,
++                                );
+                                 policy::destination_support(&position, map, movement.to())
+                             },
+                         );
+--- accepted25/src/timed.rs
++++ coherent37/src/timed.rs
+@@ -494,7 +494,9 @@
+         controls: Controls,
+         limits: Limits,
+     ) -> Result<Outcome, Error> {
++        self.clear_geometry_permission();
+         let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
++        self.clear_geometry_permission();
+         self.timing = None;
+         result
+     }
+@@ -513,6 +515,7 @@
+         }
+         assert_eq!(history.search_ply(), 0);
+         self.ensure_table().map_err(Error::Table)?;
++        self.bind_geometry_permission(&position);
+         let (root, influence) = self.prepare_root_with_influence(position);
+         let checked = movegen::in_check(&position, position.side);
+         let mut legal = MoveList::new();
+@@ -530,7 +533,7 @@
+                 work: 0,
+             })
+             .collect();
+-        self.begin_sequence(limits);
++        self.begin_owned_sequence(limits);
+         if H::ACTIVE {
+             controls.seed = self
+                 .host
+--- /dev/null
++++ coherent37/src/engine/geometry_tests.rs
+@@ -0,0 +1,202 @@
++//! Permission falsifiers; kernel arithmetic has a separate independent oracle.
++use super::*;
++use crate::evaluator::{coherent_build_count, EvaluationStage, Node, Retained};
++use crate::influence::Influence;
++use crate::ordinary;
++use crate::quiescence::{Entry, Observer};
++use crate::timed::Controls;
++use crate::types::{Color, Piece, PieceKind, Square};
++use std::panic::{catch_unwind, AssertUnwindSafe};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++fn position() -> Position { Position::from_fen(START).unwrap() }
++fn control() -> Controls {
++    Controls { average_cs: 0, maximum_cs: 0, origin: 0, seed: 0,
++        randomness: 0, maximum_entered_iterations: 2 }
++}
++struct Off;
++impl Observer for Off {
++    const ENABLED: bool = false;
++    type Parent = ();
++    type Frame = ();
++    fn parent(_: &Retained) {}
++    fn enter(&mut self, _: &Position, _: Entry, _: Option<Move>, _: (),
++        _: Retained, _: bool, _: Work) {}
++    fn stage(&mut self, _: EvaluationStage) {}
++    fn ordered(&mut self) {}
++    fn leave(&mut self, _: (), _: Retained, _: i32, _: &[Move], _: Work) {}
++}
++
++#[test]
++fn experiment37_private_supply_selection_and_public_custom_bypass() {
++    let p = position();
++    let mut trusted = Search::<true>::new(&p);
++    trusted.bind_geometry_permission(&p);
++    assert!(trusted.geometry_permission());
++    let before = coherent_build_count();
++    let mut scratch = None;
++    let map = *trusted.evaluator.ensure_influence_for_search(&p, &mut scratch, true);
++    assert_eq!(map, Influence::build(&p));
++    assert_eq!(coherent_build_count() - before, 1);
++    assert_eq!(trusted.evaluator.stats.influence_builds, 1);
++    assert_eq!(*trusted.evaluator.ensure_influence_for_search(&p, &mut scratch, true), map);
++    assert_eq!(coherent_build_count() - before, 1);
++
++    // Force refresh and compare the actual selected evaluation, retained state,
++    // maps and shared pawn/stat effects, not merely map geometry.
++    let mut a = crate::evaluator::Evaluator::<true>::new(&p);
++    let mut b = crate::evaluator::Evaluator::<true>::new(&p);
++    let mut an = Node::root(p, &a.root);
++    let mut bn = Node::root(p, &b.root);
++    let mut am = None;
++    let mut bm = None;
++    let before = coherent_build_count();
++    let av = a.select_noncheck_for_search(&mut an, -10000, 10000, true, &mut am, true);
++    let bv = b.select_noncheck(&mut bn, -10000, 10000, true, &mut bm);
++    assert_eq!(coherent_build_count() - before, 1);
++    assert_eq!((av, an.retained, am, a.stats), (bv, bn.retained, bm, b.stats));
++
++    let mut custom = Influence { profiles: [[0; 64]; 2] };
++    custom.profiles[0][7] = 255;
++    custom.profiles[1][12] = 4;
++    let mut a = crate::evaluator::Evaluator::<true>::new(&p);
++    let mut b = crate::evaluator::Evaluator::<true>::new(&p);
++    let mut an = Node::root(p, &a.root);
++    let mut bn = Node::root(p, &b.root);
++    let mut am = Some(custom);
++    let mut bm = Some(custom);
++    let before = coherent_build_count();
++    let av = a.select_noncheck_for_search(&mut an, -10000, 10000, true, &mut am, true);
++    let bv = b.select_noncheck(&mut bn, -10000, 10000, true, &mut bm);
++    assert_eq!(coherent_build_count(), before);
++    assert_eq!((av, an.retained, am, a.stats), (bv, bn.retained, bm, b.stats));
++    assert_eq!(am, Some(custom));
++    assert_eq!(a.stats.influence_builds, 0);
++
++    // Public methods ignore even an artificially stale owning Search flag.
++    // The mailbox mutation intentionally leaves private planes/lists stale.
++    let mut stale = p;
++    stale.board[Square::parse("e4").unwrap().0 as usize] = Piece::new(Color::Black, PieceKind::Pawn);
++    assert!(stale.validate().is_err());
++    let expected = Influence::build(&stale);
++    let before = coherent_build_count();
++    let mut none = None;
++    assert_eq!(*trusted.evaluator.ensure_influence(&stale, &mut none), expected);
++    let mut node = Node::root(stale, &trusted.evaluator.root);
++    let mut none = None;
++    trusted.evaluator.select_noncheck_detailed_observed(&mut node,
++        -10000, 10000, true, &mut none, |_| {}, |_| {});
++    assert_eq!(none, Some(expected));
++    assert_eq!(coherent_build_count(), before);
++}
++
++#[test]
++fn experiment37_external_entries_clear_even_before_assertion_failure() {
++    let p = position();
++    let mut search = Search::<true>::new(&p);
++    search.config.tts_bytes = 96;
++    search.coherent_geometry = true;
++    let before = coherent_build_count();
++    let mut node = search.prepare_root(p);
++    assert!(!search.geometry_permission());
++    assert_eq!(coherent_build_count(), before);
++    search.coherent_geometry = true;
++    search.begin_sequence(Limits::default());
++    assert!(!search.geometry_permission());
++
++    let mut history = SearchHistory::new(&p);
++    history.push(&node.position, None);
++    let entry = Entry { ply: 1, target: 1, iteration_depth: 1,
++        lower: -10000, upper: 10000, analysis: 0, capture_exception: false };
++    search.limits = Limits { nodes: Some(0) };
++    search.coherent_geometry = true;
++    assert!(matches!(search.continue_subtree(&mut node, &mut history, entry),
++        Err(Stopped::NodeLimit(0))));
++    assert!(!search.geometry_permission());
++    assert_eq!(coherent_build_count(), before);
++    history.pop();
++
++    search.coherent_geometry = true;
++    assert!(catch_unwind(AssertUnwindSafe(|| {
++        let mut off = Off;
++        let _ = search.search_subtree_observed(&mut node, &mut history,
++            Entry { ply: 0, ..entry }, Limits::default(), &Retained::default(), &mut off);
++    })).is_err());
++    assert!(!search.geometry_permission());
++    search.coherent_geometry = true;
++    assert!(catch_unwind(AssertUnwindSafe(|| {
++        let _ = search.run_seeded_iterations(p, &mut history, 1,
++            Limits::default(), 0, u32::MAX, |_| {});
++    })).is_err());
++    assert!(!search.geometry_permission());
++    assert_eq!(coherent_build_count(), before);
++
++    // Validation rejects invalid raw kinds before any kind-dependent producer.
++    let mut malformed = p;
++    malformed.board[Square::parse("e4").unwrap().0 as usize] = Piece(7);
++    search.bind_geometry_permission(&malformed);
++    assert!(!search.geometry_permission());
++    assert_eq!(coherent_build_count(), before);
++
++    // A safe but incoherent root chooses scalar, not an admission error.
++    let mut invalid = p;
++    invalid.starting_units ^= 1;
++    assert!(invalid.validate().is_err());
++    search.coherent_geometry = true;
++    let mut history = SearchHistory::new(&invalid);
++    assert!(matches!(search.run_iterations(invalid, &mut history, 1,
++        Limits { nodes: Some(0) }), Err(ordinary::Error::Stopped(Stopped::NodeLimit(0)))));
++    assert!(!search.geometry_permission());
++    assert_eq!(coherent_build_count(), before);
++    assert_eq!(history.search_ply(), 0);
++}
++
++#[test]
++fn experiment37_native_root_lifetime_stops_errors_and_host_transfer() {
++    let p = position();
++    let mut search = Search::<true>::new(&p);
++    search.config.tts_bytes = 96;
++    let mut history = SearchHistory::new(&p);
++    let before = coherent_build_count();
++    let outcome = search.run_iterations(p, &mut history, 1,
++        Limits { nodes: Some(100000) }).unwrap();
++    assert!(!search.geometry_permission());
++    assert!(outcome.evaluations.influence_builds > 0);
++    // Root construction is before segment-stat reset; every later actual build
++    // must retain permission through private Q selection and recursion.
++    assert_eq!(coherent_build_count() - before, outcome.evaluations.influence_builds + 1);
++    assert_eq!(history.search_ply(), 0);
++
++    let before = coherent_build_count();
++    assert!(matches!(search.run_work_timed(p, &mut history, control(),
++        Limits { nodes: Some(0) }), Err(ordinary::Error::Stopped(Stopped::NodeLimit(0)))));
++    assert_eq!(coherent_build_count() - before, 1);
++    assert!(!search.geometry_permission());
++    assert!(search.timing.is_none());
++    assert_eq!(history.search_ply(), 0);
++    let before = coherent_build_count();
++    assert!(matches!(search.run_work_timed_without_iio(p, &mut history, control(),
++        Limits { nodes: Some(0) }), Err(ordinary::Error::Stopped(Stopped::NodeLimit(0)))));
++    assert_eq!(coherent_build_count() - before, 1);
++    assert!(!search.geometry_permission());
++
++    struct FailSeed;
++    impl Host for FailSeed {
++        fn acquire_seed(&mut self, _: u32, _: u32) -> std::io::Result<u32> {
++            Err(std::io::Error::new(std::io::ErrorKind::Other, "controlled seed failure"))
++        }
++    }
++    search.coherent_geometry = true;
++    let (mut active, _) = search.map_host(FailSeed);
++    assert!(!active.geometry_permission());
++    let before = coherent_build_count();
++    assert!(matches!(active.run_work_timed(p, &mut history, control(), Limits::default()),
++        Err(ordinary::Error::Host(_))));
++    assert_eq!(coherent_build_count() - before, 1);
++    assert!(!active.geometry_permission());
++    assert!(active.timing.is_none());
++    assert_eq!(history.search_ply(), 0);
++    active.coherent_geometry = true;
++    let (saved, _) = active.map_host(NoHost);
++    assert!(!saved.geometry_permission());
++}
+--- /dev/null
++++ coherent37/src/influence/coherent.rs
+@@ -0,0 +1,190 @@
++//! Private coherent-placement producer: scalar leapers, masked SIMD sliders.
++//! No cache, parent map, persistent state, relation queries or changed byte format.
++use super::{Contribution, Influence};
++use crate::attacks::influence_rays;
++use crate::geometry::{DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
++use crate::position::Position;
++use crate::types::{Color, PieceKind, Square};
++use std::arch::x86_64::{__m128i, _mm_add_epi8, _mm_loadu_si128, _mm_or_si128,
++    _mm_set_epi64x, _mm_slli_epi16, _mm_storeu_si128};
++
++// Exactly 256 * 8 = 2048 immutable bytes. Little-endian byte lane i represents
++// bit i. The only consumers use x86-64 baseline SSE2; no feature dispatch.
++const fn expansion_table() -> [u64; 256] {
++    let mut result = [0u64; 256];
++    let mut pattern = 0;
++    while pattern < 256 {
++        let mut lane = 0;
++        while lane < 8 {
++            result[pattern] |= (((pattern >> lane) & 1) as u64) << (8 * lane);
++            lane += 1;
++        }
++        pattern += 1;
++    }
++    result
++}
++static EXPANSION: [u64; 256] = expansion_table();
++
++pub(super) fn build(position: &Position) -> Influence {
++    let mut result = Influence { profiles: [[0; 64]; 2] };
++    let planes = position.attack_planes();
++    for side in [Color::White, Color::Black] {
++        // Retain actual scalar P/N/K source lists, targets, order and wrapping.
++        for &source in position.piece_squares(side, PieceKind::Pawn) {
++            debug_assert!(source.0 < 64);
++            let targets = &PAWN_TARGETS[side.index()][(source.0 & 63) as usize];
++            for &target in &targets.squares[..targets.len as usize] {
++                result.add(side, Square(target & 63), Contribution::Pawn as u8);
++            }
++        }
++        for &source in position.piece_squares(side, PieceKind::Knight) {
++            debug_assert!(source.0 < 64);
++            let targets = &KNIGHT_SOURCES[(source.0 & 63) as usize];
++            for &target in &targets.squares[..targets.len as usize] {
++                result.add(side, Square(target & 63), Contribution::Minor as u8);
++            }
++        }
++        for &source in position.piece_squares(side, PieceKind::King) {
++            debug_assert!(source.0 < 64);
++            let targets = &KING_TARGETS[(source.0 & 63) as usize];
++            for &target in &targets.squares[..targets.len as usize] {
++                result.add(side, Square(target & 63), Contribution::Weak as u8);
++            }
++        }
++        let bishops = position.piece_squares(side, PieceKind::Bishop);
++        let rooks = position.piece_squares(side, PieceKind::Rook);
++        let queens = position.piece_squares(side, PieceKind::Queen);
++        if bishops.is_empty() && rooks.is_empty() && queens.is_empty() {
++            continue; // No slider means no vector load/store/setup for this side.
++        }
++        let mut sums = ColorSums::load(&result.profiles[side.index()]);
++        for &source in bishops {
++            let (normal, weak) = slider_masks::<2>(planes, side, source);
++            sums.add::<4>(normal, weak); // Minor16.
++        }
++        for &source in rooks {
++            let (normal, weak) = slider_masks::<3>(planes, side, source);
++            sums.add::<2>(normal, weak); // Rook4.
++        }
++        for &source in queens {
++            let (normal, weak) = slider_masks::<4>(planes, side, source);
++            sums.add::<1>(normal, weak); // Queen2.
++        }
++        sums.store(&mut result.profiles[side.index()]);
++    }
++    result
++}
++
++#[inline]
++fn first(blockers: u64, increasing: bool) -> u64 {
++    if blockers == 0 { 0 }
++    else if increasing { blockers & blockers.wrapping_neg() }
++    else { 1u64 << (63 - blockers.leading_zeros()) }
++}
++#[inline]
++fn through(ray: u64, blocker: u64, increasing: bool) -> u64 {
++    if blocker == 0 { ray }
++    else if increasing { ray & (blocker | blocker.wrapping_sub(1)) }
++    else { ray & !blocker.wrapping_sub(1) }
++}
++
++/// For one source, original and weakened targets are disjoint. Different
++/// sources must still be emitted separately to retain contribution multiplicity.
++#[inline]
++pub(super) fn slider_masks<const KIND: usize>(planes: &[u64; 4], side: Color,
++    source: Square) -> (u64, u64) {
++    let own = if side == Color::Black { planes[3] } else { !planes[3] };
++    let occupied = planes[0] | planes[1] | planes[2];
++    let queens = planes[0] & !planes[1] & planes[2] & own;
++    let pawns = planes[0] & !planes[1] & !planes[2] & own;
++    let rooks = !planes[0] & !planes[1] & planes[2] & own;
++    let bishops = planes[0] & planes[1] & !planes[2] & own;
++    let enemy_kings = !planes[0] & planes[1] & planes[2] & !own;
++    let (rays, increasing) = influence_rays(source);
++    let directions = match KIND { 2 => 0..4, 3 => 4..8, 4 => 0..8,
++        _ => unreachable!("not an influence slider") };
++    let mut normal = 0;
++    let mut weak = 0;
++    for direction in directions {
++        let diagonal = direction < 4;
++        let transparent = queens | enemy_kings | if diagonal { bishops } else { rooks };
++        let ray = rays[direction];
++        let stop = first(ray & occupied & !transparent, increasing[direction]);
++        let mut visited = through(ray, stop, increasing[direction]);
++        let step = DIRECTIONS[direction];
++        let forward = if side == Color::White { 1 } else { -1 };
++        if diagonal && step.1 == forward && stop & pawns != 0 {
++            // Add exactly one square past the stopping pawn, without inspecting
++            // that square's occupant. Intersect R to guard its board edge.
++            let delta = step.0 as i16 + 8 * step.1 as i16;
++            let extra = if delta > 0 { stop << delta as u32 }
++                else { stop >> (-delta) as u32 };
++            visited |= extra & ray;
++        }
++        let queen = first(visited & queens, increasing[direction]);
++        let original = through(visited, queen, increasing[direction]);
++        normal |= original;
++        weak |= visited & !original;
++    }
++    (normal, weak)
++}
++
++struct ColorSums { chunks: [__m128i; 4] }
++impl ColorSums {
++    #[inline]
++    fn load(bytes: &[u8; 64]) -> Self {
++        // SAFETY: x86-64 supplies SSE2. Four unaligned16B reads cover exactly
++        // this64B array; no reference alignment or initialization is assumed.
++        unsafe { Self { chunks: [
++            _mm_loadu_si128(bytes.as_ptr().cast()),
++            _mm_loadu_si128(bytes.as_ptr().add(16).cast()),
++            _mm_loadu_si128(bytes.as_ptr().add(32).cast()),
++            _mm_loadu_si128(bytes.as_ptr().add(48).cast()),
++        ] } }
++    }
++    #[inline]
++    fn store(&self, bytes: &mut [u8; 64]) {
++        // SAFETY: the same four disjoint16B ranges are writable within bytes.
++        unsafe { for i in 0..4 {
++            _mm_storeu_si128(bytes.as_mut_ptr().add(16 * i).cast(), self.chunks[i]);
++        } }
++    }
++    #[inline]
++    fn add<const SHIFT: i32>(&mut self, normal: u64, weak: u64) {
++        debug_assert_eq!(normal & weak, 0);
++        debug_assert!((0..=6).contains(&SHIFT));
++        // SAFETY: baseline SSE2; table indices are masked to bytes. Expanded
++        // byte values0/1 shifted at most6 cannot carry into adjacent bytes,
++        // even though slli operates on16-bit lanes. paddb wraps each byte.
++        unsafe {
++            if weak == 0 {
++                for i in 0..4 {
++                    let add = _mm_slli_epi16::<SHIFT>(expand((normal >> (16 * i)) as u16));
++                    self.chunks[i] = _mm_add_epi8(self.chunks[i], add);
++                }
++            } else {
++                for i in 0..4 {
++                    let original = _mm_slli_epi16::<SHIFT>(expand((normal >> (16 * i)) as u16));
++                    let add = _mm_or_si128(original, expand((weak >> (16 * i)) as u16));
++                    self.chunks[i] = _mm_add_epi8(self.chunks[i], add);
++                }
++            }
++        }
++    }
++}
++#[inline]
++unsafe fn expand(bits: u16) -> __m128i {
++    // Both scalar table loads are in bounds; low8 squares precede high8.
++    _mm_set_epi64x(EXPANSION[(bits >> 8) as usize] as i64,
++        EXPANSION[(bits & 255) as usize] as i64)
++}
++
++#[cfg(test)]
++pub(super) fn emit_for_test<const SHIFT: i32>(previous: [u8; 64], normal: u64,
++    weak: u64) -> [u8; 64] {
++    let mut bytes = previous;
++    let mut sums = ColorSums::load(&bytes);
++    sums.add::<SHIFT>(normal, weak);
++    sums.store(&mut bytes);
++    bytes
++}
+--- /dev/null
++++ coherent37/src/influence/coherent_tests.rs
+@@ -0,0 +1,245 @@
++//! Independent coordinate/count controls. Expected values never use plane masks,
++//! ray tables, prefixes, expansion tables or the new byte emitter.
++use super::*;
++use crate::types::{MoveKind, Piece};
++
++fn sq(text: &str) -> Square { Square::parse(text).unwrap() }
++fn at(source: usize, df: i32, dr: i32) -> Option<usize> {
++    let f = (source % 8) as i32 + df;
++    let r = (source / 8) as i32 + dr;
++    if (0..8).contains(&f) && (0..8).contains(&r) { Some((8 * r + f) as usize) } else { None }
++}
++const STEPS: [(i32, i32); 8] = [(1,1),(-1,-1),(-1,1),(1,-1),(0,1),(0,-1),(1,0),(-1,0)];
++fn placement(mut board: [Piece; 64]) -> Position {
++    // Add only missing kings, away from the fixed d4 ray witnesses when possible.
++    for (side, preferred) in [(Color::White, 0usize), (Color::Black, 63usize)] {
++        if !board.iter().any(|&p| p == Piece::new(side, PieceKind::King)) {
++            let slot = if board[preferred].is_empty() { preferred }
++                else { (0..64).find(|&i| board[i].is_empty()).unwrap() };
++            board[slot] = Piece::new(side, PieceKind::King);
++        }
++    }
++    let mut fen = String::new();
++    for rank in (0..8).rev() {
++        if rank != 7 { fen.push('/'); }
++        let mut empty = 0u8;
++        for file in 0..8 {
++            let piece = board[8 * rank + file];
++            if piece.is_empty() { empty += 1; }
++            else {
++                if empty != 0 { fen.push((b'0' + empty) as char); empty = 0; }
++                let c = ['p','n','b','r','q','k'][piece.kind().index()];
++                fen.push(if piece.color() == Color::White { c.to_ascii_uppercase() } else { c });
++            }
++        }
++        if empty != 0 { fen.push((b'0' + empty) as char); }
++    }
++    Position::from_fen(&format!("{fen} w - - 0 1")).unwrap()
++}
++fn described(pieces: &[(&str, Color, PieceKind)]) -> Position {
++    let mut board = [Piece::EMPTY;64];
++    for &(name, side, kind) in pieces { let i=sq(name).0 as usize; assert!(board[i].is_empty()); board[i]=Piece::new(side,kind); }
++    placement(board)
++}
++
++// Scalar coordinate ray witness: add before inspecting an occupant, and an
++// explicit one-extra iteration for a stopping forward pawn. Independent from
++// the production first-opaque/first-queen set construction.
++fn ray_masks_ref(board: &[Piece;64], side: Color, source: Square, kind: PieceKind) -> (u64,u64) {
++    let mut normal = 0; let mut weak = 0;
++    for (i,(df,dr)) in STEPS.into_iter().enumerate() {
++        if (kind==PieceKind::Bishop && i>=4) || (kind==PieceKind::Rook && i<4) { continue; }
++        let mut weakened = false;
++        for distance in 1..8 {
++            let Some(target)=at(source.0 as usize,distance*df,distance*dr) else { break; };
++            if weakened { weak |= 1u64<<target; } else { normal |= 1u64<<target; }
++            let piece=board[target]; if piece.is_empty() { continue; }
++            let occupant=piece.kind(); let own=piece.color()==side;
++            if !own && occupant==PieceKind::King { continue; }
++            if own && occupant==PieceKind::Queen { weakened=true; continue; }
++            if own && ((i<4 && occupant==PieceKind::Bishop) || (i>=4 && occupant==PieceKind::Rook)) { continue; }
++            if own && occupant==PieceKind::Pawn && i<4 && dr==(if side==Color::White {1} else {-1}) {
++                if let Some(extra)=at(target,df,dr) {
++                    if weakened { weak|=1u64<<extra; } else { normal|=1u64<<extra; }
++                }
++            }
++            break;
++        }
++    }
++    (normal,weak)
++}
++
++// Target-centric oracle: source inventory remains authoritative, while path
++// decisions use integer coordinates and actual mailbox pieces. Accumulate
++// category counts, then normalize by division rather than wrapping byte adds.
++fn map_ref(position: &Position) -> [[u8;64];2] {
++    let mut result=[[0;64];2];
++    for target in 0..64 {
++        let mut counts=[[0u16;5];2];
++        for side in [Color::White,Color::Black] { for kind in PieceKind::ALL {
++            for &source in position.piece_squares(side,kind) {
++                if source.0 as usize==target { continue; }
++                let dx=(target%8) as i32-i32::from(source.file());
++                let dy=(target/8) as i32-i32::from(source.rank());
++                let simple=match kind {
++                    PieceKind::Pawn => (dx.abs()==1 && dy==(if side==Color::White {1} else {-1})).then_some(4),
++                    PieceKind::Knight => (dx.abs()*dy.abs()==2).then_some(3),
++                    PieceKind::King => (dx.abs().max(dy.abs())==1).then_some(0), _=>None };
++                if let Some(category)=simple { counts[side.index()][category]+=1; continue; }
++                let diagonal=dx.abs()==dy.abs(); let orthogonal=dx==0 || dy==0;
++                let mut category=match kind { PieceKind::Bishop if diagonal=>3, PieceKind::Rook if orthogonal=>2,
++                    PieceKind::Queen if diagonal || orthogonal=>1, _=>continue };
++                let step=(dx.signum(),dy.signum());
++                let mut cursor=at(source.0 as usize,step.0,step.1).unwrap();
++                let reached=loop {
++                    if cursor==target { break true; }
++                    let piece=position.board[cursor];
++                    if !piece.is_empty() {
++                        let own=piece.color()==side;let occupant=piece.kind();
++                        if own && occupant==PieceKind::Queen { category=0; }
++                        else if (!own && occupant==PieceKind::King)
++                            || (own && diagonal && occupant==PieceKind::Bishop)
++                            || (own && orthogonal && occupant==PieceKind::Rook) { }
++                        else { break own && occupant==PieceKind::Pawn && diagonal
++                            && step.1==(if side==Color::White {1} else {-1}) && at(cursor,step.0,step.1)==Some(target); }
++                    }
++                    cursor=at(cursor,step.0,step.1).unwrap();
++                };
++                if reached { counts[side.index()][category]+=1; }
++            }
++        } }
++        for side in 0..2 {
++            for (digit,radix) in [2,2,4,4].into_iter().enumerate() {
++                let carry=counts[side][digit]/radix;counts[side][digit]%=radix;counts[side][digit+1]+=carry;
++            }
++            counts[side][4]%=4;
++            result[side][target]=(counts[side][0]+2*counts[side][1]+4*counts[side][2]+16*counts[side][3]+64*counts[side][4]) as u8;
++        }
++    }
++    result
++}
++fn check(position: &Position) {
++    position.validate().unwrap();
++    let expected=map_ref(position);
++    assert_eq!(Influence::build(position).profiles,expected,"old scalar versus independent counts");
++    assert_eq!(Influence::build_coherent(position).profiles,expected,"new full128 bytes");
++}
++fn emitted<const SHIFT:i32>(previous:[u8;64],normal:u64,weak:u64) {
++    assert_eq!(normal & weak,0);
++    let actual=coherent::emit_for_test::<SHIFT>(previous,normal,weak);
++    for lane in 0..64 {
++        let add=if normal & (1u64<<lane)!=0 {1u16<<SHIFT} else if weak & (1u64<<lane)!=0 {1} else {0};
++        assert_eq!(actual[lane],((u16::from(previous[lane])+add)%256) as u8,"lane={lane} shift={SHIFT}");
++    }
++}
++
++#[test]
++fn experiment37_emission_all_fragment_lanes_previous_bytes_and_wrap() {
++    for fragment in 0..=255u16 { for chunk in 0..8 {
++        let normal=u64::from(fragment)<<(8*chunk);
++        let previous=std::array::from_fn(|i| (i as u8).wrapping_mul(73).wrapping_add(fragment as u8));
++        let weak=0x5555_aaaa_5555_aaaau64 & !normal;
++        emitted::<1>(previous,normal,weak);emitted::<2>(previous,normal,weak);emitted::<4>(previous,normal,weak);
++    } }
++    for prior in 0..=255u16 { for lane in 0..64 {
++        let normal=1u64<<lane;let weak=0xaaaa_5555_aaaa_5555u64 & !normal;
++        emitted::<1>([prior as u8;64],normal,weak);emitted::<2>([prior as u8;64],normal,weak);emitted::<4>([prior as u8;64],normal,weak);
++    }
++        // Also exercise the no-weak expansion branch and zero masks.
++        emitted::<1>([prior as u8;64],u64::MAX,0);emitted::<2>([prior as u8;64],u64::MAX,0);
++        emitted::<4>([prior as u8;64],u64::MAX,0);emitted::<4>([prior as u8;64],0,0);
++    }
++}
++
++#[test]
++fn experiment37_slider_masks_and_full_bytes_match_coordinate_ray_controls() {
++    let source=sq("d4");
++    for side in [Color::White,Color::Black] { for kind in [PieceKind::Bishop,PieceKind::Rook,PieceKind::Queen] {
++        for (i,(df,dr)) in STEPS.into_iter().enumerate() {
++            if (kind==PieceKind::Bishop && i>=4) || (kind==PieceKind::Rook && i<4) {continue;}
++            for pattern in 0..10 {
++                let mut board=[Piece::EMPTY;64];board[source.0 as usize]=Piece::new(side,kind);
++                let one=at(source.0 as usize,df,dr).unwrap();let two=at(source.0 as usize,2*df,2*dr).unwrap();let three=at(source.0 as usize,3*df,3*dr).unwrap();
++                let matching=if i<4 {PieceKind::Bishop} else {PieceKind::Rook};
++                match pattern {
++                    0=>{},
++                    1=>{board[one]=Piece::new(side.opponent(),PieceKind::King);board[three]=Piece::new(side.opponent(),PieceKind::Rook);},
++                    2=>{board[one]=Piece::new(side,PieceKind::King);},
++                    3=>{board[one]=Piece::new(side,PieceKind::Queen);board[two]=Piece::new(side,PieceKind::Queen);board[three]=Piece::new(side.opponent(),PieceKind::Rook);},
++                    4=>{board[one]=Piece::new(side,matching);board[two]=Piece::new(side,PieceKind::Queen);board[three]=Piece::new(side.opponent(),PieceKind::Bishop);},
++                    5=>{board[two]=Piece::new(side,PieceKind::Pawn);board[three]=Piece::new(side.opponent(),PieceKind::Queen);},
++                    6=>{board[one]=Piece::new(side,PieceKind::Queen);board[two]=Piece::new(side,PieceKind::Pawn);board[three]=Piece::new(side.opponent(),PieceKind::Knight);},
++                    7=>{board[one]=Piece::new(side.opponent(),PieceKind::Pawn);board[two]=Piece::new(side,PieceKind::Queen);},
++                    8=>{board[two]=Piece::new(side,PieceKind::Pawn);board[three]=Piece::new(side,PieceKind::Queen);},
++                    9=>{board[one]=Piece::new(side,PieceKind::Queen);board[two]=Piece::new(side,PieceKind::Pawn);board[three]=Piece::new(side,PieceKind::Queen);},_=>unreachable!()
++                }
++                let position=placement(board);
++                let actual=match kind {PieceKind::Bishop=>coherent::slider_masks::<2>(position.attack_planes(),side,source),
++                    PieceKind::Rook=>coherent::slider_masks::<3>(position.attack_planes(),side,source),
++                    PieceKind::Queen=>coherent::slider_masks::<4>(position.attack_planes(),side,source),_=>unreachable!()};
++                assert_eq!(actual,ray_masks_ref(&position.board,side,source,kind),"side={side:?} kind={kind:?} direction={i} pattern={pattern}");
++                assert_eq!(actual.0 & actual.1,0);check(&position);
++            }
++        }
++    } }
++}
++
++#[test]
++fn experiment37_complete_maps_carries_transitions_null_and_chronology() {
++    use Color::White as W;use PieceKind::*;
++    let crowded=described(&[("d3",W,Pawn),("f3",W,Pawn),("c3",W,Knight),("c5",W,Knight),("d2",W,Knight),
++        ("d6",W,Knight),("f2",W,Knight),("f6",W,Knight),("g3",W,Knight),("g5",W,Knight)]);
++    check(&crowded);assert_eq!(Influence::build_coherent(&crowded).code(W,sq("e4")),0);
++    let bishops=described(&[("d3",W,Pawn),("f3",W,Pawn),("b1",W,Bishop),("c2",W,Bishop),("d5",W,Bishop),
++        ("c6",W,Bishop),("b7",W,Bishop),("a8",W,Bishop),("f5",W,Bishop),("g6",W,Bishop),("h7",W,Bishop),("g2",W,Bishop)]);
++    check(&bishops);assert_eq!(Influence::build_coherent(&bishops).code(W,sq("e4")),32);
++    for original in [crowded,bishops] {
++        let mut board=[Piece::EMPTY;64];
++        for (i,piece) in original.board.into_iter().enumerate() {
++            if !piece.is_empty() {board[i^56]=Piece::new(piece.color().opponent(),piece.kind());}
++        }
++        let mirrored=placement(board);check(&mirrored);
++        let before=Influence::build_coherent(&original);let after=Influence::build_coherent(&mirrored);
++        for side in [Color::White,Color::Black] {for i in 0..64 {assert_eq!(before.profiles[side.index()][i],after.profiles[side.opponent().index()][i^56]);}}
++    }
++    let roots=["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++        "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1","7k/P7/8/3pP3/8/8/8/K7 w - d6 0 1",
++        "7k/8/8/8/8/8/4P3/K7 w - - 0 1"];
++    for fen in roots {let mut position=Position::from_fen(fen).unwrap();for step in 0..12 {
++        check(&position);check(&position.null_child());
++        let mut chronology=position;
++        for side in 0..2 {let mut begin=0;for count in chronology.counts[side] {let end=begin+usize::from(count);chronology.squares[side][begin..end].reverse();begin=end;}}
++        check(&chronology);assert_eq!(Influence::build_coherent(&position),Influence::build_coherent(&chronology));
++        let mut moves=crate::movegen::MoveList::new();crate::movegen::generate_legal(&position,&mut moves);if moves.as_slice().is_empty(){break;}
++        position=position.played_unchecked(moves.as_slice()[(7*step+1)%moves.as_slice().len()]);
++    }}
++    for (fen,from,to,expected_kind) in [
++        ("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1","e1","g1",MoveKind::Castle),
++        ("7k/8/8/3pP3/8/8/8/K7 w - d6 0 1","e5","d6",MoveKind::EnPassant),
++        ("7k/P7/8/8/8/8/8/K7 w - - 0 1","a7","a8",MoveKind::Promotion(Queen)),
++        ("7k/8/8/3n4/4B3/8/8/K7 w - - 0 1","e4","d5",MoveKind::Ordinary)] {
++        let parent=Position::from_fen(fen).unwrap();let mut moves=crate::movegen::MoveList::new();crate::movegen::generate_legal(&parent,&mut moves);
++        let movement=*moves.as_slice().iter().find(|m| m.from()==sq(from)&&m.to()==sq(to)&&m.kind()==expected_kind).expect("required native legal special/capture witness");
++        check(&parent);let child=parent.played_unchecked(movement);check(&child);check(&child.null_child());
++    }
++}
++
++#[test]
++fn experiment37_public_scalar_mailbox_domain_is_not_redirected() {
++    use Color::White as W;use PieceKind::*;
++    let base=described(&[("c1",W,Bishop)]);let mut stale=base;
++    stale.board[sq("d2").0 as usize]=Piece::new(W,Queen);
++    assert_eq!(stale.attack_view(),base.attack_view());
++    assert_eq!(Influence::build(&stale).profiles,map_ref(&stale));
++    assert_ne!(Influence::build(&stale),Influence::build(&base));
++    for raw in 1..=255u16 {if (1..=6).contains(&((raw as u8)&7)) {
++        let mut alias=base;alias.board[sq("d2").0 as usize]=Piece(raw as u8);
++        assert_eq!(Influence::build(&alias).profiles,map_ref(&alias));
++    }}
++    let mut unvisited=base;unvisited.board[sq("e8").0 as usize]=Piece(0x87);
++    assert_eq!(Influence::build(&unvisited).profiles,map_ref(&unvisited));
++    let mut visited=base;visited.board[sq("d2").0 as usize]=Piece(0x08);
++    assert!(std::panic::catch_unwind(|| Influence::build(&visited)).is_err());
++    // Deliberately do not call build_coherent on any violated precondition.
++    // Component panic assertions do not imply Session unwind/recovery support.
++}

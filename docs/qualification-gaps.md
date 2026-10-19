@@ -3,8 +3,10 @@
 Experiment37 passes7focused controls, generic70 at1.455622%lower/7of7,
 and independent own-source thinPGO70 at2.147243%lower/5of7,worst1.006744.
 All70 original replay/accounting checks pass; it advances to broad local gates.
-All185 native tests now pass. Production remains25;
-full117/standalone54/wire/games have not run on37.
+All185 native and209 diagnostic tests pass, plus original7673cases/117operations/
+115wholefiles and fresh optimized54/eight-wire24 with independent reconciliation.
+Regular12pre-gate is running; whole54 timing/selection remain pending.
+Production remains25.
 See [decision0028](decisions/0028-coherent-influence-masks.md).
 
 Current candidate25 projected Boolean source passes the complete mandatory
