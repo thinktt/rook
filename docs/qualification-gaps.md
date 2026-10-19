@@ -1,5 +1,10 @@
 # Remaining qualification work
 
+Experiment37 passes7focused controls and its generic70 at1.455622%lower/7of7,
+then advances only to its own-source thinPGO profile and independent fixed70.
+Production remains25; full185/117/standalone54/wire/games have not run on37.
+See [decision0028](decisions/0028-coherent-influence-masks.md).
+
 Current candidate25 projected Boolean source passes the complete mandatory
 fixture set: 117 operations, 7673 cases across 115 whole files, and 209 fresh
 diagnostic units. Its 178 native tests are reused by exact source69 equality;

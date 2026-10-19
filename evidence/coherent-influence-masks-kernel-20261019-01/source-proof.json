@@ -1,0 +1,38 @@
+{
+  "public_scalar_build_entire_old_file_recovered_by_only_removing_new_module_and_method": true,
+  "old_influence_tests_entire_tail_unchanged": true,
+  "old_position_entire_file_recovered_by_removing_borrowed_getter": true,
+  "all_old_test_bodies_unchanged": true,
+  "only_owned_files_written": [
+    "src/influence.rs",
+    "src/attacks.rs",
+    "src/position.rs",
+    "src/influence/coherent.rs",
+    "src/influence/coherent_tests.rs"
+  ],
+  "exact_inverse_removals": {
+    "src/influence.rs": [
+      "\nmod coherent;\n#[cfg(test)]\nmod coherent_tests;\n",
+      "    /// Private search-only producer. PRECONDITION: canonical mailbox, source\n    /// lists and maintained attack planes describe this same placement.\n    /// Public/custom callers retain the self-sufficient scalar build below.\n    pub(crate) fn build_coherent(position: &Position) -> Self {\n        coherent::build(position)\n    }\n\n"
+    ],
+    "src/attacks.rs": [
+      "\n/// Existing immutable geometry for the private coherent evaluation producer.\n/// Return references, not a copied per-source ray row or a rebuilt table.\n#[inline]\npub(crate) fn influence_rays(square: Square) -> (&'static [u64; 8], &'static [bool; 8]) {\n    (&MASKS.rays[square.0 as usize], &MASKS.increasing)\n}\n",
+      "    #[inline]\n    pub(crate) fn planes(&self) -> &[u64; 4] {\n        &self.planes\n    }\n\n"
+    ],
+    "src/position.rs": [
+      "\n    /// Borrow actual maintained planes; the caller owns placement coherence.\n    #[inline]\n    pub(crate) fn attack_planes(&self) -> &[u64; 4] {\n        self.attack_bits.planes()\n    }\n"
+    ]
+  },
+  "new_field_or_layout_definitions_in_existing_native_types": false,
+  "new_persistent_state": false,
+  "new_runtime_feature_or_isa_gate": false,
+  "table_payload_bytes_by_type": 2048,
+  "scalar_pawn_knight_king_contribution_loop_bodies_and_order_retained": true,
+  "no_slider_inventory_skips_simd": true,
+  "normal_and_weak_masks_disjoint_per_source": true,
+  "per_source_emission_preserves_multiplicity": true,
+  "relation_charge_changes": 0,
+  "native_parse_build_test_runs": 0,
+  "source_only": true,
+  "old_attacks_entire_file_recovered_by_removing_two_immutable_seam_additions": true
+}

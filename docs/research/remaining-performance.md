@@ -1,6 +1,11 @@
 # Remaining performance investigations
 
 Retained production is candidate25. Subsequent experiments26–36 are parked.
+Experiment37 now passes its complete guarded-coherent Influence generic70 at
+1.455622%lower,7/7lower after7focused controls and bounded actual backend.
+It advances only to a separate own-source thinPGO experiment; no PGO or broad
+qualification result is inherited. See [decision0028](../decisions/0028-coherent-influence-masks.md).
+
 Experiment36 manifest-only fatLTO passes generic70 at2.541759%lower/7of7,
 then fails its independent own-fatPGO70 at0.414725%higher/3of7. Own54training/
 raw/PID/remerge and strict70/accounting pass. Actual PGO factoring/frame growth

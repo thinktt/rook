@@ -1,0 +1,1 @@
+Parent correction applied before source freeze: public select_noncheck delegates to select_noncheck_for_search with literal false. Only that private default wrapper creates the default three no-op closure types. The shared selection policy, public false behavior and full/fast numerical bodies remain unchanged. No source was parsed, compiled or run.

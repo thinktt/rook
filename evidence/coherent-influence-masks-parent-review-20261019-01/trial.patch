@@ -1,0 +1,425 @@
+--- retained25/src/attacks.rs
++++ experiment37/src/attacks.rs
+@@ -65,7 +65,19 @@
+ 
+ static MASKS: Masks = masks();
+ 
++/// Existing immutable geometry for the private coherent evaluation producer.
++/// Return references, not a copied per-source ray row or a rebuilt table.
++#[inline]
++pub(crate) fn influence_rays(square: Square) -> (&'static [u64; 8], &'static [bool; 8]) {
++    (&MASKS.rays[square.0 as usize], &MASKS.increasing)
++}
++
+ impl AttackBits {
++    #[inline]
++    pub(crate) fn planes(&self) -> &[u64; 4] {
++        &self.planes
++    }
++
+     pub(crate) const fn empty() -> Self {
+         Self { planes: [0; 4] }
+     }
+--- retained25/src/engine.rs
++++ experiment37/src/engine.rs
+@@ -40,6 +40,8 @@
+     pub(crate) learning: Learning,
+     pub(crate) remembered: Option<RememberedTable>,
+     table_bytes: usize,
++    // Valid only inside a guarded owned-root call; never a Node certificate.
++    coherent_geometry: bool,
+     pub(crate) pv: [[Move; PLIES]; PLIES],
+     pub(crate) pv_len: [usize; PLIES],
+     pub(crate) stats: Stats,
+@@ -60,6 +62,7 @@
+             learning: Learning::default(),
+             remembered: None,
+             table_bytes: 0,
++            coherent_geometry: false,
+             pv: [[Move::NONE; PLIES]; PLIES],
+             pv_len: [0; PLIES],
+             stats: Stats::default(),
+@@ -83,6 +86,7 @@
+             learning,
+             remembered,
+             table_bytes,
++            coherent_geometry: _,
+             pv,
+             pv_len,
+             stats,
+@@ -101,6 +105,7 @@
+                 learning,
+                 remembered,
+                 table_bytes,
++                coherent_geometry: false,
+                 pv,
+                 pv_len,
+                 stats,
+@@ -111,6 +116,19 @@
+             },
+             previous,
+         )
++    }
++
++    pub(crate) fn clear_geometry_permission(&mut self) {
++        self.coherent_geometry = false;
++    }
++
++    pub(crate) fn bind_geometry_permission(&mut self, position: &Position) {
++        self.coherent_geometry = position.validate().is_ok();
++    }
++
++    #[inline]
++    pub(crate) fn geometry_permission(&self) -> bool {
++        self.coherent_geometry
+     }
+ 
+     pub(crate) fn ensure_table(&mut self) -> Result<(), String> {
+@@ -154,3 +172,7 @@
+         self.pv_len[ply] = child_len + 1;
+     }
+ }
++
++#[cfg(test)]
++#[path = "engine/geometry_tests.rs"]
++mod geometry_tests;
+--- retained25/src/evaluator.rs
++++ experiment37/src/evaluator.rs
+@@ -7,6 +7,16 @@
+ use crate::position::Position;
+ use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+ use crate::{activity, endgame, pawn_progress, pawn_terms, positional_terms, shelter};
++
++#[cfg(test)]
++std::thread_local! {
++    static COHERENT_BUILDS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
++}
++
++#[cfg(test)]
++pub(crate) fn coherent_build_count() -> u64 {
++    COHERENT_BUILDS.with(|count| count.get())
++}
+ 
+ pub const OMITTED_TERMS: &str = "production personality/session/protocol binding";
+ 
+@@ -298,8 +308,26 @@
+         position: &Position,
+         scratch: &'a mut Option<Influence>,
+     ) -> &'a Influence {
++        self.ensure_influence_for_search(position, scratch, false)
++    }
++
++    /// Only a guarded Search-owned descendant chain may pass true. Supplied
++    /// maps remain authoritative, including on the trusted route.
++    pub(crate) fn ensure_influence_for_search<'a>(
++        &mut self,
++        position: &Position,
++        scratch: &'a mut Option<Influence>,
++        coherent_geometry: bool,
++    ) -> &'a Influence {
+         if scratch.is_none() {
+-            *scratch = Some(Influence::build(position));
++            *scratch = Some(if coherent_geometry {
++                let map = Influence::build_coherent(position);
++                #[cfg(test)]
++                COHERENT_BUILDS.with(|count| count.set(count.get() + 1));
++                map
++            } else {
++                Influence::build(position)
++            });
+             if DIAGNOSTICS {
+                 self.stats.influence_builds += 1;
+             }
+@@ -533,8 +561,23 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
++        self.select_noncheck_for_search(
++            node, lower, upper, capture_exception, scratch, false,
++        )
++    }
++
++    pub(crate) fn select_noncheck_for_search(
++        &mut self,
++        node: &mut Node,
++        lower: i32,
++        upper: i32,
++        capture_exception: bool,
++        scratch: &mut Option<Influence>,
++        coherent_geometry: bool,
++    ) -> Selection {
+         self.select_noncheck_impl::<false, false, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
++            node, lower, upper, capture_exception, scratch, coherent_geometry,
++            |_| {}, |_| {}, |_| {},
+         )
+     }
+ 
+@@ -556,7 +599,7 @@
+         G: FnMut(FastDetails),
+     {
+         self.select_noncheck_impl::<true, false, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
++            node, lower, upper, capture_exception, scratch, false, full_observer, fast_observer, |_| {},
+         )
+     }
+ 
+@@ -571,7 +614,7 @@
+         observer: F,
+     ) -> Selection {
+         self.select_noncheck_impl::<false, true, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
++            node, lower, upper, capture_exception, scratch, false, |_| {}, |_| {}, observer,
+         )
+     }
+ 
+@@ -605,6 +648,7 @@
+         upper: i32,
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
++        coherent_geometry: bool,
+         mut full_observer: F,
+         mut fast_observer: G,
+         mut stage_observer: S,
+@@ -624,7 +668,7 @@
+                 <= 1
+         });
+         if sparse {
+-            let influence = self.ensure_influence(&node.position, scratch);
++            let influence = self.ensure_influence_for_search(&node.position, scratch, coherent_geometry);
+             return Selection {
+                 evaluation: if STAGES {
+                     self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+@@ -647,7 +691,7 @@
+         };
+         let refresh = capture_exception || (lower - 250 < fast.score && fast.score < upper + 250);
+         let evaluation = if refresh {
+-            let influence = self.ensure_influence(&node.position, scratch);
++            let influence = self.ensure_influence_for_search(&node.position, scratch, coherent_geometry);
+             if STAGES {
+                 self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+             } else if OBSERVE {
+--- retained25/src/influence.rs
++++ experiment37/src/influence.rs
+@@ -7,6 +7,10 @@
+ use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+ use crate::position::Position;
+ use crate::types::{Color, Piece, PieceKind, Square};
++
++mod coherent;
++#[cfg(test)]
++mod coherent_tests;
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ #[repr(u8)]
+@@ -32,6 +36,13 @@
+ }
+ 
+ impl Influence {
++    /// Private search-only producer. PRECONDITION: canonical mailbox, source
++    /// lists and maintained attack planes describe this same placement.
++    /// Public/custom callers retain the self-sufficient scalar build below.
++    pub(crate) fn build_coherent(position: &Position) -> Self {
++        coherent::build(position)
++    }
++
+     pub fn build(position: &Position) -> Self {
+         let mut influence = Self {
+             profiles: [[0; 64]; 2],
+--- retained25/src/ordinary.rs
++++ experiment37/src/ordinary.rs
+@@ -541,12 +541,26 @@
+         randomness: u32,
+         observe_raw: F,
+     ) -> Result<Outcome, Error> {
++        self.clear_geometry_permission();
+         assert!(randomness <= i32::MAX as u32);
+         self.run_iterations_inner::<true, F>(position, history, completed, limits,
+             seed, randomness, observe_raw)
+     }
+ 
+     fn run_iterations_inner<const SEEDED: bool, F: FnMut(i32)>(
++        &mut self, position: Position, history: &mut SearchHistory,
++        completed: u8, limits: Limits, seed: u32, randomness: u32,
++        observe_raw: F,
++    ) -> Result<Outcome, Error> {
++        self.clear_geometry_permission();
++        let result = self.run_iterations_body::<SEEDED, F>(
++            position, history, completed, limits, seed, randomness, observe_raw,
++        );
++        self.clear_geometry_permission();
++        result
++    }
++
++    fn run_iterations_body<const SEEDED: bool, F: FnMut(i32)>(
+         &mut self, position: Position, history: &mut SearchHistory,
+         completed: u8, limits: Limits, seed: u32, randomness: u32,
+         mut observe_raw: F,
+@@ -556,6 +570,7 @@
+         }
+         assert_eq!(history.search_ply(), 0);
+         self.ensure_table().map_err(Error::Table)?;
++        self.bind_geometry_permission(&position);
+         let (root, root_influence) = self.prepare_root_with_influence(position);
+         let root_checked = movegen::in_check(&position, position.side);
+         let mut roots = MoveList::new();
+@@ -564,7 +579,7 @@
+             return Err(Error::NoLegalRoots);
+         }
+         let initial_candidates = roots.as_slice().to_vec();
+-        self.begin_sequence(limits);
++        self.begin_owned_sequence(limits);
+         let mut iterations = Vec::with_capacity(completed as usize);
+         for depth in 1..=completed {
+             let mut ranked = Vec::<(Move, i32)>::with_capacity(roots.len);
+@@ -761,6 +776,7 @@
+         )
+         .adjustment;
+         let mut scratch = None;
++        let coherent_geometry = self.geometry_permission();
+         if policy::fast_admitted(
+             &position,
+             previous.position,
+@@ -779,7 +795,7 @@
+                     .movement
+                     .is_some_and(|m| quiescence_policy::capture_exception(previous.position, &m)),
+             ) {
+-                let map = self.evaluator.ensure_influence(&position, &mut scratch);
++                let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+                 if !policy::king_pressure(&position, previous.influence, map) {
+                     let trial = adjusted - self.threat(node, map);
+                     if trial >= request.upper {
+@@ -792,7 +808,7 @@
+                 }
+             }
+         }
+-        let map = self.evaluator.ensure_influence(&position, &mut scratch);
++        let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+         let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+--- retained25/src/position.rs
++++ experiment37/src/position.rs
+@@ -170,6 +170,12 @@
+     #[inline]
+     pub(crate) fn attack_view(&self) -> AttackBits {
+         self.attack_bits
++    }
++
++    /// Borrow actual maintained planes; the caller owns placement coherence.
++    #[inline]
++    pub(crate) fn attack_planes(&self) -> &[u64; 4] {
++        self.attack_bits.planes()
+     }
+ 
+     #[inline]
+--- retained25/src/quiescence.rs
++++ experiment37/src/quiescence.rs
+@@ -131,6 +131,7 @@
+     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
+     /// This preparation's relation work is excluded by `search_subtree`.
+     pub fn prepare_root(&mut self, position: Position) -> Node {
++        self.clear_geometry_permission();
+         self.prepare_root_with_influence(position).0
+     }
+ 
+@@ -145,7 +146,10 @@
+         }
+         let mut root = Node::root(position, &self.evaluator.root);
+         let mut scratch = None;
+-        let influence = self.evaluator.ensure_influence(&position, &mut scratch);
++        let coherent_geometry = self.geometry_permission();
++        let influence = self.evaluator.ensure_influence_for_search(
++            &position, &mut scratch, coherent_geometry,
++        );
+         self.evaluator.full(
+             &mut root,
+             influence,
+@@ -173,6 +177,7 @@
+         &mut self, node: &mut Node, history: &mut SearchHistory,
+         entry: Entry, limits: Limits, parent_retained: &Retained, observer: &mut O,
+     ) -> Result<Outcome, Stopped> {
++        self.clear_geometry_permission();
+         assert!((1..PLIES).contains(&entry.ply));
+         assert_eq!(entry.ply, history.search_ply());
+         assert!(entry.iteration_depth >= 1 && entry.target >= 0);
+@@ -186,6 +191,12 @@
+     /// Start the measured/search-work segment without clearing shared pawns.
+     /// Root candidates then use `continue_subtree` in actual visit order.
+     pub fn begin_sequence(&mut self, limits: Limits) {
++        self.clear_geometry_permission();
++        self.begin_owned_sequence(limits);
++    }
++
++    /// Native root workers retain their already validated call permission.
++    pub(crate) fn begin_owned_sequence(&mut self, limits: Limits) {
+         self.timing = None;
+         self.stats = Stats::default();
+         self.evaluator.stats = EvalStats::default();
+@@ -199,6 +210,7 @@
+         history: &mut SearchHistory,
+         entry: Entry,
+     ) -> Result<Outcome, Stopped> {
++        self.clear_geometry_permission();
+         assert!((1..PLIES).contains(&entry.ply));
+         assert_eq!(entry.ply, history.search_ply());
+         assert!(entry.iteration_depth >= 1 && entry.target >= 0);
+@@ -253,6 +265,7 @@
+             }
+ 
+             let mut influence = None;
++            let coherent_geometry = self.geometry_permission();
+             let mut lower = entry.lower;
+             let (mut best, standing, evaluation_upper) = if checked {
+                 (-10000, -10000, 10000)
+@@ -263,8 +276,9 @@
+                         |stage| observer.stage(stage),
+                     )
+                 } else {
+-                    self.evaluator.select_noncheck(
++                    self.evaluator.select_noncheck_for_search(
+                         node, lower, entry.upper, entry.capture_exception, &mut influence,
++                        coherent_geometry,
+                     )
+                 }.evaluation;
+                 if DIAGNOSTICS {
+@@ -353,7 +367,9 @@
+                                 alpha: lower,
+                             },
+                             || {
+-                                let map = self.evaluator.ensure_influence(&position, &mut influence);
++                                let map = self.evaluator.ensure_influence_for_search(
++                                    &position, &mut influence, coherent_geometry,
++                                );
+                                 policy::destination_support(&position, map, movement.to())
+                             },
+                         );
+--- retained25/src/timed.rs
++++ experiment37/src/timed.rs
+@@ -494,7 +494,9 @@
+         controls: Controls,
+         limits: Limits,
+     ) -> Result<Outcome, Error> {
++        self.clear_geometry_permission();
+         let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
++        self.clear_geometry_permission();
+         self.timing = None;
+         result
+     }
+@@ -513,6 +515,7 @@
+         }
+         assert_eq!(history.search_ply(), 0);
+         self.ensure_table().map_err(Error::Table)?;
++        self.bind_geometry_permission(&position);
+         let (root, influence) = self.prepare_root_with_influence(position);
+         let checked = movegen::in_check(&position, position.side);
+         let mut legal = MoveList::new();
+@@ -530,7 +533,7 @@
+                 work: 0,
+             })
+             .collect();
+-        self.begin_sequence(limits);
++        self.begin_owned_sequence(limits);
+         if H::ACTIVE {
+             controls.seed = self
+                 .host
