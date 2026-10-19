@@ -1,0 +1,9 @@
+# Experiment48 segmented parent Position reborrow
+
+The exact canonical43 source72 was copied member-for-member. Only ordinary.rs changes: the parent Position copy becomes an immutable field borrow,18 redundant reference prefixes are removed, and a second immutable borrow shadows the first immediately after the original full(node,map,checked) call. evaluator.rs and all71 other members, including23 tools, are byte-identical43. No47 evaluator boundary or closure/ABI change is carried over.
+
+The pre-full loan has no escaping reference: TT/query and other gates produce owned values; ensure_influence_for_search returns a reference tied only to local scratch. Its last use is immediately before full. The new post-full reference feeds current Predecessor and all remaining tail users. Canonical full mutates only Retained, so Position’s value remains identical. No Retained snapshot, child/history/retry change, additional owner, state field, numerical operation, or callback ordering change is introduced. Existing public API/default observer and evaluator body remain exact.
+
+Source proof verifies the exact inverse and unchanged complete test-bearing regions. All189 prior test bodies remain byte-identical (187lib+2dev); no tests are added. The selected Rust NLL and actual compiler lowering remain untested: a future gate must verify removal without relocation of the actual parent160-byte snapshot, inspect alias/reload/frame/call effects, and preserve the unchanged full route. No compiler success or speed claim follows from source reasoning.47 remains parked for its failed own-PGO rule; its failure cause is not inferred here. Q remains untouched/unselected.
+
+No Rust parsing, formatting, compilation, tests, engines, binutils, profiling, timing, archive or Git work was performed. Parent retains all execution/admission decisions.

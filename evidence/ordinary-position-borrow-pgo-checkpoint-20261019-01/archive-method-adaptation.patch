@@ -1,0 +1,84 @@
+--- accepted-generic/archive_checkpoint.py
++++ own-PGO/archive_checkpoint.py
+@@ -1,10 +1,11 @@
+ #!/usr/bin/env python3
+-"""Exact closed47 generic trees only; inventory, stream, reopen and recheck originals."""
++"""Exact closed47 own-PGO trees with explicit requested exclusions; inventory, stream, reopen and recheck originals."""
+ from pathlib import Path
+ import hashlib,json,os,stat,sys,tarfile,gzip
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-TREES=['ordinary-position-borrow-backend-preparation-20261019-01', 'ordinary-position-borrow-parent-backend-review-20261019-01', 'ordinary-position-borrow-focused-native-check-20261019-01', 'ordinary-position-borrow-generic-screen-preparation-20261019-01', 'ordinary-position-borrow-generic-screen-20261019-01', 'ordinary-position-borrow-generic-screen-parent-review-20261019-01', 'ordinary-position-borrow-decision-20261019-01']
++TREES=['ordinary-position-borrow-pgo-preparation-20261019-01', 'ordinary-position-borrow-pgo-training-20261019-01', 'ordinary-position-borrow-pgo-instrumented-build-20261019-01', 'ordinary-position-borrow-pgo-use-build-20261019-01', 'ordinary-position-borrow-pgo-backend-preparation-20261019-01', 'ordinary-position-borrow-pgo-parent-backend-review-20261019-01', 'ordinary-position-borrow-pgo-screen-preparation-20261019-01', 'ordinary-position-borrow-pgo-screen-20261019-01', 'ordinary-position-borrow-pgo-screen-parent-review-20261019-01', 'ordinary-position-borrow-pgo-decision-20261019-01']
++BOUNDS={'max_included_regular_files': 10000, 'max_included_bytes': 67108864, 'max_archive_bytes': 67108864}
+ def digest(f):
+  h=hashlib.sha256();n=0
+  for b in iter(lambda:f.read(1048576),b''):h.update(b);n+=len(b)
+@@ -14,7 +15,7 @@
+ def write(name,value):
+  with (HERE/name).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
+ def inventory():
+- rows={}
++ rows={};excluded={}
+  for tree in TREES:
+   root=ROOT/tree;assert root.is_dir() and not root.is_symlink(),root
+   for p in sorted(root.rglob('*')):
+@@ -22,11 +23,24 @@
+    if p.is_dir():continue
+    assert p.is_file(),p
+    name=p.relative_to(ROOT).as_posix();assert not name.startswith('/') and all(x not in ['.','..'] for x in Path(name).parts)
+-   assert name not in rows
++   assert name not in rows and name not in excluded
++   st=p.stat();reason=None
++   if 'source-before' in p.relative_to(root).parts:
++    assert tree in ['ordinary-position-borrow-pgo-instrumented-build-20261019-01','ordinary-position-borrow-pgo-use-build-20261019-01']
++    reason='duplicate source-before tree; exact72-member archive retained and independently reopened'
++   else:
++    with p.open('rb') as f:magic=f.read(4)
++    if magic==b'\x7fELF':reason='actual ELF excluded by requested checkpoint scope; metadata/receipt retained'
++   if reason:
++    excluded[name]=dict(source_path=str(p),bytes=st.st_size,mode=stat.S_IMODE(st.st_mode),reason=reason)
++    continue
+    with p.open('rb') as f:h,n=digest(f)
+-   s=p.stat();assert n==s.st_size
+-   rows[name]=dict(bytes=n,sha256=h,mode=stat.S_IMODE(s.st_mode))
+- return rows
++   assert n==st.st_size
++   rows[name]=dict(source_path=str(p),bytes=n,sha256=h,mode=stat.S_IMODE(st.st_mode),type='regular')
++ assert len(rows)<=BOUNDS['max_included_regular_files'] and sum(x['bytes'] for x in rows.values())<=BOUNDS['max_included_bytes']
++ assert len([x for x in excluded.values() if x['reason'].startswith('actual ELF')])==2
++ assert len(excluded)==146
++ return rows,excluded
+ class HashReader:
+  def __init__(self,f):self.f=f;self.h=hashlib.sha256();self.n=0
+  def read(self,n=-1):
+@@ -35,9 +49,9 @@
+ def main():
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+- before=inventory();write('member-manifest.json',before)
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_regular_files_no_omissions=True,files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),scope='Closed47 generic mechanism/focused13/fixed70 evidence; own-PGO only decision, no adoption or broad qualification; external runtime/source payloads referenced, not expanded'))
+- archive=HERE/'closed-ordinary-position-borrow-generic.tar.gz'
++ before,excluded=inventory();write('member-manifest.json',before);write('excluded-manifest.json',excluded)
++ write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,exclusions_exact=146,included_regular_files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),bounds=BOUNDS,scope='Closed47 own-PGO PARK; includes raw54/profile and70screen lifetimes, not140; actualELFs and duplicate source-before trees explicitly excluded, no broad qualification'))
++ archive=HERE/'closed-ordinary-position-borrow-pgo.tar.gz'
+  with archive.open('xb') as raw:
+   with gzip.GzipFile(filename='',mode='wb',fileobj=raw,mtime=0) as compressed:
+    with tarfile.open(fileobj=compressed,mode='w',format=tarfile.PAX_FORMAT) as t:
+@@ -53,11 +67,13 @@
+   members=t.getmembers();assert len(members)==len(before)
+   for member in members:
+    assert member.isfile() and member.name in before and member.name not in reopened
++   assert member.uid==member.gid==member.mtime==0 and member.uname==member.gname==''
+    with t.extractfile(member) as f:h,n=digest(f)
+-   reopened[member.name]=dict(bytes=n,sha256=h,mode=member.mode)
++   reopened[member.name]=dict(source_path=str(ROOT/member.name),bytes=n,sha256=h,mode=member.mode,type='regular')
+  assert reopened==before
+- assert inventory()==before,'original closed inputs changed'
+- write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),scope_sha256=sha(HERE/'scope.json'),all_members_reopened_and_hashed=True,member_manifest_exact=True,originals_rechecked_unchanged=True,all_selected_regular_files_captured=True,no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
++ assert inventory()==(before,excluded),'original closed inputs changed'
++ assert archive.stat().st_size<=BOUNDS['max_archive_bytes']
++ write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),scope_sha256=sha(HERE/'scope.json'),all_members_reopened_and_hashed=True,member_manifest_exact=True,originals_rechecked_unchanged=True,all_selected_regular_files_captured=True,excluded_file_count=len(excluded),excluded_manifest_sha256=sha(HERE/'excluded-manifest.json'),no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
+  print((HERE/'verification.json').read_text())
+ if __name__=='__main__':
+  try:main()
