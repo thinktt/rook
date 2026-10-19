@@ -32,9 +32,15 @@ follows. Candidate37 stays retained. See
 
 Experiment39 const pressure lookup is rejected at code inspection: each
 admitted ray square copies256B to the stack, growing king_pressure's frame304B.
-No native tests or timing ran. Distinct40 shared-static storage is isolated and
-under review; retained37 remains exact. See
+No native tests or timing ran. See
 [decision0030](docs/decisions/0030-const-pressure-value-lookup.md).
+
+Distinct40 shared-static storage passes focused2 and its generic fixed70:
+0.848680%lower summed CPU medians,6/7lower,worst1.000070128. All original
+strict/raw/accounting checks reconcile. It advances only to fresh own-source
+PGO and a separately frozen comparison; full185/117/54/wire/games have not run.
+Retained37 remains exact. See
+[decision0031](docs/decisions/0031-static-pressure-value-lookup.md).
 
 ## Previous candidate25 projected Boolean checks, 2026-10-18
 

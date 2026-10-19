@@ -26,6 +26,12 @@ the knight path already specializes to cheap bit operations; both opportunity
 and new load-dependency risk remain. See
 [decision0030](../decisions/0030-const-pressure-value-lookup.md).
 
+Distinct40 shared-static pressure lookup emits direct loads without39's inner
+copy and passes focused2 plus generic70 at0.848680%lower,6/7lower. It advances
+only to fresh own-source PGO and its separate comparison. Generic results are
+not PGO or qualification evidence; root stays37. See
+[decision0031](../decisions/0031-static-pressure-value-lookup.md).
+
 Experiment36 manifest-only fatLTO passes generic70 at2.541759%lower/7of7,
 then fails its independent own-fatPGO70 at0.414725%higher/3of7. Own54training/
 raw/PID/remerge and strict70/accounting pass. Actual PGO factoring/frame growth

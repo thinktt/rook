@@ -1,0 +1,7 @@
+INERT experiment40 generic fixed70 preparation. Three accepted39 helper files are copied BYTE-IDENTICALLY; historical method docstrings are unchanged and helper diff is empty. Plan patch contains metadata-only changes.39 preparation is untouched and no39 mechanism/result/clearance authority transfers.
+
+Control is exact retained37 generic f8343eda, source72=49native+23tools. Inputs retain only its closed build/source/promotion identity, unchanged roottools23, original public oracle/workloads/runtime and these helpers. Candidate STATIC full256 pressure lookup image/source actuals/focused/backend proofs remain null until parent freeze.72source/185native are expected declarations, not executed proof. All launch/review/quiet flags remain false. No candidate source was read.
+
+Cases01/02/04/05/29/35/08; one excluded warmup plus four alternating measured lifetimes per variant per case:70 total,14 excluded,56 measured. Advance only aggregate<=.995 AND>=5lower medians AND worst<=1.02; otherwise park, no retry/outliers. Original strict replay/raw/wait4 accounting and independent70 checks are unchanged. No PGO/broad-suite authority.
+
+Parent alone binds completed source/build/focused/backend/actual terminals and final immutable union, reviews and establishes quiet point before invoking pilot.py --plan plan.json then reconcile_pilot.py --plan plan.json under H0-5,8-13/HOME TMPDIR. No helper import/parse/execution, engine/compiler/test/binutils/profile/archive/Git/Herdr operation occurred in preparation.

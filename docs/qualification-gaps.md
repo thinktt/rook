@@ -27,6 +27,12 @@ Its offline algebra pass does not qualify the binary. Distinct40 shared-static
 storage remains unqualified and does not alter retained37. See
 [decision0030](decisions/0030-const-pressure-value-lookup.md).
 
+Distinct40 shared static pressure lookup passes focused2 and generic70 at
+0.848680%lower/6of7. This only permits fresh own-source PGO and a separate
+comparison; no full185/117/54/wire/games or promotion has occurred. Generic
+CPU improvement does not close any current37 qualification gap. See
+[decision0031](decisions/0031-static-pressure-value-lookup.md).
+
 Previous candidate25 projected Boolean source passes the complete mandatory
 fixture set: 117 operations, 7673 cases across 115 whole files, and 209 fresh
 diagnostic units. Its 178 native tests are reused by exact source69 equality;
