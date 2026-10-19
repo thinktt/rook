@@ -40,8 +40,10 @@ Production40 and its complete54/12 costs remain current. The bounded independent
 critique of future screening is closed. Generic remains the default; one future
 mechanism-specific PGO-sensitive exception may be admitted prospectively under
 [decision0034](docs/decisions/0034-prospective-pgo-sensitive-screen.md). None is
-admitted and no43 is selected. Closed ordinary source-cost reviews support only
-a narrow existing-machine check of generated-move tag predicates, now in progress.
+admitted and no43 is selected. Closed ordinary source-cost reviews led to a narrow existing-machine check of
+generated-move tag predicates: both sites already use raw shift/mask/zero tests.
+That idea is closed without a source experiment. The next read-only investigation
+partitions the current coherent Influence producer; no new timing is live.
 
 ## Previous candidate37 coherent Influence, 2026-10-19
 

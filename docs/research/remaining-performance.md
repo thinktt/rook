@@ -17,9 +17,12 @@ justified local hoist trial. The bounded independent screening critique is close
 with at most one future prospectively admitted PGO-sensitive exception under
 [decision0034](../decisions/0034-prospective-pgo-sensitive-screen.md). No exception
 or43 source experiment is selected. The closed types cost partition supports
-only a narrow current-machine discriminator for two generated-move tag checks;
-it does not justify a representation rewrite or assign those sites the entire
-Move-kind instruction overlay.
+only a narrow current-machine discriminator for two generated-move tag checks.
+That discriminator is closed NO-GO: both Ordinary paths already use raw tag
+predicates, with reserved-tag checks on nonzero paths. No source experiment or
+savings claim follows. See the [backend review](../../evidence/ordinary-generated-tag-backend-review-20261019-01/review.md).
+The partition does not justify a representation rewrite or assign those sites
+the entire Move-kind instruction overlay.
 Current40 stays retained. The27 radix formula
 and32 king-ray tables are historical failed trials, not fresh ideas to retry
 without distinct current evidence. The earlier borrowed-plane activity geometry
