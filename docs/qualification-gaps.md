@@ -45,6 +45,12 @@ Full54/12 performance qualification, current-candidate 12-game CPU timing,
 production domain review and the external full3288 gate remain open. Complete
 finite fixture success does not establish every admitted production input.
 
+Experiment26 full-evaluation phase sharing is parked after its generic pilot
+reports0.207684% lower seven-case CPU, below the fixed0.5% minimum. All declared
+functional gates pass, but no own-PGO build or source promotion follows;
+[decision0016](decisions/0016-full-evaluation-phase-sharing-trial.md) records
+the exact candidate25-generic comparison. Candidate25 remains retained.
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.

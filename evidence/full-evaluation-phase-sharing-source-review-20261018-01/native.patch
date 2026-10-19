@@ -1,0 +1,106 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -97,8 +97,18 @@
+     material_score: i32,
+     weights: [i32; 2],
+ ) -> Activity {
++    compute_with_phase(position, influence, material_score, weights, position.phase())
++}
++
++/// Full evaluation may supply its already-produced current-position phase.
++pub(crate) fn compute_with_phase(
++    position: &Position,
++    influence: &Influence,
++    material_score: i32,
++    weights: [i32; 2],
++    phase: Phase,
++) -> Activity {
+     debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+-    let phase = position.phase();
+     let mut marks = [[0u8; 64]; 2];
+     let mut raw_scores = [0i64; 2];
+     let mut relation_queries = 0;
+--- a/src/shelter.rs
++++ b/src/shelter.rs
+@@ -56,9 +56,27 @@
+     material_score: i32,
+     weights: [i32; 2],
+ ) -> Shelter {
++    compute_with_phase(
++        position,
++        influence,
++        activity_pressure,
++        material_score,
++        weights,
++        position.phase(),
++    )
++}
++
++/// Full evaluation may supply its already-produced current-position phase.
++pub(crate) fn compute_with_phase(
++    position: &Position,
++    influence: &Influence,
++    activity_pressure: [i32; 2],
++    material_score: i32,
++    weights: [i32; 2],
++    phase: Phase,
++) -> Shelter {
+     debug_assert!(activity_pressure.iter().all(|p| *p >= 0));
+     debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+-    let phase = position.phase();
+     let mut terms = [0; 2];
+     for color in [Color::White, Color::Black] {
+         terms[color.index()] = compose(
+--- a/src/positional_terms.rs
++++ b/src/positional_terms.rs
+@@ -70,6 +70,11 @@
+ }
+ 
+ pub fn patterns(position: &Position) -> Patterns {
++    patterns_with_phase(position, position.phase())
++}
++
++/// Full evaluation may supply its already-produced current-position phase.
++pub(crate) fn patterns_with_phase(position: &Position, phase: Phase) -> Patterns {
+     const PAWN: [[i32; 8]; 6] = [
+         [4, 4, 6, 8, 8, 6, 4, 4],
+         [6, 8, 10, 10, 10, 10, 8, 6],
+@@ -169,7 +174,7 @@
+         }
+         raw += sign * term;
+     }
+-    let opening = position.phase().opening as i32;
++    let opening = phase.opening as i32;
+     Patterns {
+         bishop_coordination,
+         raw,
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -369,14 +369,15 @@
+         } else {
+             self.pawns.select(position, influence)
+         };
+-        let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        let activity = activity::compute(position, influence, material, self.weights.mobility);
+-        let shelter = shelter::compute(
++        let pawn = pawn_terms::compute_with_phase(position, influence, &selected.structure, phase);
++        let activity = activity::compute_with_phase(position, influence, material, self.weights.mobility, phase);
++        let shelter = shelter::compute_with_phase(
+             position,
+             influence,
+             activity.pressure,
+             material,
+             self.weights.shelter,
++            phase,
+         );
+         let structure = pawn_progress::structure_weighted(
+             phase,
+@@ -400,7 +401,7 @@
+             .weighted
+         };
+         let central = positional_terms::central(influence, phase, self.weights.central);
+-        let patterns = positional_terms::patterns(position);
++        let patterns = positional_terms::patterns_with_phase(position, phase);
+         let tempo = if in_check {
+             0
+         } else {
