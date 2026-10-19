@@ -1,0 +1,500 @@
+--- accepted40/profile.py
++++ proposed43/profile.py
+@@ -1,6 +1,7 @@
+ """Future fixed two-case diagnostic simulation. Inert until main/parent launch."""
+ from pathlib import Path
+-import argparse,hashlib,json,os,subprocess,sys,tarfile
++import argparse,hashlib,json,os,sys,tarfile
++from bounded_run import BoundedRunner
+ HERE=Path(__file__).resolve().parent
+ PLAN=json.loads((HERE/'plan.json').read_text())
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+@@ -11,6 +12,12 @@
+  a=argparse.ArgumentParser();a.add_argument('--clearance',type=Path,default=HERE/'execution-clearance.json');args=a.parse_args()
+  clearance=load(args.clearance);assert clearance['profile'] is True and clearance['all_native_and_CPU_windows_closed'] is True
+  review=clearance['parent_review'];assert review and sha(review['path'])==review['sha256']
++ canaries=clearance['supervision_canaries'];assert canaries and sha(canaries['path'])==canaries['sha256']
++ canary_proof=load(canaries['path']);assert canary_proof['complete'] is True and canary_proof['failure'] is None and len(canary_proof['cases'])==6
++ assert canary_proof['engine_runs']==canary_proof['profiler_runs']==0 and canary_proof['supervisor_sha256']==sha(HERE/'bounded_run.py')
++ assert all(row['passed'] is True for row in canary_proof['cases'])
++ assert sha(canaries['terminal_path'])==canaries['terminal_sha256']
++ canary_terminal=load(canaries['terminal_path']);assert canary_terminal['actual_tool_terminal_observed'] is True and canary_terminal['exit_code']==0
+  assert all(sha(path)==h for path,h in load(HERE/'input-pins.json').items())
+  assert all(sha(HERE/name)==h for name,h in load(HERE/'helper-pins.json').items())
+  assert sorted(os.sched_getaffinity(0))==PLAN['helper_affinity'] and os.environ.get('TMPDIR')=='/home/legolas/rook2-build-tmp'
+@@ -45,16 +52,18 @@
+  tools=[prefix/'bin/valgrind',prefix/'bin/callgrind_annotate',prefix/'libexec/valgrind/callgrind-amd64-linux']
+  tools+=sorted((prefix/'libexec/valgrind').glob('vgpreload*callgrind*'))+sorted((prefix/'libexec/valgrind').glob('vgpreload_core*'))
+  assert len(tools)>=4 and all(p.is_file() for p in tools)
+- for p in tools+[HERE/'profile.py',HERE/'verify.py',HERE/'recheck.mjs',HERE/'plan.json',args.clearance,HERE/'helper-pins.json',HERE/'input-pins.json',Path(review['path']),Path(PLAN['node']).resolve()]:inputs[p]=sha(p)
++ for p in tools+[HERE/'bounded_run.py',HERE/'profile.py',HERE/'verify.py',HERE/'recheck.mjs',HERE/'plan.json',args.clearance,HERE/'helper-pins.json',HERE/'input-pins.json',Path(review['path']),Path(canaries['path']),Path(canaries['terminal_path']),Path(PLAN['node']).resolve()]:inputs[p]=sha(p)
+  before={str(p):digest for p,digest in inputs.items()};out.mkdir()
++ runner=BoundedRunner(out,PLAN)
+  env=dict(os.environ,VALGRIND_LIB=str(prefix/'libexec/valgrind'))
+  commands=[]
+  def run(argv,stem,cwd=source,expected_exit=0,output_stream='stdout'):
+   command=['/usr/bin/taskset','-c','0-5,8-13',*map(str,argv)]
+-  with (out/(stem+'.stdout')).open('xb') as x,(out/(stem+'.stderr')).open('xb') as y:r=subprocess.run(command,cwd=cwd,env=env,stdout=x,stderr=y)
++  ms=PLAN['supervision']['version_command_wall_ms'] if stem.endswith('-version') else PLAN['supervision']['replay_command_wall_ms'] if stem.endswith('-oracle') else PLAN['supervision']['annotation_command_wall_ms']
++  r=runner.run(command,stem,ms,cwd=cwd,env=env)
+   commands.append(dict(stem=stem,argv=command,exit_code=r.returncode,expected_exit_code=expected_exit,actual_child_return_observed=True,output_sha256={stream:sha(out/(stem+'.'+stream)) for stream in ['stdout','stderr']}));write(out/(stem+'-child-terminal.json'),commands[-1]);assert r.returncode==expected_exit,stem
+   return load(out/(stem+'.stdout')) if stem.endswith('-oracle') else (out/(stem+'.'+output_stream)).read_text()
+- result=dict(complete=False,event_scope=PLAN['event_scope'],cases={},failure=None)
++ result=dict(complete=False,event_scope=PLAN['event_scope'],cases={},failure=None,study_started_monotonic=runner.started,study_boot_id=runner.boot_id)
+  try:
+   version=run([str(prefix/'bin/valgrind'),'--version'],'valgrind-version');assert 'valgrind-3.24.0' in version
+   # Installed public annotator uses Perl die() for --version: expected
+@@ -88,5 +97,6 @@
+   result.update(complete=True,input_sha256=before,commands=commands,engine_sha256=PLAN['engine_sha256'],source_archive_sha256=PLAN['source_archive_sha256'],annotation_source_root=str(source),compiled_source_root=str(compiled),one_fixed_lifetime_per_case=True,performance_claim=False,outer_actual_terminal_required=True)
+  except BaseException as error:result['failure']=f'{type(error).__name__}: {error}'
+  finally:write(out/'provenance.json',result)
+- print(json.dumps(result));return 0 if result['complete'] else 1
++ _,storage_failure=runner._files();assert storage_failure is None,storage_failure
++ print(json.dumps({k:result.get(k) for k in ['complete','failure','engine_sha256','one_fixed_lifetime_per_case','performance_claim']} | {'completed_cases':list(result['cases'])}));return 0 if result['complete'] else 1
+ if __name__=='__main__':sys.exit(main())
+--- accepted40/verify.py
++++ proposed43/verify.py
+@@ -1,6 +1,7 @@
+ """Future independent raw/profile/source reconciliation, no engine execution."""
+ from pathlib import Path
+-import hashlib,json,subprocess,sys,os
++import hashlib,json,sys,os
++from bounded_run import BoundedRunner
+ HERE=Path(__file__).resolve().parent
+ load=lambda p:json.loads(Path(p).read_text())
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+@@ -16,6 +17,12 @@
+   expected=255 if x['stem']=='annotate-version' else 0
+   assert x['actual_child_return_observed'] and x['exit_code']==x['expected_exit_code']==expected
+   assert x['output_sha256']=={stream:sha(out/(x['stem']+'.'+stream)) for stream in ['stdout','stderr']}
++  supervision=load(out/(x['stem']+'-supervision.json'))
++  assert supervision['complete'] and supervision['actual_child_return_observed'] and supervision['returncode']==expected
++  assert supervision['subreaper_enabled'] and supervision['whole_owned_tree_cleanup_confirmed'] and not supervision['remaining_owned']
++  assert supervision['cleanup_elapsed_s']<=supervision['cleanup_deadline_s']==5 and not supervision['ownership_observation_errors']
++  for stream,counts in supervision['stream_bytes'].items():
++   assert counts['observed']==counts['retained']==(out/(x['stem']+'.'+stream)).stat().st_size and counts['discarded_observed']==0
+   if x['stem']=='annotate-version':
+    assert x['argv'][-2:]==[str(Path(plan['valgrind_prefix'])/'bin/callgrind_annotate'),'--version']
+  assert (out/'annotate-version.stdout').read_bytes()==b'' and (out/'annotate-version.stderr').read_bytes()==b'callgrind_annotate-3.24.0\n'
+@@ -26,6 +33,8 @@
+   row=load(out/(case+'-oracle.stdout'))['results'][0];ref=next(x for x in reference['results'] if x['case']==case)
+   assert row['stdout'].encode()==ref['stdout'].encode()==(out/(case+'-stdout.raw')).read_bytes()
+   assert row['stderr']==ref['stderr']=='' and row['exit']==dict(code=0,signal=None) and row['complete'] and not row['truncated'] and row['error'] is None and row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
++  owned=load(out/(case+'-oracle-supervision.json'))
++  assert row['pid'] in [x['pid'] for x in owned['seen_owned_processes']], 'detached native PID not observed by supervisor'
+   profile=out/(case+'.callgrind');lines=profile.read_text().splitlines()
+   assert [x for x in lines if x.startswith('events:')]==['events: Ir']
+   totals=[int(x.split(':',1)[1]) for x in lines if x.startswith('summary:')]
+@@ -42,11 +51,13 @@
+    assert record['cases'][case]['annotations'][name]==expected
+   details[case]=dict(total_simulated_Ir=totals[0],native_exit=row['exit'],raw_bytes_equal_reference=True,source_annotations=record['cases'][case]['annotations'])
+  argv=['/usr/bin/taskset','-c','0-5,8-13',plan['node'],str(HERE/'recheck.mjs'),str(out)]
+- with (out/'independent-checkReplay.stdout').open('xb') as x,(out/'independent-checkReplay.stderr').open('xb') as y:r=subprocess.run(argv,stdout=x,stderr=y)
++ runner=BoundedRunner(out,plan,started=record['study_started_monotonic'],boot_id=record['study_boot_id'])
++ r=runner.run(argv,'independent-checkReplay',plan['supervision']['offline_checker_wall_ms'])
+  assert r.returncode==0 and not (out/'independent-checkReplay.stderr').stat().st_size
+  assert load(out/'independent-checkReplay.stdout')==dict(complete=True,originalCheckReplayCount=2,engineRuns=0)
+  assert all(sha(path)==digest for path,digest in closure.items())
+  result=dict(complete=True,cases=details,all_original_inputs_unchanged=True,original_checkReplay_exit_code=r.returncode,original_checkReplay_cases=2,event_scope=plan['event_scope'],native_engine_runs=0,qualification=False,outer_actual_terminal_required=True)
+  with (out/'independent-verification.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+- print(json.dumps(result))
++ _,storage_failure=runner._files();assert storage_failure is None,storage_failure
++ print(json.dumps({k:result[k] for k in ['complete','original_checkReplay_cases','native_engine_runs','qualification']}))
+ if __name__=='__main__':main()
+--- accepted40/plan.json
++++ proposed43/plan.json
+@@ -1,6 +1,6 @@
+ {
+-  "status": "Prepared helpers INERT; final semantic acceptance/parent review/quiet clearance pending",
+-  "execution_authorized": true,
++  "status": "PREPARATION ONLY; bounded supervision added prospectively; no launch authority",
++  "execution_authorized": false,
+   "runner_adaptation_complete": true,
+   "cases": [
+     "profile-35",
+@@ -9,14 +9,14 @@
+   "native_lifetimes": 2,
+   "order_fixed": true,
+   "repeats": false,
+-  "engine": "/home/legolas/rook2/evidence/pressure-value-static-pgo-use-build-20261019-01/rook2-exact",
+-  "engine_sha256": "c3166899f9380812b0fcb114d613021ba308699e46b0f7de48ffafaf4ff0e5a7",
+-  "build_receipt": "/home/legolas/rook2/evidence/pressure-value-static-pgo-use-build-20261019-01/receipt.json",
+-  "build_receipt_sha256": "3f577fdf9bf73897c119e52ec3a6f184e77b4adbad7c8a8ac5ab82bf58383877",
+-  "source_archive": "/home/legolas/rook2/evidence/pressure-value-static-pgo-use-build-20261019-01/verified-source-before.tar.gz",
+-  "source_archive_sha256": "d352485bb77def95af3428f11003bff38dd74a1eed72d40a9e93ed90ef0fe772",
+-  "source_root": "/home/legolas/rook2/evidence/pressure-value-static-pgo-use-build-20261019-01/source-before",
+-  "compiled_source_root": "/home/legolas/rook2-work/imp2-pressure-value-static-20261019-01",
++  "engine": "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-use-build-20261019-01/rook2-exact",
++  "engine_sha256": "36251ecf12cfdc9437c9bfc5b7a571c1992471bee611cab024fc692ac79e91b2",
++  "build_receipt": "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-use-build-20261019-01/receipt.json",
++  "build_receipt_sha256": "465eb691bcfb61722476655512ac722f4d4709df51851500c35f1ad3dbbeb324",
++  "source_archive": "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-use-build-20261019-01/verified-source-before.tar.gz",
++  "source_archive_sha256": "9cf175b9c0b746f7adbadc1593e1f79176c6f246ac921ba6d1f3c56fa8af63a9",
++  "source_root": "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-use-build-20261019-01/source-before",
++  "compiled_source_root": "/home/legolas/rook2-work/imp2-influence-bitsliced-sum-20261019-01",
+   "mutable_root_source_required": false,
+   "source_counts": {
+     "native": 49,
+@@ -27,7 +27,7 @@
+     "Cargo.toml": "6199772414ef5972898842d76472301d256e42f9dd2181fa421ff5cbc21c85d1",
+     "Cargo.lock": "d34b5888f77c0319fb614ba5701a4a1177af31b803054ad3a8251926ba237c97",
+     "src/activity.rs": "81cd2ff5ecd7125cbf2993031c57db97b02fa3877d314fc5f06350c6019024f5",
+-    "src/attacks.rs": "7a34bc73902962ed79361f60bc624149e93af671429bd8bb632d937234c99fb4",
++    "src/attacks.rs": "6e45e6a9eb223008034b52ec8b4b823cbb85bddf241257262ef596cabc8953cd",
+     "src/bin/rook2-dev.rs": "1eea8e56f268a3fd943d1dc2d2ccd0c7607c80793c1a8f41eb464bdc53853c34",
+     "src/bin/rook2.rs": "ccc0809b7c2f7c709097660fdc62d06c79f0c7563ec79753214afe8be185046e",
+     "src/clock.rs": "4b1d6f18e94d3161cefa8b4a5daafddffd1aba5d3d4ade182a03eed3ee493a79",
+@@ -43,8 +43,8 @@
+     "src/history.rs": "f6b2a5073307d655e33e774900c9fea26f4bdfefbdd2cd9848ff0758c4b34fde",
+     "src/host.rs": "cc694d926fb1c1bc3063c3c9a20a8399abc92019f4927b2b79850e7a706924ac",
+     "src/identity.rs": "761779f7f2e0186dfbe28e162bf5fc8c8461d9f9c342787ebe2becfd0914a376",
+-    "src/influence/coherent.rs": "c701529109a97e122faffafd735d83a0c6850c7c0b8bcd2130ad47d0a694786f",
+-    "src/influence/coherent_tests.rs": "93f161bb0a6e5a8c1e0dedc2e6358cd64e876db517b1c7e90d5f49d61f406998",
++    "src/influence/coherent.rs": "b4155e4b65beb0eb9aea822bae714b1222accde3b7be574d50ecf56da980ef64",
++    "src/influence/coherent_tests.rs": "999c4d015a447d4847de4f11d98175271e3c5a630ea5ae8b5fe6378767ebd8b0",
+     "src/influence.rs": "fa01b22dc312b5e9161ce405571172b5d272c8ecc2bcca1ce3de1cf7f66eb7fa",
+     "src/lib.rs": "6f09459cb36d8e8e0dfc0d473f3b91fcd19feed4c8220888b83af37124abc0c4",
+     "src/movegen.rs": "3e12fc3659c76b06b48cffb72dcb18c60e300fcecfc02b91ba9c6608a16d2e46",
+@@ -99,17 +99,17 @@
+     "tools/test_tap_wire.py": "1d7122edf2fadfb18390c3e239742176cbdad26f70e3e2ea6a63979fd18b07a4",
+     "tools/timing_probe.rs": "fe1f56db1564687383439df1edc1d81ab2fe419a76a50efcc521bd005b069442"
+   },
+-  "pgo_profile": "/home/legolas/rook2/evidence/pressure-value-static-pgo-training-20261019-01/merged.profdata",
+-  "pgo_profile_sha256": "7f79529773da099060bb1b73a1d92a7d03b52b228bc3d754607b76980981c75a",
++  "pgo_profile": "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-training-20261019-01/merged.profdata",
++  "pgo_profile_sha256": "132fc1fd85d81592173cdc97a22cfb223616b97e33a4a270c968331f8558a93f",
+   "pgo_input_sha256": {
+-    "/home/legolas/rook2/evidence/pressure-value-static-pgo-training-20261019-01/merged.profdata": "7f79529773da099060bb1b73a1d92a7d03b52b228bc3d754607b76980981c75a",
+-    "/home/legolas/rook2/evidence/pressure-value-static-pgo-training-20261019-01/training.json": "ec7e6cb643fa4565755c9419adae7939d22aa456ea05fecd257f89662b4f4e17"
+-  },
+-  "strict_reference": "/home/legolas/rook2/evidence/pressure-value-static-regression-20261019-01/profile-all.stdout",
+-  "strict_reference_sha256": "c135b420defa9002b1a8bf35badc02454273382a56ed969e9a36e9e001adaf81",
+-  "current_semantic_acceptance": "/home/legolas/rook2/evidence/pressure-value-static-integration-20261019-01/source-promotion.json",
+-  "current_semantic_acceptance_sha256": "8506a3a4c4a15f628a206823375c46c4c4a5fa8805dab05401d06ce960e13964",
+-  "output": "/home/legolas/rook2-private/pressure-value-static-callgrind-20261019-01",
++    "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-training-20261019-01/merged.profdata": "132fc1fd85d81592173cdc97a22cfb223616b97e33a4a270c968331f8558a93f",
++    "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-training-20261019-01/training.json": "f03bbc598162f8e242e8a0184c9f01b105011c98623dbc54caafd3a49f68edb0"
++  },
++  "strict_reference": "/home/legolas/rook2/evidence/influence-bitsliced-sum-postuse-validation-20261019-01/profile-all.stdout",
++  "strict_reference_sha256": "66fe9b365b3dfb3252765ee8842914d389b1dd5a786fb1aa76e359d7358a5870",
++  "current_semantic_acceptance": "/home/legolas/rook2/evidence/influence-bitsliced-sum-integration-20261019-01/source-promotion.json",
++  "current_semantic_acceptance_sha256": "f2d673150677502cae2b1d9e2d3dff7c383b5d28c549afb4b817c7504fc30769",
++  "output": "/home/legolas/rook2-private/influence-bitsliced-sum-hot-cost-20261019-01",
+   "helper_affinity": [
+     0,
+     1,
+@@ -157,23 +157,23 @@
+   "no_PMUs_or_hardware_claims": true,
+   "PMU_status": "Own-process PMU denied in existing environment; do not retry privilege or alter system policy",
+   "parent_prerequisites": [
+-    "Exact40 broad semantic gate/strict54+wire/full117 closed and parent accepted, if parent elects production-baseline designation",
+-    "Exact current40 strict54 reference stdout and immutable acceptance provenance; no old25/37 expected-output substitution",
+-    "No measured/native/build/compiler/archival jobs active; parent explicit simulation window",
+-    "Minimal accepted driver adaptation and source review; profile/verify clearances true and byte-stable through closure",
+-    "Exact actual successful profile outer terminal recorded before independent verify",
+-    "Original released checkReplay2 offline, native normal exits/PIDs/raw stdout+stderr and complete source/runtime/input closure"
++    "Root-owned six-case supervision canaries pass against exact final bounded_run.py; frozen canary.py/preparation.json pinned, mutable activation plan intentionally excluded. Result/actual-terminal pins remain null and must be supplied by parent after successful actual execution.",
++    "Explicit parent review and immutable profile/verify clearance true after actual quiet-window release; not supplied by this preparation",
++    "Exact current43 use image/source72/profile, successful original strict54+wire and promotion provenance stay stable",
++    "No measured/native/build/compiler/archival jobs active before the two fixed instrumented lifetimes; no interference/speed inference from prior40",
++    "Original released checkReplay2 offline and complete native normal exits/PIDs/raw bytes/input/runtime/source closure",
++    "Actual successful profile outer terminal recorded before independent verify; no restart after a failure"
+   ],
+   "accepted_method_templates": {
+-    "/home/legolas/rook2/evidence/fullbyte-callgrind-preparation-20261018-01/profile.py": "b9c56b257277220c2c5941fb2eb55a1f6b1a3ed8f4bcc17dff6b3f4f390f3a13",
+-    "/home/legolas/rook2/evidence/fullbyte-callgrind-preparation-20261018-01/verify.py": "299590de73f21a89c9d5be54c3ab4071255c935e8a76dc4798821a7e52c43d31",
+-    "/home/legolas/rook2/evidence/fullbyte-callgrind-preparation-20261018-01/recheck.mjs": "b35e08846c6c85072c545fbcee5080948d923479a59594eb3db7da1ec1264943",
+-    "/home/legolas/rook2/evidence/fullbyte-callgrind-preparation-20261018-01/plan.json": "76fbf87d3efbe806dd17b54c176941408803e8b8def1318fae381bf7bb350adb"
+-  },
+-  "strict_recheck": "/home/legolas/rook2/evidence/pressure-value-static-regression-preparation-20261019-01/recheck-result.json",
+-  "strict_recheck_sha256": "32a65546f465021016b6602aa6cb3affc7269f2d15f0f9e6d00938889327eb7b",
+-  "pgo_proof": "/home/legolas/rook2/evidence/pressure-value-static-pgo-training-20261019-01/verification.json",
+-  "pgo_proof_sha256": "73d0d9c6ec5ec64f0b211ec053e1e7627d6d1a8eeebc6ac2e4503f8f18e9dcad",
++    "/home/legolas/rook2/evidence/pressure-value-static-hot-cost-preparation-20261019-01/profile.py": "0b973b10140afc114605076bda209821ccdfa71c5b0735afb79127b90fc31680",
++    "/home/legolas/rook2/evidence/pressure-value-static-hot-cost-preparation-20261019-01/verify.py": "299590de73f21a89c9d5be54c3ab4071255c935e8a76dc4798821a7e52c43d31",
++    "/home/legolas/rook2/evidence/pressure-value-static-hot-cost-preparation-20261019-01/recheck.mjs": "b35e08846c6c85072c545fbcee5080948d923479a59594eb3db7da1ec1264943",
++    "/home/legolas/rook2/evidence/pressure-value-static-hot-cost-preparation-20261019-01/plan.json": "85dfa2dad4c6cfbc39754c727de6cbe48d5feefdcd4ec6f373f57797fa09f3a0"
++  },
++  "strict_recheck": "/home/legolas/rook2/evidence/influence-bitsliced-sum-postuse-validation-preparation-20261019-01/recheck-result.json",
++  "strict_recheck_sha256": "07c161d148ed76fe16154fa16b1b5d8702b16ee8526ee0229c72b857fb6a038e",
++  "pgo_proof": "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-training-20261019-01/verification.json",
++  "pgo_proof_sha256": "4d5c82fa57807fd348ac03185234a904a8b32b88a5eb8acd3e93616240510404",
+   "expected_runtime_sha256": {
+     "/home/legolas/.local/imp2-tools/valgrind/usr/bin/valgrind": "4652774bd116cb49951ef74115ad4237cad5021b2bd4d80002f09d986ec438b9",
+     "/home/legolas/.local/imp2-tools/valgrind/usr/bin/callgrind_annotate": "23adee94ece6ea8a25f5b797e8a1f8663cd3642a50080a7c8f587758783998ce",
+@@ -182,7 +182,74 @@
+     "/home/legolas/.local/imp2-tools/valgrind/usr/libexec/valgrind/vgpreload_core-x86-linux.so": "d3ead1c99e08c152e8fa2633d7f06bae642ca5a853d63e669c86d0f2f51c6c85",
+     "/usr/bin/node": "ca0728526aa1cc4e3056decec848ecc6d2c5391cecdd4e21a0ebd221d665c84e",
+     "/usr/bin/python3.13": "889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9",
+-    "/usr/bin/perl": "b85210f03baeb859ee20b1324e59497f27f319eda9e2d3d1ecd163a79d884a7d"
+-  },
+-  "known_tools_version": "Closed accepted public Valgrind/Callgrind3.24.0; version commands must be freshly observed only after clearance"
++    "/usr/bin/perl": "b85210f03baeb859ee20b1324e59497f27f319eda9e2d3d1ecd163a79d884a7d",
++    "/usr/lib/x86_64-linux-gnu/libc.so.6": "9792e3cbb541c8f44c7acf5f14f4022ea62998ecc787d326bed4d8b6547dfd92",
++    "/usr/lib/x86_64-linux-gnu/libffi.so.8.1.4": "922024ec5a23f7de1095b1cff2f6cbfb377b5d58cd51fd0ec2e8fe35427653e2",
++    "/usr/lib/python3.13/ctypes/__init__.py": "f09e342b0b32f979275ca571578c8bae6776e5c4f7ea3eab0907bc59e81f55be",
++    "/usr/lib/python3.13/lib-dynload/_ctypes.cpython-313-x86_64-linux-gnu.so": "3e676dae0a658c6c94d82f4e49d2f4ed8a15687bb8806fcc6adfe70b2cd883e9",
++    "/usr/lib/python3.13/lib-dynload/resource.cpython-313-x86_64-linux-gnu.so": "b66dd7ff3800a4b9cd8af06bacde81201e33ce4e074082bd02b3d483fbf7ead3"
++  },
++  "known_tools_version": "Closed accepted public Valgrind/Callgrind3.24.0; version commands must be freshly observed only after clearance",
++  "source72_graph_sha256": "e89dcb3315e4d8aaa5089ec445d0a7d0bda7f0928001c502c6343899a5195aa5",
++  "supervision": {
++    "new_prospective_enforcement": true,
++    "study_wall_ms": 21600000,
++    "replay_command_wall_ms": 935000,
++    "version_command_wall_ms": 10000,
++    "annotation_command_wall_ms": 60000,
++    "offline_checker_wall_ms": 60000,
++    "cleanup_ms": 5000,
++    "term_grace_ms": 1000,
++    "poll_ms": 50,
++    "captured_stream_bytes": 4194304,
++    "profile_bytes": 67108864,
++    "log_bytes": 4194304,
++    "total_storage_bytes": 268435456,
++    "aggregate_group_rss_bytes": 2147483648,
++    "max_group_swap_bytes": 0,
++    "max_group_processes": 32,
++    "max_group_threads": 512,
++    "child_rlimit_fsize_bytes": 67108864,
++    "sampled_limits_caveat": "RSS/swap/group/direct-file/aggregate-storage monitoring is sampled, not a cgroup/quota guarantee; transient overshoot can occur, retained observations invalidate and stop. Per-file RLIMIT_FSIZE is a hard child limit; captured pipe bytes retained at their cap with observed discarded bytes recorded. Short-lived children between samples can be missed in peak RSS; subreaper adoption still retains cleanup ownership. No hard cgroup RSS/swap/global disk quota is claimed.",
++    "ownership": "Process-local Linux child subreaper; enumerate helper descendants via all owned task children lists, including detached sessions/adopted orphans. Pin observed tasks with pidfds, TERM then KILL and reap adopted children. Controller Popen status remains separately observed; no group-only ownership claim.",
++    "no_host_or_security_changes": true,
++    "no_retry": true,
++    "required_support": [
++      "Linux PR_SET_CHILD_SUBREAPER/PR_GET_CHILD_SUBREAPER",
++      "os.pidfd_open",
++      "signal.pidfd_send_signal",
++      "readable owned /proc task/children/stat/status"
++    ]
++  },
++  "public_replay_limits_unchanged": {
++    "setupMs": 30000,
++    "searchMs": 900000,
++    "cleanupMs": 5000,
++    "aggregateMs": 21600000,
++    "rawBytesPerRun": 4194304,
++    "rawBytesAggregate": 134217728
++  },
++  "required_analysis": "Use fresh43 raw function SELF including inlined file contexts; split list/count/source-range from bit-sum carry/transpose/geometry only when source rows support it. Keep line0/libc/inlining unknown; do not add source subsets or callee-inclusive arcs to exclusive functions, or infer call counts from Ir.",
++  "supervision_canary_prerequisite": {
++    "result_path": "/home/legolas/rook2/evidence/influence-bitsliced-sum-hot-cost-supervision-check-execution-20261019-01/result.json",
++    "result_sha256": null,
++    "actual_terminal_path": null,
++    "actual_terminal_sha256": null,
++    "supervisor_sha256": null,
++    "cases": 6,
++    "engine_runs": 0,
++    "profiler_runs": 0,
++    "status": "SOURCE PREPARATION FROZEN; execution/result/actual terminal pending",
++    "frozen_source_inputs": {
++      "/home/legolas/rook2/evidence/influence-bitsliced-sum-hot-cost-supervision-check-preparation-20261019-01/canary.py": "d1e55a76f024daab0415294ed1fb91594e30be590b5c4ab05cc1c055a90019be",
++      "/home/legolas/rook2/evidence/influence-bitsliced-sum-hot-cost-supervision-check-preparation-20261019-01/preparation.json": "0cb3d04567522c3a01c319e483efc1f748066b7856299405dd40e657b304e550"
++    }
++  },
++  "supervision_runtime_sha256": {
++    "/usr/lib/x86_64-linux-gnu/libc.so.6": "9792e3cbb541c8f44c7acf5f14f4022ea62998ecc787d326bed4d8b6547dfd92",
++    "/usr/lib/x86_64-linux-gnu/libffi.so.8.1.4": "922024ec5a23f7de1095b1cff2f6cbfb377b5d58cd51fd0ec2e8fe35427653e2",
++    "/usr/lib/python3.13/ctypes/__init__.py": "f09e342b0b32f979275ca571578c8bae6776e5c4f7ea3eab0907bc59e81f55be",
++    "/usr/lib/python3.13/lib-dynload/_ctypes.cpython-313-x86_64-linux-gnu.so": "3e676dae0a658c6c94d82f4e49d2f4ed8a15687bb8806fcc6adfe70b2cd883e9",
++    "/usr/lib/python3.13/lib-dynload/resource.cpython-313-x86_64-linux-gnu.so": "b66dd7ff3800a4b9cd8af06bacde81201e33ce4e074082bd02b3d483fbf7ead3"
++  }
+ }
+--- /dev/null
++++ proposed43/bounded_run.py
+@@ -0,0 +1,195 @@
++"""Prospective safety supervision. Import starts no processes/syscalls."""
++from pathlib import Path
++import ctypes, json, os, resource, selectors, signal, subprocess, time
++from types import SimpleNamespace
++
++class BoundedRunner:
++ def __init__(self,out,plan,started=None,boot_id=None):
++  self.out=Path(out);self.limits=plan['supervision'];self.started=time.monotonic() if started is None else started
++  self.boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip();self.deadline=self.started+self.limits['study_wall_ms']/1000
++  preflight={'complete':False,'pid':os.getpid(),'failure':None,'prior_subreaper':None}
++  try:
++   assert boot_id is None or boot_id==self.boot_id, 'study crossed reboot'
++   assert hasattr(os,'pidfd_open') and hasattr(signal,'pidfd_send_signal'), 'pidfd APIs absent'
++   fd=os.pidfd_open(os.getpid())
++   try:signal.pidfd_send_signal(fd,0)
++   finally:os.close(fd)
++   preflight['self_pidfd_signal0_passed']=True
++   # Process-local Linux child subreaper retains replay-check detached:true children.
++   libc=ctypes.CDLL(None,use_errno=True);old=ctypes.c_int()
++   assert libc.prctl(37,ctypes.byref(old),0,0,0)==0, 'GET_CHILD_SUBREAPER failed'
++   preflight['prior_subreaper']=old.value
++   assert libc.prctl(36,1,0,0,0)==0, 'SET_CHILD_SUBREAPER failed'
++   new=ctypes.c_int();assert libc.prctl(37,ctypes.byref(new),0,0,0)==0 and new.value==1
++   assert not self._owned(), 'preexisting helper child'
++   preflight['complete']=True
++  except BaseException as error:preflight['failure']=f'{type(error).__name__}: {error}'
++  with (self.out/f'supervisor-preflight-{os.getpid()}.json').open('x') as f:json.dump(preflight,f,indent=2);f.write('\n')
++  assert preflight['complete'],preflight['failure']
++  self.prior_subreaper=preflight['prior_subreaper']
++
++ def _files(self):
++  total=0;bad=None
++  for p in self.out.rglob('*'):
++   if p.is_symlink():bad=f'output symlink: {p.name}';continue
++   if not p.is_file():continue
++   n=p.stat().st_size;total+=n
++   cap=self.limits['profile_bytes'] if p.suffix=='.callgrind' else self.limits['log_bytes'] if p.suffix=='.log' else None
++   if cap is not None and n>cap:bad=f'direct file cap: {p.name} ({n}>{cap})'
++  if total>self.limits['total_storage_bytes']:bad=f'whole-study storage cap ({total})'
++  return total,bad
++
++ @staticmethod
++ def _stat(pid):
++  tail=Path(f'/proc/{pid}/stat').read_text().rsplit(')',1)[1].split()
++  return tail[0],int(tail[19])
++
++ @staticmethod
++ def _owned():
++  pending=[os.getpid()];seen=set();rows=[]
++  # Only owned task/children lists, not arbitrary /proc PID resource scans.
++  while pending:
++   parent=pending.pop()
++   try:tasks=list(Path(f'/proc/{parent}/task').iterdir())
++   except FileNotFoundError:continue
++   for task in tasks:
++    try:kids=(task/'children').read_text().split()
++    except FileNotFoundError:continue
++    for raw in kids:
++     pid=int(raw)
++     if pid in seen:continue
++     seen.add(pid);pending.append(pid)
++     try:
++      state,start=BoundedRunner._stat(pid)
++      fields={x.split(':',1)[0]:x.split(':',1)[1].strip() for x in Path(f'/proc/{pid}/status').read_text().splitlines() if ':' in x}
++      rows.append({'pid':pid,'start_ticks':start,'state':state,'rss_bytes':int(fields.get('VmRSS','0 kB').split()[0])*1024,'swap_bytes':int(fields.get('VmSwap','0 kB').split()[0])*1024,'threads':int(fields['Threads'])})
++     except (FileNotFoundError,ProcessLookupError):continue
++  return rows
++
++ def run(self,command,stem,wall_ms,cwd=None,env=None):
++  assert '/' not in stem and time.monotonic()<self.deadline and not self._owned()
++  _,bad=self._files();assert bad is None,bad
++  cap=self.limits['captured_stream_bytes'];counts={s:{'observed':0,'retained':0,'discarded_observed':0} for s in ['stdout','stderr']}
++  outputs={s:(self.out/(stem+'.'+s)).open('xb') for s in counts}
++  limit=self.limits['child_rlimit_fsize_bytes']
++  def child_limits():resource.setrlimit(resource.RLIMIT_FSIZE,(limit,limit))
++  child=None;selector=selectors.DefaultSelector();failure=None;cleanup_at=None;term_at=None;pidfds={};adopted=[];errors=[];uncertain=False
++  peak={'rss_bytes':0,'swap_bytes':0,'processes':0,'threads':0,'storage_bytes':0};last=[]
++  begin=time.monotonic();end=min(self.deadline,begin+wall_ms/1000);last_sample=0
++  def fault(where,error):
++   nonlocal failure,uncertain
++   uncertain=True;failure=failure or f'{where}: {type(error).__name__}: {error}'
++   if len(errors)<32:errors.append(f'{where}: {type(error).__name__}: {error}')
++  def sample():
++   nonlocal last
++   try:rows=self._owned()
++   except BaseException as error:fault('owned scan',error);return last
++   for row in rows:
++    key=(row['pid'],row['start_ticks'])
++    if key in pidfds:continue
++    fd=None
++    try:
++     fd=os.pidfd_open(row['pid'])
++     if self._stat(row['pid'])[1]!=row['start_ticks']:os.close(fd);continue
++     if len(pidfds)>=256:
++      # Known fixed tools should never churn this much; terminate this exact
++      # freshly pinned task too, rather than failing before cleanup can see it.
++      signal.pidfd_send_signal(fd,signal.SIGKILL);os.close(fd);fd=None
++      raise RuntimeError('owned PID churn cap')
++     pidfds[key]=fd
++    except (FileNotFoundError,ProcessLookupError):
++     if fd is not None:os.close(fd)
++    except BaseException as error:
++     if fd is not None:os.close(fd)
++     fault('pidfd acquisition',error)
++   last=rows;return rows
++  def stop(sig):
++   for fd in list(pidfds.values()):
++    try:signal.pidfd_send_signal(fd,sig)
++    except ProcessLookupError:pass
++    except BaseException as error:fault('pidfd signal',error)
++  def reap(rows):
++   for row in rows:
++    if child is None or row['pid']==child.pid:continue
++    try:
++     pid,status=os.waitpid(row['pid'],os.WNOHANG)
++     if pid:adopted.append({'pid':pid,'wait_status':status})
++    except (ChildProcessError,ProcessLookupError):pass
++    except BaseException as error:fault('adopted wait',error)
++  def drain(wait):
++   nonlocal failure
++   for key,_ in selector.select(wait):
++    try:data=os.read(key.fileobj.fileno(),65536)
++    except BlockingIOError:continue
++    s=key.data
++    if not data:selector.unregister(key.fileobj);key.fileobj.close();continue
++    row=counts[s];row['observed']+=len(data);keep=min(len(data),max(0,cap-row['retained']))
++    outputs[s].write(data[:keep]);outputs[s].flush();row['retained']+=keep;row['discarded_observed']+=len(data)-keep
++    if keep!=len(data):failure=failure or f'captured {s} cap'
++  try:
++   child=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,preexec_fn=child_limits,cwd=cwd,env=env)
++   sample() # Pin controller before the first poll; retains detached descendants.
++   for s,pipe in [('stdout',child.stdout),('stderr',child.stderr)]:os.set_blocking(pipe.fileno(),False);selector.register(pipe,selectors.EVENT_READ,s)
++   while True:
++    now=time.monotonic()
++    if now-last_sample>=self.limits['poll_ms']/1000:
++     last_sample=now;rows=sample();active=[x for x in rows if x['state']!='Z'];reap(rows)
++     values={'rss_bytes':sum(x['rss_bytes'] for x in active),'swap_bytes':sum(x['swap_bytes'] for x in active),'processes':len(active),'threads':sum(x['threads'] for x in active)}
++     storage,bad=self._files();values['storage_bytes']=storage;failure=failure or bad
++     for k,v in values.items():peak[k]=max(peak[k],v)
++     for key,lim in [('rss_bytes','aggregate_group_rss_bytes'),('swap_bytes','max_group_swap_bytes'),('processes','max_group_processes'),('threads','max_group_threads')]:
++      if values[key]>self.limits[lim]:failure=failure or f'owned-tree {key} cap ({values[key]})'
++     if now>=end:failure=failure or 'command/whole-study deadline'
++    code=child.poll()
++    if code is not None:
++     cleanup_at=time.monotonic() if cleanup_at is None else cleanup_at
++     rows=sample();reap(rows) # Re-enumerate after reaping the primary controller.
++     if any(x['pid']!=child.pid and x['state']!='Z' for x in rows):failure=failure or 'owned descendant outlived controller'
++    if failure:
++     cleanup_at=time.monotonic() if cleanup_at is None else cleanup_at
++     term_at=time.monotonic() if term_at is None else term_at
++     sample();stop(signal.SIGKILL if time.monotonic()-term_at>=self.limits['term_grace_ms']/1000 else signal.SIGTERM);reap(last)
++    if cleanup_at is not None and time.monotonic()-cleanup_at>=self.limits['cleanup_ms']/1000:
++     failure=failure or 'five-second cleanup deadline exceeded';stop(signal.SIGKILL);break
++    drain(self.limits['poll_ms']/1000)
++    if child.poll() is not None and not selector.get_map():
++     rows=sample();reap(rows)
++     if not sample():break
++  except BaseException as error:failure=failure or f'{type(error).__name__}: {error}'
++  finally:
++   # No acquisition/observation error may escape this cleanup/preservation path.
++   if child is not None:
++    cleanup_at=time.monotonic() if cleanup_at is None else cleanup_at
++    term_at=time.monotonic() if term_at is None else term_at
++    while time.monotonic()-cleanup_at<self.limits['cleanup_ms']/1000:
++     rows=sample()
++     try:code=child.poll()
++     except BaseException as error:fault('controller poll',error);code=None
++     reap(rows)
++     if code is not None and not sample():break
++     stop(signal.SIGKILL if time.monotonic()-term_at>=self.limits['term_grace_ms']/1000 else signal.SIGTERM)
++     try:drain(0.01)
++     except BaseException as error:fault('cleanup drain',error)
++    stop(signal.SIGKILL) # Final bounded attempt, not an extra cleanup allowance.
++   for key in list(selector.get_map().values()):
++    try:selector.unregister(key.fileobj);key.fileobj.close()
++    except BaseException as error:fault('pipe close',error)
++   selector.close()
++   for f in outputs.values():
++    try:f.close()
++    except BaseException as error:fault('stream close',error)
++  try:code=None if child is None else child.poll()
++  except BaseException as error:fault('final poll',error);code=None
++  rows=sample() if child is not None else [];reap(rows);rows=sample() if child is not None else []
++  completed=time.monotonic();elapsed=0 if cleanup_at is None else completed-cleanup_at
++  confirmed=not uncertain and not rows and (child is None or code is not None) and elapsed<=self.limits['cleanup_ms']/1000
++  if not confirmed:failure=failure or 'owned cleanup unknown or observed later than five seconds'
++  try:storage,bad=self._files();peak['storage_bytes']=max(peak['storage_bytes'],storage);failure=failure or bad
++  except BaseException as error:fault('final storage observation',error)
++  result={'argv':command,'pid':None if child is None else child.pid,'returncode':code,'actual_child_return_observed':code is not None,'complete':failure is None,'failure':failure,'whole_owned_tree_cleanup_confirmed':confirmed,'cleanup_started_monotonic':cleanup_at,'cleanup_completed_observed_monotonic':completed,'cleanup_elapsed_s':elapsed,'cleanup_elapsed_wall_s':elapsed,'cleanup_within_deadline':elapsed<=self.limits['cleanup_ms']/1000,'cleanup_deadline_s':self.limits['cleanup_ms']/1000,'remaining_owned':rows,'ownership_observation_errors':errors,'seen_owned_processes':[{'pid':p,'start_ticks':s} for p,s in pidfds],'adopted_wait_statuses':adopted,'subreaper_enabled':True,'prior_subreaper':self.prior_subreaper,'stream_bytes':counts,'sampled_peaks':peak,'sample_interval_ms':self.limits['poll_ms'],'limits_sampled_except_fsize_and_pipe_retention':True,'elapsed_wall_s':time.monotonic()-begin}
++  for fd in pidfds.values():
++   try:os.close(fd)
++   except OSError:pass
++  with (self.out/(stem+'-supervision.json')).open('x') as f:json.dump(result,f,indent=2);f.write('\n')
++  if failure:raise RuntimeError(f'{stem}: {failure}; preserved supervision/output')
++  return SimpleNamespace(returncode=code)

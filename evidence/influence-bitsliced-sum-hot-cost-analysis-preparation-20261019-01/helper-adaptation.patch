@@ -1,0 +1,253 @@
+--- /home/legolas/rook2/evidence/coherent-influence-current-cost-review-20261019-01/analyze.py
++++ /home/legolas/rook2/evidence/influence-bitsliced-sum-hot-cost-analysis-preparation-20261019-01/analyze.py
+@@ -1,16 +1,18 @@
+-"""Read-only existing raw Callgrind SELF selection; no subprocesses/native calls."""
++"""Offline current43 raw SELF selection/ranking; never executes a native/tool."""
+ from pathlib import Path
+ from collections import Counter,defaultdict
+ import hashlib,json,re,os
+ E=Path(__file__).resolve().parent
+-O=Path('/home/legolas/rook2-private/pressure-value-static-callgrind-20261019-01')
+-W=Path('/home/legolas/rook2/evidence/pressure-value-static-pgo-use-build-20261019-01/source-before')
+-assert os.sched_getaffinity(0)<={0,1,2,3,4,5,8,9,10,11,12,13}
+-FN='rook2::influence::Influence::build_coherent'
+-sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+-save=lambda n,x:(E/n).write_text(json.dumps(x,indent=2)+'\n')
++PLAN=json.loads((E/'plan.json').read_text())
++O=Path(PLAN['input_root']);W=Path(PLAN['source_snapshot']);FN=PLAN['producer_function']
++sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
++def save(name,value):
++ with (E/name).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
++def terminal(path):
++ t=json.loads(path.read_text());assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['terminal_chunk_id']
++
+ def raw(path):
+- lines=path.read_text().splitlines();names={'file':{},'fn':{},'ob':{}}
++ lines=path.read_text().splitlines();assert 'positions: line' in lines and 'events: Ir' in lines;names={'file':{},'fn':{},'ob':{}}
+  def value(kind,s):
+   m=re.fullmatch(r'\((\d+)\)(?: (.*))?',s)
+   if not m:return s
+@@ -22,14 +24,16 @@
+  for line in lines:
+   m=re.match(r'^(fl|fi|fe|cfi|fn|cfn|ob|cob)=(.*)$',line)
+   if m:value('fn' if m[1] in ['fn','cfn'] else 'ob' if m[1] in ['ob','cob'] else 'file',m[2])
+- current_file=None;current_fn=None;callee_fn=None;position=0;pending=None;rows=[];arcs=[]
++ current_file=None;current_fn=None;callee_fn=None;current_object=None;callee_object=None;fn_token=None;position=0;pending=None;rows=[];arcs=[]
+  for number,line in enumerate(lines,1):
+   m=re.match(r'^(fl|fi|fe|cfi|fn|cfn|ob|cob)=(.*)$',line)
+   if m:
+    key,s=m.groups()
+    if key in ['fl','fi','fe']:current_file=value('file',s)
+-   elif key=='fn':current_fn=value('fn',s)
++   elif key=='fn':current_fn=value('fn',s);fn_token=s
+    elif key=='cfn':callee_fn=value('fn',s)
++   elif key=='ob':current_object=value('ob',s)
++   elif key=='cob':callee_object=value('ob',s)
+    continue
+   if line.startswith('calls='):
+    assert pending is None
+@@ -39,50 +43,59 @@
+   if not m:continue
+   token=m[1];position=position if token=='*' else position+int(token) if token[0] in '+-' else int(token,0) if token.startswith('0x') else int(token)
+   assert current_file is not None and current_fn is not None
+-  row=dict(raw_line=number,file=current_file,function=current_fn,line=position,Ir=int(m[2]))
++  row=dict(raw_line=number,raw_cost_text=line,object=current_object,file=current_file,function=current_fn,fn_name_token=fn_token,line=position,Ir=int(m[2]))
+   if pending is None:rows.append(row)
+-  else:row.update(callee_function=callee_fn,explicit_calls=pending,inclusive_arc=True);arcs.append(row)
++  else:row.update(callee_function=callee_fn,callee_object=callee_object,explicit_calls=pending,inclusive_arc=True);arcs.append(row)
+   pending=None
+  assert pending is None
+  total=int(next(s.split(':',1)[1] for s in lines if s.startswith('summary:')))
+  assert sum(r['Ir'] for r in rows)==total==int(next(s.split(':',1)[1] for s in lines if s.startswith('totals:')))
+  return rows,arcs,total
+ 
+-provenance=json.loads((O/'provenance.json').read_text())
+-assert provenance['complete'] and provenance['engine_sha256']=='c3166899f9380812b0fcb114d613021ba308699e46b0f7de48ffafaf4ff0e5a7'
+-verification=json.loads((O/'independent-verification.json').read_text());assert verification['complete'] and verification['all_original_inputs_unchanged']
+-paths=[O/n for n in ['provenance.json','independent-verification.json','tool-terminal.json','verify-tool-terminal.json']]
+-paths += [W/n for n in ['src/influence/coherent.rs','src/influence.rs','src/position.rs','src/attacks.rs']]
+-for path in paths[4:]:
+- relative=path.relative_to(W)
+- assert sha(path)==sha(Path('/home/legolas/rook2')/relative)==provenance['input_sha256'][str(Path(provenance['compiled_source_root'])/relative)]
+-paths += [Path('/home/legolas/rook2')/p.relative_to(W) for p in paths[4:]]
+-results={}
+-for case,total in [('35',45372164975),('08',3916044228)]:
+- path=O/f'profile-{case}.callgrind';paths += [path,O/f'profile-{case}-functions.stdout',O/f'profile-{case}-coherent-lines.stdout']
+- rows,arcs,observed=raw(path);assert total==observed
+- selected=[r for r in rows if r['function']==FN]
+- fullfile=Counter();lines=defaultdict(list)
+- for row in selected:fullfile[row['file']]+=row['Ir'];lines[(row['file'],row['line'])].append(row)
+- printed=[]
+- for number,line in enumerate((O/f'profile-{case}-functions.stdout').read_text().splitlines(),1):
+-  m=re.match(r'^\s*([\d,]+) \([^)]*\)\s+(.+)$',line)
+-  if m and ':'+FN in m[2]:
+-   label=m[2].split(':'+FN)[0];cost=int(m[1].replace(',',''));assert fullfile[label]==cost
+-   printed.append({'raw_row':number,'file':label,'Ir':cost})
+- assert sum(x['Ir'] for x in printed)==sum(r['Ir'] for r in selected)
+- native_lines=[]
+- for (file,line),subset in lines.items():
+-  src=None
+-  if file.startswith(provenance['compiled_source_root']+'/src/') and line>0:
+-   src=(W/Path(file).relative_to(provenance['compiled_source_root'])).read_text().splitlines()[line-1]
+-  native_lines.append({'file':file,'line':line,'Ir':sum(r['Ir'] for r in subset),'source':src,'raw_rows':[r['raw_line'] for r in subset]})
+- result={'total_Ir':total,'producer_exclusive_SELF':sum(r['Ir'] for r in selected),'file_partitions':dict(fullfile),'line_groups':native_lines,'raw_SELF_rows':selected,'function_display_rows':printed,'incoming_arcs_NOT_ADDED':[r for r in arcs if r['callee_function']==FN],'outgoing_arcs_NOT_ADDED':[r for r in arcs if r['function']==FN]}
+- results[case]=result;save('profile-'+case+'-self-selection.json',result)
+- print(case,'TOTAL',result['producer_exclusive_SELF'],'wholepct',100*result['producer_exclusive_SELF']/total)
+- for row in native_lines:
+-  print(Path(row['file']).name,row['line'],row['Ir'],row['source'] or '')
+-for case in ('35','08'):
+- assert sha(O/f'profile-{case}.callgrind')==provenance['cases']['profile-'+case]['profile_sha256']
+-save('input-pins.json',{str(p):{'sha256':sha(p),'bytes':p.stat().st_size} for p in paths})
+-save('self-summary.json',{'complete':True,'inputs_match_closed_provenance':True,'exclusive_self_rows_only':True,'incoming_and_outgoing_arcs_never_added':True,'cases':{case:{k:v for k,v in result.items() if k not in ['line_groups','raw_SELF_rows','incoming_arcs_NOT_ADDED','outgoing_arcs_NOT_ADDED']} for case,result in results.items()},'engine_profile_annotation_build_runs':0})
++
++def main():
++ assert PLAN['launch'] is True and PLAN['parent_activation']
++ assert os.sched_getaffinity(0)<={0,1,2,3,4,5,8,9,10,11,12,13}
++ for path,h in PLAN['input_sha256'].items():assert sha(path)==h,path
++ for path in [O/'tool-terminal.json',O/'verify-tool-terminal.json']:terminal(path)
++ provenance=json.loads((O/'provenance.json').read_text());verification=json.loads((O/'independent-verification.json').read_text())
++ assert provenance['complete'] and provenance['failure'] is None and provenance['engine_sha256']==PLAN['expected_image_sha256']
++ assert verification['complete'] and verification['all_original_inputs_unchanged'] and verification['original_checkReplay_exit_code']==0 and verification['original_checkReplay_cases']==2
++ assert provenance['annotation_source_root']==str(W)
++ for n,h in PLAN['source_sha256'].items():assert sha(W/n)==h,n
++ results={}
++ for case in ['35','08']:
++  path=O/f'profile-{case}.callgrind';assert sha(path)==provenance['cases']['profile-'+case]['profile_sha256']
++  rows,arcs,total=raw(path);assert total==PLAN['expected_total_Ir'][case]==provenance['cases']['profile-'+case]['total_simulated_Ir']
++  selected=[r for r in rows if r['function']==FN];assert selected
++  files=Counter();groups=defaultdict(list);rank=Counter();fn_files=defaultdict(Counter)
++  for r in rows:
++   key=(r['object'],r['function']);rank[key]+=r['Ir'];fn_files[key][r['file']]+=r['Ir']
++  ranking=[dict(object=k[0],function=k[1],SELF_Ir=v,whole_percent=100*v/total,file_partitions=dict(fn_files[k])) for k,v in sorted(rank.items(),key=lambda kv:(-kv[1],str(kv[0])))]
++  assert sum(r['SELF_Ir'] for r in ranking)==total
++  for r in selected:files[r['file']]+=r['Ir'];groups[(r['file'],r['line'])].append(r)
++  printed=[]
++  for number,line in enumerate((O/f'profile-{case}-functions.stdout').read_text().splitlines(),1):
++   m=re.match(r'^\s*([\d,]+) \([^)]*\)\s+(.+)$',line)
++   if m and ':'+FN in m[2]:
++    label=m[2].split(':'+FN)[0];cost=int(m[1].replace(',',''));assert files[label]==cost
++    printed.append(dict(display_line=number,file=label,Ir=cost))
++  assert sum(x['Ir'] for x in printed)==sum(r['Ir'] for r in selected)
++  joined=[]
++  for (file,line),subset in sorted(groups.items()):
++   source=None;relative=None
++   if file.startswith(provenance['compiled_source_root']+'/src/') and line>0:
++    relative=str(Path(file).relative_to(provenance['compiled_source_root']));assert relative in PLAN['source_sha256']
++    text=(W/relative).read_text().splitlines();assert line<=len(text);source=text[line-1]
++   joined.append(dict(file=file,relative_source=relative,line=line,Ir=sum(r['Ir'] for r in subset),source=source,raw_rows=[r['raw_line'] for r in subset]))
++  result=dict(total_Ir=total,producer_exclusive_SELF=sum(r['Ir'] for r in selected),file_partitions=dict(files),line_groups=joined,raw_SELF_rows=selected,function_display_rows=printed,incoming_arcs_NOT_ADDED=[r for r in arcs if r['callee_function']==FN],outgoing_arcs_NOT_ADDED=[r for r in arcs if r['function']==FN])
++  save('profile-'+case+'-self-selection.json',result)
++  save('profile-'+case+'-function-ranking.json',dict(whole_Ir=total,ranking=ranking,all_SELF_exactly_reconciled=True,scope='Object+recorded function-name grouping across inlined file partitions. No physical entry/call/address count is inferred.'))
++  results[case]={k:v for k,v in result.items() if k not in ['line_groups','raw_SELF_rows','incoming_arcs_NOT_ADDED','outgoing_arcs_NOT_ADDED']}
++  print(json.dumps(dict(case=case,total_Ir=total,producer_SELF=result['producer_exclusive_SELF'],whole_percent=100*result['producer_exclusive_SELF']/total,top_functions=ranking[:10])))
++ assert all(sha(p)==h for p,h in PLAN['input_sha256'].items())
++ save('self-summary.json',dict(complete=True,exclusive_SELF_only=True,all_program_and_function_file_totals_reconciled=True,arcs_preserved_never_added=True,cases=results,all_inputs_unchanged=True,engine_profile_annotation_build_runs=0))
++if __name__=='__main__':
++ try:main()
++ except BaseException as error:
++  save('self-analysis-failure.json',dict(complete=False,error=repr(error)));raise
+--- /home/legolas/rook2/evidence/coherent-influence-current-cost-review-20261019-01/partition.py
++++ /home/legolas/rook2/evidence/influence-bitsliced-sum-hot-cost-analysis-preparation-20261019-01/partition.py
+@@ -1,47 +1,58 @@
+-"""Disjoint attribution of already selected SELF rows, no new annotation."""
++"""Disjoint current43 source-context partition of frozen raw SELF; no runtime/tool."""
+ from pathlib import Path
+-import json,hashlib
+ from collections import defaultdict
++import json,hashlib,os
+ E=Path(__file__).resolve().parent
+-load=lambda n:json.loads((E/n).read_text())
+-save=lambda n,x:(E/n).write_text(json.dumps(x,indent=2)+'\n')
+-def owner(r):
+-    file=Path(r['file']).name;line=r['line']
+-    if line==0:return 'unidentified_line0_all_files'
+-    if file=='coherent.rs':
+-        if line in [29,31,57,61,65,69,75]:return 'setup_source_dispatch_return_known'
+-        if 33<=line<=51:return 'scalar_leapers_known'
+-        if line in [80,82,86,87,88,111,112,116,120,122,124,126,127]:return 'slider_mask_construction_known'
+-        if line==60:return 'explicit_per_color_vector_load_context'
+-        if line in [160,162,167,168,178,179]:return 'per_slider_expansion_emission_source_context'
+-        raise AssertionError(r)
+-    if file=='influence.rs':
+-        if line in [42,44]:return 'setup_source_dispatch_return_known'
+-        if line==167:return 'scalar_leapers_known'
+-        raise AssertionError(r)
+-    if file=='position.rs':
+-        assert line in [183,185,192,193];return 'setup_source_dispatch_return_known'
+-    if file=='attacks.rs':
+-        assert line==72;return 'slider_mask_construction_known'
+-    if '/stdarch/' in r['file'] and file in ['simd.rs','sse2.rs']:
+-        return 'vector_intrinsic_positive_context_unsplit_load_add_store'
+-    assert r['file'].startswith('/usr/src/rustc-1.85.1/'),r
+-    return 'other_core_positive_crosscutting_unknown'
+-results={}
+-for case in ['35','08']:
+-    raw=load('profile-'+case+'-self-selection.json');groups=defaultdict(list)
+-    for row in raw['raw_SELF_rows']:groups[owner(row)].append(row)
+-    ids=[r['raw_line'] for rows in groups.values() for r in rows]
+-    assert len(ids)==len(set(ids))==len(raw['raw_SELF_rows'])
+-    sums={key:{'Ir':sum(r['Ir'] for r in rows),'whole_percent':100*sum(r['Ir'] for r in rows)/raw['total_Ir'],'producer_SELF_percent':100*sum(r['Ir'] for r in rows)/raw['producer_exclusive_SELF'],'row_count':len(rows),'raw_rows':[r['raw_line'] for r in rows]} for key,rows in groups.items()}
+-    assert sum(g['Ir'] for g in sums.values())==raw['producer_exclusive_SELF']
+-    emission=sum(sums[key]['Ir'] for key in ['explicit_per_color_vector_load_context','per_slider_expansion_emission_source_context','vector_intrinsic_positive_context_unsplit_load_add_store'])
+-    results[case]={'whole_Ir':raw['total_Ir'],'producer_SELF':raw['producer_exclusive_SELF'],'disjoint_groups':sums,'emission_and_vector_context_Ir':emission,'emission_and_vector_context_whole_percent':100*emission/raw['total_Ir'],'all_groups_exactly_sum_SELF':True,'no_arc_or_other_owner_costs_added':True,'known_decode_rows_96_101_have_no_positive_source_attribution':True,'unmapped_is_not_zero_cost':True}
+-    print(case,'SELF',raw['producer_exclusive_SELF'])
+-    for key,g in sums.items():print(key,g['Ir'],round(g['whole_percent'],6))
+-    print('EMISSION_CONTEXT',emission,100*emission/raw['total_Ir'])
+-save('partition.json',{'complete':True,'event_scope':'Exact exclusive whole-lifetime simulated Ir; not PMU/CPU/traffic/cycles.','cases':results,'unknowns_retained':True,'all_rows_disjoint':True})
+-# Finite input hashes are rechecked; raw rows already matched original summary/totals and function displays.
+-pins=load('input-pins.json')
+-assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==meta['sha256'] for p,meta in pins.items())
+-print('All consumed inputs unchanged.')
++load=lambda p:json.loads(Path(p).read_text())
++sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
++def save(name,value):
++ with (E/name).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
++def owner(row,root):
++ line=row['line'];file=row['file']
++ if line==0:return 'unknown_line0_all_files'
++ if file==root+'/src/influence/coherent.rs':
++  if line in [15,16,17,18,74]:return 'initial_result_placement_color_return_context'
++  if line in [19,20,21,22,24,31,38,48,52,56,60,64,68]:return 'list_counts_source_dispatch_context'
++  if 25<=line<=30 or 32<=line<=37 or 39<=line<=45:return 'scalar_no_slider_PNK_context'
++  if 49<=line<=51 or 53<=line<=55 or 57<=line<=59:return 'active_PNK_geometry_carry_callsite_context'
++  if line in [61,65,69] or 93<=line<=129:return 'slider_geometry_context'
++  if line in [47,62,66,70] or 134<=line<=161:return 'shared_counter_setup_accumulation_context'
++  if line==72 or 162<=line<=203:return 'counter_transpose_output_source_context'
++ if file==root+'/src/influence.rs':
++  if 42<=line<=44:return 'initial_result_placement_color_return_context'
++  if 165<=line<=167:return 'scalar_no_slider_PNK_context'
++ if file==root+'/src/position.rs':
++  if 175<=line<=179:return 'initial_result_placement_color_return_context'
++  if 182<=line<=194:return 'list_counts_source_dispatch_context'
++ if file==root+'/src/attacks.rs':
++  if 69<=line<=73:return 'slider_geometry_context'
++  if 78<=line<=88:return 'active_PNK_geometry_carry_callsite_context'
++  if 91<=line<=95:return 'initial_result_placement_color_return_context'
++ if '/stdarch/' in file:return 'unknown_positive_stdarch_intrinsic_context'
++ if file.startswith(root+'/src/'):return 'unknown_positive_native_context'
++ return 'unknown_positive_core_or_other_context'
++
++def main():
++ plan=load(E/'plan.json');assert plan['launch'] is True and plan['parent_activation']
++ assert os.sched_getaffinity(0)<={0,1,2,3,4,5,8,9,10,11,12,13}
++ assert all(sha(p)==h for p,h in plan['input_sha256'].items())
++ source_plan=load(E/'source-context-plan.json');assert sha(Path(plan['source_snapshot'])/'src/influence/coherent.rs')==source_plan['coherent_source_sha256']
++ provenance=load(Path(plan['input_root'])/'provenance.json');root=provenance['compiled_source_root'];results={}
++ for case in ['35','08']:
++  raw=load(E/('profile-'+case+'-self-selection.json'));groups=defaultdict(list)
++  for row in raw['raw_SELF_rows']:groups[owner(row,root)].append(row)
++  ids=[r['raw_line'] for rows in groups.values() for r in rows]
++  assert len(ids)==len(set(ids))==len(raw['raw_SELF_rows'])
++  sums={name:dict(Ir=sum(r['Ir'] for r in rows),whole_percent=100*sum(r['Ir'] for r in rows)/raw['total_Ir'],producer_SELF_percent=100*sum(r['Ir'] for r in rows)/raw['producer_exclusive_SELF'],raw_rows=[r['raw_line'] for r in rows],rows=rows) for name,rows in groups.items()}
++  assert sum(x['Ir'] for x in sums.values())==raw['producer_exclusive_SELF']
++  position_rows=[r for r in raw['raw_SELF_rows'] if r['file']==root+'/src/position.rs' and 182<=r['line']<=194]
++  detail=dict(Ir=sum(r['Ir'] for r in position_rows),whole_percent=100*sum(r['Ir'] for r in position_rows)/raw['total_Ir'],raw_rows=[r['raw_line'] for r in position_rows],note='Subset of list/source bucket, not added again; includes count/prefix/slice source context, not exact removable guards.')
++  unknown=sum(v['Ir'] for k,v in sums.items() if k.startswith('unknown_'))
++  results[case]=dict(whole_Ir=raw['total_Ir'],producer_SELF=raw['producer_exclusive_SELF'],disjoint_groups=sums,position_list_context_subset=detail,unknown_Ir=unknown,unknown_producer_percent=100*unknown/raw['producer_exclusive_SELF'],all_groups_exactly_sum_SELF=True,all_cost_rows_partitioned_once=True,no_arcs_added=True)
++  print(json.dumps(dict(case=case,producer_SELF=raw['producer_exclusive_SELF'],groups={k:dict(Ir=v['Ir'],whole_percent=v['whole_percent']) for k,v in sums.items()},position_list_subset=detail,unknown_Ir=unknown)))
++ assert all(sha(p)==h for p,h in plan['input_sha256'].items())
++ save('partition.json',dict(complete=True,event_scope='Exact exclusive whole-lifetime simulated Ir/source contexts, not PMU/cycles/CPU/traffic or saving estimates.',cases=results,unknowns_retained=True,all_rows_disjoint=True,all_inputs_unchanged=True,shared_carry_not_assigned_between_PNK_and_sliders=True,absence_of_positive_attribution_is_not_free=True,old40_costs_or_line_numbers_transferred=False))
++if __name__=='__main__':
++ try:main()
++ except BaseException as error:
++  save('partition-failure.json',dict(complete=False,error=repr(error)));raise

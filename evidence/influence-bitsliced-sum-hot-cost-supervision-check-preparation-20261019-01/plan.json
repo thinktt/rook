@@ -1,0 +1,72 @@
+{
+  "launch": true,
+  "supervisor_path": "/home/legolas/rook2/evidence/influence-bitsliced-sum-hot-cost-preparation-20261019-01/bounded_run.py",
+  "supervisor_sha256": "2afed91ff218eb5396015ece2e2ce7cadb21653a2282e218494d9619883aeebe",
+  "output": "/home/legolas/rook2/evidence/influence-bitsliced-sum-hot-cost-supervision-check-execution-20261019-01",
+  "aggregate_wall_ms": 60000,
+  "supervision": {
+    "study_wall_ms": 60000,
+    "poll_ms": 50,
+    "cleanup_ms": 5000,
+    "term_grace_ms": 100,
+    "profile_bytes": 4096,
+    "log_bytes": 4096,
+    "total_storage_bytes": 1048576,
+    "captured_stream_bytes": 1024,
+    "child_rlimit_fsize_bytes": 65536,
+    "aggregate_group_rss_bytes": 2147483648,
+    "max_group_swap_bytes": 0,
+    "max_group_processes": 32,
+    "max_group_threads": 512
+  },
+  "cases": [
+    {
+      "id": "normal-exit",
+      "program": "print('normal-exit',flush=True)",
+      "wall_ms": 1000,
+      "expect_failure": false
+    },
+    {
+      "id": "normal-work",
+      "program": "import time;time.sleep(0.12);print('normal-work',flush=True)",
+      "wall_ms": 1000,
+      "expect_failure": false
+    },
+    {
+      "id": "command-deadline",
+      "program": "import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);time.sleep(30)",
+      "wall_ms": 200,
+      "expect_failure": true,
+      "reason_fragment": "deadline"
+    },
+    {
+      "id": "detached-orphan",
+      "program": "import json,os,signal,time\nr,w=os.pipe()\npid=os.fork()\nif pid==0:\n os.close(r);os.setsid();signal.signal(signal.SIGTERM,signal.SIG_IGN);os.write(w,b'1');os.close(w);time.sleep(30);os._exit(0)\nos.close(w);assert os.read(r,1)==b'1';os.close(r);print(json.dumps({'orphan_pid':pid,'orphan_pgid':os.getpgid(pid),'orphan_sid':os.getsid(pid)}),flush=True);os._exit(0)",
+      "wall_ms": 1000,
+      "expect_failure": true,
+      "reason_fragment": "outlived"
+    },
+    {
+      "id": "stream-cap",
+      "program": "print('x'*8192,flush=True)",
+      "wall_ms": 1000,
+      "expect_failure": true,
+      "reason_fragment": "stdout cap"
+    },
+    {
+      "id": "memory-cap",
+      "program": "import time;time.sleep(30)",
+      "wall_ms": 1000,
+      "expect_failure": true,
+      "reason_fragment": "rss_bytes cap",
+      "limit_overrides": {
+        "aggregate_group_rss_bytes": 1048576
+      }
+    }
+  ],
+  "fixed_case_count": 6,
+  "maximum_interpreter_lifetimes": 7,
+  "engine_runs": 0,
+  "profiler_runs": 0,
+  "scope": "Inert bounded canary plan; source review/freeze and parent execution clearance required. Helper field names must match the frozen reviewed supervisor before activation."
+}
