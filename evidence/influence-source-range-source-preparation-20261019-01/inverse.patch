@@ -1,0 +1,33 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -67,10 +67,9 @@
+ 
+ /// Existing immutable geometry for the private coherent evaluation producer.
+ /// Return references, not a copied per-source ray row or a rebuilt table.
+-/// These coherent-only getters require canonical source squares 0..64; the mask is identity.
+ #[inline]
+ pub(crate) fn influence_rays(square: Square) -> (&'static [u64; 8], &'static [bool; 8]) {
+-    (&MASKS.rays[(square.0 & 63) as usize], &MASKS.increasing)
++    (&MASKS.rays[square.0 as usize], &MASKS.increasing)
+ }
+ 
+ 
+@@ -78,15 +77,15 @@
+ /// Pawn target direction is the opposite-side source row at this square.
+ #[inline]
+ pub(crate) fn influence_pawn_targets(side: Color, square: Square) -> u64 {
+-    MASKS.pawn_sources[side.opponent().index()][(square.0 & 63) as usize]
++    MASKS.pawn_sources[side.opponent().index()][square.0 as usize]
+ }
+ #[inline]
+ pub(crate) fn influence_knight_targets(square: Square) -> u64 {
+-    MASKS.knight[(square.0 & 63) as usize]
++    MASKS.knight[square.0 as usize]
+ }
+ #[inline]
+ pub(crate) fn influence_king_targets(square: Square) -> u64 {
+-    MASKS.king[(square.0 & 63) as usize]
++    MASKS.king[square.0 as usize]
+ }
+ 
+ impl AttackBits {
