@@ -1,0 +1,47 @@
+--- /home/legolas/rook2/evidence/coherent-influence-masks-pregate-preparation-20261019-01/run_pregate.py
++++ /home/legolas/rook2/evidence/pressure-value-static-regression-preparation-20261019-01/run_pregate.py
+@@ -18,7 +18,7 @@
+ ENGINE=Path(APPROVAL['ordinary_artifact']['image'])
+ EXPECTED=APPROVAL['ordinary_artifact']['sha256']
+ assert isinstance(EXPECTED,str) and len(EXPECTED)==64
+-OUT=PREP.parent/'coherent-influence-masks-pregate-20261019-01'
++OUT=PREP.parent/'pressure-value-static-pregate-20261019-01'
+ MASK={0,1,2,3,4,5,8,9,10,11,12,13}
+ def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(p,d):
+@@ -60,10 +60,10 @@
+     clearance=json.loads((PREP/'pregate-clearance.json').read_text());assert clearance['authorized'] is True
+     plan=json.loads((PREP/'pregate-plan.json').read_text())
+     assert clearance['plan_sha256']==sha(PREP/'pregate-plan.json')
+-    assert clearance['all_conflicting_native_jobs_closed'] is True
++    assert clearance['untimed_parallel_work_acknowledged'] is True
+     assert str(OUT)==plan['output'] and str(ENGINE)==plan['ordinary_artifact']['image']
+     assert EXPECTED==plan['ordinary_artifact']['sha256']
+-    assert set(clearance['prerequisites'])=={'native','postuse54_wire24','full117','own_pgo70'}
++    assert set(clearance['prerequisites'])=={'postuse54_wire24','own_pgo70'}
+     required=[ENGINE,BUILD/'receipt.json',BUILD/'archive-receipt.json',BUILD/'tool-terminal.json',
+       Path(plan['source_freeze']),Path(plan['profile']['path']),Path(plan['profile']['training_record'])]
+     required += [PREP/n for n in ['run_pregate.py','direct_wire_tap.mjs','sync_control_tap.mjs','reconcile_pregate.mjs']]
+@@ -95,7 +95,7 @@
+         assert sha(BUILD/'source-before'/name)==h
+     before=pins();OUT.mkdir()
+     write(OUT/'binding.json',{'before':before,'engine_sha256':EXPECTED,'image':str(ENGINE),'affinity':sorted(MASK),
+-      'scope':'Untimed exact own-PGO117 regular pre-gate after current37 qualification prerequisites PASS; full3288 external, no CPU qualification.',
++      'scope':'Untimed exact own-PGO117 regular pre-gate after current40 strict/wire+ownPGO70 pass; full native/117 are separately parent-owned; full3288 external, no CPU qualification.',
+       'parallel_independent_games':3})
+     fixture=json.loads((KIT/'accepted-games-v1.json').read_text())
+     games=fixture['games'];assert len(games)==12 and sum(len(g['plies']) for g in games)==632
+
+--- /home/legolas/rook2/evidence/coherent-influence-masks-pregate-preparation-20261019-01/reconcile_pregate.mjs
++++ /home/legolas/rook2/evidence/pressure-value-static-regression-preparation-20261019-01/reconcile_pregate.mjs
+@@ -13,7 +13,7 @@
+ const hash=data=>createHash('sha256').update(data).digest('hex');
+ const fixture=load(join(kit,'accepted-games-v1.json'));validateFixture(fixture);
+ const binding=load(join(directory,'binding.json'));
+-const approval=load('/home/legolas/rook2/evidence/coherent-influence-masks-pregate-preparation-20261019-01/pregate-clearance.json');
++const approval=load('/home/legolas/rook2/evidence/pressure-value-static-regression-preparation-20261019-01/pregate-clearance.json');
+ assert.equal(approval.authorized,true);
+ assert.equal(binding.engine_sha256,approval.ordinary_artifact.sha256);
+ assert.equal(hash(readFileSync(approval.ordinary_artifact.image)),binding.engine_sha256);
+
+

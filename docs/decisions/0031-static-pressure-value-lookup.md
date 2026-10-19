@@ -26,3 +26,14 @@ original/offline checks reconcile. Full185 native tests and optimized54/wire24
 subsequently pass. Mandatory117/7673 and regular12 pre-gate remain in progress;
 retained37 stays production until their independent closures. See the
 [PGO milestone](../../evidence/pressure-value-static-pgo-milestone-20261019-01/README.md).
+
+All broad functional gates subsequently pass:185native/209diagnostic tests,
+7673cases/117operations/115wholefiles, optimized54/eight-wire24 and regular12/
+632searches,continuity8 and seed11/persistence3. Parent independently reopens
+both complete source/fixture archives, all30796 conformance archive members
+and all215 regression/pre-gate archive members. Exact source115 graph7c022b82
+is integrated, changing only activity.rs. Retain ordinaryc3166899 and companion
+a8720c47 as tested isolated-path immutable artifacts. No canonical rebuild is
+implied. Full40 whole54 timing remains pending; final performance, production
+review and external3288 qualification remain open. See the
+[source promotion](../../evidence/pressure-value-static-integration-20261019-01/source-promotion.json).

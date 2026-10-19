@@ -1,5 +1,14 @@
 # Remaining performance investigations
 
+Current retained production is40, an exact256-byte static pressure lookup over
+37. Own-PGO fixed70 improves0.877002%/7of7; all mandatory finite checks,185/209
+tests, optimized54/wire24 and regular12/632 plus continuity/seed controls pass.
+Current40 whole54 and fresh hot-cost attribution are next. The27 radix formula
+and32 king-ray tables are historical failed trials, not fresh ideas to retry
+without distinct current evidence. A minimal borrowed-plane activity geometry
+proposal is feasible but unselected pending40 attribution. All earlier timing
+shares below retain historical scope. No final performance qualification follows.
+
 Retained production is candidate37 guarded coherent Influence;26–36 are parked.
 37passes generic70 at1.455622%lower/7of7 and independent own-PGO70 at2.147243%
 lower/5of7.185native/209diagnostic,full117 and fresh54/eight-wire24 pass, then

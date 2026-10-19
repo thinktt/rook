@@ -1,5 +1,13 @@
 # Remaining qualification work
 
+Candidate40 now replaces37 by exact source115 equality after all mandatory
+finite checks,185native/209diagnostic tests, fresh optimized54/wire24 and
+regular12/632 plus continuity8 and required seed controls. Own-PGO fixed70
+improves0.877002%; this is a prescreen, not full54/12 qualification. Current40
+whole54 collection and12 costs remain pending. The37 timings below retain
+their original artifact scope. Normative domain and external3288 obligations
+remain open. See [decision0031](decisions/0031-static-pressure-value-lookup.md).
+
 Candidate37 is retained after185native/209diagnostic tests, complete original
 7673cases/117operations/115wholefiles, fresh optimized54/eight-wire24 and
 regular12pre-gate/632searches,continuity8 and required seed controls. All raw
@@ -30,8 +38,8 @@ storage remains unqualified and does not alter retained37. See
 Distinct40 shared static pressure lookup passes focused2 and generic70 at
 0.848680%lower/6of7. Fresh own-source PGO70 independently passes0.877002%lower/7of7. Full185
 native tests and optimized54/eight-wire24 pass; mandatory117/7673 and
-regular12 pre-gate remain in progress. No promotion or current40 whole54
-collection exists. These prescreens do not close final qualification gaps. See
+regular12 pre-gate subsequently pass, permitting exact source promotion.
+No current40 whole54 collection exists yet. These prescreens do not close final qualification gaps. See
 [decision0031](decisions/0031-static-pressure-value-lookup.md).
 
 Previous candidate25 projected Boolean source passes the complete mandatory

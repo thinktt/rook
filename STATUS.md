@@ -1,6 +1,25 @@
 # Implementation status
 
-## Current stage — candidate37 coherent Influence, 2026-10-19
+## Current stage — candidate40 static pressure lookup, 2026-10-19
+
+Candidate40 replaces37 by exact tested source115 equality after185native and
+209diagnostic tests, all7673 mandatory cases/117operations/115wholefiles,
+fresh optimized54/eight-wire24, regular12pre-gate/632searches, continuity8 and
+required seed11/persistence3 controls. All original/raw outputs and exits
+independently reconcile. Only activity.rs changes: one immutable256-byte
+pressure-value table replaces exact arithmetic; state/ownership/charges stay
+unchanged. Ordinaryc3166899 and diagnostica8720c47 are the immutable tested
+isolated-path artifacts, without a canonical rebuild claim.
+
+Generic fixed70 improves0.848680%; fresh own-source PGO fixed70 improves
+0.877002%, all7cases lower. Whole40 standard54 timing is pending. The latest
+complete whole54 numbers below remain bound to37. Current12 costs, final
+same-hardware54/12 performance qualification, production-domain audit and
+external3288 gameplay remain open. No new Bee run or transfer is implied.
+See [decision0031](docs/decisions/0031-static-pressure-value-lookup.md) and
+[source promotion](evidence/pressure-value-static-integration-20261019-01/source-promotion.json).
+
+## Previous candidate37 coherent Influence, 2026-10-19
 
 Candidate37 is integrated by exact source72 equality after its own-source
 thinPGO screen,185native/209diagnostic tests, complete mandatory117operations/
@@ -37,9 +56,9 @@ No native tests or timing ran. See
 
 Distinct40 shared-static storage passes focused2 and its generic fixed70:
 0.848680%lower summed CPU medians,6/7lower,worst1.000070128. All original
-strict/raw/accounting checks reconcile. Fresh own-source PGO70 also passes at0.877002%lower/7of7. Full185 native
-tests and optimized54/eight-wire24 pass; mandatory117/7673 and regular12
-pre-gate remain in progress. Retained37 remains exact. See
+strict/raw/accounting checks reconcile. Fresh own-source PGO70 also passes at0.877002%lower/7of7. All mandatory
+finite checks, full185/209 tests, optimized54/eight-wire24 and regular12
+pre-gate subsequently pass; exact source40 is now retained. See
 [decision0031](docs/decisions/0031-static-pressure-value-lookup.md).
 
 ## Previous candidate25 projected Boolean checks, 2026-10-18

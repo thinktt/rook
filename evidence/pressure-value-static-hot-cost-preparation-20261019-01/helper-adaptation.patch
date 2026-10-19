@@ -1,0 +1,30 @@
+--- /home/legolas/rook2/evidence/fullbyte-callgrind-preparation-20261018-01/profile.py
++++ /home/legolas/rook2/evidence/pressure-value-static-hot-cost-preparation-20261019-01/profile.py
+@@ -23,18 +23,21 @@
+  # DWARF can retain absolute compilation paths. Bind BOTH possible source
+  # roots; archived cwd/include alone does not redirect absolute lookups.
+  inputs.update({compiled/path:digest for path,digest in (PLAN['source_sha256']|PLAN['tool_source_sha256']).items()})
+- inputs.update({Path(PLAN['current_source_root'])/path:digest for path,digest in (PLAN['source_sha256']|PLAN['tool_source_sha256']).items()})
+  inputs.update({Path(path):h for path,h in PLAN['expected_runtime_sha256'].items()})
+  inputs.update({Path(path):h for path,h in load(HERE/'input-pins.json').items()})
+- inputs.update({Path(PLAN['pgo_proof']):PLAN['pgo_proof_sha256']})
++ inputs.update({Path(PLAN[key]):PLAN[key+'_sha256'] for key in ['pgo_proof','strict_recheck','current_semantic_acceptance']})
+  inputs.update({Path(path):h for path,h in PLAN['pgo_input_sha256'].items()})
+  assert all(sha(path)==digest for path,digest in inputs.items())
+  assert build['binary_output']['sha256']==PLAN['engine_sha256'] and build['pgo']['mode']=='profile-use' and build['source_sha256_before']==build['source_sha256_after']==PLAN['source_sha256']
+  assert build['tool_sha256_before']==build['tool_sha256_after']==PLAN['tool_source_sha256']
+- proof=load(PLAN['pgo_proof']);assert all(proof[k] is True for k in ['complete','own_profile_only','strict_training54','fresh_strict54','wire8_searches24'])
+- assert proof['variants']['full-byte-pair-relations']['artifact_sha256']==PLAN['engine_sha256']
+- assert proof['variants']['full-byte-pair-relations']['source_sha256']==PLAN['source_sha256']
+- assert proof['variants']['full-byte-pair-relations']['profile_sha256']==PLAN['pgo_profile_sha256']
++ proof=load(PLAN['pgo_proof']);assert proof['complete'] is True and proof['independent_remerge_byte_identical'] is True and proof['independent_remerge_exit_code']==0
++ assert all(proof[key]==54 for key in ['strict_replays','original_checkReplay_count','raw_training_protocol_cases','raw_profiles_independently_hashed'])
++ assert proof['merged_profile_sha256']==proof['independent_profile_sha256']==PLAN['pgo_profile_sha256']
++ training_path=Path(build['pgo']['training_record']);training=load(training_path)
++ assert sha(training_path)==proof['training_record_sha256'] and training['engine_source_sha256']==PLAN['source_sha256'] and training['profile_sha256']==PLAN['pgo_profile_sha256']
++ assert training['schema']=='rook2-pgo-training-v1' and training['complete'] is True and len(training['raw_profiles_sha256'])==54
++ check=load(PLAN['strict_recheck']);assert check['complete'] is True and check['exact_artifact_sha256']==PLAN['engine_sha256']
++ assert (check['strict54'],check['original_checkReplay_calls'],check['wire_fixtures'],check['wire_searches'])==(54,54,8,24)
+  assert build['pgo']['input_sha256_before']==build['pgo']['input_sha256_after']==PLAN['pgo_input_sha256'] and build['pgo']['inputs_unchanged']
+  with tarfile.open(PLAN['source_archive'],'r:gz') as tar:
+   members={m.name:hashlib.sha256(tar.extractfile(m).read()).hexdigest() for m in tar}

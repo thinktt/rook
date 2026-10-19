@@ -1,0 +1,18 @@
+--- /home/legolas/rook2/evidence/coherent-influence-masks-standard54-20261019-01/collect54.py
++++ /home/legolas/rook2/evidence/pressure-value-static-standard54-20261019-01/collect54.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Candidate37 local54 whole-native and search CPU collection with the strict oracle.
++"""Candidate40 local54 whole-native and search CPU collection with the strict oracle.
+ 
+ One excluded warmup followed by three measured fresh-process repetitions per
+ case, in stored corpus order. No reference qualification or PMU claim.
+@@ -61,7 +61,7 @@
+                     build_path, Path('/usr/bin/node').resolve(), Path(sys.executable).resolve()]
+     oracle = json.loads((SPEC/'replay-oracle.json').read_text())
+     schedule = [dict(case=c, repeat=i, warmup=i == 0) for c in case_ids for i in range(4)]
+-    manifest = dict(schema='rook2-candidate37-native-and-search54-v1', engine=str(engine), engine_sha256=engine_sha,
++    manifest = dict(schema='rook2-candidate40-native-and-search54-v1', engine=str(engine), engine_sha256=engine_sha,
+                     build_record=str(build_path), schedule=schedule,
+                     input_sha256={str(p):sha(p) for p in dependencies},
+                     limits=dict(seconds_per_run=960, aggregate_seconds=3600,
