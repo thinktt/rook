@@ -1,0 +1,206 @@
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -119,12 +119,18 @@
+ }
+ 
+ fn main() -> ExitCode {
+-    match run() {
++    let result = match run() {
+         Ok(()) => ExitCode::SUCCESS,
+         Err(Failure::Fatal) => ExitCode::from(1),
+         Err(Failure::Message(message)) => {
+             let _ = io::stderr().write_all(message.as_bytes());
+             ExitCode::from(1)
+         }
++    };
++    if let Some(path) = std::env::var_os("ROOK2_INFLUENCE_CENSUS_PATH") {
++        // Preserve wire stdout/stderr and the original exit even on report I/O
++        // failure; the collector independently requires the complete new file.
++        let _ = rook2::influence::write_influence_demand_census(path);
+     }
++    result
+ }
+--- a/src/influence.rs
++++ b/src/influence.rs
+@@ -7,6 +7,64 @@
+ use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+ use crate::position::Position;
+ use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
++
++// Diagnostic-copy-only whole-process counters. No loaded value enters search.
++use std::sync::atomic::{AtomicU64, Ordering};
++
++static FRESH_BUILD_ENTRIES: AtomicU64 = AtomicU64::new(0);
++static UPDATE_ENTRIES: AtomicU64 = AtomicU64::new(0);
++static READY_HITS: AtomicU64 = AtomicU64::new(0);
++static FIRST_FILL_BY_ORIGIN: [AtomicU64; 10] = [
++    AtomicU64::new(0), AtomicU64::new(0),
++    AtomicU64::new(0), AtomicU64::new(0),
++    AtomicU64::new(0), AtomicU64::new(0),
++    AtomicU64::new(0), AtomicU64::new(0),
++    AtomicU64::new(0), AtomicU64::new(0),
++];
++
++pub(crate) fn record_first_fill(origin: u8, eligible: bool) {
++    // Private Predecessor factories supply only the five declared roles.
++    let index = usize::from(origin) * 2 + usize::from(eligible);
++    FIRST_FILL_BY_ORIGIN[index].fetch_add(1, Ordering::Relaxed);
++}
++
++pub(crate) fn record_ready_hit() {
++    READY_HITS.fetch_add(1, Ordering::Relaxed);
++}
++
++/// Diagnostic-copy reporter; called only after the wire run has returned.
++/// A missing/partial report is a collector failure, never an engine decision.
++pub fn write_influence_demand_census(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
++    use std::io::Write;
++    let rows: [u64; 10] = std::array::from_fn(|index| {
++        FIRST_FILL_BY_ORIGIN[index].load(Ordering::Relaxed)
++    });
++    let eligible: u64 = (0..5).map(|origin| rows[origin * 2 + 1]).sum();
++    let unlinked: u64 = (0..5).map(|origin| rows[origin * 2]).sum();
++    let report = format!(
++        concat!(
++            "{{\"schema\":\"influence-delta-demand-census-v1\",",
++            "\"scope\":\"whole-native-process\",",
++            "\"fresh_build_entries\":{},\"update_entries\":{},",
++            "\"ordinary_first_fill_by_origin\":[",
++            "{{\"origin\":0,\"role\":\"raw\",\"unlinked\":{},\"eligible\":{}}},",
++            "{{\"origin\":1,\"role\":\"root\",\"unlinked\":{},\"eligible\":{}}},",
++            "{{\"origin\":2,\"role\":\"current-null\",\"unlinked\":{},\"eligible\":{}}},",
++            "{{\"origin\":3,\"role\":\"IIO\",\"unlinked\":{},\"eligible\":{}}},",
++            "{{\"origin\":4,\"role\":\"main\",\"unlinked\":{},\"eligible\":{}}}],",
++            "\"ready_hits\":{},\"ordinary_first_fill_total\":{},",
++            "\"ordinary_eligible_first_fill_total\":{},",
++            "\"ordinary_unlinked_first_fill_total\":{}}}\n",
++        ),
++        FRESH_BUILD_ENTRIES.load(Ordering::Relaxed), UPDATE_ENTRIES.load(Ordering::Relaxed),
++        rows[0], rows[1], rows[2], rows[3], rows[4], rows[5],
++        rows[6], rows[7], rows[8], rows[9], READY_HITS.load(Ordering::Relaxed),
++        eligible + unlinked, eligible, unlinked,
++    );
++    let mut output = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
++    output.write_all(report.as_bytes())
++}
++
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ #[repr(u8)]
+@@ -74,6 +132,7 @@
+ 
+ impl Influence {
+     pub fn build(position: &Position) -> Self {
++        FRESH_BUILD_ENTRIES.fetch_add(1, Ordering::Relaxed);
+         let mut influence = Self {
+             profiles: [[0; 64]; 2],
+         };
+@@ -159,6 +218,7 @@
+         child: &Position,
+         movement: Move,
+     ) {
++        UPDATE_ENTRIES.fetch_add(1, Ordering::Relaxed);
+         debug_assert_eq!(movement.kind(), MoveKind::Ordinary);
+         let from = movement.from();
+         let to = movement.to();
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -508,6 +508,7 @@
+     checked: bool,
+     movement: Option<Move>,
+     ordinary_child: bool,
++    census_origin: u8, // Diagnostic copy only: raw/root/current-null/IIO/main.
+ }
+ 
+ impl<'a> Predecessor<'a> {
+@@ -519,7 +520,26 @@
+         checked: bool,
+         movement: Option<Move>,
+     ) -> Self {
+-        Self { position, influence, checked, movement, ordinary_child: false }
++        Self { position, influence, checked, movement, ordinary_child: false, census_origin: 0 }
++    }
++
++    // These wrappers classify only the census; all remain unlinked.
++    pub(crate) fn root(
++        position: &'a Position, influence: &'a Influence, checked: bool, movement: Option<Move>,
++    ) -> Self {
++        Self { census_origin: 1, ..Self::unlinked(position, influence, checked, movement) }
++    }
++
++    fn current_null(
++        position: &'a Position, influence: &'a Influence, checked: bool, movement: Option<Move>,
++    ) -> Self {
++        Self { census_origin: 2, ..Self::unlinked(position, influence, checked, movement) }
++    }
++
++    fn iio(
++        position: &'a Position, influence: &'a Influence, checked: bool, movement: Option<Move>,
++    ) -> Self {
++        Self { census_origin: 3, ..Self::unlinked(position, influence, checked, movement) }
+     }
+ 
+     /// The sole production caller is colocated with the actual main Node::child.
+@@ -532,6 +552,7 @@
+             checked,
+             movement: Some(movement),
+             ordinary_child: movement.kind() == MoveKind::Ordinary,
++            census_origin: 4,
+         }
+     }
+ }
+@@ -554,6 +575,7 @@
+ 
+     fn fill<const D: bool>(&mut self, evaluator: &mut Evaluator<D>, previous: Predecessor<'_>) {
+         if self.map.is_none() {
++            crate::influence::record_first_fill(previous.census_origin, previous.ordinary_child);
+             match (previous.ordinary_child, previous.movement) {
+                 (true, Some(movement)) => {
+                     self.map = Some(*previous.influence);
+@@ -564,6 +586,8 @@
+                 _ => self.map = Some(Influence::build(self.position)),
+             }
+             evaluator.record_influence_fill();
++        } else {
++            crate::influence::record_ready_hit();
+         }
+     }
+ 
+@@ -651,7 +675,7 @@
+                         iteration: depth as i32,
+                         checked: None,
+                     },
+-                    Predecessor::unlinked(&position, &root_influence, root_checked, Some(movement)),
++                    Predecessor::root(&position, &root_influence, root_checked, Some(movement)),
+                 );
+                 history.pop();
+                 let raw_score = -returned.map_err(Error::Stopped)?;
+@@ -859,7 +883,7 @@
+         if let Some(bound) = bounds.cutoff(request.lower,request.upper) {
+             return Ok(bound.score());
+         }
+-        let current = Predecessor::unlinked(&position, map, checked, None);
++        let current = Predecessor::current_null(&position, map, checked, None);
+         if request.depth <= adjustment && evaluation.score >= request.upper && !checked {
+             let trial = if request.depth <= 2
+                 && !previous.checked
+@@ -1200,7 +1224,7 @@
+                         checked: None,
+                         ..request
+                     },
+-                    Predecessor::unlinked(position, map, checked, Some(movement)),
++                    Predecessor::iio(position, map, checked, Some(movement)),
+                 );
+                 history.pop();
+                 let score = -returned?;
+--- a/src/timed.rs
++++ b/src/timed.rs
+@@ -618,7 +618,7 @@
+                 lower:-score_add(attempt.window[1],-child.adjustment),
+                 upper:-score_add(attempt.window[0],-child.adjustment),previous_extension:0,
+                 iteration:depth as i32,checked:None},
+-            Predecessor::unlinked(self.position,self.influence,
++            Predecessor::root(self.position,self.influence,
+                 self.checked,Some(child.movement)));
+         self.history.pop();
+         match result {
