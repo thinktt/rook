@@ -1,0 +1,17 @@
+--- /home/legolas/rook2/evidence/influence-delta-exact-image-ir-preparation-20261019-01/profile.py
++++ profile.py
+@@ -1,4 +1,4 @@
+-"""Two exact-image case08 runs only. Never imports account_native."""
++"""Two exact-image case35 runs only. Never imports account_native."""
+ from pathlib import Path
+ import hashlib,json,os,signal,subprocess,time,sys
+ HERE=Path(__file__).resolve().parent
+@@ -112,7 +112,7 @@
+   assert (out/'annotator-version.stderr').read_bytes()==b'callgrind_annotate-3.24.0\n' and not (out/'annotator-version.stdout').stat().st_size
+   for name,v in plan['variants'].items():
+    target=out/name;target.mkdir()
+-   argv=[plan['node'],str(HERE/'replay08.mjs'),'live',str(HERE/'plan.json'),name,str(target)]
++   argv=[plan['node'],str(HERE/'replay35.mjs'),'live',str(HERE/'plan.json'),name,str(target)]
+    rec=run(argv,name+'-live',Path(v['source_root']),monitor=True)
+    row=load(target/'replay.json');assert any(o['pid']==row['pid'] for o in rec['observations'])
+    assert v['engine'] in row['command']

@@ -1,0 +1,59 @@
+--- /home/legolas/rook2/evidence/influence-delta-exact-image-ir-preparation-20261019-01/verify.py
++++ verify.py
+@@ -59,7 +59,7 @@
+  if 'CurrentInfluence' in fn and '::fill' in fn:return 'fill'
+  if 'rook2::ordinary::' in fn and 'visit_ordinary_impl' in fn:return 'ordinary'
+  if 'rook2::quiescence::' in fn and 'visit_q_impl' in fn:return 'Q'
+- if any(t in fn for t in ['rook2::timed::','rook2::root_schedule::','rook2::session::']):return 'root_host'
++ if fn.split("'")[0]=='rook2::run' or any(t in fn for t in ['rook2::timed::','rook2::root_schedule::','rook2::session::']):return 'root_host'
+  if any(t in fn for t in ['rook2::evaluator::','rook2::activity::','rook2::shelter::','rook2::evaluation::']):return 'evaluation_consumers'
+  return 'rest'
+ def main():
+@@ -76,7 +76,7 @@
+  results={}
+  for name,v in p['variants'].items():
+   target=out/name;row=load(target/'replay.json');assert sha(v['engine'])==v['engine_sha256']
+-  argv=[p['node'],str(HERE/'replay08.mjs'),'offline',str(HERE/'plan.json'),name,str(target)]
++  argv=[p['node'],str(HERE/'replay35.mjs'),'offline',str(HERE/'plan.json'),name,str(target)]
+   with (target/'offline.stdout').open('xb') as x,(target/'offline.stderr').open('xb') as y:r=subprocess.run(argv,stdout=x,stderr=y,timeout=p['static_command_timeout_seconds'])
+   write(target/'offline-terminal.json',{'argv':argv,'exit_code':r.returncode,'actual_child_return_observed':True})
+   assert r.returncode==0 and (target/'offline.stderr').stat().st_size==0
+@@ -84,19 +84,22 @@
+   data=target/'profile.callgrind';assert sha(data)==record['cases'][name]['profile_sha256']
+   assert sha(target/'valgrind.log')==record['cases'][name]['log_sha256']
+   rows,arcs,total=raw(data);assert total==record['cases'][name]['whole_lifetime_Ir']
+-  exclusive=Counter();fnself=Counter();incoming=Counter();arc_cost=Counter();outgoing=Counter();family_calls=Counter();family_inclusive=Counter()
++  exclusive=Counter();fnself=Counter();incoming=Counter();arc_cost=Counter();outgoing=Counter();family_calls=Counter();family_inclusive=Counter();caller_calls=Counter();caller_cost=Counter();stage_arcs=[]
+   for x in rows:exclusive[family(x['function'])]+=x['Ir'];fnself[x['function']]+=x['Ir']
+   for x in arcs:
+    incoming[x['callee']]+=x['calls'];arc_cost[x['callee']]+=x['Ir'];outgoing[x['function']]+=x['calls']
+    family_calls[family(x['callee'])]+=x['calls'];family_inclusive[family(x['callee'])]+=x['Ir']
++   if family(x['callee']) in ['fresh','update','fill','signed_rays']:
++    key=(family(x['callee']),family(x['function']))
++    caller_calls[key]+=x['calls'];caller_cost[key]+=x['Ir'];stage_arcs.append(x)
+   assert sum(exclusive.values())==total
+   selected={fn:{'self_Ir':fnself[fn],'incoming_calls':incoming[fn],'incoming_arc_inclusive_Ir':arc_cost[fn],'outgoing_calls':outgoing[fn]} for fn in set(fnself)|set(incoming) if family(fn) not in ['rest','root_host','evaluation_consumers','Q']}
+   # These exact expected counts are only evaluated AFTER original live/offline
+-  # replay and pinned input/image closure. They come from closed case08 census,
++  # replay and pinned input/image closure. They come from closed case35 census,
+   # not from expected fixture outputs substituted for observed calls.
+-  expected={'baseline25':{'fresh':361836,'update':0},'inplace30':{'fresh':147171,'update':214665}}[name]
++  expected=p['construction_postconditions'][name]
+   assert family_calls['fresh']==expected['fresh'] and family_calls['update']==expected['update'],(name,dict(family_calls))
+-  assert family_calls['fresh']+family_calls['update']==361836
++  assert family_calls['fresh']+family_calls['update']==p['construction_postconditions']['total']
+   assert family_calls['derive_if_any']==0
+   # update-inclusive ALREADY includes signed rays: do not add ray-inclusive.
+   # fill-self excludes fresh/update callees. Caller dispatch/copies remain in
+@@ -105,8 +108,9 @@
+   assert not any(family(a['function'])=='fresh' and a['Ir'] for a in arcs),'fresh unexpectedly has executed outgoing calls; revise attribution before interpreting'
+   assert not any(family(a['function'])=='update' and family(a['callee'])!='signed_rays' and a['Ir'] for a in arcs),'unclassified executed update descendant'
+   assert 0<=map_ir<=total
+-  details={'whole_lifetime_Ir':total,'disjoint_exclusive_Ir':dict(exclusive),'selected_function_self_and_calls':selected,'observed_stage_calls':dict(family_calls),'closed_census_expected_calls':expected,'map_family_non_double_counted_Ir':{'fresh_inclusive':family_inclusive['fresh'],'update_inclusive_including_signed_rays':family_inclusive['update'],'outlined_fill_self':exclusive['fill'],'sum':map_ir,'whole_lifetime_residual':total-map_ir},'all_call_arcs':arcs,'raw_self_rows':rows,'scope':'Incoming inclusive arcs generally include descendants and can overlap recursively. Only bounded nonrecursive fresh/update plus fill-self forms the separate map-family subtotal; ray-inclusive is never added again. Emitted call counts are not inlined logical invocation counts. Ordinary-self includes unrelated work and is not wholly assigned to maps.'}
+-  write(target/'partition.json',details);results[name]={k:v for k,v in details.items() if k not in ['all_call_arcs','raw_self_rows']}
++  caller_summary=[{'callee_family':callee,'caller_family':caller,'calls':calls,'inclusive_arc_Ir':caller_cost[(callee,caller)]} for (callee,caller),calls in sorted(caller_calls.items())]
++  details={'whole_lifetime_Ir':total,'disjoint_exclusive_Ir':dict(exclusive),'selected_function_self_and_calls':selected,'stage_caller_summary':caller_summary,'stage_caller_arcs':stage_arcs,'observed_stage_calls':dict(family_calls),'closed_census_expected_calls':expected,'map_family_non_double_counted_Ir':{'fresh_inclusive':family_inclusive['fresh'],'update_inclusive_including_signed_rays':family_inclusive['update'],'outlined_fill_self':exclusive['fill'],'sum':map_ir,'whole_lifetime_residual':total-map_ir},'all_call_arcs':arcs,'raw_self_rows':rows,'scope':'Incoming inclusive arcs generally include descendants and can overlap recursively. Only bounded nonrecursive fresh/update plus fill-self forms the separate map-family subtotal; ray-inclusive is never added again. Emitted call counts are not inlined logical invocation counts. Ordinary-self includes unrelated work and is not wholly assigned to maps. Fresh-context average is not a paired eligible-node counterfactual cost. Caller families retain raw arcs/names/suffixes/file partitions for audit; no assumption that fill executes zero times on35.'}
++  write(target/'partition.json',details);results[name]={k:v for k,v in details.items() if k not in ['all_call_arcs','raw_self_rows','stage_caller_arcs']}
+  assert all(sha(f)==h for f,h in closure.items())
+  write(out/'independent-verification.json',{'complete':True,'cases':results,'original_offline_checkReplay_count':2,'engine_runs':0,'all_inputs_unchanged':True,'no_CPU_or_qualification_claim':True,'outer_actual_terminal_required':True})
+  print(json.dumps({k:{'whole_lifetime_Ir':v['whole_lifetime_Ir'],'exclusive':v['disjoint_exclusive_Ir']} for k,v in results.items()}))

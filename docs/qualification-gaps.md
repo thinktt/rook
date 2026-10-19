@@ -77,6 +77,14 @@ and70 original strict pilot replays pass; no own-PGO, standalone54/wire, full117
 no causal29→30 comparison is claimed. See
 [decision0020](decisions/0020-influence-delta-inplace-trial.md).
 
+The closed influence-update discriminator confirms95–96% demand eligibility on
+35/08, then compares exact generic25/30 instruction simulation. Whole simulated
+Ir falls2.6003% on35 and rises0.4118% on08, including actual construction,
+outlined fill, caller and residual costs. This does not overturn the failed
+native timing pilot or establish a profitable hybrid selector. No further delta
+variant, IIO expansion, PGO or qualification run follows; see
+[decision0021](decisions/0021-influence-update-costs.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.

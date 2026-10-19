@@ -1,0 +1,76 @@
+--- accepted-raw-parser
++++ raw-parser-with-call-counts-and-IDs
+@@ -1,38 +1,44 @@
+ def raw(path):
+  lines=path.read_text().splitlines();names={'file':{},'fn':{},'ob':{}}
+- def value(kind,s):
++ assert [s for s in lines if s.startswith('events:')]==['events: Ir']
++ assert [s for s in lines if s.startswith('positions:')]==['positions: line']
++ def kind(k):return 'fn' if k in ['fn','cfn'] else 'ob' if k in ['ob','cob'] else 'file'
++ # Definitions and references share dictionaries; forward references do not
++ # require inventing names. This preserves the accepted parser's two passes.
++ for line in lines:
++  m=re.match(r'^(fl|fi|fe|cfi|cfl|fn|cfn|ob|cob)=\((\d+)\) (.*)$',line)
++  if m:
++   k,index,name=m.groups();d=names[kind(k)];index=int(index)
++   assert index not in d or d[index]==name;d[index]=name
++ def value(k,s):
+   m=re.fullmatch(r'\((\d+)\)(?: (.*))?',s)
+-  if not m:return s
+-  index=int(m[1]);dictionary=names[kind]
+-  if m[2] is not None:
+-   assert index not in dictionary or dictionary[index]==m[2]
+-   dictionary[index]=m[2]
+-  return dictionary[index]
+- for line in lines:
+-  m=re.match(r'^(fl|fi|fe|cfi|fn|cfn|ob|cob)=(.*)$',line)
++  return names[kind(k)][int(m[1])] if m else s
++ current_file=current_fn=current_obj=callee=callee_file=None
++ current_fn_id=callee_id=None
++ position=0;pending=None;rows=[];arcs=[]
++ for number,line in enumerate(lines,1):
++  m=re.match(r'^(fl|fi|fe|cfi|cfl|fn|cfn|ob|cob)=(.*)$',line)
+   if m:
+-   kind='fn' if m[1] in ['fn','cfn'] else ('ob' if m[1] in ['ob','cob'] else 'file')
+-   value(kind,m[2])
+- current_file=None;current_fn=None;current_obj=None;position=0;pending=False;rows=[];arcs=[]
+- for number,line in enumerate(lines,1):
+-  m=re.match(r'^(fl|fi|fe|cfi|fn|cfn|ob|cob)=(.*)$',line)
+-  if m:
+-   key,s=m.groups()
+-   if key in ['fl','fi','fe']:current_file=value('file',s)
+-   elif key=='fn':current_fn=value('fn',s)
+-   elif key=='ob':current_obj=value('ob',s)
++   key,s=m.groups();v=value(key,s)
++   if key in ['fl','fi','fe']:current_file=v
++   elif key=='fn':current_fn=v;current_fn_id=s
++   elif key=='ob':current_obj=v
++   elif key=='cfn':callee=v;callee_id=s
++   elif key in ['cfi','cfl']:callee_file=v
+    continue
+   if line.startswith('calls='):
+-   assert not pending and int(line.split('=',1)[1].split()[0])>0;pending=True;continue
++   assert pending is None and callee is not None
++   count=int(line.split('=',1)[1].split()[0]);assert count>0
++   pending={'calls':count,'callee':callee,'callee_raw_id':callee_id,'callee_file':callee_file};continue
+   m=re.fullmatch(r'([+\-]?\d+|\*|0x[0-9a-fA-F]+)\s+(\d+)\s*',line)
+   if not m:continue
+-  token=m[1]
+-  position=position if token=='*' else (position+int(token) if token[0] in '+-' else int(token,0) if token.startswith('0x') else int(token))
++  token=m[1];position=position if token=='*' else position+int(token) if token[0] in '+-' else int(token,0) if token.startswith('0x') else int(token)
+   assert current_file is not None and current_fn is not None
+-  row={'raw_line':number,'file':current_file,'function':current_fn,'line':position,'Ir':int(m[2])}
+-  (arcs if pending else rows).append(row);pending=False
+- assert not pending
+- summary=int(next(s.split(':',1)[1] for s in lines if s.startswith('summary:')))
+- totals=int(next(s.split(':',1)[1] for s in lines if s.startswith('totals:')))
+- assert sum(r['Ir'] for r in rows)==summary==totals
+- return rows,arcs,summary
++  row={'raw_line':number,'file':current_file,'function':current_fn,'function_raw_id':current_fn_id,'object':current_obj,'line':position,'Ir':int(m[2])}
++  if pending is not None:row.update(pending);arcs.append(row);pending=None
++  else:rows.append(row)
++ assert pending is None
++ summary=[int(s.split(':',1)[1]) for s in lines if s.startswith('summary:')]
++ totals=[int(s.split(':',1)[1]) for s in lines if s.startswith('totals:')]
++ assert len(summary)==1 and summary==totals and sum(r['Ir'] for r in rows)==summary[0]
++ return rows,arcs,summary[0]

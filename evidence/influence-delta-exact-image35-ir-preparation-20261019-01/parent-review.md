@@ -1,0 +1,9 @@
+# Parent review of exact generic35 pair
+
+Reviewed the four adaptation patches and complete profile/verify helpers. This extends the closed08 actual-image discriminator to the dense workload35 only; no new engine, source change, qualification or production adoption. Both exact generic images retain the same compiler/settings. All304 immutable input pins and the preparation manifest match before activation.
+
+The original live and independent offline replay assertions precede the closed census call-count postconditions. Baseline fresh2086736 versus trial fresh680386 plus update1406350 are observed postconditions, not substituted behavioral outputs. Fresh/update/fill/ray caller summaries preserve raw IDs, suffixes, files and arcs, and recognize actual rook2::run. No assumption that outlined fill has zero dynamic calls on35.
+
+Exclusive raw self rows reconcile once to whole-lifetime simulated Ir; incoming inclusive arcs are not added to exclusive totals. Fresh inclusive plus update inclusive (already including signed rays) plus outlined fill self is a bounded nonrecursive map-family subtotal. Ordinary self still contains unrelated work. Mixed fresh contexts are not a paired eligible-node counterfactual. Historical own-PGO35 duration supplies only a generous safety deadline, never a generic cost or speed comparison.
+
+Exactly two fresh engines onCPU14; helpers on0-5,8-13 and no owned sibling15 work. Unique process-group/start-token cleanup and bounded descendants remain identical to the closed08 method. The preflight snapshot has no active engine/profiler or compiler; ordinary kernel work remains possible. No PMU/cycles/CPI, real CPU-speed or performance qualification inference follows from Callgrind Ir. Keep all consumed inputs immutable after activation. Proceed without further advisor approval.
