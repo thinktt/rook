@@ -1,0 +1,56 @@
+--- /home/legolas/rook2/evidence/ordinary-projected-bits-codegen-review-20261018-01/capture.py
++++ /home/legolas/rook2/evidence/compact-stop-generic-backend-review-20261019-01/capture.py
+@@ -17,14 +17,23 @@
+  for p,h in json.loads((HERE/'input-pins.json').read_text()).items():assert sha(p)==h,p
+  for p,h in json.loads((HERE/'helper-pins.json').read_text()).items():assert sha(HERE/p)==h,p
+  a=json.loads((HERE/'authority.json').read_text());assert a['capture'] is True,'capture lacks explicit parent clearance'
++ assert a['plan_sha256']==sha(HERE/'plan.json')
+  assert len(a['candidate_image_sha256'])==len(a['candidate_receipt_sha256'])==64
+- decision=a['parent_source_review'];assert decision and sha(decision['path'])==decision['sha256']
++ assert isinstance(a['candidate_source_graph_sha256'],str) and len(a['candidate_source_graph_sha256'])==64
++ for key in ['parent_source_review','candidate_source_manifest','candidate_build_actual']:
++  pin=a[key];assert pin and sha(pin['path'])==pin['sha256'],key
++ t=json.loads(Path(a['candidate_build_actual']['path']).read_text())
++ assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0
++ assert t.get('terminal_chunk_id') or t.get('chunk_id')
+  return a
+ 
+ def main():
+  authority=guard();inputs={};receipts={};identities={};commands=[]
+- source_manifest=json.loads((Path(PLAN['proposal'])/'source-manifest.json').read_text())['source69']
+- assert len(source_manifest)==69
++ manifest=json.loads(Path(authority['candidate_source_manifest']['path']).read_text())
++ source_manifest=manifest.get('source69',manifest.get('files'))
++ assert isinstance(source_manifest,dict) and len(source_manifest)==69
++ assert all(isinstance(v,str) and len(v)==64 for v in source_manifest.values())
++ # Unknown source-release schema stops before binary tools; no guessed source pin.
+  for side in ['control','candidate']:
+   build=Path(PLAN[side+'_build']);rp=build/'receipt.json';receipt=json.loads(rp.read_text());receipts[side]=receipt
+   image=build/'rook2-exact';expected=PLAN['control_image_sha256'] if side=='control' else authority['candidate_image_sha256']
+@@ -37,7 +46,11 @@
+   if side=='candidate':assert smap==source_manifest
+   for rel,digest in smap.items():
+    p=build/'source-before'/rel;assert sha(p)==digest,str(p);inputs[str(p)]=digest
+-  for p in [image,rp,build/'build.stderr',build/'archive-receipt.json',build/'verified-source-before.tar.gz']:inputs[str(p)]=sha(p)
++  archive=json.loads((build/'archive-receipt.json').read_text())
++  assert archive['files']==69 and archive['verified_against_build_before_hashes']
++  assert archive['binary_sha256']==expected
++  archived=build/archive['archive'];assert sha(archived)==archive['sha256']
++  for p in [image,rp,build/'build.stderr',build/'archive-receipt.json',archived]:inputs[str(p)]=sha(p)
+   dest=HERE/side;dest.mkdir()
+   for name,argv in [('nm-demangled',['/usr/bin/nm','-n','-S','-C',str(image)]),('nm-mangled',['/usr/bin/nm','-n','-S',str(image)]),('sections',['/usr/bin/readelf','-W','-S',str(image)]),('relocations',['/usr/bin/readelf','-W','-r',str(image)])]:
+    cmd=['/usr/bin/taskset','-c','0-5,8-13',*argv]
+--- /home/legolas/rook2/evidence/ordinary-projected-bits-codegen-review-20261018-01/capture-functions.py
++++ /home/legolas/rook2/evidence/compact-stop-generic-backend-review-20261019-01/capture-functions.py
+@@ -4,9 +4,9 @@
+ from capture import HERE,PLAN,guard,sha,write
+ GROUPS={
+  'ordinary-Q-order':r'rook2::(?:ordinary::|quiescence::).*::(?:visit_ordinary|ordering_phase|visit_q)',
+- 'charge':r'rook2::engine::Search.*::charge_node',
++ 'charge-poll':r'rook2::(?:engine::Search.*::charge_node|timed::.*::work_poll|work_clock::charge_search_unit)',
+  'root-run':r'^rook2::run$',
+- 'projection-query-generation':r'rook2::(?:attacks::AttackBits::|movegen::(?:find_attackers|attacked|projected_board|generate_legal|in_check))',
++ 'public-boundary':r'rook2::(?:timed::|quiescence::|ordinary::|first_iteration::).*::(?:run_work_timed|run_iterations|run_seeded_iterations|continue_subtree|search_subtree|run_session_timed)',
+  'full-fast':r'rook2::evaluator::Evaluator.*::(?:full|fast)',
+  'node-transitions':r'rook2::evaluator::Node::(?:child|root|null_child)',
+ }

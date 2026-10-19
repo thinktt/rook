@@ -1,14 +1,27 @@
 # Remaining performance investigations
 
-Retained production is candidate25. Subsequent experiments26–33 are parked.
+Retained production is candidate25. Subsequent experiments26–34 are parked.
 Experiment32 improves generic timing but fails its own-source PGO pilot at
 0.239039%higher summed medians; broader qualification is not run. Experiment33's
 distinct validated fixed-root weighted cache passes9focused/source/backend and
 generic70 (0.983941%lower,7/7lower), then own54 training/remerge and strict70.
 Own-PGO timing is only0.374850%lower with4/7lower, missing its frozen rule.
 It is parked without retry, broad qualification or adoption.
+Experiment34's compact recursion removes real memory-result transfers and a Q
+stack argument, but generic timing is only0.340478%lower with4/7lower. Focused8
+and strict70 pass; it is parked before PGO or broad qualification.
+
+The current25 checker-prefix rejection is revalidated without a new trial.
+A distinct local activity-category/destination-mask design now has disjoint
+source attribution and an exhaustive offline bitplane algebra model covering
+2,097,152 normalized relation comparisons plus borrowing/capture overrides.
+This is not a production kernel, geometry proof or speed result. Construction,
+public supplied-map/mailbox semantics, per-piece rounding/R multiplicity and
+sparse-position costs remain architectural decisions before implementation.
+See the [design](../../evidence/activity-kernel-current25-design-20261019-01/review.md)
+and [offline model](../../evidence/activity-category-bitplane-model-20261019-01/README.md).
 Current results and qualification limits are in
-[qualification gaps](../qualification-gaps.md) and decisions0016–0024.
+[qualification gaps](../qualification-gaps.md) and decisions0016–0025.
 Entries below preserve the historical investigation record and artifact scopes.
 
 Current117 integrates the full-byte relation table after178 native/209 diagnostic

@@ -117,6 +117,14 @@ declarations). No retry, full187/use54/eight-wire/full117/pre-gate or promotion
 follows; retained25 and its external package remain unchanged. See
 [decision0024](decisions/0024-private-bound-weighted-cache.md).
 
+Experiment34 compact recursive stop is parked after generic fixed70:
+0.340478%lower summed medians,4/7lower,worst1.012894, missing the aggregate
+and lower-case criteria. The intended scalar-return/stack-argument change
+survives actual WireHost compilation and focused8 passes; all70 strict/raw
+checks reconcile. Full180 was not run. No retry, PGO, broad54/wire/117,
+pre-gate or promotion follows; retained25 is unchanged. See
+[decision0025](decisions/0025-compact-recursive-stop.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.

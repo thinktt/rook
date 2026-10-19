@@ -1,0 +1,20 @@
+--- analyze-before-annotation-correction.py
++++ analyze.py
+@@ -65,7 +65,7 @@
+  for name,pred in groups.items():
+   subset=[r for r in native if pred(r)];ids={r['raw_line'] for r in subset};assert not used&ids;used|=ids
+   buckets[name]={'Ir':sum(r['Ir'] for r in subset),'whole_percent':100*sum(r['Ir'] for r in subset)/total,'rows':subset}
+- for name,subset in [('other_activity_source',[r for r in native if r['raw_line'] not in used]),('other_file_or_line0',[r for r in owner if r not in native])]:
++ for name,subset in [('other_activity_source_positive',[r for r in native if r['raw_line'] not in used and r['line']>0]),('activity_source_line0',[r for r in native if r['line']==0]),('other_source_partitions',[r for r in owner if r not in native])]:
+   buckets[name]={'Ir':sum(r['Ir'] for r in subset),'whole_percent':100*sum(r['Ir'] for r in subset)/total,'rows':subset}
+  assert sum(b['Ir'] for b in buckets.values())==sum(r['Ir'] for r in owner)
+  # Reconcile every native positive line to absolute annotation's exclusive source section.
+@@ -73,7 +73,7 @@
+  lines=annotation.read_text().split('-- User-annotated source:',1)[1].splitlines();printed={};line_no=None
+  for text in lines:
+   if m:=re.match(r'^-- line (\d+) ',text):line_no=int(m[1])
+-  elif m:=re.match(r'^\s*([\d,]+) \(\s*[\d.]+%\)',text):
++  elif (m:=re.match(r'^\s*([\d,]+) \(\s*[\d.]+%\)',text)) and '<counts for unidentified lines' not in text and 'events annotated' not in text:
+    assert line_no is not None;printed[line_no]=int(m[1].replace(',',''))
+  byline=Counter()
+  for r in native:byline[r['line']]+=r['Ir']
