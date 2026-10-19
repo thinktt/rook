@@ -21,10 +21,14 @@ path. Source/backend and11focused controls pass. Generic70 independently falls
 0.714195% in summed CPU medians,5of7lower,worst1.009410959; all70 originals pass.
 The actual producer grows304B/48Bframe with real stack-held counters; required
 transpose/output work stays. No performance causality follows from code size.
-Full189/diagnostic/games and own-PGO timing have not run. Fresh own54 training,
-independent original54/raw/PID/profile remerge and the use build now pass with
-zero missing/stale warnings; own image36251ecf/profile132fc1fd are frozen. Actual
-own-PGO backend review precedes its separately declared70 screen; retain40. See the
+Fresh own54 training, independent original54/raw/PID/profile remerge and the use
+build pass with zero missing/stale warnings; image36251ecf/profile132fc1fd are
+frozen. Own-PGO backend review is closed (+444B producer/+64B frame). The fixed
+own-PGO70 screen passes independently at1.160850%lower summed CPU medians,
+7of7lower,worst0.992494082. Fresh189 native tests and optimized54/wire24 pass;
+original replay/raw reconciliation is closed for54/wire. DIAG209/full117 and
+regular12 pre-gate are in progress; retain40 pending all fresh gates. No full43
+whole54/12 timing or performance qualification follows. See the
 [selection](../../evidence/influence-bitsliced-sum-parent-review-20261019-01/selection.json),
 [cost review](../../evidence/coherent-influence-current-cost-review-20261019-01/review.md)
 and [algebra](../../evidence/influence-bitsliced-sum-design-20261019-01/review.md). The closed types cost partition supports

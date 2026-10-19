@@ -49,8 +49,11 @@ closed. Experiment43 private bit-sliced Influence accumulation passes source/bac
 The producer adds304 code bytes/48 frame bytes and has real counter-memory and
 transpose costs.189 native tests are declared; the full suite is unrun. Fresh own54 PGO training, independent original54/profile remerge and use build
 now pass with zero missing/stale-profile warnings. Own-PGO image36251ecf/profile
-132fc1fd are frozen; backend review precedes the separate fixed70 timing. No
-own-PGO timing, broad validation or source promotion has occurred. See [decision0035](docs/decisions/0035-bit-sliced-influence-accumulation.md).
+132fc1fd are frozen. Actual own-PGO backend review is closed; fixed70 passes
+with1.160850%lower summed CPU medians,7of7lower,worst0.992494082. All70
+original outputs and accounting reconcile independently. Fresh189 native tests and untimed optimized54/wire24 validation pass; independent
+original54/wire raw checks are closed. DIAG209/full117 and regular12 are running.
+No source promotion or complete43 whole54/12 cost collection has occurred. See [decision0035](docs/decisions/0035-bit-sliced-influence-accumulation.md).
 40 and its complete54/12 costs remain current.
 
 ## Previous candidate37 coherent Influence, 2026-10-19

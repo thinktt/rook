@@ -28,10 +28,12 @@ follows. See [decision0033](decisions/0033-borrowed-activity-slider-geometry.md)
 
 Distinct43 bit-sliced Influence accumulation passes source/backend review and11
 focused controls. Generic70 passes its declared rule at0.714195%lower CPU,5of7
-lower,worst1.009410959, with all70 original outputs/accounting exact. Full189
-native/diagnostic/117/game checks and own-PGO timing remain unrun. Fresh own54
-training, original54/raw/PID/independent-profile checks and use build pass, but
-no conformance or performance qualification transfers.40 remains current. See
+lower,worst1.009410959, with all70 original outputs/accounting exact. Fresh own54
+training, original54/raw/PID/independent-profile checks and use build pass.
+Own-PGO70 independently passes at1.160850%lower CPU,7of7lower. Fresh189 native
+and optimized54/wire24 pass; original54/wire raw reconciliation is closed.
+DIAG209/full117 and regular12 pre-gate remain in progress. No full43 whole54/12
+cost result or performance qualification follows.40 remains current. See
 [decision0035](decisions/0035-bit-sliced-influence-accumulation.md).
 
 Previous candidate37 was retained after185native/209diagnostic tests, complete original
