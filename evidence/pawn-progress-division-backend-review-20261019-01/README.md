@@ -1,0 +1,1 @@
+Closed bounded43 own-PGO pawn-score division assessment. Read review.md; exact source/address/raw-row maps are in assessment.json and division-regions.json. Complete raw disassembly and7 tool command/return receipts retained. All input pins stable, no source trial or native execution. Parent selects any next work.
