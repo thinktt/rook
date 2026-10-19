@@ -36,8 +36,12 @@ source/algebra, emitted-mechanism and12focused tests pass: fixed generic70 is
 0.600465%higher CPU,1of7lower. All70 original replays and native receipts
 independently reconcile. No own-PGO, full189/diagnostic/117/game validation or
 promotion follows. See [decision0033](docs/decisions/0033-borrowed-activity-slider-geometry.md).
-Production40 and its complete54/12 costs remain current. A bounded independent
-critique of the future generic/PGO screening policy is pending; no43 is selected.
+Production40 and its complete54/12 costs remain current. The bounded independent
+critique of future screening is closed. Generic remains the default; one future
+mechanism-specific PGO-sensitive exception may be admitted prospectively under
+[decision0034](docs/decisions/0034-prospective-pgo-sensitive-screen.md). None is
+admitted and no43 is selected. Closed ordinary source-cost reviews support only
+a narrow existing-machine check of generated-move tag predicates, now in progress.
 
 ## Previous candidate37 coherent Influence, 2026-10-19
 

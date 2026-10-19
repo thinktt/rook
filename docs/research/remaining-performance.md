@@ -13,12 +13,17 @@ geometry with scalar public/custom-state fallback and unchanged supplied
 Influence authority.42 source/algebra, emitted mechanism, focused12 and all70
 original outputs pass, but fixed generic70 is0.600465%higher/1of7lower. Park
 without own-PGO or promotion. The ordinary-glue source review also finds no
-justified local hoist trial. Future screening policy is under bounded independent
-critique; no43 source experiment is selected.
+justified local hoist trial. The bounded independent screening critique is closed: generic remains default,
+with at most one future prospectively admitted PGO-sensitive exception under
+[decision0034](../decisions/0034-prospective-pgo-sensitive-screen.md). No exception
+or43 source experiment is selected. The closed types cost partition supports
+only a narrow current-machine discriminator for two generated-move tag checks;
+it does not justify a representation rewrite or assign those sites the entire
+Move-kind instruction overlay.
 Current40 stays retained. The27 radix formula
 and32 king-ray tables are historical failed trials, not fresh ideas to retry
-without distinct current evidence. A minimal borrowed-plane activity geometry
-proposal is feasible but unselected pending40 attribution. All earlier timing
+without distinct current evidence. The earlier borrowed-plane activity geometry
+proposal became42 and is now parked after its fixed generic failure. All earlier timing
 shares below retain historical scope. No final performance qualification follows.
 
 Retained production is candidate37 guarded coherent Influence;26–36 are parked.
