@@ -1,0 +1,11 @@
+--- capture-before-source-guard-correction.py
++++ capture.py
+@@ -50,7 +50,7 @@
+  for key in ['toolchain','mode','target_triple','target_cpu','jobs','rust_flags','build_effective_environment','cargo_config_sha256_before']:
+   assert a[key]==b[key],key
+  assert a['tool_sha256_before']==b['tool_sha256_before']
+- changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/influence.rs','src/influence/coherent.rs']
++ changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/attacks.rs']
+  freeze=load(plan['candidate_source_freeze']['path'])
+  assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+  assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']

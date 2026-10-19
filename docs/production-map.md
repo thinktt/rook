@@ -19,6 +19,13 @@ the intended copy survived, and the three inspected complete function bodies
 are byte-identical to43 generic. It ran no native tests or timing and is not
 production.
 
+Candidate45's private source-index masks removed the intended bounds branches,
+with a55B larger producer and16B larger frame. Its11 focused tests and70 exact
+replay checks passed, but its fixed generic screen improved only0.345564%
+(6of7 lower), below the required0.5%. It is
+[parked without retry or own-PGO](../evidence/influence-source-range-decision-20261019-01/README.md);
+the accepted production artifact and whole54/12 timings remain43's.
+
 Fresh [mandatory validation](../evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/validation-summary.json)
 passes189 native tests,209 diagnostic tests and7,673 cases across117 operations
 and115 whole fixture files. The ordinary image separately passes all54 strict
