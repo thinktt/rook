@@ -107,14 +107,15 @@ independent replay/remerge and all70 own-PGO strict checks pass. No retry,
 fresh use54/eight-wire/full117/pre-gate or promotion is selected; retained25 is
 unchanged. See [decision0023](decisions/0023-pressure-table-traversal-trial.md).
 
-Experiment33 private bound weighted reuse passes its generic fixed70:
-0.983941%lower summed medians,7/7lower,worst0.997227, with all70 original
-strict replays and independent accounting.9 new focused tests pass; old178
-bodies are unchanged but not run by that filter (187 total declarations).
-Native source/provenance and actual generic backend gates pass. Fresh own-source
-PGO and a separate fixed70 are selected; no generic-speed transfer, adoption or
-full187/use54/eight-wire/full117/pre-gate result is claimed. Retained25 stays
-unchanged. See [decision0024](decisions/0024-private-bound-weighted-cache.md).
+Experiment33 private bound weighted reuse is parked after its own-PGO fixed70:
+0.374850%lower summed medians,4/7lower,worst1.005342, missing the minimum0.5%
+aggregate and5-of7 criteria. Its generic0.983941%gain does not transfer.9new
+focused tests, source/backend gates, fresh54 compiler training, independent
+original54/raw/PID/remerge checks and all70 own-PGO strict/accounting checks
+pass. Old178 bodies are unchanged but unrun by the focused filter (187 total
+declarations). No retry, full187/use54/eight-wire/full117/pre-gate or promotion
+follows; retained25 and its external package remain unchanged. See
+[decision0024](decisions/0024-private-bound-weighted-cache.md).
 
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).

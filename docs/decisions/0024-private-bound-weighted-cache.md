@@ -1,4 +1,4 @@
-# Select private weighted reuse for own-source PGO
+# Park private weighted reuse after own-source PGO
 
 Keep production25 while evaluating isolated experiment33. Its1024 exact-key slots reuse already-rounded activity/shelter contributions, piece totals for live tempo and activity semanticR only within one validated, freshly bound Session timed search. This is distinct from parked24's root-independent raw payload/reweighting and does not compose26–32. An optional thin boxed array adds evaluator storage; Node/Position source layout stays unchanged.
 
@@ -6,4 +6,8 @@ One private timed entry validates current-root coherence once, then binds and cl
 
 All9 focused falsifiers pass, including real hits and work/result parity, D=false charges, public poison/empty/custom bypass, native chronology/EP/null transitions, A/B/A binding and retained-Search unwind. Old178 bodies are unchanged;187 is the declaration total, not execution count. Actual generic WireHost code skips the intended producers, with32B exact equality/24B payload and heap-only64KiB storage. Added text/outlined timed stack and startup/lookup costs remain risks.
 
-The fixed generic70 sums14.0542500→13.9159645s (0.983941%lower),7/7 lower medians,worst0.997227. All70 original strict replays and independent CPU accounting pass without retry/deletion. Select fresh own-source PGO54 training/verification/use-build and separate70 timing against25PGO. Require the unchanged0.5%/5-of7/2% rule. Generic speed does not transfer; defer broad qualification until PGO also wins. See the [generic checkpoint](../../evidence/weighted-bound-cache-generic-decision-20261019-01/README.md).
+The fixed generic70 sums14.0542500→13.9159645s (0.983941%lower),7/7 lower medians,worst0.997227. All70 original strict replays and independent CPU accounting pass without retry/deletion. This selected fresh own-source PGO54 training/verification/use-build and separate70 timing against25PGO. See the [generic checkpoint](../../evidence/weighted-bound-cache-generic-decision-20261019-01/README.md).
+
+Own-source PGO training54, unique native raw profiles/PIDs, independent original54 checks and byte-identical LLVM19 remerge pass. The actual PGO backend retains the intended normal-search hit bypass; added text/startup/key traffic remains a measured-cost question. Exact use image16ab894a uses its own5b883a83 profile, with paired compiler/source/settings/tool provenance.
+
+The own-PGO fixed70 independently sums12.7454855→12.6977090s (0.374850%lower),4/7lower,worst1.005342. It fails the predeclared minimum0.5% aggregate and5-of7 criteria. Park without retry, sample deletion or promotion. All70 original strict replays and native accounting pass; generic benefit does not transfer. No full187, fresh use54/eight-wire/full117/pre-gate follows. Production25 and its external package remain unchanged. See the [own-PGO decision](../../evidence/weighted-bound-cache-pgo-decision-20261019-01/README.md).

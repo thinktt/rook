@@ -1,0 +1,7 @@
+# Accept own-source33 PGO for one fixed70 prescreen
+
+The actual four-stage own-source PGO workflow and independent original54/raw/PID/byte-identical remerge have completed. Candidate16ab894a uses its own5b883a83 profile; control remains exact25PGO51529 with its own distinct profile. Source46/tools23, compiler, generic target/base flags/settings and profile closure are paired by the backend provenance. Focused9 passed;187 remains a declaration count and broad qualification is deferred.
+
+Read the actual normal-WireHost backend review. The enabled root/Q full and inlined ordinary full compare the complete32-byte key, reuse24-byte payload and bypass only activity/shelter production/weighting on hits. Live pawn/tempo/retained/R/finishing remains. Additional text/startup/lookup/frame costs require measurement; no generic benefit is transferred. Accept one original frozen seven-case70-lifetime comparison with14 excluded warmups and56 measured, aggregate ratio<=.995,>=5lower medians and worst<=1.02. Preserve every sample; no variability retry or outlier deletion. Otherwise park before full187/use54/eight-wire/full117/pregate.
+
+All owned jobs actually closed, including backend4e9e5f/0; helpers use0-5,8-13 and native measurements14. No owned15 task; point observations do not exclude host/kernel activity. Root production69 bytes remain retained25. This authorizes only the frozen pilot and independent replay/accounting reconciliation, no source promotion or broad-suite execution.

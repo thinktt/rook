@@ -1,11 +1,12 @@
 # Remaining performance investigations
 
-Retained production is candidate25. Subsequent experiments26–32 are parked.
+Retained production is candidate25. Subsequent experiments26–33 are parked.
 Experiment32 improves generic timing but fails its own-source PGO pilot at
-0.239039%higher summed medians; broader qualification is not run. Experiment33 implements the distinct validated fixed-root weighted cache:
-9 focused checks and actual source/backend gates pass, generic70 improves
-0.983941% with all7 medians lower. Fresh own-source PGO and its separate pilot
-are selected; no adoption or broad qualification yet.
+0.239039%higher summed medians; broader qualification is not run. Experiment33's
+distinct validated fixed-root weighted cache passes9focused/source/backend and
+generic70 (0.983941%lower,7/7lower), then own54 training/remerge and strict70.
+Own-PGO timing is only0.374850%lower with4/7lower, missing its frozen rule.
+It is parked without retry, broad qualification or adoption.
 Current results and qualification limits are in
 [qualification gaps](../qualification-gaps.md) and decisions0016–0024.
 Entries below preserve the historical investigation record and artifact scopes.

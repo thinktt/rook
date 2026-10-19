@@ -1,0 +1,7 @@
+# Parent acceptance of experiment33 own-source PGO
+
+The fixed generic70 independently passed its declared rule: 0.9901605919917462 ratio, seven lower case medians and worst ratio0.997226543628715. Accept the written generic decision and focused9 pass; old178 and full117 remain unrun. The final source audit and actual generic backend support the intended private mechanism. Root69 production source/tools remain exact retained25.
+
+Reviewed all six prepared helpers and exposed adaptations: build/raw/recheck unchanged from accepted32; remaining changes are variant paths/scope. Source/native46/tools23, toolchain, training closure and original54 ordered workload remain pinned. The four serial activations are instrumented build/archive, own-source compiler training, independent original54 raw/PID/remerge verification and profile-use build/archive. Each actual outer terminal must be recorded before advancing. Historical future nulls stay unchanged and actual receipts bind future identities. This is compiler training, not a broad qualification run of the use binary.
+
+All subagents are completed and no conflicting native/compiler/binutils/archive/Git process appeared at the recorded point. Helpers use housekeeping CPUs0-5,8-13; native training is pinned14, with no owned task15. Kernel/host activity cannot be excluded absolutely. Keep this clearance immutable after activation. No timing/full187/use54/wire/full117/pregate launch is authorized here; own-PGO fixed70 needs its actual backend and separate binding first. No production promotion.

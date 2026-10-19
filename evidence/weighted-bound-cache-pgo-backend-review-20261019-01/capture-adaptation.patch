@@ -1,0 +1,78 @@
+--- /home/legolas/rook2/evidence/pressure-table-traversal-pgo-backend-review-20261019-01/capture.py
++++ capture.py
+@@ -1,12 +1,25 @@
+-"""Bounded own-image experiment32 own-PGO static capture; no engine/search execution."""
++"""Bounded own-image experiment33 own-PGO static capture; no engine/search execution."""
+ from pathlib import Path
+ import hashlib,json,re,subprocess
+ P=Path(__file__).resolve().parent;E=P.parent
+-D={'control':E/'ordinary-projected-bits-pgo-use-build-20261018-01','candidate':E/'pressure-table-traversal-pgo-use-build-20261019-01'}
++# This file is inert until the parent releases the ACTUAL closed use artifact.
++plan=json.loads((P/'plan.json').read_text())
++assert plan['actual_use_released'] is True and plan['candidate_sha256']
++assert plan['required_input_pins'] and plan['required_actual_terminals']
++D={'control':E/'ordinary-projected-bits-pgo-use-build-20261018-01','candidate':E/'weighted-bound-cache-pgo-use-build-20261019-01'}
+ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+ def put(n,v):
+  with (P/n).open('x') as f:json.dump(v,f,indent=2);f.write('\n')
+ pins={};rs={};cmd=[];fs={}
++# Never read the future candidate path until the release guard above succeeds.
++for path,h in plan['required_input_pins'].items():
++ assert sha(Path(path))==h;pins[path]=h
++for row in plan['required_actual_terminals']:
++ assert row['actual_tool_terminal_observed'] is True and row['exit_code']==0
++ assert (row.get('terminal_chunk_id') or row.get('chunk_id') or '').strip()
++ assert row.get('session_id') is None or isinstance(row['session_id'],int)
++assert sha(D['control']/'rook2-exact')==plan['control_sha256']
++assert sha(D['candidate']/'rook2-exact')==plan['candidate_sha256']
+ for side,d in D.items():
+  r=json.loads((d/'receipt.json').read_text());rs[side]=r
+  assert r['source_sha256_before']==r['source_sha256_after'];assert r['tool_sha256_before']==r['tool_sha256_after']
+@@ -36,26 +49,29 @@
+ put('paired-provenance.json',{'own_profiles':profiles,'compiler_baseflags_normalized_environment_equal':True,'no_missing_or_stale_profile_warnings':True})
+ assert rs['control']['tool_sha256_before']==rs['candidate']['tool_sha256_before']
+ changed=[n for n,h in rs['control']['source_sha256_before'].items() if rs['candidate']['source_sha256_before'][n]!=h]
+-assert changed==['src/activity.rs']
+-for n in ['review.md','trial.patch','source-proof.json','source-manifest.json','closure.json','plan.json']:
+- p=E/'pressure-table-traversal-preparation-20261019-01'/n;pins[str(p)]=sha(p)
+-for n in ['nm','objdump','size']:p=Path('/usr/bin')/n;pins[str(p)]=sha(p)
++assert sorted(changed)==['src/evaluator.rs','src/ordinary.rs','src/quiescence.rs','src/session.rs','src/timed.rs']
++for n in ['review.md','source-proof.json','closure.json']:
++ p=E/'weighted-bound-cache-final-source-review-20261019-01'/n;pins[str(p)]=sha(p)
++for n in ['nm','objdump','size','readelf']:p=Path('/usr/bin')/n;pins[str(p)]=sha(p)
+ def run(argv,stem):
+  o=P/(stem+'.stdout');e=P/(stem+'.stderr');o.parent.mkdir(exist_ok=True)
+- with o.open('xb') as so,e.open('xb') as se:r=subprocess.run(argv,stdout=so,stderr=se)
+- cmd.append({'argv':argv,'exit_code':r.returncode,'stdout':str(o),'stderr':str(e)})
++ with o.open('xb') as so,e.open('xb') as se:
++  r=subprocess.Popen(argv,stdout=so,stderr=se);r.returncode=r.wait()
++ cmd.append({'argv':argv,'pid':r.pid if hasattr(r,'pid') else None,'exit_code':r.returncode,'stdout':str(o),'stderr':str(e)})
+  assert r.returncode==0
+  return o.read_text()
+-for n in ['nm','objdump','size']:run(['/usr/bin/'+n,'--version'],n+'-version')
++for n in ['nm','objdump','size','readelf']:run(['/usr/bin/'+n,'--version'],n+'-version')
+ for side,d in D.items():
+  image=str(d/'rook2-exact');nm=run(['/usr/bin/nm','--numeric-sort','--print-size','--demangle',image],side+'/nm')
+- run(['/usr/bin/size','-A',image],side+'/size');rows=[]
++ run(['/usr/bin/size','-A',image],side+'/size')
++ run(['/usr/bin/readelf','-rW',image],side+'/relocations')
++ run(['/usr/bin/readelf','-SW',image],side+'/sections');rows=[]
+  for line in nm.splitlines():
+   m=re.match(r'^([0-9a-f]+) ([0-9a-f]+) [tT] (.*)$',line)
+   if not m:continue
+   address,length,name=int(m[1],16),int(m[2],16),m[3]
+-  selected='rook2::activity::compute' in name or 'rook2::activity::king_pressure' in name
+-  if selected or any(x in name for x in ['::visit_ordinary_impl','::visit_q_impl','::full_impl','::run_work_timed_impl']) or name=='rook2::run':
++  selected=any(x in name for x in ['rook2::activity::compute','rook2::activity::king_pressure','rook2::shelter::compute','::Position::validate','::begin_search','::prepare_bound_cache','::BoundComponents::compute'])
++  if selected or any(x in name for x in ['::visit_ordinary_impl','::visit_ordinary_bound','::visit_q_impl','::full_impl','::run_work_timed_impl','::run_session_timed','::ordering_phase','::run_work_timed_inner']) or name=='rook2::run':
+    row={'address':hex(address),'bytes':length,'symbol':name,'captured':True}
+    if True:
+     stem=side+'/body-'+format(address,'x');text=run(['/usr/bin/objdump','-d','-w','-C','-Mintel','--no-show-raw-insn','--start-address='+hex(address),'--stop-address='+hex(address+length),image],stem)
+@@ -63,6 +79,7 @@
+     row.update(assembly=stem+'.stdout',static_instructions=len(a),stack_memory_reference_instructions=[{'address':x,'instruction':y} for x,y in a if '[rsp' in y and not y.startswith(('lea','nop'))],rsp_adjustments=[{'address':x,'instruction':y} for x,y in a if re.match(r'(sub|add)\s+rsp,',y)],calls=[{'address':x,'instruction':y} for x,y in a if y.startswith('call')],imuls=[{'address':x,'instruction':y} for x,y in a if y.startswith('imul')])
+    rows.append(row)
+  fs[side]=rows
++pins[str(P/'plan.json')]=sha(P/'plan.json')
+ assert all(sha(Path(p))==h for p,h in pins.items())
+ put('input-pins.json',pins);put('capture.json',{'complete':True,'commands':cmd,'functions':fs,'only_changed_source':changed,'all_inputs_unchanged':True,'compiler_baseflags_normalized_environment_tools_equal':True})
+ print(json.dumps({'complete':True,'commands':len(cmd),'functions':{s:[{'symbol':r['symbol'],'address':r['address'],'bytes':r['bytes'],'static_instructions':r['static_instructions'],'stack_refs':len(r['stack_memory_reference_instructions']),'calls':len(r['calls']),'entry_rsp':r['rsp_adjustments'][:1]} for r in rows] for s,rows in fs.items()}},indent=2))
