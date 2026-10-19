@@ -1,0 +1,13 @@
+49 own-PGO PARK — exact commit whitelist, no Git
+
+Fresh checkpoint is ACTUALLY closed: independentd8399d/0, archive15158/dbe075→00bc25/0, final6f41be/0. Verified archive cee4742b...2333033B contains626regular originals, including54raw compiler profiles plus merged/independent profdata. Excluded146files (2ELFs/144duplicate source-before) remain excluded; no opaque ELF is introduced. Originals retained.
+
+Select570archived original files as loose evidence, all25closed checkpoint files/archive,9closed park-docupdate files,4closed incremental-influence-feasibility files and3current docs =611existing payload files. Separate archive-only-files.json lists56ignored .profraw/.profdata loose paths (4326416B) with exact member/hash/mode/bytes and archive identity; never force-add them. Their bytes remain in the committed verified archive. .profdata.gz is not ignored by these rules and stays selected. No unfinished critical review, external advisor memo, future mutable data or path outside these exact scopes is read/added.
+
+Production43 remains accepted. Generic49 passed, own-PGO fixed70 failed .995 aggregate and minimum5lower gates despite70exact outputs:ratio.9981793829,0.1820617%lower,4of7lower,worst1.005536395. No retry, broader tests or adoption. Current docs retain this actual PARK scope; no engine source changes.
+
+selected-files.json schema exact-repository-relative-commit-whitelist-v1 gives repository-relative payload paths→SHA256 with byte/mode/category details. pathspec.nul is the finite union of those keys and four explicit controls(selected-files.json,pathspec.nul,tool-terminal.json,closure.json). Controls are outside their own payload map to avoid self-hash claims; closure pins manifest/pathspec/terminal, and its own hash is reported by actual tool output. Root owns final staging/commit and required attribution. No Git command executed here.
+
+Byte-oriented whitespace scan covers ALL selected text evidence, including generated docs.patch/unified context and every new preparation text file; it is not a Git whitespace command. Exact issue paths/line numbers/EOF blank counts and binary non-text skips are recorded. Preserve raw stdout padding, disassembly and patch context plus inherited raw_model.py blank EOF; no normalization. No assertion that all evidence is whitespace-clean. Three current docs/this README are checked as authored prose; immutable context patches are exceptions by exact path.
+
+Only small closed evidence reads/streaming hashes and new metadata writes on H. No archive creation/replay/native/build/binutils/Git/source edit. Existing archive hash comes from the fully reopened verification; no redundant bulk archive hash. All parents, raw data and current docs remain unchanged.

@@ -27,16 +27,17 @@ See [local validation](evidence/influence-bitsliced-sum-qualification-20261019-0
 and [decision0035](docs/decisions/0035-bit-sliced-influence-accumulation.md).
 
 
-Candidate49 is an isolated internal sorting equal-length trial; production43 remains
-accepted. Its generic backend reduces bound-check sites11→6 per inlined caller
-with unchanged frames and+182B selected code. Six existing focused controls and
-all70 live/offline original replay checks pass. The fixed generic screen improves
-0.6650503%,7of7lower,worst0.997841443, and [advances only to fresh own-source PGO](evidence/ordering-equal-length-decision-20261019-01/README.md).
-Fresh54 training/original raw/PID checks, independent byte-identical profile remerge
-and the use build are closed with zero missing/stale warnings. Actual own-PGO
-backend review and its separate fixed screen remain pending. No full189, broader49 qualification or adoption
-is claimed. Generic savings may not transfer because43PGO already inlines sorting.
-The [closed49 generic checkpoint](evidence/ordering-equal-length-generic-checkpoint-20261019-01/README.md) preserves exact originals and actual exits.
+Candidate49 preserves the public sorting helper and512-entry workspace while giving
+internal callers equal-length knowledge. Six existing controls and all70 generic
+live/offline original replay checks pass; generic70 improves0.6650503%,7of7lower.
+Fresh own54 training/original raw/PID checks, independent byte-identical profile
+remerge and use build close with zero missing/stale warnings. Its separate
+own-PGO70 preserves all exact replay outputs but improves only0.1820617%,4of7lower,
+worst1.005536395, failing both the0.995 aggregate and minimum5lower gates.
+It is [parked without retry, broader tests or adoption](evidence/ordering-equal-length-pgo-decision-20261019-01/decision.json).
+No full189 or broader49 qualification is claimed. Production43 and its whole54/12
+evidence remain unchanged; the generic gain does not transfer to own-PGO.
+The [closed49 generic checkpoint](evidence/ordering-equal-length-generic-checkpoint-20261019-01/README.md) preserves its exact originals and actual exits.
 
 ## Previous candidate40 static pressure lookup, 2026-10-19
 

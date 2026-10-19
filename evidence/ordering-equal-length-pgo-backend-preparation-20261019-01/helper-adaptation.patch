@@ -1,0 +1,95 @@
+--- /home/legolas/rook2/evidence/ordinary-position-borrow-pgo-backend-preparation-20261019-01/capture.py
++++ /home/legolas/rook2/evidence/ordering-equal-length-pgo-backend-preparation-20261019-01/capture.py
+@@ -3,7 +3,7 @@
+ import hashlib,json,os,re,subprocess,sys
+ P=Path(__file__).resolve().parent;E=P.parent
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+-SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('ordinary-position-borrow',None)}
++SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('ordering-equal-length',None)}
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def load(p):return json.loads(Path(p).read_text())
+ def save(p,j):
+@@ -22,12 +22,16 @@
+  assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
+  assert plan['candidate_image_sha256'] and plan['candidate_build_terminal'] is not None
+  assert plan['candidate_source_graph_sha256'] and plan['candidate_source_freeze']['sha256']
+- assert plan['candidate_receipt_sha256'] and sha(E/'ordinary-position-borrow-pgo-use-build-20261019-01'/'receipt.json')==plan['candidate_receipt_sha256']
++ assert plan['candidate_receipt_sha256'] and sha(E/'ordering-equal-length-pgo-use-build-20261019-01'/'receipt.json')==plan['candidate_receipt_sha256']
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  assert plan['profile_sha256']['candidate'] and plan['actual_stage_pins']['candidate']
+  for path,h in plan['input_sha256'].items():assert sha(path)==h,path
+  row=plan['candidate_build_terminal'];assert sha(row['path'])==row['sha256']
+  terminal=load(row['path']);assert terminal['actual_tool_terminal_observed'] is True and terminal['exit_code']==0 and terminal['terminal_chunk_id']
++ decision=load(plan['generic_advancement']['decision_path']);generic=load(plan['generic_advancement']['independent_path'])
++ assert decision['experiment']==49 and decision['decision']=='ADVANCE_TO_OWN_PGO_ONLY' and decision['pgo_authorized'] is True
++ assert decision['source_graph_sha256']==plan['candidate_source_graph_sha256']
++ assert generic['complete'] is True and generic['advance_under_declared_rule'] is True and generic['lifetimes']==70 and generic['excluded_warmups']==14 and generic['measured']==56
+  SIDES['control']=(SIDES['control'][0],plan['control_image_sha256'])
+  SIDES['candidate']=(SIDES['candidate'][0],plan['candidate_image_sha256'])
+  return plan
+@@ -110,7 +114,8 @@
+   assert a[key]==b[key],key
+  assert normalized_env['control']==normalized_env['candidate']
+  assert a['tool_sha256_before']==b['tool_sha256_before']
+- changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/evaluator.rs','src/ordinary.rs']
++ assert set(a['source_sha256_before'])==set(b['source_sha256_before'])
++ changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/tactical.rs']
+  freeze=load(plan['candidate_source_freeze']['path'])
+  assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+  assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
+@@ -118,13 +123,15 @@
+  assert len(b['source_sha256_before'])==49 and len(b['tool_sha256_before'])==23
+  assert b['mode']=='generic' and b['pgo']['mode']=='profile-use'
+  assert all(sha(p)==h for p,h in pins.items())
+- save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,own_pgo_bindings=bindings,only_own_profile_paths_normalized=True,compiler_settings_equal=True,only_evaluator_ordinary_source_changed=changed,source_files=72,native49_tools23=True))
++ save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,own_pgo_bindings=bindings,only_own_profile_paths_normalized=True,compiler_settings_equal=True,only_tactical_source_changed=changed,source_files=72,native49_tools23=True))
+  print(json.dumps(dict(complete=True,commands=len(commands),pins=len(pins),only_changed=changed)))
+ 
+ def bodies():
+  plan=admit()
+  d=load(P/'discovery.json');assert all(sha(p)==h for p,h in d['pins'].items())
+- request=load(P/'body-request.json');assert 0<len(request)<=plan['max_complete_bodies']==4
++ request=load(P/'body-request.json');assert 0<len(request)<=plan['max_complete_bodies']==6
++ primary=[(row['side'],row['label']) for row in request if row['label']!='sorting-helper']
++ assert len(primary)==4 and set(primary)=={(side,label) for side in ['control','candidate'] for label in ['ordinary','q']}
+  total=0;scope_total=0;rows=[]
+  for row in request:
+   side=row['side'];name,_=SIDES[side];image=E/(name+'-pgo-use-build-20261019-01')/'rook2-exact'
+@@ -137,6 +144,9 @@
+    parts=line.split(maxsplit=3)
+    if len(parts)==4 and parts[2] in ['t','T'] and int(parts[0],16)==start and int(parts[1],16)==size:symbol_rows.append(parts[3])
+   assert row['actual_symbol'] in symbol_rows,(row,symbol_rows)
++  role={'ordinary':'rook2::ordinary::','q':'rook2::quiescence::','sorting-helper':'rook2::tactical::'}[row['label']]
++  assert role in row['actual_symbol']
++  if row['label']=='sorting-helper':assert any(part in row['actual_symbol'] for part in ['priority_sequence','order_by','order_with_scratch'])
+   if row.get('reuse'):
+    assert side=='control'
+    prior=plan['reusable_control_bodies'][row['label']]
+@@ -150,7 +160,7 @@
+    stem=side+'-'+row['label']
+    result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],stem)
+    raw_path=P/(stem+'.stdout');total+=raw_path.stat().st_size;reused=False
+-  assert total<=plan['max_new_raw_disassembly_bytes']==1572864,total
++  assert total<=plan['max_new_raw_disassembly_bytes']==2097152,total
+   scope_total+=raw_path.stat().st_size
+   rows.append(dict(**row,command=result,raw_path=str(raw_path),raw_bytes=raw_path.stat().st_size,reused=reused))
+  assert all(sha(p)==h for p,h in d['pins'].items())
+--- /home/legolas/rook2/evidence/ordinary-position-borrow-pgo-backend-preparation-20261019-01/analyze.py
++++ /home/legolas/rook2/evidence/ordering-equal-length-pgo-backend-preparation-20261019-01/analyze.py
+@@ -6,7 +6,7 @@
+ sha=lambda b:hashlib.sha256(b).hexdigest()
+ d=load(P/'discovery.json');requests=load(P/'body-request.json');bodyproof=load(P/'bodies.json')
+ assert bodyproof['complete'] and bodyproof['all_discovery_inputs_unchanged']
+-images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-pgo-use-build'),('candidate','ordinary-position-borrow-pgo-use-build')]}
++images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-pgo-use-build'),('candidate','ordering-equal-length-pgo-use-build')]}
+ plan=load(P/'plan.json')
+ def metadata(side,stem):
+  return Path(plan['control_saved_metadata'][stem]['path']) if side=='control' else P/(side+'-'+stem+'.stdout')
+@@ -59,6 +59,6 @@
+   functionproof[label].update(complete_machine_bytes_identical=pair['control']['machine_sha256']==pair['candidate']['machine_sha256'],size_delta=pair['candidate']['bytes']-pair['control']['bytes'])
+ sectionproof={name:{side:sections[side][name] for side in ['control','candidate']} for name in ['.text','.rodata','.data.rel.ro']}
+ assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in d['pins'].items())
+-result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual source-bound entry snapshot/relocation and shared full_parts/return/observer caller audit required; absence of one memcpy alone is insufficient.',limits=['No CPU or correctness execution, generic-to-PGO transfer or whole-binary equality.','Only requested complete linked bodies, at most4 total; source crosswalk covers absent public/observed/root/Q wrappers without inventing emitted counterparts.','Check entry160 copy versus relocation into wrappers/returns/child construction; actual frames/calls/size/ABI/spills and source alias/lifetime invariants. No dynamic copy cost or Callgrind suffix mapping inferred.'])
++result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual source-bound ordinary/Q gap6 and gap1 sorting audit required: distinguish index bounds, priority comparisons, cursor/outer controls, folded equal-length assertion, private outlining and alias/call/frame/copy costs. Generic branch reduction is not PGO evidence.',limits=['No CPU or correctness execution, generic-to-PGO transfer or whole-binary equality.','Only requested complete linked ordinary and Q bodies, at most6 total including any actual outlined sorting helpers; no full evaluator or invented inlined counterpart.','Compare actual sorting bounds roles, exact gap6-then1 permutation, paired move/priority traffic, calls/frames/code/assertion and alias costs. Static branch counts are not dynamic demand or savings; no Callgrind suffix mapping inferred.'])
+ with (P/'analysis.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+ print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate'] if s in v} for k,v in functionproof.items()},all_inputs_unchanged=True)))

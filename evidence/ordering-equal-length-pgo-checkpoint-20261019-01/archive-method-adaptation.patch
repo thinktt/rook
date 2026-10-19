@@ -1,0 +1,35 @@
+--- accepted47/archive_checkpoint.py
++++ 49/archive_checkpoint.py
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env python3
+-"""Exact closed47 own-PGO trees with explicit requested exclusions; inventory, stream, reopen and recheck originals."""
++"""Exact closed49 own-PGO trees with explicit requested exclusions; inventory, stream, reopen and recheck originals."""
+ from pathlib import Path
+ import hashlib,json,os,stat,sys,tarfile,gzip
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-TREES=['ordinary-position-borrow-pgo-preparation-20261019-01', 'ordinary-position-borrow-pgo-training-20261019-01', 'ordinary-position-borrow-pgo-instrumented-build-20261019-01', 'ordinary-position-borrow-pgo-use-build-20261019-01', 'ordinary-position-borrow-pgo-backend-preparation-20261019-01', 'ordinary-position-borrow-pgo-parent-backend-review-20261019-01', 'ordinary-position-borrow-pgo-screen-preparation-20261019-01', 'ordinary-position-borrow-pgo-screen-20261019-01', 'ordinary-position-borrow-pgo-screen-parent-review-20261019-01', 'ordinary-position-borrow-pgo-decision-20261019-01']
++TREES=['ordering-equal-length-pgo-preparation-20261019-01', 'ordering-equal-length-pgo-training-20261019-01', 'ordering-equal-length-pgo-instrumented-build-20261019-01', 'ordering-equal-length-pgo-use-build-20261019-01', 'ordering-equal-length-pgo-backend-preparation-20261019-01', 'ordering-equal-length-pgo-parent-backend-review-20261019-01', 'ordering-equal-length-pgo-screen-preparation-20261019-01', 'ordering-equal-length-pgo-screen-20261019-01', 'ordering-equal-length-pgo-screen-parent-review-20261019-01', 'ordering-equal-length-pgo-decision-20261019-01', 'ordering49-generic-pass-parent-commit-20261019-01']
+ BOUNDS={'max_included_regular_files': 10000, 'max_included_bytes': 67108864, 'max_archive_bytes': 67108864}
+ def digest(f):
+  h=hashlib.sha256();n=0
+@@ -26,7 +26,7 @@
+    assert name not in rows and name not in excluded
+    st=p.stat();reason=None
+    if 'source-before' in p.relative_to(root).parts:
+-    assert tree in ['ordinary-position-borrow-pgo-instrumented-build-20261019-01','ordinary-position-borrow-pgo-use-build-20261019-01']
++    assert tree in ['ordering-equal-length-pgo-instrumented-build-20261019-01','ordering-equal-length-pgo-use-build-20261019-01']
+     reason='duplicate source-before tree; exact72-member archive retained and independently reopened'
+    else:
+     with p.open('rb') as f:magic=f.read(4)
+@@ -50,8 +50,8 @@
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  before,excluded=inventory();write('member-manifest.json',before);write('excluded-manifest.json',excluded)
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,exclusions_exact=146,included_regular_files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),bounds=BOUNDS,scope='Closed47 own-PGO PARK; includes raw54/profile and70screen lifetimes, not140; actualELFs and duplicate source-before trees explicitly excluded, no broad qualification'))
+- archive=HERE/'closed-ordinary-position-borrow-pgo.tar.gz'
++ write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,exclusions_exact=146,included_regular_files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),bounds=BOUNDS,scope='Closed49 own-PGO PARK; includes raw54/profile and70screen lifetimes, not140; actualELFs and duplicate source-before trees explicitly excluded, no broad qualification'))
++ archive=HERE/'closed-ordering-equal-length-pgo.tar.gz'
+  with archive.open('xb') as raw:
+   with gzip.GzipFile(filename='',mode='wb',fileobj=raw,mtime=0) as compressed:
+    with tarfile.open(fileobj=compressed,mode='w',format=tarfile.PAX_FORMAT) as t:
