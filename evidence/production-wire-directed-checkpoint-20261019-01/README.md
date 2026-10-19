@@ -1,0 +1,3 @@
+# Closed current43 directed-wire checkpoint
+
+All four finite witnesses pass with independent raw/chunk/input/exit reconciliation. Parent acceptance is in the sealed packet. The archive reopens all74 exact files, including the original inert preparation and source-review correction history, actual execution, independent review and parent acceptance. Historical inert closure hashes describe their original flags; before-parent-activation copies preserve those bytes, while actual collector/independent terminals and the execution input closure bind the approved run. No full protocol, arbitrary-schedule or performance qualification is implied.

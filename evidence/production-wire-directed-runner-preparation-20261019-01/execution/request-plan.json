@@ -1,0 +1,179 @@
+{
+  "status": "INERT test design, not an executable runner or launch grant",
+  "artifact": "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-use-build-20261019-01/rook2-exact",
+  "artifact_sha256": "36251ecf12cfdc9437c9bfc5b7a571c1992471bee611cab024fc692ac79e91b2",
+  "argv": [
+    "/home/legolas/rook2/evidence/influence-bitsliced-sum-pgo-use-build-20261019-01/rook2-exact",
+    "--work-clock=kingwcr"
+  ],
+  "no_explicit_seed_or_diagnostic_flag": true,
+  "cases": [
+    {
+      "id": "boundary-lf-fragment-idle-eof",
+      "fresh_process": true,
+      "steps": [
+        {
+          "write": "cm_parm opk=37\n",
+          "expect_exact": "cm_parm opk=37\n"
+        },
+        {
+          "write": "cm_parm                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    opk\n",
+          "assert_record_bytes": 1023,
+          "expect_exact_before_next_write_or_eof": "cm_parm opk=37\n"
+        },
+        {
+          "write": "cm_parm op",
+          "wait_own_pipe_unread_bytes": 0,
+          "require_no_output_for_ms": 100
+        },
+        {
+          "write": "k\r",
+          "wait_own_pipe_unread_bytes": 0,
+          "require_no_output_for_ms": 100
+        },
+        {
+          "write": "\n",
+          "expect_exact_before_next_write_or_eof": "cm_parm opk=37\n"
+        },
+        {
+          "write": "\n",
+          "close_stdin_between_commands": true,
+          "expect_remaining_stdout": "",
+          "expect_stderr": "",
+          "expect_exit_code": 0
+        }
+      ],
+      "claim": "Actual ordinary LF boundary, last payload byte, prefix consumed before completion, CR/LF fragmentation, one complete reply without next input, blank then idle EOF; finite schedule only"
+    },
+    {
+      "id": "boundary-crlf-book-idle-quit",
+      "fresh_process": true,
+      "steps": [
+        {
+          "write": "cm_parm opk=37\r\n",
+          "expect_exact": "cm_parm opk=37\n"
+        },
+        {
+          "write": "cm_parm                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   opk\r\n",
+          "assert_record_bytes": 1023,
+          "expect_exact_before_next_write_or_eof": "cm_parm opk=37\n"
+        },
+        {
+          "write": "bk\r\n",
+          "expect_exact_before_next_write_or_eof": " This engine does not have a book.\n \n Okay?\n\n"
+        },
+        {
+          "write": "quit\r\n",
+          "keep_stdin_open_until_process_exit": true,
+          "expect_remaining_stdout": "",
+          "expect_stderr": "",
+          "expect_exit_code": 0
+        }
+      ],
+      "claim": "Actual ordinary CRLF boundary and LF-only exact reply/book bytes, explicit quit with no EOF confound"
+    },
+    {
+      "id": "four-observed-polls-then-abort",
+      "fresh_process": true,
+      "setup": [
+        "new",
+        "force",
+        "easy",
+        "post",
+        "level 0 5 0",
+        "cm_parm opp=100 opn=100 opb=100 opr=100 opq=100 myp=100 myn=100 myb=100 myr=100 myq=100 mycc=100 mymob=100 myks=100 mypp=100 mypw=100 opcc=100 opmob=100 opks=100 oppp=100 oppw=100 cfd=0 sop=100 avd=0 sel=14 tts=67108864 rnd=0 md=20",
+        "time 18100",
+        "cm_parm",
+        "nopost"
+      ],
+      "setup_expected_stdout": "cm_parm opp=100 opn=100 opb=100 opr=100 opq=100 myp=100 myn=100 myb=100 myr=100 myq=100 mycc=100 mymob=100 myks=100 mypp=100 mypw=100 opcc=100 opmob=100 opks=100 oppp=100 oppw=100 cfd=0 sop=100 avd=0 sel=14 tts=67108864 rnd=0 md=20\ncm_parm\n",
+      "atomic_write": "go\n\notim -7\n.\n.\nforce\n",
+      "atomic_write_must_fit_PIPE_BUF": true,
+      "expect_order": [
+        {
+          "type": "status",
+          "searchId": 12288,
+          "total": 20,
+          "remaining_range_inclusive": [
+            0,
+            19
+          ]
+        },
+        {
+          "type": "status",
+          "searchId": 16384,
+          "total": 20,
+          "remaining_range_inclusive": [
+            0,
+            19
+          ]
+        },
+        {
+          "exact": "aborting search ...\n"
+        }
+      ],
+      "no_posts_or_moves": true,
+      "after_abort_steps": [
+        {
+          "write": "cm_parm\n",
+          "expect_exact": "cm_parm\n"
+        },
+        {
+          "write": "e2e4\ne7e5\ncm_parm\n",
+          "expect_exact": "cm_parm\n"
+        },
+        {
+          "write": "quit\n",
+          "keep_stdin_open_until_process_exit": true,
+          "expect_remaining_stdout": "",
+          "expect_stderr": "",
+          "expect_exit_code": 0
+        }
+      ],
+      "claim": "Third/fourth poll directly observed through status N. Fifth force abort has no public N field; no terminal-N assertion. Followup legal moves are finite abort/force-mode checks.",
+      "early_natural_completion": "Coverage precondition unmet; preserve actual outcome and stop, do not claim protocol defect solely because chosen search failed to reach desired polls or tune/retry automatically"
+    },
+    {
+      "id": "graceful-stop-queued-idle-force-completion",
+      "fresh_process": true,
+      "setup": [
+        "new",
+        "force",
+        "easy",
+        "post",
+        "level 0 5 0",
+        "cm_parm opp=100 opn=100 opb=100 opr=100 opq=100 myp=100 myn=100 myb=100 myr=100 myq=100 mycc=100 mymob=100 myks=100 mypp=100 mypw=100 opcc=100 opmob=100 opks=100 oppp=100 oppw=100 cfd=0 sop=100 avd=0 sel=14 tts=67108864 rnd=0 md=20",
+        "time 18100",
+        "cm_parm"
+      ],
+      "setup_expected_stdout": "cm_parm opp=100 opn=100 opb=100 opr=100 opq=100 myp=100 myn=100 myb=100 myr=100 myq=100 mycc=100 mymob=100 myks=100 mypp=100 mypw=100 opcc=100 opmob=100 opks=100 oppp=100 oppw=100 cfd=0 sop=100 avd=0 sel=14 tts=67108864 rnd=0 md=20\ncm_parm\n",
+      "atomic_write": "go\n?\nforce\n",
+      "atomic_write_must_fit_PIPE_BUF": true,
+      "expect_exact_file": "graceful-first-stop-expected.stdout",
+      "expect_exact_file_sha256": "f99adb89edbcb62030748ca18b35421f349cdff6215f1a26369fa217f7c8cc4c",
+      "after_move_steps": [
+        {
+          "write": ".\ncm_parm\n",
+          "expect_exact": "cm_parm\n",
+          "claim": "Actual post-move arrival is necessarily after final search poll; dot is idle no-op, not a live status."
+        },
+        {
+          "write": "e2e4\ncm_parm\n",
+          "expect_exact": "Illegal move: e2e4\ncm_parm\n"
+        },
+        {
+          "write": "e7e5\ncm_parm\n",
+          "expect_exact": "cm_parm\n"
+        },
+        {
+          "write": "quit\n",
+          "keep_stdin_open_until_process_exit": true,
+          "expect_remaining_stdout": "",
+          "expect_stderr": "",
+          "expect_exit_code": 0
+        }
+      ],
+      "claim": "Released first-poll completion stream plus an unconsumed complete successor force handled idle. Exact selected e2e4 has vacated its source before next idle command; black e7e5 does not provoke automatic reply because queued idle force actually took effect. Not an internal full-state identity proof."
+    }
+  ]
+}

@@ -78,8 +78,14 @@ stdlib/libc/loader/environment and finite observation limits remain explicit.
 
 The [current framing review](../evidence/production-wire-framing-review-20261019-01/review.md)
 and its [parent disposition](../evidence/production-wire-framing-parent-review-20261019-01/decision.json)
-confirm current-source continuity and single-line poll ownership. They add no
-runtime framing pass; the listed directed schedules remain open.
+confirm current-source continuity and single-line poll ownership. Four subsequent
+[directed CLI witnesses](../evidence/production-wire-directed-independent-review-20261019-01/review.md)
+pass on exact43, with [parent acceptance](../evidence/production-wire-directed-parent-review-20261019-01/acceptance.json):
+maximum LF/CRLF records, fragmented input, observable FIFO polls and graceful
+completion followed by idle commands. Raw bytes, four normal exits and input
+identities reconcile independently. These finite schedules do not establish
+all protocol clauses, arbitrary interleavings or the unobservable last-poll to
+move-publication arrival interval.
 
 Earlier scalar, score-capacity, depth, IIO and ingress reviews remain linked in
 the historical map, with their original source/artifact identities and limits.

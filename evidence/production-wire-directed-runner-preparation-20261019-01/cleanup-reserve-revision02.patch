@@ -1,0 +1,105 @@
+--- before-parent-review-309722-01/run.py
++++ revision02/run.py
+@@ -162,12 +162,13 @@
+   except PermissionError:self.ownership_unknown=True;return True
+  def finish(self,close_stdin):
+   if close_stdin:self.child.stdin.close();self.log('stdin-eof')
+-  self.cleanup_started=time.monotonic();end=min(self.hard_deadline,self.cleanup_started+self.plan['cleanup_seconds'])
++  self.cleanup_started=time.monotonic();shared_end=min(self.hard_deadline,self.cleanup_started+self.plan['cleanup_seconds'])
++  end=min(self.cleanup_started+self.plan['normal_completion_seconds'],shared_end-self.plan['term_grace_seconds']-self.plan['cleanup_observation_reserve_seconds'])
+   while time.monotonic()<end:
+    if self.child.poll() is not None and not self.selector.get_map() and not self.group_alive():
+     self.cleanup_completed=time.monotonic();break
+    self.pump(end,cleanup=True)
+-  if self.cleanup_completed is None:raise Invalid('normal exit/drain not observed within five-second completion budget')
++  if self.cleanup_completed is None:raise Invalid('normal completion timeout; remaining shared budget reserved for TERM/KILL and observation')
+   if self.child.returncode!=0:raise WitnessError(f'unexpected native exit {self.child.returncode}')
+   if self.pending:raise WitnessError('extra or partial shutdown stdout')
+   if self.counts['stderr']['observed']:raise WitnessError('unexpected stderr')
+@@ -179,7 +180,7 @@
+    for f in [*self.raw.values(),self.events]:f.close()
+    return dict(confirmed=True,launched=False)
+   self.cleanup_started=time.monotonic() if self.cleanup_started is None else self.cleanup_started
+-  end=min(self.hard_deadline,self.cleanup_started+self.plan['cleanup_seconds']);term_sent=False;kill_sent=False
++  end=min(self.hard_deadline,self.cleanup_started+self.plan['cleanup_seconds']);term_sent=False;kill_sent=False;term_at=None;kill_at=None
+   def signal_group(sig):
+    try:os.killpg(self.child.pid,sig)
+    except ProcessLookupError:pass
+@@ -188,17 +189,19 @@
+     if len(self.cleanup_errors)<16:self.cleanup_errors.append(str(e))
+   while self.cleanup_completed is None and time.monotonic()<end:
+    if self.child.poll() is not None and not self.selector.get_map() and not self.group_alive():self.cleanup_completed=time.monotonic();break
+-   if not term_sent:signal_group(signal.SIGTERM);term_sent=True
+-   if time.monotonic()-self.cleanup_started>=self.plan['term_grace_seconds'] and not kill_sent:signal_group(signal.SIGKILL);kill_sent=True
++   if not term_sent:
++    term_at=time.monotonic();signal_group(signal.SIGTERM);term_sent=True
++   if time.monotonic()-term_at>=self.plan['term_grace_seconds'] and not kill_sent:
++    kill_at=time.monotonic();signal_group(signal.SIGKILL);kill_sent=True
+    try:self.pump(end,cleanup=True)
+    except BaseException as e:
+     if len(self.cleanup_errors)<16:self.cleanup_errors.append(f'{type(e).__name__}: {e}')
+   if self.cleanup_completed is None:
+-   signal_group(signal.SIGKILL);kill_sent=True;self.child.poll()
++   kill_at=time.monotonic() if kill_at is None else kill_at;signal_group(signal.SIGKILL);kill_sent=True;self.child.poll()
+    if self.child.returncode is not None and not self.selector.get_map() and not self.group_alive():self.cleanup_completed=time.monotonic()
+   elapsed=(self.cleanup_completed or time.monotonic())-self.cleanup_started
+   confirmed=self.cleanup_completed is not None and elapsed<=self.plan['cleanup_seconds'] and self.cleanup_completed<=self.hard_deadline and not self.ownership_unknown
+-  result=dict(confirmed=confirmed,launched=True,normal_exit=self.normal_exit,pid=self.child.pid,returncode=self.child.returncode,exit_code=self.child.returncode if self.child.returncode is not None and self.child.returncode>=0 else None,signal=-self.child.returncode if self.child.returncode is not None and self.child.returncode<0 else None,actual_return_observed=self.child.returncode is not None,cleanup_started_monotonic=self.cleanup_started,cleanup_completed_observed_monotonic=self.cleanup_completed,cleanup_elapsed_s=elapsed,term_sent=term_sent,kill_sent=kill_sent,unexpected_children=self.unexpected_children,ownership_unknown=self.ownership_unknown,errors=self.cleanup_errors)
++  result=dict(confirmed=confirmed,launched=True,normal_exit=self.normal_exit,pid=self.child.pid,returncode=self.child.returncode,exit_code=self.child.returncode if self.child.returncode is not None and self.child.returncode>=0 else None,signal=-self.child.returncode if self.child.returncode is not None and self.child.returncode<0 else None,actual_return_observed=self.child.returncode is not None,cleanup_started_monotonic=self.cleanup_started,cleanup_completed_observed_monotonic=self.cleanup_completed,cleanup_elapsed_s=elapsed,term_sent=term_sent,kill_sent=kill_sent,term_attempted_monotonic=term_at,kill_attempted_monotonic=kill_at,unexpected_children=self.unexpected_children,ownership_unknown=self.ownership_unknown,errors=self.cleanup_errors)
+   for key in list(self.selector.get_map().values()):
+    try:self.selector.unregister(key.fileobj);key.fileobj.close()
+    except OSError:pass
+@@ -257,7 +260,8 @@
+  budget.result(directory/'result.json',result);return result
+ 
+ def main():
+- plan=load(HERE/'plan.json');clearance_path=HERE/'execution-clearance.json';clearance=load(clearance_path)
++ plan=load(HERE/'plan.json');assert plan['normal_completion_seconds']+plan['term_grace_seconds']+plan['cleanup_observation_reserve_seconds']<=plan['cleanup_seconds']==5
++ clearance_path=HERE/'execution-clearance.json';clearance=load(clearance_path)
+  assert clearance['launch'] is True and clearance['quiet_window_clearance'] is True, 'INERT: no parent launch clearance'
+  review=clearance['parent_review'];assert review and sha(review['path'])==review['sha256']
+  assert Path(sys.executable).resolve()==Path(plan['python']) and sha(sys.executable)==plan['python_sha256']
+--- before-parent-review-309722-01/plan.json
++++ revision02/plan.json
+@@ -39,10 +39,12 @@
+   "performance_measurement": false,
+   "protocol_qualification": false,
+   "ownership": "Exact current43 normal CLI, known single process, fresh private session/group. Unexpected descendants invalidate ownership; no arbitrary detached/delegated-child guarantee.",
+-  "normal_exit": "Explicit quit cases retain open stdin until observed exit. Idle EOF case closes only after last complete command. Native exit/pipes/group must be observed within the single5s completion/cleanup budget; late/unknown exit remains invalid and stops.",
++  "normal_exit": "Use the unchanged single5s completion/cleanup clock: at most2s normal wait, then1s TERM grace and at least1s observation reserve, leaving1s nominal scheduling/bookkeeping headroom. Normal completion timeout is collection-invalid. Never reset or extend cleanup_started.",
+   "no_retries": true,
+   "no_hot_cost_module_dependency": true,
+   "python": "/usr/bin/python3.13",
+   "python_sha256": "889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9",
+-  "deadline_reserve": "The final5s of each120s lifetime and600s study are reserved for completion/cleanup; no automatic extra cleanup interval."
++  "deadline_reserve": "The final5s of each120s lifetime and600s study are reserved for completion/cleanup; no automatic extra cleanup interval.",
++  "normal_completion_seconds": 2,
++  "cleanup_observation_reserve_seconds": 1
+ }
+--- before-parent-review-309722-01/README.md
++++ revision02/README.md
+@@ -16,8 +16,12 @@
+ 
+ Native/controller inherit exact housekeeping0–5,8–13; no14/15, accounting or timing benchmark. A fresh direct native process starts a private session/group; actual executable/PID/start identity, affinity, pgid and sid are checked. The selected source is known single-process. Unexpected children invalidate ownership and stop; this is not an arbitrary daemon/delegation cleanup claim. Its own group is terminated as needed, with actual native return and group/pipes completion retained. No host/global/security/cgroup setting is changed.
+ 
+-Keep the closed design's30s per reply,120s per lifetime,600s whole study,4MiB per raw/event stream,16KiB stdin/lifetime and64MiB total. Reserve the final5s within both lifetime/study caps for completion/cleanup, rather than adding another interval after expiry. TERM then KILL may be used on failure, with a single monotonic five-second budget; late/unknown exit is unconfirmed even if a last kill is attempted. Parent intervention is required after unconfirmed cleanup, and no later case or source/hash work runs. All retained bytes and observed/discarded counts survive caps. A256KiB metadata reserve is inside, not added to, the64MiB total.
++Keep the closed design's30s per reply,120s per lifetime,600s whole study,4MiB per raw/event stream,16KiB stdin/lifetime and64MiB total. Reserve the final5s within both lifetime/study caps for completion/cleanup, rather than adding another interval after expiry. Normal completion waits at most2s; the remaining shared budget preserves1s TERM grace, at least1s nominal post-KILL observation/drain reserve and1s scheduling/bookkeeping headroom. TERM grace starts at the actual TERM attempt. TERM then KILL may be used on failure, with the same single monotonic five-second budget; late/unknown exit is unconfirmed even if a last kill is attempted. Parent intervention is required after unconfirmed cleanup, and no later case or source/hash work runs. All retained bytes and observed/discarded counts survive caps. A256KiB metadata reserve is inside, not added to, the64MiB total.
+ 
+ The source has no retries, outlier deletion or cap increases. First failure/unavailable precondition stops the batch. It prints only allowlisted summary fields; detailed raw/expected/assertion/exit records stay in execution. Behavioral observations, missing schedule preconditions and environment/resource/cleanup invalidity remain separate dispositions for parent adjudication. No formal protocol/full3288 or performance qualification follows from these four witnesses.
+ 
+ This preparation used source text, small file pins and AST inspection only. Safety and protocol mechanisms are unrun; parent must review the actual code before enabling anything. Parent records the real outer terminal separately at execution/tool-terminal.json only after observing it. Frozen original design, engine/tools/spec and hot-cost preparations were not edited.
++
++## Parent review correction02 (source only)
++
++Original frozen run/plan/helperpins/prepared/closure and supporting docs are preserved under before-parent-review-309722-01. Parent actual309722/0 found that the original finish consumed the whole5s budget and left only a final kill/poll. cleanup-reserve-revision02.patch shows the exact correction. finish now ends normal waiting early; a normal-exit timeout is collection-invalid and stops. cleanup uses the original start/end, measures TERM grace from the TERM attempt and retains actual TERM/KILL attempt timestamps. No additional interval or clock reset is granted. All four packet/expected bytes are unchanged. The corrected mechanisms remain unrun, not claimed validated.
+--- before-parent-review-309722-01/implementation-map.md
++++ revision02/implementation-map.md
+@@ -4,7 +4,7 @@
+ - `Process.start`: single direct ordinary CLI child, fresh session/group, native actual PID/start/exe/affinity/pgid/sid. No Node/Valgrind, seed hook or native source change.
+ - `send`, `expect`, `line`, `fragment_consumed`: retained real stdin chunks and flushes; exact replies before the next write; atomic <=PIPE_BUF control packets; own-pipe consumption then fixed quiet observation; unsupported FIONREAD/partial atomic write becomes unavailable coverage, not pass.
+ - `status`, `run_case`: exact released first-stop expected bytes; directly observed third/fourth poll N; raw abort and no-move effects; late idle dot, duplicate selected-move source check and force-mode followup. No manufactured finalN or complete hidden-state assertion.
+-- `finish`, `cleanup`: explicit quit with stdin held open versus idle EOF; actual0/no signal/drained streams; one monotonic5s completion/cleanup budget reserved inside lifetime120s/study600s. TERM/KILL group fallback; late/unknown closure invalid, no automatic retry. Unknown native descendants invalidate the known single-process model.
++- `finish`, `cleanup`: explicit quit with stdin held open versus idle EOF; actual0/no signal/drained streams; one monotonic5s completion/cleanup budget reserved inside lifetime120s/study600s: at most2s normal wait,1s TERM grace,1s observation reserve and1s nominal headroom. TERM grace uses its actual attempt time; no clock reset. TERM/KILL group fallback; late/unknown closure invalid, no automatic retry. Unknown native descendants invalidate the known single-process model.
+ - `Budget`, `capture`, `log`: exact retained raw bytes, observed/discarded counts and bounded timestamp events; streaming file hashes; partial retained-file writes accounted. Raw/event4MiB, stdin16KiB, whole64MiB with internal256KiB metadata reserve. No silently discarded overflow or rewritten failure.
+ 
+ The structural inspiration is our accepted `tools/check_live.py` byte-process pattern, already pinned by the closed design. This is new finite interactive code, not claimed to be byte-equivalent to that helper. Original fixture/expected inputs are unchanged; checks come from the closed design and released wire/PV rules. All mechanisms remain unrun pending separate parent review/activation. No protocol/full3288/performance qualification is asserted.
