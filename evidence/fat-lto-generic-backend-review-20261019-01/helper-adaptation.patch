@@ -1,0 +1,50 @@
+--- closed35/capture.py
++++ fat36/capture.py
+@@ -7,7 +7,7 @@
+ CAP=128*1024
+ BODY_CAP=12
+ D={'control':E/'ordinary-projected-bits-generic-build-20261018-01',
+-   'candidate':E/'activity-category-masks-generic-build-20261019-01'}
++   'candidate':E/'fat-lto-generic-build-20261019-01'}
+ def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+ def put(path,value):
+     with path.open('x') as f: json.dump(value,f,indent=2);f.write('\n')
+@@ -33,7 +33,7 @@
+         assert receipt['rust_flags']==['-C','target-cpu=x86-64']
+         assert receipt['source_sha256_before']==receipt['source_sha256_after']
+         assert receipt['tool_sha256_before']==receipt['tool_sha256_after']
+-        assert len(receipt['source_sha256_before'])==(46 if side=='control' else 48)
++        assert len(receipt['source_sha256_before'])==46
+         assert len(receipt['tool_sha256_before'])==23
+         image=base/'rook2-exact'; expected=plan[side+'_sha256']
+         assert sha(image)==expected==receipt['binary_output']['sha256']
+@@ -47,9 +47,18 @@
+     for key in ['mode','target_triple','target_cpu','jobs','toolchain','build_effective_environment']:
+         assert a[key]==b[key],key
+     old,new=a['source_sha256_before'],b['source_sha256_before']
+-    assert set(new)-set(old)=={'src/activity/batch.rs','src/activity/batch_tests.rs'}
+-    assert set(old)<=set(new)
+-    assert [k for k in old if old[k]!=new[k]]==['src/activity.rs']
++    assert set(new)==set(old)
++    assert [k for k in old if old[k]!=new[k]]==['Cargo.toml']
++    old_manifest=(D['control']/'source-before/Cargo.toml').read_text()
++    new_manifest=(D['candidate']/'source-before/Cargo.toml').read_text()
++    assert old_manifest.count('lto = "thin"')==1
++    assert new_manifest==old_manifest.replace('lto = "thin"','lto = "fat"')
++    for side,setting in [('control','thin'),('candidate','fat')]:
++        log=D[side]/'build.stderr';pins[str(log)]=sha(log)
++        binary_lines=[line for line in log.read_text().splitlines() if '--crate-type bin' in line and 'src/bin/rook2.rs' in line and 'Running ' in line]
++        assert len(binary_lines)==1
++        assert '-C lto='+setting+' ' in binary_lines[0]
++        assert '-C codegen-units=1 ' in binary_lines[0]
+     for tool in ['nm','objdump','readelf','size']:
+         path=Path('/usr/bin')/tool;pins[str(path)]=sha(path)
+     return pins
+@@ -96,6 +105,7 @@
+         commands.append(run(['/usr/bin/'+tool,'--version'],tool+'-version'))
+     for side,base in D.items():
+         image=str(base/'rook2-exact')
++        commands.append(run(['/usr/bin/nm','--numeric-sort','--print-size',image],side+'-nm-mangled'))
+         commands.append(run(['/usr/bin/nm','--numeric-sort','--print-size','--demangle',image],side+'-nm'))
+         commands.append(run(['/usr/bin/size','-A',image],side+'-size'))
+         commands.append(run(['/usr/bin/readelf','-rW',image],side+'-relocations'))

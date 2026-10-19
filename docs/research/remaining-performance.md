@@ -1,6 +1,11 @@
 # Remaining performance investigations
 
 Retained production is candidate25. Subsequent experiments26–35 are parked.
+Experiment36 is a distinct manifest-only fatLTO build trial: generic70 strict
+checks/accounting pass with2.541759%lower summed medians,7/7lower. It advances
+only to own-config PGO and its separate screen; production is not promoted.
+The released reference uses fatLTO, and actual generic lowering proves broader
+integration. No fraction of the remaining reference gap is assigned to it.
 Experiment32 improves generic timing but fails its own-source PGO pilot at
 0.239039%higher summed medians; broader qualification is not run. Experiment33's
 distinct validated fixed-root weighted cache passes9focused/source/backend and
