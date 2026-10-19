@@ -21,6 +21,12 @@ higher summed median CPU and1/7lower. Only its two focused native checks and
 No source or qualification transfers; retained37 remains current. See
 [decision0029](decisions/0029-packed-four-tier-relations.md).
 
+Experiment39 const pressure lookup is rejected before tests/timing: actual
+per-ray-square256B memcpy and304B frame growth defeat the intended mechanism.
+Its offline algebra pass does not qualify the binary. Distinct40 shared-static
+storage remains unqualified and does not alter retained37. See
+[decision0030](decisions/0030-const-pressure-value-lookup.md).
+
 Previous candidate25 projected Boolean source passes the complete mandatory
 fixture set: 117 operations, 7673 cases across 115 whole files, and 209 fresh
 diagnostic units. Its 178 native tests are reused by exact source69 equality;

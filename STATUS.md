@@ -30,6 +30,12 @@ checks and all70 original strict replays pass; no PGO, full suite or promotion
 follows. Candidate37 stays retained. See
 [decision0029](docs/decisions/0029-packed-four-tier-relations.md).
 
+Experiment39 const pressure lookup is rejected at code inspection: each
+admitted ray square copies256B to the stack, growing king_pressure's frame304B.
+No native tests or timing ran. Distinct40 shared-static storage is isolated and
+under review; retained37 remains exact. See
+[decision0030](docs/decisions/0030-const-pressure-value-lookup.md).
+
 ## Previous candidate25 projected Boolean checks, 2026-10-18
 
 Candidate25 is integrated by exact source equality after its own-PGO trial,

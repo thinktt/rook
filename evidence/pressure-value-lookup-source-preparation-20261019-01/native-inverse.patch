@@ -1,0 +1,36 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -425,29 +425,12 @@
+     }
+ }
+ 
+-// Each mark bit contributes independently; every sum is at most 112.
+-const PRESSURE_VALUES: [u8; 256] = {
+-    let weights = [16u8, 24, 8, 16, 8, 16, 8, 16];
+-    let mut values = [0u8; 256];
+-    let mut mark = 0usize;
+-    while mark < values.len() {
+-        let mut bit = 0usize;
+-        let mut value = 0u8;
+-        while bit < weights.len() {
+-            if mark & (1usize << bit) != 0 {
+-                value += weights[bit];
+-            }
+-            bit += 1;
+-        }
+-        values[mark] = value;
+-        mark += 1;
+-    }
+-    values
+-};
+-
+ #[inline]
+ fn pressure_value(mark: u8) -> i32 {
+-    i32::from(PRESSURE_VALUES[usize::from(mark)])
++    i32::from(mark & 1 != 0) * 16
++        + i32::from(mark & 2 != 0) * 24
++        + (mark & 0x54).count_ones() as i32 * 8
++        + (mark & 0xa8).count_ones() as i32 * 16
+ }
+ 
+ fn king_pressure(position: &Position, defender: Color, marks: &Marks) -> i32 {

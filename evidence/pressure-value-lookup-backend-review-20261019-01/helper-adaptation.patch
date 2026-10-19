@@ -1,0 +1,29 @@
+--- closed38generic/capture.py
++++ inert39generic/capture.py
+@@ -7,7 +7,7 @@
+ CAP=128*1024
+ BODY_CAP=12
+ D={'control':E/'coherent-influence-masks-generic-build-20261019-01',
+-   'candidate':E/'packed-four-tier-relations-generic-build-20261019-01'}
++   'candidate':E/'pressure-value-lookup-generic-build-20261019-01'}
+ def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+ def put(path,value):
+     with path.open('x') as f: json.dump(value,f,indent=2);f.write('\n')
+@@ -56,7 +56,7 @@
+     assert set(old)==set(new)
+     changed=sorted(k for k in old if old[k]!=new[k])
+     added=sorted(set(new)-set(old))
+-    assert len(changed)==2 and changed==plan['expected_changed_members']
++    assert len(changed)==1 and changed==plan['expected_changed_members']
+     assert added==plan['expected_new_members']==[]
+     assert freeze['files_sha256']=={**new,**b['tool_sha256_before']}
+     assert (D['control']/'source-before/Cargo.toml').read_bytes()==(D['candidate']/'source-before/Cargo.toml').read_bytes()
+@@ -132,7 +132,7 @@
+         start,length=int(start,16),int(length,16);assert 0<length<=0x800
+         found=[r for r in discovery['symbols'][side] if r['address']<=start<r['address']+r['bytes']]
+         assert len(found)==1;row=found[0];assert start+length<=row['address']+row['bytes']
+-        hot=(any(namespace in row['name'] for namespace in ['rook2::influence::','rook2::activity::','rook2::ordinary_policy::','rook2::pawn_terms::']) or row['name']=='rook2::run' or any(x in row['name'] for x in ['rook2::evaluator::','::full_impl','::visit_ordinary','::visit_q_impl','::visit_quiescence','::main']))
++        hot=('rook2::activity::' in row['name'] or row['name']=='rook2::run' or any(x in row['name'] for x in ['rook2::evaluator::','::full_impl','::visit_ordinary','::visit_q_impl','::visit_quiescence','::main']))
+         assert hot,'No allocator or unrelated body capture'
+         requests.append({'side':side,'start':start,'length':length,'symbol':row,
+             'starts_at_entry':start==row['address'],'whole_body':start==row['address'] and length==row['bytes']})

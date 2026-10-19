@@ -17,6 +17,15 @@ Its fixed70 independently reports0.697096%higher summed median CPU and1/7lower,
 failing the rule. Park without retuning, retry, PGO or broad qualification.
 Retained37 stays exact; see [decision0029](../decisions/0029-packed-four-tier-relations.md).
 
+Experiment39 pressure-value lookup has a finite256-input source proof, but its
+generic ray code copies the const array256B for every admitted square and grows
+king_pressure's frame304B. It is rejected before tests/timing; no CPU result is
+claimed. Distinct40 requests shared static storage and receives separate gates.
+Current37 own-PGO ray code confirms real software-popcount arithmetic, while
+the knight path already specializes to cheap bit operations; both opportunity
+and new load-dependency risk remain. See
+[decision0030](../decisions/0030-const-pressure-value-lookup.md).
+
 Experiment36 manifest-only fatLTO passes generic70 at2.541759%lower/7of7,
 then fails its independent own-fatPGO70 at0.414725%higher/3of7. Own54training/
 raw/PID/remerge and strict70/accounting pass. Actual PGO factoring/frame growth
