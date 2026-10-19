@@ -1,0 +1,21 @@
+# Experiment32 own-source PGO fixed70 preparation
+
+INERT. Parent-review and all-owned-jobs-closed Booleans remain FALSE; actual own-PGO backend acceptance and root final/quiet closure are null prerequisites. This directory contains only source/helper metadata preparation. No helper/parser/oracle, engine/native/compiler/test/static/profiler/merge/Git/archive execution occurred, and no existing file was changed.
+
+Three runnable helpers are BYTE-IDENTICAL to the accepted generic32 pilot/reconciler/original70 checker. Their adaptation patches are intentionally empty. Only plan identities/phase/provenance change; plan.adaptation.patch shows them. Exact control is own25PGO51529cebf24ad91b0cf86e4ae497bc32bb7ad7a819f8b300f8b86028326b254a, candidate own32PGOd2fac478bb7ba45019421f082cca31a03b4b1516bb4a553fbacb4294e3a1a212 (7,063,960B0555). Neither generic image/timing is used as this pilot's performance evidence.
+
+Candidate source69 graph3c8aeee3b726aa6de3edc1c2e7dde4fcc784c44b06616753ff83992b5d802e6a and46native/23tools match instrumented/training/use receipts. Compiler/toolchain and flags match control after substituting ONLY the distinct own-source profile path; profiles are not transferred/equated. Candidate profile89cd873f3b1b4f049571a28809ebb50c6885179548b819bcd95bf032959512e3 is from its fresh54 training, actual130e40/session54367→f2f84c/0; original offline54 and byte-identical independent remerge d0e688/0. Use buildbb2a5a/session41833→8abf47/0 and freeze f314c7/0 are bound with actual receipts/terminals.390 initial immutable dependencies include training/raw54 profile hashes/replay/launch/profile/provenance, source maps, instrumented/use archive receipts and control's own profile inputs. No raw/profile processing or archive reopening was repeated by this preparation.
+
+Historical captured training clearance is an immutable input of its CLOSED training proof. No future CPU/backend clearance is pinned; parent must join the later actual acceptance and final quiet closure, then freeze/activate the plan.179=177lib+2dev remains SOURCE DECLARATION metadata, not a full179 execution claim/prerequisite. Same-source generic focused9 proof is bound explicitly. Fresh use54/eight-wire24/full117/pre-gate have NOT run and are not silently claimed; they require separate parent selection after a useful own-PGO pilot.
+
+The untouched pretraining declaration is pressure-table-traversal-pgo-preparation-20261019-01/pilot-predeclaration.json; its hash is pinned in plan.json. It predates training and fixes cases01/02/04/05/29/35/08,70lifetimes/14excluded warmups/56measured, four samples per case/variant. Advance only if aggregate sum-of-medians ratio<=.995 AND5of7 lower medians AND worst ratio<=1.02. Otherwise PARK; no retry/outlier deletion, broad checks or promotion. No generic gain or historical own-PGO gain transfers.
+
+After parent backend/final closure and explicit plan activation ONLY:
+
+```
+taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/pressure-table-traversal-pgo-cpu-pilot-preparation-20261019-01/pilot.py --plan /home/legolas/rook2/evidence/pressure-table-traversal-pgo-cpu-pilot-preparation-20261019-01/plan.json
+# Observe actual outer session/initial/terminal/exit; retain output/tool-terminal.json before dependent offline reconciliation.
+taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/pressure-table-traversal-pgo-cpu-pilot-preparation-20261019-01/reconcile_pilot.py --plan /home/legolas/rook2/evidence/pressure-table-traversal-pgo-cpu-pilot-preparation-20261019-01/plan.json
+```
+
+Unchanged methods preserve nativeCPU14/single task, helperH/no owned sibling15 tasks, wait4 user+system arithmetic, original direct exits/PIDs/argv/streams, input/image before-after hashing, context/quiet checks and independent all70 original checkReplay. Four-sample full ranges/medians/aggregate remain, without confidence, PMU/CPI, host isolation or qualification claims. Preserve all failures and actual outer terminals; stop dependencies on failure. Root/old experiment sources, frozen predeclaration and weighted feasibility memo remain unchanged; no further cache work occurred.

@@ -1,0 +1,24 @@
+--- generic32/analyze.py
++++ ownPGO32/analyze.py
+@@ -5,7 +5,7 @@
+ def save(n,d):(E/n).write_text(json.dumps(d,indent=2)+'\n')
+ summary={};calls={};tables={};windows={}
+ for side in ['control','candidate']:
+- image=Path(next(p for p in pins if p.endswith('/rook2-exact') and ('pressure-table-traversal-generic-build' in p)==(side=='candidate')))
++ image=Path(next(p for p in pins if p.endswith('/rook2-exact') and ('pressure-table-traversal-pgo-use-build' in p)==(side=='candidate')))
+  b=image.read_bytes();assert b[:6]==b'\x7fELF\x02\x01'
+  shoff=struct.unpack_from('<Q',b,40)[0];size,num=struct.unpack_from('<HH',b,58);rel={}
+  for i in range(num):
+@@ -32,10 +32,10 @@
+   row={k:f[k] for k in ['symbol','address','bytes','static_instructions']}
+   row.update(entry_rsp_subtractions=f['rsp_adjustments'][:2],static_stack_memory_reference_instructions=len(f['stack_memory_reference_instructions']),call_sites=len(f['calls']),imul_count=len(f['imuls']))
+   summary[side].append(row)
+-  if 'activity::king_pressure' in f['symbol']:
++  if 'activity::compute' in f['symbol']:
+    calls[side]=[resolve(c) for c in f['calls']]
+    tables[side]=[resolve({'address':a,'instruction':s}) for a,s in ins if '# ' in s and ('geometry::' in s or 'QWORD PTR [rip' in s)]
+-   ranges=([(0x1a88b,0x1a89b),(0x1a91f,0x1a974),(0x1a990,0x1a9ef)] if side=='control' else [(0x1a81c,0x1a83d),(0x1a8c9,0x1a8ee),(0x1a97e,0x1a9b5),(0x1aa26,0x1aa87)])
++   ranges=([(0x12d09,0x12d40),(0x13271,0x132d0)] if side=='control' else [(0x12a7d,0x12ac5),(0x1306f,0x130c4),(0x1316a,0x131c9),(0x13686,0x13703)])
+    windows[side]=[[{'address':a,'instruction':s} for a,s in ins if start<=int(a,16)<=end] for start,end in ranges]
+   if '::full_impl' in f['symbol']:
+    save(side+'-full-activity-call.json',[resolve(c) for c in f['calls'] if resolve(c).get('resolved_symbol')=='rook2::activity::compute'])

@@ -99,12 +99,13 @@ lower, but only2/7 cases improve; aggregate<=0.995 and>=5lower both fail. No
 PGO, broad178/117, standalone54/wire, games or source promotion follows; see
 [decision0022](decisions/0022-arithmetic-pressure-mark-trial.md).
 
-Experiment32 pressure table traversal passes its generic fixed70 gate:
-0.832364%lower summed case medians,6/7lower,worst1.000171. Focused9 checks
-precede timing; all179 native tests pass afterward. Fresh own-source PGO and a
-separate own-PGO pilot are selected. Generic results do not qualify or promote
-it; retained25 is unchanged. See
-[decision0023](decisions/0023-pressure-table-traversal-trial.md).
+Experiment32 pressure table traversal is parked after its own-PGO fixed70:
+0.239039%higher summed case medians,4/7lower,worst1.011352, failing the
+predeclared rule. Its generic0.832364% improvement does not transfer. Focused9
+precede generic timing and all179 native tests pass afterward; fresh54 training,
+independent replay/remerge and all70 own-PGO strict checks pass. No retry,
+fresh use54/eight-wire/full117/pre-gate or promotion is selected; retained25 is
+unchanged. See [decision0023](decisions/0023-pressure-table-traversal-trial.md).
 
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).

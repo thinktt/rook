@@ -1,7 +1,10 @@
 # Remaining performance investigations
 
-Retained production is candidate25. Subsequent experiments26–31 are parked;
-experiment32 has passed its generic gate and is selected for fresh own-source PGO.
+Retained production is candidate25. Subsequent experiments26–32 are parked.
+Experiment32 improves generic timing but fails its own-source PGO pilot at
+0.239039%higher summed medians; broader qualification is not run. A bounded
+weighted-cache architectural review is closed with dependency/lifetime/provenance
+conditions, but no new variant is selected or implemented.
 Current results and qualification limits are in
 [qualification gaps](../qualification-gaps.md) and decisions0016–0023.
 Entries below preserve the historical investigation record and artifact scopes.
