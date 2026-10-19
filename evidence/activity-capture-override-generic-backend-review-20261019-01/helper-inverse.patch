@@ -1,0 +1,78 @@
+--- /home/legolas/rook2/evidence/activity-capture-override-generic-backend-review-20261019-01/capture.py
++++ /home/legolas/rook2/evidence/influence-source-range-backend-review-20261019-01/capture.py
+@@ -3,7 +3,7 @@
+ import hashlib,json,os,subprocess,sys
+ P=Path(__file__).resolve().parent;E=P.parent
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+-SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('activity-capture-override',None)}
++SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('influence-source-range',None)}
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def load(p):return json.loads(Path(p).read_text())
+ def save(p,j):
+@@ -50,7 +50,7 @@
+  for key in ['toolchain','mode','target_triple','target_cpu','jobs','rust_flags','build_effective_environment','cargo_config_sha256_before']:
+   assert a[key]==b[key],key
+  assert a['tool_sha256_before']==b['tool_sha256_before']
+- changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/activity.rs']
++ changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/attacks.rs']
+  freeze=load(plan['candidate_source_freeze']['path'])
+  assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+  assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
+@@ -58,7 +58,7 @@
+  assert len(b['source_sha256_before'])==49 and len(b['tool_sha256_before'])==23
+  assert b['mode']=='generic' and b['pgo']['mode']=='none'
+  assert all(sha(p)==h for p,h in pins.items())
+- save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,compiler_settings_equal=True,only_activity_source_changed=changed,source_files=72,native49_tools23=True))
++ save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,compiler_settings_equal=True,only_attacks_source_changed=changed,source_files=72,native49_tools23=True))
+  print(json.dumps(dict(complete=True,commands=len(commands),pins=len(pins),only_changed=changed)))
+ 
+ def bodies():
+@@ -77,7 +77,7 @@
+    if len(parts)==4 and parts[2] in ['t','T'] and int(parts[0],16)==start and int(parts[1],16)==size:symbol_rows.append(parts[3])
+   assert row['actual_symbol'] in symbol_rows,(row,symbol_rows)
+   stem=side+'-'+row['label']
+-  result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],stem)
++  result=run(['/usr/bin/objdump','-d','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],stem)
+   total+=(P/(stem+'.stdout')).stat().st_size;assert total<=1048576,total
+   rows.append(dict(**row,command=result,raw_bytes=(P/(stem+'.stdout')).stat().st_size))
+  assert all(sha(p)==h for p,h in d['pins'].items())
+--- /home/legolas/rook2/evidence/activity-capture-override-generic-backend-review-20261019-01/analyze.py
++++ /home/legolas/rook2/evidence/influence-source-range-backend-review-20261019-01/analyze.py
+@@ -6,7 +6,7 @@
+ sha=lambda b:hashlib.sha256(b).hexdigest()
+ d=load(P/'discovery.json');requests=load(P/'body-request.json');bodyproof=load(P/'bodies.json')
+ assert bodyproof['complete'] and bodyproof['all_discovery_inputs_unchanged']
+-images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-generic-build'),('candidate','activity-capture-override-generic-build')]}
++images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-generic-build'),('candidate','influence-source-range-generic-build')]}
+ sections={};raw={};symbols={}
+ for side,image in images.items():
+  raw[side]=image.read_bytes();assert sha(raw[side])==d['pins'][str(image)]
+@@ -33,23 +33,18 @@
+   address=int(line.split()[-1],16);return dict(slot=hex(slot),relocation=line,target_address=hex(address),symbol=symbols[side].get(address))
+  return dict(slot=hex(slot),relocation=line)
+ functionproof={}
+-for label in sorted({r['label'] for r in requests}):
++for label in ['producer','ensure','ordinary']:
+  pair={}
+  for side in ['control','candidate']:
+-  matches=[r for r in requests if r['side']==side and r['label']==label]
+-  if not matches:continue  # No invented old counterpart for a newly outlined helper.
+-  assert len(matches)==1
+-  r=matches[0];address=int(r['start'],16);code=get(side,address,r['bytes'])
++  r=next(r for r in requests if r['side']==side and r['label']==label);address=int(r['start'],16);code=get(side,address,r['bytes'])
+   assert symbols[side][address]==dict(bytes=r['bytes'],name=r['actual_symbol'])
+   text=(P/(side+'-'+label+'.stdout')).read_text();ins=re.findall(r'^\s*([0-9a-f]+):\s+(.+)$',text,re.M)
+   calls=[dict(address=a,operand=i,resolved=resolve(side,i)) for a,i in ins if re.match(r'call\s',i)]
+   refs=[dict(address=a,operand=i,resolved=resolve(side,i)) for a,i in ins if '# ' in i and resolve(side,i)]
+   pair[side]=dict(address=hex(address),bytes=r['bytes'],machine_sha256=sha(code),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',i)) for _,i in ins),call_sites=calls,resolved_RIP_references=refs,instructions=len(ins),AND_instructions=[dict(address=a,operand=i) for a,i in ins if re.match(r'and\s',i)],conditional_branches=[dict(address=a,operand=i) for a,i in ins if re.match(r'j(?!mp)[a-z]+\s',i)])
+- functionproof[label]=dict(**pair)
+- if set(pair)=={'control','candidate'}:functionproof[label].update(complete_machine_bytes_identical=pair['control']['machine_sha256']==pair['candidate']['machine_sha256'],size_delta=pair['candidate']['bytes']-pair['control']['bytes'])
+- else:functionproof[label]['unpaired_actual_owner']=True
++ functionproof[label]=dict(**pair,complete_machine_bytes_identical=pair['control']['machine_sha256']==pair['candidate']['machine_sha256'],size_delta=pair['candidate']['bytes']-pair['control']['bytes'])
+ sectionproof={name:{side:sections[side][name] for side in ['control','candidate']} for name in ['.text','.rodata','.data.rel.ro']}
+ assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in d['pins'].items())
+-result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual generic-to-generic complete-body forced-victim dominance/lookup bypass proof required. Static branch/AND counts do not establish bypass or savings.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','Only requested complete activity/common full and actually necessary outlined classifier bodies; recursive/Q/timed owners not dumped.','Forced/unforced numerical paths, existing Queen/direct shortcuts, additional charge, empty/pawn branch costs, calls/copies/frame/spills and ISA require manual review. No transferred PGO-control finding.'])
++result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual complete-body route/source-range comparison required; aggregate AND/branch counts are static bookkeeping, not targeted removal proof.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','Only complete producer/ensure/ordinary instruction bodies; other instantiations/Q/timed/full not dumped.','Source-bound target ranges, no-slider preservation, calls/copies/frame/spills and ISA require bounded manual review; cold bounds-call presence is not dynamic hot cost.'])
+ with (P/'analysis.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+-print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate'] if s in v} for k,v in functionproof.items()},all_inputs_unchanged=True)))
++print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate']} for k,v in functionproof.items()},all_inputs_unchanged=True)))

@@ -26,6 +26,8 @@ replay checks passed, but its fixed generic screen improved only0.345564%
 [parked without retry or own-PGO](../evidence/influence-source-range-decision-20261019-01/README.md);
 the accepted production artifact and whole54/12 timings remain43's.
 
+Candidate46 bypassed unused relation reads for forced capture categories. Its10 focused tests and70 exact replay checks passed, but the fixed generic screen improved only0.048659%, with3of7 lower cases, failing both preset improvement gates. It is [parked without retry or own-PGO](../evidence/activity-capture-override-decision-20261019-01/README.md). Candidate43 remains accepted.
+
 Fresh [mandatory validation](../evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/validation-summary.json)
 passes189 native tests,209 diagnostic tests and7,673 cases across117 operations
 and115 whole fixture files. The ordinary image separately passes all54 strict
