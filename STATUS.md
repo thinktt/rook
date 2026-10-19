@@ -1,6 +1,30 @@
 # Implementation status
 
-## Current stage — candidate40 static pressure lookup, 2026-10-19
+## Current stage — candidate43 bit-sliced Influence, 2026-10-19
+
+Candidate43 replaces40 by exact equality of all115 tested source files after
+fresh189native/209diagnostic tests, all7673 mandatory cases/117operations/
+115wholefiles, optimized54/eight-wire24 and regular12pre-gate/632searches,
+continuity8 and required seed11/persistence3 controls. Every original/raw output
+and exit independently reconciles. Only three files change: private coherent
+Influence accumulation uses eight local wrapping counter planes and one output
+transpose; existing immutable leaper masks supply targets. The scalar no-slider
+path, slider geometry, public/custom-map authority, state layout and charges stay
+unchanged. Conditional production arithmetic review finds no new carry,
+multiplicity, color or transpose gap; unchanged coherence/geometry premises remain.
+
+Generic70 improves0.714195%/5of7; fresh own-source PGO70 improves1.160850%/7of7.
+Ordinary36251ecf/profile132fc1fd and diagnosticb024c045 are the exact tested
+isolated-path artifacts, without a canonical rebuild claim. Full43 whole54/12
+costs are pending. The latest complete timings remain40's70.500search/
+70.968677whole54 and712.333390whole12. No full43 timing gain is inferred from
+its seven-case screen. Final same-hardware performance qualification, remaining
+production-domain review and the external3288 gameplay gate remain open.
+See [local validation](evidence/influence-bitsliced-sum-qualification-20261019-01/README.md),
+[source promotion](evidence/influence-bitsliced-sum-integration-20261019-01/source-promotion.json)
+and [decision0035](docs/decisions/0035-bit-sliced-influence-accumulation.md).
+
+## Previous candidate40 static pressure lookup, 2026-10-19
 
 Candidate40 replaces37 by exact tested source115 equality after185native and
 209diagnostic tests, all7673 mandatory cases/117operations/115wholefiles,

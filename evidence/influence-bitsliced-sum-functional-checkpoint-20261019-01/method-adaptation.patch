@@ -1,0 +1,117 @@
+--- accepted28/archive_checkpoint.py
++++ functional43/archive_checkpoint.py
+@@ -1,10 +1,25 @@
+ #!/usr/bin/env python3
+-"""Exact closed28 trees only; inventory, stream, reopen and recheck originals."""
++"""Closed43 functional trees only; deterministic gzip, full reopen/original recheck."""
+ from pathlib import Path
+-import hashlib,json,os,stat,sys,tarfile
++import gzip,hashlib,json,os,stat,sys,tarfile
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-TREES=['direct-child-construction-build-validation-20261019-01', 'direct-child-construction-decision-20261019-01', 'direct-child-construction-generic-build-20261019-01', 'direct-child-construction-generic-codegen-review-20261019-01', 'direct-child-construction-preparation-20261019-01', 'direct-child-construction-source-review-20261019-01']
++TREES=[
++ 'influence-bitsliced-sum-conformance-preparation-20261019-01',
++ 'influence-bitsliced-sum-conformance-20261019-01',
++ 'influence-bitsliced-sum-conformance-build-20261019-01',
++ 'influence-bitsliced-sum-postuse-validation-preparation-20261019-01',
++ 'influence-bitsliced-sum-postuse-validation-20261019-01',
++ 'influence-bitsliced-sum-pregate-preparation-20261019-01',
++ 'influence-bitsliced-sum-pregate-20261019-01',
++]
++EXACT_EXCLUSIONS={
++ 'influence-bitsliced-sum-conformance-preparation-20261019-01/full-native189/unit-bin/rook2/unit-exact':'native library unit ELF explicitly excluded',
++ 'influence-bitsliced-sum-conformance-preparation-20261019-01/full-native189/unit-bin/rook2-dev/unit-exact':'native development unit ELF explicitly excluded',
++ 'influence-bitsliced-sum-conformance-preparation-20261019-01/diagnostic-build-check/unit-bin/rook2-diag/unit-exact':'diagnostic unit ELF explicitly excluded',
++ 'influence-bitsliced-sum-conformance-build-20261019-01/rook2-diag-exact':'diagnostic ELF explicitly excluded',
++}
++DUPLICATE_PREFIX='influence-bitsliced-sum-conformance-build-20261019-01/source-before/'
+ def digest(f):
+  h=hashlib.sha256();n=0
+  for b in iter(lambda:f.read(1048576),b''):h.update(b);n+=len(b)
+@@ -14,7 +29,7 @@
+ def write(name,value):
+  with (HERE/name).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
+ def inventory():
+- rows={}
++ rows={};excluded={}
+  for tree in TREES:
+   root=ROOT/tree;assert root.is_dir() and not root.is_symlink(),root
+   for p in sorted(root.rglob('*')):
+@@ -22,11 +37,22 @@
+    if p.is_dir():continue
+    assert p.is_file(),p
+    name=p.relative_to(ROOT).as_posix();assert not name.startswith('/') and all(x not in ['.','..'] for x in Path(name).parts)
+-   assert name not in rows
+-   with p.open('rb') as f:h,n=digest(f)
++   assert name not in rows and name not in excluded
++   reason=EXACT_EXCLUSIONS.get(name)
++   if name.startswith(DUPLICATE_PREFIX):reason='duplicate extracted frontend source-before; exact existing tar retained'
++   if reason:
++    with p.open('rb') as f:magic=f.read(4)
++    if name in EXACT_EXCLUSIONS:assert magic==b'\x7fELF',name
++    s=p.stat();excluded[name]=dict(bytes=s.st_size,mode=stat.S_IMODE(s.st_mode),reason=reason)
++    continue
++   with p.open('rb') as f:
++    assert f.read(4)!=b'\x7fELF',('unexpected selected ELF',name)
++    f.seek(0);h,n=digest(f)
+    s=p.stat();assert n==s.st_size
+    rows[name]=dict(bytes=n,sha256=h,mode=stat.S_IMODE(s.st_mode))
+- return rows
++ assert set(EXACT_EXCLUSIONS)<=set(excluded)
++ assert sum(n.startswith(DUPLICATE_PREFIX) for n in excluded)==43
++ return dict(sorted(rows.items())),dict(sorted(excluded.items()))
+ class HashReader:
+  def __init__(self,f):self.f=f;self.h=hashlib.sha256();self.n=0
+  def read(self,n=-1):
+@@ -35,30 +61,30 @@
+ def main():
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+- full={p.name for p in ROOT.iterdir() if p.is_dir() and p.name.startswith('direct-child-construction-') and p!=HERE}
+- assert full=={n for n in TREES if n.startswith('direct-child-construction-')}
+- before=inventory();write('member-manifest.json',before)
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_regular_files_no_omissions=True,files=len(before),original_bytes=sum(x['bytes'] for x in before.values()),scope='Closed28 source/backend rejection preservation only; no native/test/timing/PGO/qualification or promotion'))
+- archive=HERE/'closed-direct-child-construction.tar.gz'
+- with tarfile.open(archive,'x:gz',format=tarfile.PAX_FORMAT) as t:
+-  for name,row in before.items():
+-   source=ROOT/name;info=t.gettarinfo(str(source),arcname=name)
+-   assert info.isfile() and info.size==row['bytes'] and stat.S_IMODE(info.mode)==row['mode']
+-   with source.open('rb') as f:
+-    reader=HashReader(f);t.addfile(info,reader)
+-    assert reader.n==row['bytes'] and reader.h.hexdigest()==row['sha256'],name
++ before,excluded=inventory();write('member-manifest.json',before);write('excluded-members.json',excluded)
++ write('scope.json',dict(complete_closed_trees=TREES,exact_exclusions=EXACT_EXCLUSIONS,duplicate_prefix=DUPLICATE_PREFIX,external_payload_expansion=False,own_checkpoint_excluded=True,files=len(before),excluded_files=len(excluded),original_bytes=sum(x['bytes'] for x in before.values()),scope='Closed43 functional evidence only; excluded test/adapter ELF and duplicate extracted source; not self-contained deployment or qualification'))
++ archive=HERE/'closed-influence-bitsliced-sum-functional.tar.gz'
++ with archive.open('xb') as raw:
++  with gzip.GzipFile(filename='',mode='wb',compresslevel=6,fileobj=raw,mtime=0) as gz:
++   with tarfile.open(fileobj=gz,mode='w|',format=tarfile.PAX_FORMAT) as t:
++    for name,row in before.items():
++     source=ROOT/name;info=t.gettarinfo(str(source),arcname=name)
++     assert info.isfile() and info.size==row['bytes'] and stat.S_IMODE(info.mode)==row['mode']
++     info.mtime=0;info.uid=info.gid=0;info.uname=info.gname='';info.pax_headers={}
++     with source.open('rb') as f:
++      reader=HashReader(f);t.addfile(info,reader)
++      assert reader.n==row['bytes'] and reader.h.hexdigest()==row['sha256'],name
+  reopened={}
+- with tarfile.open(archive,'r:gz') as t:
+-  members=t.getmembers();assert len(members)==len(before)
+-  for member in members:
++ with tarfile.open(archive,'r|gz') as t:
++  for member in t:
+    assert member.isfile() and member.name in before and member.name not in reopened
++   assert member.uid==member.gid==member.mtime==0 and member.uname==member.gname==''
+    with t.extractfile(member) as f:h,n=digest(f)
+-   reopened[member.name]=dict(bytes=n,sha256=h,mode=member.mode)
++   reopened[member.name]=dict(bytes=n,sha256=h,mode=stat.S_IMODE(member.mode))
+  assert reopened==before
+- assert inventory()==before,'original closed inputs changed'
+- full_after={p.name for p in ROOT.iterdir() if p.is_dir() and p.name.startswith('direct-child-construction-') and p!=HERE}
+- assert full_after==full
+- write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),scope_sha256=sha(HERE/'scope.json'),all_members_reopened_and_hashed=True,member_manifest_exact=True,originals_rechecked_unchanged=True,all_selected_regular_files_captured=True,no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
++ after,excluded_after=inventory();assert after==before,'original closed selected inputs changed'
++ assert excluded_after==excluded,'excluded inventory changed'
++ write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),scope_sha256=sha(HERE/'scope.json'),all_members_reopened_and_hashed=True,member_manifest_exact=True,originals_rechecked_unchanged=True,all_selected_regular_files_captured=True,excluded_files=len(excluded),no_external_expansion=True,deterministic_metadata=dict(gzip_mtime=0,gzip_filename='',tar_mtime=0,uid=0,gid=0,uname='',gname='',pax_headers='empty except deterministic long-path handling',order='sorted relative names'),affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
+  print((HERE/'verification.json').read_text())
+ if __name__=='__main__':
+  try:main()

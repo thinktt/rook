@@ -243,3 +243,125 @@ fn experiment37_public_scalar_mailbox_domain_is_not_redirected() {
     // Deliberately do not call build_coherent on any violated precondition.
     // Component panic assertions do not imply Session unwind/recovery support.
 }
+
+
+#[test]
+fn experiment43_actual_bitplanes_transpose_carries_and_multiplicity() {
+    for bit in 0..8 { for target in 0..64 {
+        let mut planes = [0;8]; planes[bit] = 1u64 << target;
+        let mut expected = [0;64]; expected[target] = 1u8 << bit;
+        assert_eq!(coherent::bitplanes_for_test(planes), expected, "bit={bit} target={target}");
+    }}
+    for prior in 0..=255u16 { for shift in [0usize,1,2,4,6] {
+        let normal = 0x55aa_33cc_f00f_0ff0u64;
+        let weak = if (1..=4).contains(&shift) { !normal } else { 0 };
+        let actual = coherent::bits_sources_for_test([prior as u8;64], &[(shift,normal,weak)]);
+        for target in 0..64 {
+            let add = (((normal >> target) & 1) << shift) + ((weak >> target) & 1);
+            assert_eq!(actual[target], ((u64::from(prior)+add)%256) as u8);
+        }
+    }}
+    // All carries can leave bit7: full physical multiplicity must wrap, not cap.
+    let mut sources = vec![(4usize,1u64<<27,0);8];
+    sources.extend([(6,1u64<<27,0);2]);
+    assert_eq!(coherent::bits_sources_for_test([0;64],&sources)[27],0);
+    let mut seed = 0x8c52_b731_e4a9_6d0fu64;
+    let mut next = || { seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17; seed };
+    for _ in 0..64 {
+        let previous = std::array::from_fn(|_| next() as u8);
+        let mut expected = previous;
+        let mut sources = Vec::new();
+        for _ in 0..32 {
+            let shift = [1usize,2,4][(next()%3) as usize];
+            let normal = next(); let weak = next() & !normal;
+            sources.push((shift,normal,weak));
+            for target in 0..64 {
+                let add = (((normal>>target)&1)<<shift) + ((weak>>target)&1);
+                expected[target] = ((u64::from(expected[target])+add)%256) as u8;
+            }
+        }
+        assert_eq!(coherent::bits_sources_for_test(previous,&sources),expected);
+    }
+}
+
+#[test]
+fn experiment43_existing_leaper_masks_match_coordinate_destinations() {
+    const LEAPS: [(i32,i32);8] = [(1,2),(1,-2),(-1,2),(-1,-2),(2,1),(2,-1),(-2,1),(-2,-1)];
+    for source in 0..64 {
+        let mut king = 0; let mut knight = 0;
+        for (df,dr) in STEPS { if let Some(target)=at(source,df,dr) { king |= 1u64<<target; } }
+        for (df,dr) in LEAPS { if let Some(target)=at(source,df,dr) { knight |= 1u64<<target; } }
+        let square = Square(source as u8);
+        assert_eq!(crate::attacks::influence_king_targets(square),king);
+        assert_eq!(crate::attacks::influence_knight_targets(square),knight);
+        for side in [Color::White,Color::Black] {
+            let mut pawn = 0; let forward = if side==Color::White {1} else {-1};
+            for df in [-1,1] { if let Some(target)=at(source,df,forward) { pawn |= 1u64<<target; } }
+            assert_eq!(crate::attacks::influence_pawn_targets(side,square),pawn);
+        }
+    }
+}
+
+#[test]
+fn experiment43_zero_one_and_promoted_slider_full_maps() {
+    use Color::{White as W,Black as B};use PieceKind::*;
+    let pieces = [("d3",W,Pawn),("f3",W,Pawn),("c3",W,Knight),("c5",W,Knight),
+        ("d2",W,Knight),("d6",W,Knight),("f2",W,Knight),("f6",W,Knight),
+        ("g3",W,Knight),("g5",W,Knight)];
+    let zero = described(&pieces);
+    assert!(zero.piece_squares(W,Bishop).is_empty() && zero.piece_squares(W,Rook).is_empty() && zero.piece_squares(W,Queen).is_empty());
+    check(&zero);assert_eq!(Influence::build_coherent(&zero).code(W,sq("e4")),0);
+    let mut one_pieces = pieces.to_vec();one_pieces.push(("a8",W,Bishop));
+    let one = described(&one_pieces);
+    assert_eq!(one.piece_squares(W,Bishop).len(),1);
+    assert!(one.piece_squares(W,Rook).is_empty() && one.piece_squares(W,Queen).is_empty());
+    check(&one);assert_eq!(Influence::build_coherent(&one).code(W,sq("e4")),16);
+    // Three promoted-capable queens on one ray; their contributions stay separate.
+    // Enemy king is transparent after the first friendly queen has weakened it.
+    let queens = described(&[("a4",W,Queen),("c4",W,Queen),("e4",W,Queen),("g4",B,King)]);
+    check(&queens);assert_eq!(Influence::build_coherent(&queens).code(W,sq("h4")),4);
+    for original in [zero,one,queens] {
+        let mut board = [Piece::EMPTY;64];
+        for (i,piece) in original.board.into_iter().enumerate() {
+            if !piece.is_empty() { board[i^56]=Piece::new(piece.color().opponent(),piece.kind()); }
+        }
+        let mirrored = placement(board);check(&mirrored);
+        let before = Influence::build_coherent(&original);let after = Influence::build_coherent(&mirrored);
+        for side in [W,B] { for target in 0..64 {
+            assert_eq!(before.profiles[side.index()][target],after.profiles[side.opponent().index()][target^56]);
+        }}
+    }
+}
+
+#[test]
+fn experiment43_public_and_supplied_maps_keep_their_original_authority() {
+    use crate::evaluator::{Evaluator,Node,coherent_build_count};
+    let position = Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+    let custom = Influence { profiles: std::array::from_fn(|color| std::array::from_fn(|target| (71*target+113*color+17) as u8)) };
+    assert_ne!(custom.profiles,map_ref(&position));
+    let before = coherent_build_count();
+    let mut evaluator = Evaluator::<true>::new(&position);
+    let mut scratch = Some(custom);
+    assert_eq!(*evaluator.ensure_influence(&position,&mut scratch),custom);
+    assert_eq!(*evaluator.ensure_influence_for_search(&position,&mut scratch,true),custom);
+    assert_eq!(scratch,Some(custom));assert_eq!(coherent_build_count(),before);
+    assert_eq!(evaluator.stats.influence_builds,0);
+    let mut node = Node::root(position,&evaluator.root);let mut observed = None;
+    let actual = evaluator.full_observed(&mut node,&custom,false,|parts| observed=Some(parts));
+    let mut other = Evaluator::<true>::new(&position);let mut other_node = Node::root(position,&other.root);
+    assert_eq!(actual,other.full(&mut other_node,&custom,false));
+    assert!(observed.is_some());assert_eq!(node.retained,other_node.retained);
+    assert_eq!(coherent_build_count(),before);assert_eq!(evaluator.stats.influence_builds,0);
+    let mut empty = None;
+    assert_eq!(evaluator.ensure_influence(&position,&mut empty).profiles,map_ref(&position));
+    assert_eq!(coherent_build_count(),before);assert_eq!(evaluator.stats.influence_builds,1);
+    let mut trusted_empty = None;
+    assert_eq!(evaluator.ensure_influence_for_search(&position,&mut trusted_empty,true).profiles,map_ref(&position));
+    assert_eq!(coherent_build_count(),before+1);assert_eq!(evaluator.stats.influence_builds,2);
+    // A stale private plane at a newly transparent mailbox cell stays public-scalar.
+    let base = described(&[("c1",Color::White,PieceKind::Bishop)]);let mut stale = base;
+    stale.board[sq("d2").0 as usize]=Piece::new(Color::White,PieceKind::Queen);
+    let mut scratch = None;
+    assert_eq!(evaluator.ensure_influence(&stale,&mut scratch).profiles,map_ref(&stale));
+    assert_eq!(coherent_build_count(),before+1);
+}

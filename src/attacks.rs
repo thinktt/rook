@@ -72,6 +72,22 @@ pub(crate) fn influence_rays(square: Square) -> (&'static [u64; 8], &'static [bo
     (&MASKS.rays[square.0 as usize], &MASKS.increasing)
 }
 
+
+/// Existing immutable leaper masks, only for a coherent private producer.
+/// Pawn target direction is the opposite-side source row at this square.
+#[inline]
+pub(crate) fn influence_pawn_targets(side: Color, square: Square) -> u64 {
+    MASKS.pawn_sources[side.opponent().index()][square.0 as usize]
+}
+#[inline]
+pub(crate) fn influence_knight_targets(square: Square) -> u64 {
+    MASKS.knight[square.0 as usize]
+}
+#[inline]
+pub(crate) fn influence_king_targets(square: Square) -> u64 {
+    MASKS.king[square.0 as usize]
+}
+
 impl AttackBits {
     #[inline]
     pub(crate) fn planes(&self) -> &[u64; 4] {

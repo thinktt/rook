@@ -1,5 +1,14 @@
 # Remaining qualification work
 
+Current43 passes fresh189native/209diagnostic, all7673 mandatory cases/117operations/
+115wholefiles, own-PGO54/eight-wire24 and regular12/632 plus continuity8 and required
+seed11/persistence3 with independent original/raw/exit reconciliation. Exact source115
+is promoted; ordinary36251ecf and diagnosticb024c045 remain the tested artifacts.
+Full43 whole54/12 costs, final same-hardware measurement/performance qualification,
+remaining production-domain obligations and the external3288 gate remain open.
+See [local validation](../evidence/influence-bitsliced-sum-qualification-20261019-01/README.md).
+
+
 Candidate40 now replaces37 by exact source115 equality after all mandatory
 finite checks,185native/209diagnostic tests, fresh optimized54/wire24 and
 regular12/632 plus continuity8 and required seed controls. Own-PGO fixed70
@@ -32,8 +41,9 @@ lower,worst1.009410959, with all70 original outputs/accounting exact. Fresh own5
 training, original54/raw/PID/independent-profile checks and use build pass.
 Own-PGO70 independently passes at1.160850%lower CPU,7of7lower. Fresh189 native
 and optimized54/wire24 pass; original54/wire raw reconciliation is closed.
-DIAG209/full117 and regular12 pre-gate remain in progress. No full43 whole54/12
-cost result or performance qualification follows.40 remains current. See
+DIAG209/full117 and regular12 pre-gate also pass independent raw/exit checks.
+Exact source43 is retained. No full43 whole54/12 cost result or performance
+qualification follows. See
 [decision0035](decisions/0035-bit-sliced-influence-accumulation.md).
 
 Previous candidate37 was retained after185native/209diagnostic tests, complete original

@@ -1,6 +1,8 @@
 # Remaining performance investigations
 
-Current retained production is40, an exact256-byte static pressure lookup over
+Current retained production is43; its exact three-file bit-sliced Influence change passes all fresh local finite gates and source115 equality. Own-PGO70 improves1.160850%/7of7. Full43 whole54/12 costs are pending; no corpus-wide gain is inferred. See [decision0035](../decisions/0035-bit-sliced-influence-accumulation.md).
+
+Previous production40 is an exact256-byte static pressure lookup over
 37. Own-PGO fixed70 improves0.877002%/7of7; all mandatory finite checks,185/209
 tests, optimized54/wire24 and regular12/632 plus continuity/seed controls pass.
 Current40 whole54 reconciles70.500search/70.968677whole-native CPU seconds;
@@ -26,8 +28,8 @@ build pass with zero missing/stale warnings; image36251ecf/profile132fc1fd are
 frozen. Own-PGO backend review is closed (+444B producer/+64B frame). The fixed
 own-PGO70 screen passes independently at1.160850%lower summed CPU medians,
 7of7lower,worst0.992494082. Fresh189 native tests and optimized54/wire24 pass;
-original replay/raw reconciliation is closed for54/wire. DIAG209/full117 and
-regular12 pre-gate are in progress; retain40 pending all fresh gates. No full43
+original replay/raw reconciliation is closed for54/wire. DIAG209/full117 and regular12 pre-gate also pass with independent original/raw/exit
+checks. Exact source43 is now retained. No full43
 whole54/12 timing or performance qualification follows. See the
 [selection](../../evidence/influence-bitsliced-sum-parent-review-20261019-01/selection.json),
 [cost review](../../evidence/coherent-influence-current-cost-review-20261019-01/review.md)
@@ -38,7 +40,7 @@ predicates, with reserved-tag checks on nonzero paths. No source experiment or
 savings claim follows. See the [backend review](../../evidence/ordinary-generated-tag-backend-review-20261019-01/review.md).
 The partition does not justify a representation rewrite or assign those sites
 the entire Move-kind instruction overlay.
-Current40 stays retained. The27 radix formula
+The preceding checkpoint retained40; current43 selection is described above. The27 radix formula
 and32 king-ray tables are historical failed trials, not fresh ideas to retry
 without distinct current evidence. The earlier borrowed-plane activity geometry
 proposal became42 and is now parked after its fixed generic failure. All earlier timing

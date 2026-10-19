@@ -1,0 +1,141 @@
+--- /dev/null
++++ /home/legolas/rook2/evidence/influence-bitsliced-sum-integration-preparation-20261019-01/promote.py
+@@ -0,0 +1,138 @@
++#!/usr/bin/env python3
++"""INERT until parent clearance: exact three-file43 source promotion, no build/Git."""
++from pathlib import Path, PurePosixPath
++import hashlib, json, os, stat, tempfile
++HERE = Path(__file__).resolve().parent
++H = {0,1,2,3,4,5,8,9,10,11,12,13}
++EXPECTED_CHANGED = ['src/attacks.rs', 'src/influence/coherent.rs', 'src/influence/coherent_tests.rs']
++REQUIRED_GATES = {'freeze', 'native189', 'diagnostic209_build', 'diagnostic117',
++    'conformance_independent', 'conformance_finalization', 'postuse54_wire',
++    'postuse_independent', 'pregate12', 'pregate_independent'}
++def sha(path):
++    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
++def load(path):
++    return json.loads(Path(path).read_text())
++def write(path, value):
++    with Path(path).open('x') as f:
++        json.dump(value, f, indent=2); f.write('\n')
++def graph(values):
++    return hashlib.sha256(json.dumps(values, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
++def snapshot(root, expected):
++    actual = {}
++    for name in sorted(expected):
++        relative = PurePosixPath(name)
++        assert not relative.is_absolute() and '..' not in relative.parts
++        path = root/name
++        assert path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(root.resolve()), path
++        actual[name] = sha(path)
++    assert actual == expected, root
++    return actual
++
++def attest(plan):
++    for path, expected in plan['input_sha256'].items():
++        assert sha(path) == expected, path
++    assert set(plan['gates']) == REQUIRED_GATES
++    for name, gate in plan['gates'].items():
++        assert gate['proof'] is not None and gate['terminal'] is not None, name
++        for key in ['proof', 'terminal']:
++            row = gate[key]
++            assert isinstance(row['sha256'], str) and len(row['sha256']) == 64
++            assert sha(row['path']) == row['sha256'], name
++        terminal = load(gate['terminal']['path'])
++        assert terminal['actual_tool_terminal_observed'] is True and terminal['exit_code'] == 0
++        assert terminal.get('terminal_chunk_id') or terminal.get('chunk_id'), name
++        proof = load(gate['proof']['path'])
++        for field, expected in gate['checks'].items():
++            assert proof[field] == expected, (name, field)
++    for key in ['ordinary_image', 'diagnostic_image', 'profile']:
++        assert sha(plan[key]['path']) == plan[key]['sha256'], key
++
++def atomic_replace(path, data, mode):
++    descriptor, name = tempfile.mkstemp(prefix='.'+path.name+'.exp43-', dir=path.parent)
++    temporary = Path(name)
++    try:
++        with os.fdopen(descriptor, 'wb') as stream:
++            stream.write(data); stream.flush(); os.fsync(stream.fileno())
++        os.chmod(temporary, mode)
++        os.replace(temporary, path)
++    finally:
++        if temporary.exists():
++            temporary.unlink()
++
++def main():
++    assert os.sched_getaffinity(0) <= H
++    plan_path = HERE/'plan.json'; plan_identity = sha(plan_path); plan = load(plan_path)
++    clearance_path = HERE/'execution-clearance.json'; clearance_identity = sha(clearance_path)
++    clearance = load(clearance_path)
++    assert plan['launch'] is True and plan['parent_review_accepted'] is True
++    for flag in ['launch', 'parent_review_accepted', 'source_promotion_authorized',
++                 'all_gate_proofs_reviewed_pass', 'all_owned_native_jobs_terminal',
++                 'exclusive_canonical_source_write_window']:
++        assert clearance.get(flag) is True, flag
++    assert clearance['plan_sha256'] == plan_identity and clearance['helper_sha256'] == sha(Path(__file__))
++    assert plan['changed_files'] == EXPECTED_CHANGED
++    assert len(plan['root_before_files_sha256']) == len(plan['target_files_sha256']) == 115
++    assert set(plan['root_before_files_sha256']) == set(plan['target_files_sha256'])
++    assert sorted(n for n in plan['target_files_sha256'] if plan['target_files_sha256'][n] != plan['root_before_files_sha256'][n]) == EXPECTED_CHANGED
++    assert graph(plan['root_before_files_sha256']) == plan['root_before_graph_sha256']
++    assert graph(plan['target_files_sha256']) == plan['target_source115_graph_sha256']
++    assert graph(plan['target_native72_sha256']) == plan['target_native72_graph_sha256']
++    assert len(plan['target_native72_sha256']) == 72
++    assert all(plan['target_files_sha256'][n] == h for n, h in plan['target_native72_sha256'].items())
++    attest(plan)
++    root = Path(plan['canonical_root']); source = Path(plan['native_source_root']); combined = Path(plan['combined_source_root'])
++    snapshot(root, plan['root_before_files_sha256'])
++    snapshot(source, plan['target_native72_sha256']); snapshot(combined, plan['target_files_sha256'])
++    originals = {n: (root/n).read_bytes() for n in EXPECTED_CHANGED}
++    modes = {n: stat.S_IMODE((root/n).stat().st_mode) for n in EXPECTED_CHANGED}
++    replacements = {n: (source/n).read_bytes() for n in EXPECTED_CHANGED}
++    out = Path(plan['output']); assert not out.exists(); out.mkdir()
++    applied = []
++    try:
++        for name in EXPECTED_CHANGED:
++            backup = out/'source-before'/name; backup.parent.mkdir(parents=True, exist_ok=True)
++            with backup.open('xb') as f: f.write(originals[name])
++            os.chmod(backup, modes[name])
++            assert sha(backup) == plan['root_before_files_sha256'][name]
++        write(out/'rollback-manifest.json', {n: dict(sha256=plan['root_before_files_sha256'][n], mode=modes[n]) for n in EXPECTED_CHANGED})
++        assert sha(plan_path) == plan_identity and sha(clearance_path) == clearance_identity
++        snapshot(root, plan['root_before_files_sha256']); attest(plan)
++        for name in EXPECTED_CHANGED:
++            assert sha(root/name) == plan['root_before_files_sha256'][name], name
++            applied.append(name)  # Track before replacement so its failure/interrupt is covered by rollback.
++            atomic_replace(root/name, replacements[name], modes[name])
++        snapshot(root, plan['target_files_sha256'])
++        snapshot(source, plan['target_native72_sha256']); snapshot(combined, plan['target_files_sha256'])
++        attest(plan)
++        assert sha(plan_path) == plan_identity and sha(clearance_path) == clearance_identity
++        assert all(stat.S_IMODE((root/n).stat().st_mode) == modes[n] for n in EXPECTED_CHANGED)
++        result = dict(experiment=43, promoted=True, previous_retained=40, changed_files=EXPECTED_CHANGED,
++            native_source72_graph=plan['target_native72_graph_sha256'], combined_source115_graph=plan['target_source115_graph_sha256'],
++            root_exact_tested_source115=True, files_sha256=plan['target_files_sha256'],
++            ordinary_image=plan['ordinary_image']['path'], ordinary_image_sha256=plan['ordinary_image']['sha256'],
++            diagnostic_image=plan['diagnostic_image']['path'], diagnostic_image_sha256=plan['diagnostic_image']['sha256'],
++            own_profile_sha256=plan['profile']['sha256'], gate_evidence=plan['gates'], expected=plan['expected'],
++            plan_sha256=plan_identity, helper_sha256=sha(Path(__file__)), clearance_sha256=clearance_identity,
++            canonical_rebuild_performed=False, outer_actual_terminal_must_be_recorded_by_parent=True, scope=plan['scope'])
++        write(out/'source-promotion.json', result)
++        print(json.dumps(dict(promoted=True, source115_graph=plan['target_source115_graph_sha256'], changed_files=EXPECTED_CHANGED)))
++    except BaseException as error:
++        rollback_errors = []
++        for name in reversed(applied):
++            try:
++                current = sha(root/name)
++                if current == plan['target_files_sha256'][name]:
++                    atomic_replace(root/name, originals[name], modes[name])
++                else:
++                    assert current == plan['root_before_files_sha256'][name], 'Unrelated concurrent edit; refusing overwrite'
++            except BaseException as rollback_error:
++                rollback_errors.append(dict(path=name, error=repr(rollback_error)))
++        try:
++            snapshot(root, plan['root_before_files_sha256']); restored = not rollback_errors
++        except BaseException as rollback_error:
++            rollback_errors.append(dict(path='source115', error=repr(rollback_error))); restored = False
++        write(out/'promotion-failure.json', dict(promoted=False, error=repr(error), applied_before_failure=applied,
++            rollback_complete=restored, rollback_errors=rollback_errors, no_retry_authorized=True))
++        raise
++if __name__ == '__main__':
++    main()

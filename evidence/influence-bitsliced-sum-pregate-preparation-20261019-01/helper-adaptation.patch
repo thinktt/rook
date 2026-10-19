@@ -1,0 +1,38 @@
+--- accepted40/run_pregate.py
++++ proposed43/run_pregate.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Untimed12-game/continuity pre-gate of the exact passed117 native image."""
++"""Untimed12-game/continuity pre-gate of the exact ownPGO43 native image."""
+ import concurrent.futures
+ import hashlib
+ import json
+@@ -18,7 +18,7 @@
+ ENGINE=Path(APPROVAL['ordinary_artifact']['image'])
+ EXPECTED=APPROVAL['ordinary_artifact']['sha256']
+ assert isinstance(EXPECTED,str) and len(EXPECTED)==64
+-OUT=PREP.parent/'pressure-value-static-pregate-20261019-01'
++OUT=PREP.parent/'influence-bitsliced-sum-pregate-20261019-01'
+ MASK={0,1,2,3,4,5,8,9,10,11,12,13}
+ def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(p,d):
+@@ -95,7 +95,7 @@
+         assert sha(BUILD/'source-before'/name)==h
+     before=pins();OUT.mkdir()
+     write(OUT/'binding.json',{'before':before,'engine_sha256':EXPECTED,'image':str(ENGINE),'affinity':sorted(MASK),
+-      'scope':'Untimed exact own-PGO117 regular pre-gate after current40 strict/wire+ownPGO70 pass; full native/117 are separately parent-owned; full3288 external, no CPU qualification.',
++      'scope':'Untimed exact own-PGO43 regular pre-gate after current43 strict/wire+ownPGO70 pass; full native/117 are separately parent-owned; full3288 external, no CPU qualification.',
+       'parallel_independent_games':3})
+     fixture=json.loads((KIT/'accepted-games-v1.json').read_text())
+     games=fixture['games'];assert len(games)==12 and sum(len(g['plies']) for g in games)==632
+--- accepted40/reconcile_pregate.mjs
++++ proposed43/reconcile_pregate.mjs
+@@ -13,7 +13,7 @@
+ const hash=data=>createHash('sha256').update(data).digest('hex');
+ const fixture=load(join(kit,'accepted-games-v1.json'));validateFixture(fixture);
+ const binding=load(join(directory,'binding.json'));
+-const approval=load('/home/legolas/rook2/evidence/pressure-value-static-regression-preparation-20261019-01/pregate-clearance.json');
++const approval=load('/home/legolas/rook2/evidence/influence-bitsliced-sum-pregate-preparation-20261019-01/pregate-clearance.json');
+ assert.equal(approval.authorized,true);
+ assert.equal(binding.engine_sha256,approval.ordinary_artifact.sha256);
+ assert.equal(hash(readFileSync(approval.ordinary_artifact.image)),binding.engine_sha256);

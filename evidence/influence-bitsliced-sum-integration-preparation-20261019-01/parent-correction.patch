@@ -1,0 +1,50 @@
+--- /home/legolas/rook2/evidence/influence-bitsliced-sum-integration-preparation-20261019-01/history/promote-before-parent-correction.py
++++ /home/legolas/rook2/evidence/influence-bitsliced-sum-integration-preparation-20261019-01/promote.py
+@@ -87,7 +87,7 @@
+     modes = {n: stat.S_IMODE((root/n).stat().st_mode) for n in EXPECTED_CHANGED}
+     replacements = {n: (source/n).read_bytes() for n in EXPECTED_CHANGED}
+     out = Path(plan['output']); assert not out.exists(); out.mkdir()
+-    applied = []
++    attempted = []; completed = []
+     try:
+         for name in EXPECTED_CHANGED:
+             backup = out/'source-before'/name; backup.parent.mkdir(parents=True, exist_ok=True)
+@@ -99,8 +99,9 @@
+         snapshot(root, plan['root_before_files_sha256']); attest(plan)
+         for name in EXPECTED_CHANGED:
+             assert sha(root/name) == plan['root_before_files_sha256'][name], name
+-            applied.append(name)  # Track before replacement so its failure/interrupt is covered by rollback.
++            attempted.append(name)
+             atomic_replace(root/name, replacements[name], modes[name])
++            completed.append(name)
+         snapshot(root, plan['target_files_sha256'])
+         snapshot(source, plan['target_native72_sha256']); snapshot(combined, plan['target_files_sha256'])
+         attest(plan)
+@@ -118,7 +119,17 @@
+         print(json.dumps(dict(promoted=True, source115_graph=plan['target_source115_graph_sha256'], changed_files=EXPECTED_CHANGED)))
+     except BaseException as error:
+         rollback_errors = []
+-        for name in reversed(applied):
++        # A published success record must not remain authoritative after rollback.
++        success = out/'source-promotion.json'
++        if success.exists():
++            try:
++                preserved = out/'source-promotion.before-failure.json'
++                assert not preserved.exists()
++                os.replace(success, preserved)
++            except BaseException as preservation_error:
++                rollback_errors.append(dict(path=str(success), error=repr(preservation_error)))
++        # Inspect all three paths: replacement may commit before tracking completes.
++        for name in reversed(EXPECTED_CHANGED):
+             try:
+                 current = sha(root/name)
+                 if current == plan['target_files_sha256'][name]:
+@@ -131,7 +142,7 @@
+             snapshot(root, plan['root_before_files_sha256']); restored = not rollback_errors
+         except BaseException as rollback_error:
+             rollback_errors.append(dict(path='source115', error=repr(rollback_error))); restored = False
+-        write(out/'promotion-failure.json', dict(promoted=False, error=repr(error), applied_before_failure=applied,
++        write(out/'promotion-failure.json', dict(promoted=False, error=repr(error), attempted_before_failure=attempted, completed_before_failure=completed,
+             rollback_complete=restored, rollback_errors=rollback_errors, no_retry_authorized=True))
+         raise
+ if __name__ == '__main__':
