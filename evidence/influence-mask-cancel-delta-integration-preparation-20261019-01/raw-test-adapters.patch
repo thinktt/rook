@@ -1,0 +1,45 @@
+--- baseline-old-ordinary-tests
++++ four-unlinked-spelling-adapters
+@@ -47,8 +47,7 @@
+         let raw_first = -direct.visit_ordinary(&mut child, &mut history,
+             Request { ply:1, depth:0, lower:-10000, upper:10000,
+                 previous_extension:0, iteration:1, checked:None },
+-            Predecessor { position:&position, influence:&influence, checked,
+-                movement:Some(movement) }).unwrap();
++            Predecessor::unlinked(&position, &influence, checked, Some(movement))).unwrap();
+         history.pop();
+         let child_pv = direct.pv[1][..direct.pv_len[1]].to_vec();
+         let first_work = direct.work();
+@@ -330,12 +329,7 @@
+                     iteration: 6,
+                     checked: Some(true),
+                 },
+-                Predecessor {
+-                    position: &position,
+-                    influence: &influence,
+-                    checked: false,
+-                    movement: Some(movement),
+-                },
++                Predecessor::unlinked(&position, &influence, false, Some(movement)),
+             )
+             .unwrap();
+         assert!((-10000..10000).contains(&score));
+@@ -361,7 +355,7 @@
+             let result=search.ordering_phase::<false>(&node,&mut history,
+                 Request{ply:0,depth:6,lower:-10000,upper:10000,
+                     previous_extension:0,iteration:6,checked:Some(false)},
+-                Predecessor{position:&position,influence:&map,checked:false,movement:None},
++                Predecessor::unlinked(&position, &map, false, None),
+                 &map,false,start);
+             assert_eq!(result,Err(Stopped::InternalIterativeOrdering));
+             assert_eq!((search.stats.iio_initial_phases,search.stats.iio_tail_phases),
+@@ -406,8 +400,7 @@
+         history.push(&child.position,Some(movement));
+         let request=Request{ply:1,depth:5,lower:-10000,upper:10000,
+             previous_extension:0,iteration:6,checked:Some(true)};
+-        let previous=Predecessor{position:&position,influence:&influence,checked:false,
+-            movement:Some(movement)};
++        let previous=Predecessor::unlinked(&position, &influence, false, Some(movement));
+         let result=match mode {
+             0=>search.visit_ordinary(&mut child,&mut history,request,previous),
+             1=>search.visit_ordinary_impl::<true>(&mut child,&mut history,request,previous),

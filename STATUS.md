@@ -19,8 +19,10 @@ isolated-path artifacts, without a canonical rebuild claim. Full43 standard54 no
 independently reconciles216lifetimes/432offline checks at69.380search/
 69.809672whole-native CPU seconds,1.633122%lower than40's separate full window,
 all54 medians lower. Raw cross-hardware reference ratio1.100547 remains
-reported-only. Current43 full12 costs are pending;40's712.333390 is the latest
-complete12 result. See [whole54 report](evidence/influence-bitsliced-sum-standard54-20261019-01/README.md). Final same-hardware performance qualification, remaining
+reported-only. Current43 full12 independently reconciles48lifetimes/2528searches
+at701.276947whole-native CPU seconds, raw historical reference ratio1.088562
+(reported-only). See [whole12 report](evidence/influence-bitsliced-sum-games12-results-20261019-01/README.md)
+and [whole54 report](evidence/influence-bitsliced-sum-standard54-20261019-01/README.md). Final same-hardware performance qualification, remaining
 production-domain review and the external3288 gameplay gate remain open.
 See [local validation](evidence/influence-bitsliced-sum-qualification-20261019-01/README.md),
 [source promotion](evidence/influence-bitsliced-sum-integration-20261019-01/source-promotion.json)
@@ -38,6 +40,16 @@ It is [parked without retry, broader tests or adoption](evidence/ordering-equal-
 No full189 or broader49 qualification is claimed. Production43 and its whole54/12
 evidence remain unchanged; the generic gain does not transfer to own-PGO.
 The [closed49 generic checkpoint](evidence/ordering-equal-length-generic-checkpoint-20261019-01/README.md) preserves its exact originals and actual exits.
+
+Experiment50 shared per-ray Influence masks and same-weight cancellation is
+parked after13 focused controls and all70 original live/offline replay checks
+pass. Its single frozen generic screen sums13.670586→13.6640335 CPU seconds in
+case medians:0.047931%lower,4of7lower,worst1.0214957. All three advancement
+criteria fail. No retry, own-PGO, broad validation or promotion follows;
+production43 remains exact and experiments44–50 are parked. Logical cancellation
+counts do not price discovery/scatter, transport or frame costs, and no single
+backend cost is asserted as the cause. See [decision evidence](evidence/influence-mask-cancel-delta-decision-20261019-01/decision.json)
+and the [finite checkpoint](evidence/influence-mask-cancel-delta-checkpoint-20261019-01/README.md).
 
 ## Previous candidate40 static pressure lookup, 2026-10-19
 

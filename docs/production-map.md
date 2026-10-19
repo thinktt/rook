@@ -32,6 +32,17 @@ Candidate47 removes the ordinary parent Position snapshot using a split evaluati
 
 Candidate48 removes the parent snapshot with two shared Position loans around the unchanged full call, keeping the evaluator source and ABI intact. Its13 focused controls and70 exact replay checks pass. Generic70 improves0.306387%,7of7 lower, below the fixed0.5% aggregate gate. It is [parked without own-PGO or retry](../evidence/ordinary-position-reborrow-decision-20261019-01/README.md). Candidate49 preserves the public sorting helper and512-entry workspace while giving internal consumers equal-length knowledge. Its generic backend reduces bound-check sites11→6 per inlined caller with unchanged frames and+182B selected code. Six existing controls and all70 generic live/offline original replay checks pass; generic70 improves0.6650503%,7of7lower. Fresh own54 training/original raw/PID verification, independent byte-identical profile remerge and use build close with zero missing/stale warnings. The separate own-PGO70 preserves all70 exact outputs but improves only0.1820617%,4of7lower,worst1.005536395, failing both aggregate<=.995 and minimum5lower gates. It is [parked without retry, broader tests or adoption](../evidence/ordering-equal-length-pgo-decision-20261019-01/decision.json). No full189 or broader49 qualification follows; production43 and its whole54/12 evidence remain unchanged.
 
+Experiment50 shared per-ray Influence masks and same-weight cancellation passes13
+focused controls and70 original live plus70 independent offline replay checks,
+but its fixed generic70 improves only0.047931%,4of7lower,worst1.0214957. All
+three frozen advancement gates fail. It is [parked without retry, own-PGO,
+broad validation or adoption](../evidence/influence-mask-cancel-delta-decision-20261019-01/decision.json).
+Experiments44–50 remain parked; accepted43/source115 and its whole54/12 evidence
+are unchanged. High parent coverage and logical cancellation do not measure
+physical work or identify a single cause of the failed screen. The [closed50
+checkpoint](../evidence/influence-mask-cancel-delta-checkpoint-20261019-01/README.md)
+preserves finite source/provenance/backend/focused/raw70 evidence.
+
 Fresh [mandatory validation](../evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/validation-summary.json)
 passes189 native tests,209 diagnostic tests and7,673 cases across117 operations
 and115 whole fixture files. The ordinary image separately passes all54 strict
