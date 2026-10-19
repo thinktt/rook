@@ -1,0 +1,92 @@
+--- plan.json.before-generic-closure
++++ plan.json
+@@ -12,12 +12,18 @@
+     "sha256": "90d5d9a87e8ac1079a567475438c4778fdea50629815f2a23292ab3fccf9bf8e"
+   },
+   "accepted_generic_pilot_proof": {
+-    "actual_terminal_path": null,
+-    "actual_terminal_sha256": null,
+-    "path": null,
+-    "pending": true,
+-    "root_advance_decision": null,
+-    "sha256": null
++    "actual_independent_terminal_path": "/home/legolas/rook2/evidence/weighted-bound-cache-generic-cpu-pilot-20261019-01/reconcile-tool-terminal.json",
++    "actual_independent_terminal_sha256": "efa75e504ff60ca7a8852ec830472681e04dd4a71590df5601bc892b8518fafd",
++    "actual_terminal_path": "/home/legolas/rook2/evidence/weighted-bound-cache-generic-cpu-pilot-20261019-01/tool-terminal.json",
++    "actual_terminal_sha256": "6eefeef41e4ff7abcd0c74678ad20b8a9321c127412dcb5d3f6db709531e7566",
++    "lower_cases": 7,
++    "path": "/home/legolas/rook2/evidence/weighted-bound-cache-generic-cpu-pilot-20261019-01/independent-reconciliation.json",
++    "pending": false,
++    "ratio": 0.9901605919917462,
++    "root_advance_decision_path": null,
++    "root_advance_decision_sha256": null,
++    "sha256": "9d26d8403eaaf9a33c3414aa93de6c5c4a8b6c56fcd6d3317444714b62328dab",
++    "worst_case_ratio": 0.997226543628715
+   },
+   "base_flags": [
+     "-C",
+@@ -164,8 +170,10 @@
+   "generic_candidate_sha256": "98709a1a44323abdbab1b6616e6a7f164f8dc9162cd1693eafe17385b8425b7d",
+   "generic_selection": {
+     "authorized": false,
+-    "requires_parent_binding": "Actual generic pilot outer terminal, independent reconciliation and accepted decision; no live/partial pilot outputs pinned",
+-    "selected_for_pgo": false
++    "requires_parent_binding": "Parent written generic-decision plus actual generic pilot/independent terminal and acceptance in immutable execution-clearance.json; no activation yet",
++    "selected_for_pgo_by_parent_message": true,
++    "written_parent_decision_path": null,
++    "written_parent_decision_sha256": null
+   },
+   "helper_affinity": [
+     0,
+@@ -203,6 +211,9 @@
+     "/home/legolas/rook2/evidence/weighted-bound-cache-generic-build-20261019-01/rook2-exact": "98709a1a44323abdbab1b6616e6a7f164f8dc9162cd1693eafe17385b8425b7d",
+     "/home/legolas/rook2/evidence/weighted-bound-cache-generic-build-20261019-01/tool-terminal.json": "d9c2989184d04bbfba6b5f67a6fa82e37825eed600414b1a28868a7705d2137f",
+     "/home/legolas/rook2/evidence/weighted-bound-cache-generic-build-20261019-01/verified-source-before.tar.gz": "1b92de9483cbb789d93e95ee912ad22180b53e22a1d3930db14ceeb3db4a4cd7",
++    "/home/legolas/rook2/evidence/weighted-bound-cache-generic-cpu-pilot-20261019-01/independent-reconciliation.json": "9d26d8403eaaf9a33c3414aa93de6c5c4a8b6c56fcd6d3317444714b62328dab",
++    "/home/legolas/rook2/evidence/weighted-bound-cache-generic-cpu-pilot-20261019-01/reconcile-tool-terminal.json": "efa75e504ff60ca7a8852ec830472681e04dd4a71590df5601bc892b8518fafd",
++    "/home/legolas/rook2/evidence/weighted-bound-cache-generic-cpu-pilot-20261019-01/tool-terminal.json": "6eefeef41e4ff7abcd0c74678ad20b8a9321c127412dcb5d3f6db709531e7566",
+     "/home/legolas/rook2/evidence/weighted-bound-cache-parent-correction-20261019-01/proof.json": "fca8612f38769569447f382fa11b60b80881f351dc99c5318a7bb5a8b9561561",
+     "/home/legolas/rook2/evidence/weighted-bound-cache-parent-correction-20261019-01/review.md": "0772b65652c08c5b5a54b25a0fc3090a4d0f23a934f295534e8abdc1b0e6c64c",
+     "/home/legolas/rook2/evidence/weighted-bound-cache-parent-correction-20261019-01/source-manifest.json": "9015ec3cb75e6588ce804d55cf86bd7965d85a08504205e9fac56d3cf1dc6d25",
+@@ -239,7 +250,7 @@
+   },
+   "pin_provenance": {
+     "generic_binary_archive": "Identities from actual immutable build/archive receipts; execution guard hashes before activation, no binary/archive reading now",
+-    "live_generic_pilot": "Never read, pinned or represented as completed",
++    "live_generic_pilot": "No live/partial output read. Only after parent actual terminal notice: closed independent-reconciliation + actual outer/reconciler terminals read and pinned.",
+     "runtime_and_public_inputs": "Accepted32 recorded pins retained; execution guard must freshly verify before activation, no tool version invocation now",
+     "small_metadata": "Hashed directly in preparation",
+     "source69": "Each current source file hashed against exact generic receipt/corrected manifest/final review map, during metadata-only preparation"
+@@ -267,7 +278,7 @@
+     "verify-training-and-independent-remerge",
+     "build-use"
+   ],
+-  "status": "INERT PREPARATION ONLY; generic70 decision pending; four future stages unrun; parent clearance required",
++  "status": "INERT PREPARATION ONLY; generic70 independently passed; written parent selection/clearance pending; four future stages unrun",
+   "target_cpu": "x86-64",
+   "target_triple": "x86_64-unknown-linux-gnu",
+   "tempdir": "/home/legolas/rook2-build-tmp",
+--- execution-clearance.template.json.before-generic-closure
++++ execution-clearance.template.json
+@@ -8,8 +8,8 @@
+   "generic_pilot_actual_terminals": {},
+   "generic_pilot_advance_accepted": false,
+   "generic_pilot_evidence": {},
+-  "notes": "INERT template only. Parent must select PGO after actual generic70 terminal+independent decision and bind exact focused9/source/backend acceptance (NOT full187) plus real terminal files. Write one immutable execution-clearance.json before four serial activations. No use54/wire/full117/pre-gate/CPU/PGO timing authority. Future artifacts remain null in immutable plan.",
+-  "plan_sha256": "aff4e2c34ec09b5b9ba34d798b60ceae8d1dfc32ac0b3ddb6e65c35a36e0267b",
++  "notes": "INERT template only. Generic70 independently passed; parent reported PGO selection but written decision/clearance pending. Bind written decision, actual generic70+independent terminals and focused9/source/backend acceptance (NOT full187) before immutable execution-clearance.json. Four serial compiler/training activations only; no use54/wire/full117/pre-gate/CPU launch authority.",
++  "plan_sha256": "9500f22eb6341d80cab54dea15150f2ff06086d3f256da63d77f24993deb44c7",
+   "prepared_scripts_sha256": {
+     "build_stage.py": "36e9af981c43787e74ada6544cc851965d11e7428baab0e362f97254d158b423",
+     "guard.py": "05ff9ffd5f60973f7ed3f66f473381283417bdb13174513193dc8956dfb2533d",
+--- README.md.before-generic-closure
++++ README.md
+@@ -4,7 +4,7 @@
+ 
+ Source: frozen33 graph1caeea201ae177ec429a4e4ad7fb12f6baf3bf41ad6cf1cd983d57fcf3e97397, native46/tools23. All69 current source bytes match corrected manifest, final source review and generic build before/after. Generic98709a1a44323abdbab1b6616e6a7f164f8dc9162cd1693eafe17385b8425b7d/archive1b92de9483cbb789d93e95ee912ad22180b53e22a1d3930db14ceeb3db4a4cd7 are identities bound from their closed receipts, not freshly read binary/archive bytes. Exact focused9 pass is bb493b/session80410→1bf7de/0; old176 library tests were filtered and2dev unrun. Total187 is a declaration count, NOT a passing187 claim or activation prerequisite. Source admission, parent correction, final source review and generic backend are pinned separately.
+ 
+-The generic70 pilot was LIVE at preparation: no pilot result, partial output, independent result or mutable launch proof was read/pinned. PGO selection and clearance remain false. Parent may later bind the actual generic outer terminal, independent result and advance decision in one immutable clearance, with exact source/backend/focused9 proof and interference review. Do not mutate the frozen plan/predeclaration to fill future artifact hashes; real stage receipts and a later launch binding carry them.
++Initial preparation was completed while generic70 was LIVE and read no pilot output. After parent reported actual closure, only the now-closed independent result and both actual terminal records were read/pinned:8a574f/session76977→6fd863/0 and e4d4aa/0, ratio.9901605919917462,7/7lower,worst.997226543628715,70original offline checks, declared rule passes. Initial plan/template/prose are preserved as before-generic-closure files with an explicit metadata diff. Parent reports selection for fresh PGO, but its written generic-decision and execution-clearance remain pending/absent; the template authorization and acceptance fields stay false. The predeclaration records the initial pending state and its numerical rule remains byte-immutable. Parent must bind its written decision, these actual proofs/terminals, focused9/source/backend acceptance and interference review in one immutable clearance before activation. Future artifact hashes remain null; real stage receipts and a later launch binding carry them.
+ 
+ Four separate future stages only: instrumented generic build/freeze/archive → one original54 stored-order training → offline original54 raw/PID/protocol checks plus independent byte-identical LLVM19 remerge → generic profile-use build/freeze/archive. Same actual source-owned profile only; no baseline/control or historical profile transfer. Train retains actual native stdout/stderr/exits/PIDs and one profraw per54 native lifetimes; verifier reconstructs original stdin and invokes original checkReplay including relative benchmark.mjs closure. Build flags/compiler/profile identities and stale/missing warnings remain checked. Never precreate raw/PGO output directories. Actual outer terminals gate progression; child-return logs alone are insufficient.
+ 

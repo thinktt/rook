@@ -1,0 +1,96 @@
+--- frozen33-01/src/evaluator.rs
++++ reviewed33-02/src/evaluator.rs
+@@ -152,6 +152,20 @@
+                 assert_eq!(cached.stats.pawn_replacements, before.pawn_replacements + 1);
+             }
+         }
++        // Production D=false must replay semantic R on an actual hit too.
++        let mut quiet_cached = Evaluator::<false>::new(&position);
++        let mut quiet_plain = Evaluator::<false>::new(&position);
++        quiet_cached.prepare_bound_cache();
++        for _ in 0..2 {
++            let mut a = Node::root(position, &quiet_cached.root);
++            let mut b = Node::root(position, &quiet_plain.root);
++            let actual = quiet_cached.full_bound::<true>(&mut a, &map, false);
++            assert_eq!(actual, quiet_plain.full(&mut b, &map, false));
++            assert_eq!((a, quiet_cached.stats), (b, quiet_plain.stats));
++            assert!(actual.relation_queries > 0);
++            assert_eq!(quiet_cached.stats.full, 0);
++        }
++        assert_eq!(quiet_cached.bound_test_events().hits, 1);
+     }
+ 
+     #[test]
+@@ -191,7 +205,7 @@
+         let movement = legal(&start, "e2e4");
+         let mut a = Node::root(start, &cached.root).child(&cached.root, movement);
+         let mut b = Node::root(start, &plain.root).child(&plain.root, movement);
+-        assert_ne!(a.position.ep, crate::types::NO_SQUARE);
++        assert_ne!(a.position.ep, crate::position::NO_SQUARE);
+         let original = a.position;
+         let map = Influence::build(&original);
+         assert_eq!(cached.full_bound::<true>(&mut a, &map, false), plain.full(&mut b, &map, false));
+@@ -205,7 +219,7 @@
+         }
+         assert_eq!(a.position.board, original.board);
+         assert_eq!(a.position.side, original.side);
+-        assert_eq!(a.position.ep, crate::types::NO_SQUARE);
++        assert_eq!(a.position.ep, crate::position::NO_SQUARE);
+     }
+ 
+     fn public_call(which: usize, evaluator: &mut Evaluator, node: &mut Node,
+--- frozen33-01/src/timed.rs
++++ reviewed33-02/src/timed.rs
+@@ -625,6 +625,9 @@
+         let events = cached.evaluator.bound_test_events();
+         assert_eq!(events.epochs, 1);
+         assert!(events.lookups > 1 && events.stores > 1);
++        assert_eq!(events.lookups, x.evaluations.full + 1);
++        assert!(events.hits > 0, "actual timed run must exercise reuse");
++        assert_eq!(events.hits + events.stores, events.lookups);
+         assert_eq!(plain.evaluator.bound_test_events(), Default::default());
+         assert!(!plain.evaluator.bound_test_allocated());
+     }
+@@ -694,6 +697,42 @@
+             assert!(search.timing.is_none());
+         }
+     }
++
++    #[test]
++    fn bound_actual_started_unwind_leaves_public_routes_inert_and_next_root_clears() {
++        struct PanicStart(bool);
++        impl crate::host::Host for PanicStart {
++            fn started(&mut self, _: u32) -> std::io::Result<()> {
++                self.0 = true;
++                panic!("test host started panic");
++            }
++        }
++        let position = Position::from_fen(START).unwrap();
++        let mut search = Search::<true>::new(&position);
++        search.config.tts_bytes = 65536;
++        let (mut search, _) = search.map_host(PanicStart(false));
++        let mut history = SearchHistory::new(&position);
++        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++            let _ = search.run_session_timed(position, &mut history, controls(), Limits::default());
++        }));
++        assert!(result.is_err() && search.host.0);
++        assert_eq!(history.search_ply(), 0);
++        let before = search.evaluator.bound_test_events();
++        assert_eq!((before.epochs, before.lookups, before.stores, before.hits), (1, 1, 1, 0));
++        // Test a retained Search; general Session panic recovery is not promised.
++        search.evaluator.parameters.own[7] = 271;
++        let (mut node, map) = search.prepare_root_with_influence(position);
++        search.evaluator.full(&mut node, &map, false);
++        search.evaluator.select_noncheck(&mut node, -10000, 10000, true, &mut Some(map));
++        assert_eq!(search.evaluator.bound_test_events(), before);
++        let (mut search, _) = search.map_host(crate::host::NoHost);
++        assert!(matches!(search.run_session_timed(position, &mut history, controls(), Limits { nodes: Some(0) }),
++            Err(Error::Stopped(Stopped::NodeLimit(0)))));
++        let after = search.evaluator.bound_test_events();
++        assert_eq!((after.epochs, after.lookups, after.stores, after.hits), (2, 2, 2, 0));
++        assert!(search.timing.is_none());
++        assert_eq!(history.search_ply(), 0);
++    }
+ }
+ 
+ /// These are the former root-local variables, never new Search/Node fields.

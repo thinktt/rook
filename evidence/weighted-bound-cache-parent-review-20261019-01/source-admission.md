@@ -1,0 +1,7 @@
+# Admit33 generic build after focused correctness
+
+Root reviewed all five production-file diffs and the one full body/pure producer, private const creator/propagation and false wrappers. No Node/Position layout changes. The once-per-Session validation gate establishes current-root coherence; the existing generated-move/transition invariants supply the descendant premise. Native maps originate from matching local None scratch. Same placement and fixed bound root/weights determine the two already-rounded pure contributions/R/pieces; every other term, PawnCache effect, tempo, retained/stat/R/observer/finish owner stays live.
+
+The frozen01 proposal remains preserved, with its known uncompiled test constant issue. Root's separate test-only correction preserves every production byte and old178 test module, adds D=false hit/R and actual retained-Search unwind witnesses, and requires real natural timed hits plus full+root lookup closure. All9 new focused tests pass,176 existing lib tests are filtered and2 dev tests unrun. This proves finite witnesses only, not all187/117 or complete production induction. Actual focusedbb493b/session80410→1bf7de/0; source69 stays1caeea201ae177ec429a4e4ad7fb12f6baf3bf41ad6cf1cd983d57fcf3e97397.
+
+Select generic main build/backend, followed by frozen70 only after independent final source audit and actual mechanism/quiet admission. Do not transfer test-harness layout or infer speed. Duplication/frame/lookup/miss/validation/clear costs remain open. Production25 and its external package remain unchanged.

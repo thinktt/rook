@@ -2,11 +2,12 @@
 
 Retained production is candidate25. Subsequent experiments26–32 are parked.
 Experiment32 improves generic timing but fails its own-source PGO pilot at
-0.239039%higher summed medians; broader qualification is not run. A bounded
-weighted-cache architectural review is closed with dependency/lifetime/provenance
-conditions, but no new variant is selected or implemented.
+0.239039%higher summed medians; broader qualification is not run. Experiment33 implements the distinct validated fixed-root weighted cache:
+9 focused checks and actual source/backend gates pass, generic70 improves
+0.983941% with all7 medians lower. Fresh own-source PGO and its separate pilot
+are selected; no adoption or broad qualification yet.
 Current results and qualification limits are in
-[qualification gaps](../qualification-gaps.md) and decisions0016–0023.
+[qualification gaps](../qualification-gaps.md) and decisions0016–0024.
 Entries below preserve the historical investigation record and artifact scopes.
 
 Current117 integrates the full-byte relation table after178 native/209 diagnostic

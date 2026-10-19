@@ -1,0 +1,7 @@
+# Admit experiment33 generic fixed70 once
+
+Root accepts the final source gate and actual backend: validated normal WireHost reaches enabled full/ordinary/Q/IIO, exact32B key compares and24B payload loads bypass activity/shelter weighting while live suffix/R remains. Root preparation binds then clears/heap-allocates before full. No64KiB stack temporary; recursive reservations match except full16B lower. Added false/true text and3752B outlined timed frame, validation/clear/lookup/payload costs remain risks. No speed is inferred.
+
+All9 focused tests passed; old178 remain source-preserved and unrun by that filter. Current source69 and exact98709 generic image are bound; control is exact25generic2940. Run only the originally frozen seven cases,70 lifetimes/14 excluded/56 measured once. Require aggregate<=.995 AND>=5 lower medians AND worst<=1.02; otherwise park without retry/PGO/broad qualification. Source review c63b10/0, backend final ac7984/0, focused1bf7de/0, generic build ebde23/0, archive50cd95/0. Parent retains engineering/adoption responsibility.
+
+All input hashes and both binaries match before activation. Root69 production stays25; owned native/compiler/test/static/archive jobs are closed and point job check is quiet. HelpersH/engine14/no owned15 follow existing measurement method; context does not establish exclusive host isolation. Preserve actual outer terminal before independent reconciliation.

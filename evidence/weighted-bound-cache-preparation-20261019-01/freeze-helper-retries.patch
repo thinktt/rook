@@ -1,0 +1,20 @@
+--- freeze_source.py
++++ freeze_source-03.py
+@@ -50,7 +50,7 @@
+     elif name.endswith('timed.rs'):
+         block = between(before, '#[cfg(test)]\nmod tests {', '\nimpl<const D: bool, H: crate::host::Host> Search<D, H>')
+     else:
+-        block = between(before, '#[cfg(test)]\nmod tests {', '\n#[derive(Clone, Debug, PartialEq, Eq)]\npub struct Iteration')
++        block = between(before, '#[cfg(test)]\nmod tests {', '\npub struct Iteration {')
+     assert after.count(block) == 1, ('old test module changed', name)
+     test_blocks[name] = {'bytes': len(block.encode()), 'sha256': sha(block.encode()), 'unchanged': True}
+ 
+@@ -90,7 +90,7 @@
+ added = [r for r in new_tests if (r['file'], r['name']) not in old_pairs]
+ assert len(added) == 8 and len(new_tests) == 186, (len(added), len(new_tests))
+ assert all(r['name'].startswith('bound_') for r in added)
+-assert sum(r['file'] == 'src/development.rs' for r in new_tests) == 2
++assert sum(r['file'] == 'src/bin/rook2-dev.rs' for r in new_tests) == 2
+ 
+ patches = []
+ inverse = []

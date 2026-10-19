@@ -1,0 +1,997 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -16,6 +16,254 @@
+     pub pawn_progress: i32,
+     pub nonking_squares: i32,
+     pub age: u8,
++}
++
++#[cfg(test)]
++mod weighted_bound_tests {
++    use super::*;
++    const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++
++    #[test]
++    fn bound_storage_is_lazy_thin_exact_key_collision_and_clear() {
++        assert_eq!(std::mem::size_of::<BoundComponents>(), 24);
++        assert_eq!(std::mem::size_of::<BoundEntry>(), 64);
++        assert_eq!(std::mem::align_of::<BoundEntry>(), 64);
++        assert_eq!(std::mem::size_of::<Option<Box<[BoundEntry; 1024]>>>(),
++            std::mem::size_of::<usize>());
++        let start = Position::from_fen(START).unwrap();
++        let mut evaluator = Evaluator::<true>::new(&start);
++        assert!(!evaluator.bound_test_allocated());
++        evaluator.begin_search(&start);
++        assert!(!evaluator.bound_test_allocated());
++        evaluator.prepare_bound_cache();
++        let entries = evaluator.bound.as_ref().unwrap();
++        assert_eq!(entries.as_ptr() as usize % 64, 0);
++        assert_eq!((&entries[1] as *const BoundEntry as usize)
++            - (&entries[0] as *const BoundEntry as usize), 64);
++        // Pigeonhole over >1024 distinct coherent boards; no forged fingerprints.
++        let mut seen = vec![None; 1024];
++        let mut collision = None;
++        'outer: for a in 1..63 {
++            for b in a + 1..63 {
++                let mut fen = String::new();
++                for rank in (0..8).rev() {
++                    let mut empty = 0;
++                    for file in 0..8 {
++                        let square = rank * 8 + file;
++                        let tag = if square == 0 { Some('K') }
++                            else if square == 63 { Some('k') }
++                            else if square == a || square == b { Some('N') } else { None };
++                        if let Some(tag) = tag {
++                            if empty != 0 { fen.push(char::from(b'0' + empty)); empty = 0; }
++                            fen.push(tag);
++                        } else { empty += 1; }
++                    }
++                    if empty != 0 { fen.push(char::from(b'0' + empty)); }
++                    if rank != 0 { fen.push('/'); }
++                }
++                fen.push_str(" w - - 0 1");
++                let position = Position::from_fen(&fen).unwrap();
++                let slot = Evaluator::<true>::bound_index(&position);
++                if let Some(first) = seen[slot] {
++                    collision = Some((first, position)); break 'outer;
++                }
++                seen[slot] = Some(position);
++            }
++        }
++        let (a, b) = collision.expect("real1024-slot collision");
++        assert_ne!(a.attack_view(), b.attack_view());
++        let x = BoundComponents { pieces: [3, 5], activity: 7, shelter: 11, relation_queries: 13 };
++        let y = BoundComponents { relation_queries: 17, ..x };
++        evaluator.bound_insert(&a, x);
++        assert_eq!(evaluator.bound_get(&a), Some(x));
++        assert_eq!(evaluator.bound_get(&b), None);
++        evaluator.bound_insert(&b, y);
++        assert_eq!(evaluator.bound_get(&a), None);
++        assert_eq!(evaluator.bound_get(&b), Some(y));
++        evaluator.prepare_bound_cache();
++        assert!(evaluator.bound.as_ref().unwrap().iter().all(|e| *e == BoundEntry::EMPTY));
++    }
++
++    #[test]
++    fn bound_hits_preserve_live_tempo_retained_pawn_effects_and_nonzero_relation_work() {
++        let position = Position::from_fen(START).unwrap();
++        let mut cached = Evaluator::<true>::new(&position);
++        let mut plain = Evaluator::<true>::new(&position);
++        for evaluator in [&mut cached, &mut plain] {
++            evaluator.parameters.own[7] = 271;
++            evaluator.parameters.opponent[7] = 43;
++            evaluator.parameters.own[8] = 377;
++            evaluator.begin_search(&position);
++        }
++        cached.prepare_bound_cache();
++        let map = Influence::build(&position);
++        let mut a = Node::root(position, &cached.root);
++        let mut b = Node::root(position, &plain.root);
++        assert_eq!(cached.full_bound::<true>(&mut a, &map, false), plain.full(&mut b, &map, false));
++        assert!(cached.bound_get(&position).unwrap().relation_queries > 0);
++        let mut changed = position;
++        for side in 0..2 {
++            changed.squares[side][..8].reverse();
++            changed.squares[side][8..10].reverse();
++            changed.squares[side][10..12].reverse();
++            changed.squares[side][12..14].reverse();
++        }
++        changed.side = Color::Black;
++        changed.rights = 0;
++        changed.ep = 20;
++        changed.halfmove = 83;
++        changed.validate().unwrap();
++        assert_eq!(changed.attack_view(), position.attack_view());
++        assert_eq!(Influence::build(&changed), map);
++        for checked in [false, true] {
++            let before = cached.bound_test_events();
++            a = Node::root(changed, &cached.root);
++            b = Node::root(changed, &plain.root);
++            a.retained.age = 19; b.retained.age = 19;
++            a.retained.positional = -371; b.retained.positional = -371;
++            let mut left = None;
++            let mut right = None;
++            // Private test observation only: no production observed entry gets permission.
++            let x = cached.full_impl::<false, true, _, _>(&mut a, &map, checked,
++                |components| left = Some(components), |_| {});
++            let y = plain.full_observed(&mut b, &map, checked,
++                |components| right = Some(components));
++            assert_eq!((x, left), (y, right));
++            assert_eq!((a, cached.stats), (b, plain.stats));
++            assert_eq!(cached.bound_test_events().hits, before.hits + 1);
++        }
++        // A real PawnCache collision must still replace on a pure hit.
++        let first = Position::from_fen("7k/8/8/8/6P1/3P4/8/K7 w - - 0 1").unwrap();
++        let other = Position::from_fen("7k/8/6P1/8/8/3P4/8/K7 w - - 0 1").unwrap();
++        assert_eq!(first.pawn % 128, other.pawn % 128);
++        assert_ne!(first.pawn, other.pawn);
++        for (i, position) in [first, other, first].into_iter().enumerate() {
++            let map = Influence::build(&position);
++            let mut a = Node::root(position, &cached.root);
++            let mut b = Node::root(position, &plain.root);
++            let before = cached.stats;
++            let hits = cached.bound_test_events().hits;
++            let actual = if i == 1 { cached.full(&mut a, &map, false) }
++                else { cached.full_bound::<true>(&mut a, &map, false) };
++            assert_eq!(actual, plain.full(&mut b, &map, false));
++            assert_eq!((a, cached.stats), (b, plain.stats));
++            if i == 2 {
++                assert_eq!(cached.bound_test_events().hits, hits + 1);
++                assert_eq!(cached.stats.pawn_replacements, before.pawn_replacements + 1);
++            }
++        }
++    }
++
++    #[test]
++    fn bound_native_rook_cycle_and_ep_nulls_hit_without_freezing_live_state() {
++        fn legal(position: &Position, text: &str) -> Move {
++            let mut list = crate::movegen::MoveList::new();
++            crate::movegen::generate_legal(position, &mut list);
++            *list.as_slice().iter().find(|m| m.to_string() == text).unwrap()
++        }
++        let start = Position::from_fen("7k/8/8/8/8/8/8/R1R4K w - - 0 1").unwrap();
++        let mut cached = Evaluator::<true>::new(&start);
++        let mut plain = Evaluator::<true>::new(&start);
++        cached.prepare_bound_cache();
++        let mut a = Node::root(start, &cached.root);
++        let mut b = Node::root(start, &plain.root);
++        let map = Influence::build(&start);
++        assert_eq!(cached.full_bound::<true>(&mut a, &map, false), plain.full(&mut b, &map, false));
++        for text in ["a1a2", "h8g8", "c1a1", "g8h8", "a2c2", "h8g8", "c2c1", "g8h8"] {
++            let movement = legal(&a.position, text);
++            a = a.child(&cached.root, movement);
++            b = b.child(&plain.root, movement);
++            a.position.validate().unwrap();
++        }
++        assert_eq!(a.position.board, start.board);
++        assert_eq!(a.position.side, start.side);
++        assert_ne!(a.position.squares, start.squares);
++        assert_eq!(Influence::build(&a.position), map);
++        let hits = cached.bound_test_events().hits;
++        assert_eq!(cached.full_bound::<true>(&mut a, &map, false), plain.full(&mut b, &map, false));
++        assert_eq!((a, cached.stats), (b, plain.stats));
++        assert_eq!(cached.bound_test_events().hits, hits + 1);
++
++        let start = Position::from_fen("7k/8/8/8/3p4/8/4P3/7K w - - 0 1").unwrap();
++        let mut cached = Evaluator::<true>::new(&start);
++        let mut plain = Evaluator::<true>::new(&start);
++        cached.prepare_bound_cache();
++        let movement = legal(&start, "e2e4");
++        let mut a = Node::root(start, &cached.root).child(&cached.root, movement);
++        let mut b = Node::root(start, &plain.root).child(&plain.root, movement);
++        assert_ne!(a.position.ep, crate::types::NO_SQUARE);
++        let original = a.position;
++        let map = Influence::build(&original);
++        assert_eq!(cached.full_bound::<true>(&mut a, &map, false), plain.full(&mut b, &map, false));
++        for _ in 0..2 {
++            a = a.null_child(); b = b.null_child();
++            assert_eq!(Influence::build(&a.position), map);
++            let hits = cached.bound_test_events().hits;
++            assert_eq!(cached.full_bound::<true>(&mut a, &map, false), plain.full(&mut b, &map, false));
++            assert_eq!((a, cached.stats), (b, plain.stats));
++            assert_eq!(cached.bound_test_events().hits, hits + 1);
++        }
++        assert_eq!(a.position.board, original.board);
++        assert_eq!(a.position.side, original.side);
++        assert_eq!(a.position.ep, crate::types::NO_SQUARE);
++    }
++
++    fn public_call(which: usize, evaluator: &mut Evaluator, node: &mut Node,
++        map: &Influence) -> Evaluation
++    {
++        match which {
++            0 => evaluator.full(node, map, false),
++            1 => evaluator.full_observed(node, map, false, |_| {}),
++            2 => evaluator.fresh_observed(node, map, false, |_| {}),
++            3 => evaluator.full_detailed_observed(node, map, false, |_| {}),
++            4 => evaluator.fresh_detailed_observed(node, map, false, |_| {}),
++            5 => evaluator.select_noncheck(node, -10000, 10000, true, &mut Some(*map)).evaluation,
++            6 => evaluator.select_noncheck_detailed_observed(node, -10000, 10000, true,
++                &mut Some(*map), |_| {}, |_| {}).evaluation,
++            7 => evaluator.select_noncheck_stages_observed(node, -10000, 10000, true,
++                &mut Some(*map), |_| {}).evaluation,
++            _ => unreachable!(),
++        }
++    }
++    #[test]
++    fn bound_public_custom_maps_and_public_root_rebind_never_lookup_or_populate() {
++        let position = Position::from_fen(START).unwrap();
++        let other = Position::from_fen("7k/8/8/8/8/8/P7/K7 b - - 0 1").unwrap();
++        let custom = Influence { profiles: [[255; 64]; 2] };
++        for which in 0..8 {
++            for poisoned in [false, true] {
++                for mutation in 0..3 {
++                    let mut cached = Evaluator::<true>::new(&position);
++                    let mut plain = Evaluator::<true>::new(&position);
++                    if mutation == 1 {
++                        cached.root = RootContext::neutral(&other);
++                        plain.root = cached.root.clone();
++                    } else if mutation == 2 {
++                        for evaluator in [&mut cached, &mut plain] {
++                            evaluator.parameters.own[7] = 271;
++                            evaluator.parameters.opponent[8] = 17;
++                            evaluator.begin_search(&other);
++                        }
++                    }
++                    cached.prepare_bound_cache();
++                    if poisoned {
++                        cached.bound_insert(&position, BoundComponents { pieces: [-17, 29],
++                            activity: -733, shelter: 997, relation_queries: 99999 });
++                    }
++                    let before = cached.bound.as_ref().unwrap().to_vec();
++                    let events = cached.bound_test_events();
++                    let mut a = Node::root(position, &cached.root);
++                    let mut b = Node::root(position, &plain.root);
++                    assert_eq!(public_call(which, &mut cached, &mut a, &custom),
++                        public_call(which, &mut plain, &mut b, &custom));
++                    assert_eq!((a, cached.stats), (b, plain.stats));
++                    assert_eq!(cached.bound_test_events(), events);
++                    assert_eq!(&cached.bound.as_ref().unwrap()[..], before.as_slice());
++                    assert!(!plain.bound_test_allocated());
++                }
++            }
++        }
++    }
+ }
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+@@ -258,6 +506,42 @@
+     pub finished: endgame::Finished,
+ }
+ 
++// Valid only inside the private coherent, fixed-root Session search instantiation.
++// No root-relative weighting or final Evaluation is reconstructed on a hit.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++struct BoundComponents {
++    pieces: [i32; 2],
++    activity: i32,
++    shelter: i32,
++    relation_queries: u64,
++}
++impl BoundComponents {
++    fn compute(position: &Position, influence: &Influence, material: i32, weights: Weights) -> Self {
++        let activity = activity::compute(position, influence, material, weights.mobility);
++        let shelter = shelter::compute(position, influence, activity.pressure, material, weights.shelter);
++        Self { pieces: activity.pieces, activity: activity.weighted,
++            shelter: shelter.weighted, relation_queries: activity.relation_queries }
++    }
++}
++#[repr(C, align(64))]
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct BoundEntry {
++    key: crate::attacks::AttackBits,
++    value: BoundComponents,
++}
++impl BoundEntry {
++    const EMPTY: Self = Self { key: crate::attacks::AttackBits::empty(),
++        value: BoundComponents { pieces: [0; 2], activity: 0, shelter: 0, relation_queries: 0 } };
++}
++#[cfg(test)]
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct BoundEvents {
++    pub(crate) epochs: u64,
++    pub(crate) lookups: u64,
++    pub(crate) hits: u64,
++    pub(crate) stores: u64,
++}
++
+ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
+     pub root: RootContext,
+     pub parameters: Parameters,
+@@ -265,6 +549,9 @@
+     pub variation_range: u32,
+     weights: Weights,
+     pawns: PawnCache,
++    bound: Option<Box<[BoundEntry; 1024]>>,
++    #[cfg(test)]
++    bound_events: BoundEvents,
+     pub stats: EvalStats,
+ }
+ 
+@@ -279,6 +566,9 @@
+             draw_preference,
+             variation_range,
+             pawns: PawnCache::new(),
++            bound: None,
++            #[cfg(test)]
++            bound_events: BoundEvents::default(),
+             stats: EvalStats::default(),
+         }
+     }
+@@ -292,6 +582,42 @@
+         self.pawns.clear();
+         self.stats = EvalStats::default();
+     }
++
++    // Called only AFTER root binding, BEFORE the first ROOT_CACHE full call.
++    pub(crate) fn prepare_bound_cache(&mut self) {
++        if let Some(entries) = self.bound.as_mut() {
++            entries.fill(BoundEntry::EMPTY);
++        } else {
++            let mut entries = Vec::with_capacity(1024);
++            entries.resize_with(1024, || BoundEntry::EMPTY);
++            let entries: Box<[BoundEntry]> = entries.into_boxed_slice();
++            self.bound = Some(entries.try_into().ok().expect("fixed bound cache length"));
++        }
++        #[cfg(test)] { self.bound_events.epochs += 1; }
++    }
++    fn bound_index(position: &Position) -> usize {
++        ((position.primary ^ position.secondary.rotate_left(16)) & 1023) as usize
++    }
++    fn bound_get(&mut self, position: &Position) -> Option<BoundComponents> {
++        let key = position.attack_view();
++        debug_assert_ne!(key, crate::attacks::AttackBits::empty());
++        let entry = &self.bound.as_ref().expect("bound root not prepared")[Self::bound_index(position)];
++        let result = (entry.key == key).then_some(entry.value);
++        #[cfg(test)] {
++            self.bound_events.lookups += 1;
++            self.bound_events.hits += u64::from(result.is_some());
++        }
++        result
++    }
++    fn bound_insert(&mut self, position: &Position, value: BoundComponents) {
++        self.bound.as_mut().expect("bound root not prepared")[Self::bound_index(position)] =
++            BoundEntry { key: position.attack_view(), value };
++        #[cfg(test)] { self.bound_events.stores += 1; }
++    }
++    #[cfg(test)]
++    pub(crate) fn bound_test_events(&self) -> BoundEvents { self.bound_events }
++    #[cfg(test)]
++    pub(crate) fn bound_test_allocated(&self) -> bool { self.bound.is_some() }
+ 
+     pub fn ensure_influence<'a>(
+         &mut self,
+@@ -308,7 +634,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
++        self.full_impl::<false, false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -318,7 +644,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<false, false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -327,7 +653,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<true, false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -338,7 +664,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
++        self.full_impl::<true, false, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -348,9 +674,16 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
+-    }
+-    fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        self.full_impl::<false, false, _, _>(node, influence, in_check, |_| {}, observer)
++    }
++    /// Private permission is inherited from the validated fixed-root Session run.
++    /// The supplied map must be this current placement's locally built native map.
++    pub(crate) fn full_bound<const ROOT_CACHE: bool>(&mut self, node: &mut Node,
++        influence: &Influence, in_check: bool) -> Evaluation
++    {
++        self.full_impl::<false, ROOT_CACHE, _, _>(node, influence, in_check, |_| {}, |_| {})
++    }
++    fn full_impl<const FRESH: bool, const ROOT_CACHE: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+@@ -370,14 +703,12 @@
+             self.pawns.select(position, influence)
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        let activity = activity::compute(position, influence, material, self.weights.mobility);
+-        let shelter = shelter::compute(
+-            position,
+-            influence,
+-            activity.pressure,
+-            material,
+-            self.weights.shelter,
+-        );
++        let cached = if ROOT_CACHE { self.bound_get(position) } else { None };
++        let pure = if let Some(value) = cached { value } else {
++            let value = BoundComponents::compute(position, influence, material, self.weights);
++            if ROOT_CACHE { self.bound_insert(position, value); }
++            value
++        };
+         let structure = pawn_progress::structure_weighted(
+             phase,
+             pawn.structure,
+@@ -404,7 +735,7 @@
+         let tempo = if in_check {
+             0
+         } else {
+-            let magnitude = ((activity.pieces[position.side.index()] as i64 + 140)
++            let magnitude = ((pure.pieces[position.side.index()] as i64 + 140)
+                 * (5 * phase.opening as i64
+                     + 4 * phase.middlegame as i64
+                     + 2 * phase.endgame as i64)
+@@ -423,9 +754,9 @@
+                 .square_balance_from(position, node.retained.nonking_squares),
+             pawn_structure: structure,
+             pawn_progress: progress,
+-            activity: activity.weighted,
++            activity: pure.activity,
+             central: central.weighted,
+-            shelter: shelter.weighted,
++            shelter: pure.shelter,
+             bishops: patterns.bishop_coordination,
+             patterns: patterns.opening,
+             tempo,
+@@ -433,7 +764,7 @@
+         node.retained.positional = components.positional();
+         node.retained.pawn_progress = progress;
+         node.retained.age = 0;
+-        let queries = pawn.relation_queries + activity.relation_queries;
++        let queries = pawn.relation_queries + pure.relation_queries;
+         if DIAGNOSTICS {
+             self.stats.full += 1;
+             if selected.reused {
+@@ -533,7 +864,7 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
+-        self.select_noncheck_impl::<false, false, _, _, _>(
++        self.select_noncheck_impl::<false, false, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
+         )
+     }
+@@ -555,7 +886,7 @@
+         F: FnMut(FullDetails),
+         G: FnMut(FastDetails),
+     {
+-        self.select_noncheck_impl::<true, false, _, _, _>(
++        self.select_noncheck_impl::<true, false, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
+         )
+     }
+@@ -570,7 +901,7 @@
+         scratch: &mut Option<Influence>,
+         observer: F,
+     ) -> Selection {
+-        self.select_noncheck_impl::<false, true, _, _, _>(
++        self.select_noncheck_impl::<false, true, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
+         )
+     }
+@@ -596,9 +927,18 @@
+         evaluation
+     }
+ 
++    /// Private selector; scratch originates as None in the matching Q invocation.
++    pub(crate) fn select_noncheck_bound<const ROOT_CACHE: bool>(&mut self,
++        node: &mut Node, lower: i32, upper: i32, capture_exception: bool,
++        scratch: &mut Option<Influence>) -> Selection
++    {
++        self.select_noncheck_impl::<false, false, ROOT_CACHE, _, _, _>(
++            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {})
++    }
++
+     // Only stage call wrappers differ. The ordinary instantiation retains its
+     // original full/fast call sites; every selection condition stays shared.
+-    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, F, G, S>(
++    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, const ROOT_CACHE: bool, F, G, S>(
+         &mut self,
+         node: &mut Node,
+         lower: i32,
+@@ -630,6 +970,8 @@
+                     self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+                 } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
++                } else if ROOT_CACHE {
++                    self.full_bound::<ROOT_CACHE>(node, influence, false)
+                 } else {
+                     self.full(node, influence, false)
+                 },
+@@ -652,6 +994,8 @@
+                 self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+             } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
++            } else if ROOT_CACHE {
++                self.full_bound::<ROOT_CACHE>(node, influence, false)
+             } else {
+                 self.full(node, influence, false)
+             }
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -693,6 +693,13 @@
+     }
+ 
+     pub(crate) fn visit_ordinary_impl<const ALLOW_IIO: bool>(
++        &mut self, node: &mut Node, history: &mut SearchHistory,
++        request: Request, previous: Predecessor<'_>,
++    ) -> Result<i32, Stopped> {
++        self.visit_ordinary_bound::<ALLOW_IIO, false>(node, history, request, previous)
++    }
++
++    pub(crate) fn visit_ordinary_bound<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         node: &mut Node,
+         history: &mut SearchHistory,
+@@ -702,7 +709,7 @@
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+         if policy::quiescence_handoff(request.depth, p, self.config.maximum_depth) {
+-            return self.visit_q(
++            return self.visit_q_bound::<ROOT_CACHE>(
+                 node,
+                 history,
+                 TacticalEntry {
+@@ -793,7 +800,9 @@
+             }
+         }
+         let map = self.evaluator.ensure_influence(&position, &mut scratch);
+-        let evaluation = self.evaluator.full(node, map, checked);
++        let evaluation = if ROOT_CACHE {
++            self.evaluator.full_bound::<ROOT_CACHE>(node, map, checked)
++        } else { self.evaluator.full(node, map, checked) };
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+@@ -820,7 +829,7 @@
+                 }
+                 let mut child = node.null_child();
+                 history.push(&child.position, None);
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+                     &mut child,
+                     history,
+                     Request {
+@@ -895,7 +904,7 @@
+                 }
+                 let mut child = node.child(&self.evaluator.root, movement);
+                 history.push(&child.position, Some(movement));
+-                let returned = self.visit_q(
++                let returned = self.visit_q_bound::<ROOT_CACHE>(
+                     &mut child,
+                     history,
+                     TacticalEntry {
+@@ -931,7 +940,7 @@
+                 .marked_depth
+                 .is_none_or(|d| d < request.depth - 2)
+         {
+-            self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 0)?;
++            self.ordering_phase_bound::<ALLOW_IIO, ROOT_CACHE>(node, history, request, previous, map, checked, 0)?;
+         }
+         let mut best = effective_lower;
+         let mut lower = request.lower;
+@@ -1017,7 +1026,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
++                let returned = self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(&mut child, history, child_request, predecessor);
+                 let returned = match returned {
+                     Ok(value) => Ok(-value),
+                     Err(stop) => Err(stop),
+@@ -1030,7 +1039,7 @@
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
+-                        self.visit_ordinary_impl::<ALLOW_IIO>(
++                        self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+                             &mut child,
+                             history,
+                             Request {
+@@ -1069,7 +1078,7 @@
+             index += 1;
+             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
+             {
+-                self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 1)?;
++                self.ordering_phase_bound::<ALLOW_IIO, ROOT_CACHE>(node, history, request, previous, map, checked, 1)?;
+             }
+         }
+         best = best.min(effective_upper);
+@@ -1080,7 +1089,15 @@
+         Ok(best)
+     }
+ 
++    #[cfg(test)]
+     fn ordering_phase<const ALLOW_IIO: bool>(
++        &mut self, node: &Node, history: &mut SearchHistory, request: Request,
++        previous: Predecessor<'_>, map: &Influence, checked: bool, start: usize,
++    ) -> Result<(), Stopped> {
++        self.ordering_phase_bound::<ALLOW_IIO, false>(node, history, request, previous, map, checked, start)
++    }
++
++    fn ordering_phase_bound<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         node: &Node,
+         history: &mut SearchHistory,
+@@ -1137,7 +1154,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.iio_children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+                     &mut child,
+                     history,
+                     Request {
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -134,11 +134,18 @@
+         self.prepare_root_with_influence(position).0
+     }
+ 
+-    pub(crate) fn prepare_root_with_influence(
++    pub(crate) fn prepare_root_with_influence(&mut self, position: Position)
++        -> (Node, crate::influence::Influence)
++    {
++        self.prepare_root_bound::<false>(position)
++    }
++
++    pub(crate) fn prepare_root_bound<const ROOT_CACHE: bool>(
+         &mut self,
+         position: Position,
+     ) -> (Node, crate::influence::Influence) {
+         self.evaluator.begin_search(&position);
++        if ROOT_CACHE { self.evaluator.prepare_bound_cache(); }
+         self.learning.clear();
+         if let Some(table) = &mut self.remembered {
+             table.clear();
+@@ -146,11 +153,12 @@
+         let mut root = Node::root(position, &self.evaluator.root);
+         let mut scratch = None;
+         let influence = self.evaluator.ensure_influence(&position, &mut scratch);
+-        self.evaluator.full(
+-            &mut root,
+-            influence,
+-            movegen::in_check(&position, position.side),
+-        );
++        if ROOT_CACHE {
++            self.evaluator.full_bound::<ROOT_CACHE>(&mut root, influence,
++                movegen::in_check(&position, position.side));
++        } else {
++            self.evaluator.full(&mut root, influence, movegen::in_check(&position, position.side));
++        }
+         (root, scratch.unwrap())
+     }
+ 
+@@ -179,7 +187,7 @@
+         assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
+         self.begin_sequence(limits);
+         let parent = if O::ENABLED { O::parent(parent_retained) } else { O::Parent::default() };
+-        let score = self.visit_q_impl(node, history, entry, None, false, parent, observer)?;
++        let score = self.visit_q_impl::<false, O>(node, history, entry, None, false, parent, observer)?;
+         Ok(self.outcome(entry.ply, score))
+     }
+ 
+@@ -215,10 +223,21 @@
+         checked: Option<bool>,
+         replies_available: bool,
+     ) -> Result<i32, Stopped> {
+-        self.visit_q_impl(node, history, entry, checked, replies_available, (), &mut NoTrace)
+-    }
+-
+-    fn visit_q_impl<O: Observer>(
++        self.visit_q_bound::<false>(node, history, entry, checked, replies_available)
++    }
++
++    pub(crate) fn visit_q_bound<const ROOT_CACHE: bool>(
++        &mut self,
++        node: &mut Node,
++        history: &mut SearchHistory,
++        entry: Entry,
++        checked: Option<bool>,
++        replies_available: bool,
++    ) -> Result<i32, Stopped> {
++        self.visit_q_impl::<ROOT_CACHE, NoTrace>(node, history, entry, checked, replies_available, (), &mut NoTrace)
++    }
++
++    fn visit_q_impl<const ROOT_CACHE: bool, O: Observer>(
+         &mut self, node: &mut Node, history: &mut SearchHistory,
+         entry: Entry, checked: Option<bool>, replies_available: bool,
+         parent: O::Parent, observer: &mut O,
+@@ -261,6 +280,10 @@
+                     self.evaluator.select_noncheck_stages_observed(
+                         node, lower, entry.upper, entry.capture_exception, &mut influence,
+                         |stage| observer.stage(stage),
++                    )
++                } else if ROOT_CACHE {
++                    self.evaluator.select_noncheck_bound::<ROOT_CACHE>(
++                        node, lower, entry.upper, entry.capture_exception, &mut influence,
+                     )
+                 } else {
+                     self.evaluator.select_noncheck(
+@@ -440,10 +463,10 @@
+                 };
+                 let returned = if O::ENABLED {
+                     let parent = O::parent(&node.retained);
+-                    self.visit_q_impl(&mut child, history, child_entry, child_checked,
++                    self.visit_q_impl::<false, O>(&mut child, history, child_entry, child_checked,
+                         complete_replies, parent, observer)
+                 } else {
+-                    self.visit_q(&mut child, history, child_entry, child_checked, complete_replies)
++                    self.visit_q_bound::<ROOT_CACHE>(&mut child, history, child_entry, child_checked, complete_replies)
+                 };
+                 history.pop();
+                 let score = -returned?;
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -14,6 +14,28 @@
+ use crate::work_clock::Ledger;
+ 
+ pub const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++
++#[cfg(test)]
++mod weighted_bound_tests {
++    use super::*;
++    #[test]
++    fn bound_incoherent_public_session_root_keeps_old_false_node_limit_admission() {
++        let mut invalid = Session::<true>::default();
++        invalid.parameters.values[27] = 1;
++        invalid.parameters.values[24] = 0;
++        invalid.parameters.values[29] = 65536;
++        invalid.states.last_mut().unwrap().starting_units ^= 1;
++        assert!(invalid.position().validate().is_err());
++        assert!(matches!(invalid.go(0, Limits { nodes: Some(0) }, 6),
++            Err(Error::Search(ordinary::Error::Stopped(crate::quiescence::Stopped::NodeLimit(0))))));
++        let search = invalid.search.as_ref().unwrap();
++        assert_eq!(search.evaluator.bound_test_events(), Default::default());
++        assert!(!search.evaluator.bound_test_allocated());
++        assert!(search.timing.is_none());
++        assert_eq!(invalid.game_ply(), 0);
++        assert!(invalid.position().validate().is_err());
++    }
++}
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub enum GameResult {
+@@ -499,7 +521,7 @@
+         iteration_capacity: u8,
+     ) -> Result<SearchResult, Error> {
+         let mut prepared = self.prepare_go(system_seconds, iteration_capacity)?;
+-        let result = self.search.as_mut().unwrap().run_work_timed(
++        let result = self.search.as_mut().unwrap().run_session_timed(
+             prepared.root,
+             &mut prepared.history,
+             prepared.controls,
+@@ -563,7 +585,7 @@
+             initial_side: self.states[0].side,
+             clock_color: self.clock_color,
+         });
+-        let result = active.run_work_timed(
++        let result = active.run_session_timed(
+             prepared.root,
+             &mut prepared.history,
+             prepared.controls,
+--- a/src/timed.rs
++++ b/src/timed.rs
+@@ -487,19 +487,39 @@
+         self.run_work_timed_entry::<false>(position, history, controls, limits)
+     }
+ 
++    /// Only Session go/go_live call this entry. Validate once, without changing
++    /// invalid-root admission: incoherent public states retain the old false path.
++    pub(crate) fn run_session_timed(&mut self, position: Position,
++        history: &mut SearchHistory, controls: Controls, limits: Limits)
++        -> Result<Outcome, Error>
++    {
++        if position.validate().is_ok() {
++            self.run_work_timed_bound_entry::<true, true>(position, history, controls, limits)
++        } else {
++            self.run_work_timed_entry::<true>(position, history, controls, limits)
++        }
++    }
++
+     fn run_work_timed_entry<const ALLOW_IIO: bool>(
++        &mut self, position: Position, history: &mut SearchHistory,
++        controls: Controls, limits: Limits,
++    ) -> Result<Outcome, Error> {
++        self.run_work_timed_bound_entry::<ALLOW_IIO, false>(position, history, controls, limits)
++    }
++
++    fn run_work_timed_bound_entry<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         position: Position,
+         history: &mut SearchHistory,
+         controls: Controls,
+         limits: Limits,
+     ) -> Result<Outcome, Error> {
+-        let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
++        let result = self.run_work_timed_inner::<ALLOW_IIO, ROOT_CACHE>(position, history, controls, limits);
+         self.timing = None;
+         result
+     }
+ 
+-    fn run_work_timed_inner<const ALLOW_IIO: bool>(
++    fn run_work_timed_inner<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         position: Position,
+         history: &mut SearchHistory,
+@@ -513,7 +533,7 @@
+         }
+         assert_eq!(history.search_ply(), 0);
+         self.ensure_table().map_err(Error::Table)?;
+-        let (root, influence) = self.prepare_root_with_influence(position);
++        let (root, influence) = self.prepare_root_bound::<ROOT_CACHE>(position);
+         let checked = movegen::in_check(&position, position.side);
+         let mut legal = MoveList::new();
+         movegen::generate_legal(&position, &mut legal);
+@@ -541,7 +561,7 @@
+         if H::ACTIVE {
+             self.host.started(controls.seed).map_err(Error::Host)?;
+         }
+-        let mut effects=ActualEffects::<D,H,ALLOW_IIO> {
++        let mut effects=ActualEffects::<D,H,ALLOW_IIO,ROOT_CACHE> {
+             search:self,history,root:&root,position:&position,influence:&influence,
+             initial_candidates:&initial_candidates,controls,checked,
+             iterations:Vec::new(),iteration:None,pv:Vec::new(),captures:CaptureSlot::new(),
+@@ -569,8 +589,115 @@
+ }
+ 
+ 
++#[cfg(test)]
++mod weighted_bound_tests {
++    use super::*;
++    const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++    fn controls() -> Controls {
++        Controls { average_cs: 0, maximum_cs: 1, origin: 0xfffffff0,
++            seed: 0, randomness: 50, maximum_entered_iterations: 6 }
++    }
++
++    #[test]
++    fn bound_actual_timed_poll_matches_public_uncached_records_work_and_history() {
++        let position = Position::from_fen(START).unwrap();
++        let mut cached = Search::<true>::new(&position);
++        let mut plain = Search::<true>::new(&position);
++        cached.config.tts_bytes = 65536; plain.config.tts_bytes = 65536;
++        let mut a = SearchHistory::new(&position);
++        let mut b = SearchHistory::new(&position);
++        let x = cached.run_session_timed(position, &mut a, controls(), Limits::default()).unwrap();
++        let y = plain.run_work_timed(position, &mut b, controls(), Limits::default()).unwrap();
++        assert_eq!((a.search_ply(), b.search_ply()), (0, 0));
++        assert!(cached.timing.is_none() && plain.timing.is_none());
++        assert_eq!(x.stop.point, Point::Poll);
++        assert!(x.stop.pending.is_some() && x.result.is_some());
++        assert_eq!((&x.result, &x.stop, &x.publications, x.ledger),
++            (&y.result, &y.stop, &y.publications, y.ledger));
++        assert_eq!((&x.initial_candidates, &x.iterations, &x.checks, x.seed),
++            (&y.initial_candidates, &y.iterations, &y.checks, y.seed));
++        assert_eq!((x.stats, x.evaluations), (y.stats, y.evaluations));
++        assert!(x.evaluations.relation_queries > 0);
++        assert_eq!(crate::output::completed_events(position, &x,
++            cached.evaluator.draw_preference, cached.config.selectivity, true).unwrap(),
++            crate::output::completed_events(position, &y,
++            plain.evaluator.draw_preference, plain.config.selectivity, true).unwrap());
++        let events = cached.evaluator.bound_test_events();
++        assert_eq!(events.epochs, 1);
++        assert!(events.lookups > 1 && events.stores > 1);
++        assert_eq!(plain.evaluator.bound_test_events(), Default::default());
++        assert!(!plain.evaluator.bound_test_allocated());
++    }
++
++    #[test]
++    fn bound_a_b_a_root_rebindings_clear_before_first_full_and_node_limit_unwinds() {
++        let first = Position::from_fen(START).unwrap();
++        let other = Position::from_fen("7k/8/8/8/8/8/P7/K7 b - - 0 1").unwrap();
++        let mut cached = Search::<true>::new(&first);
++        let mut plain = Search::<true>::new(&first);
++        cached.config.tts_bytes = 65536; plain.config.tts_bytes = 65536;
++        for (index, position) in [first, other, first].into_iter().enumerate() {
++            for search in [&mut cached, &mut plain] {
++                search.evaluator.parameters.own[7] = 111 + index as i32 * 73;
++                search.evaluator.parameters.opponent[8] = 307 - index as i32 * 19;
++            }
++            let before = cached.evaluator.bound_test_events();
++            let mut a = SearchHistory::new(&position);
++            let mut b = SearchHistory::new(&position);
++            assert!(matches!(cached.run_session_timed(position, &mut a, controls(), Limits { nodes: Some(0) }),
++                Err(Error::Stopped(Stopped::NodeLimit(0)))));
++            assert!(matches!(plain.run_work_timed(position, &mut b, controls(), Limits { nodes: Some(0) }),
++                Err(Error::Stopped(Stopped::NodeLimit(0)))));
++            let after = cached.evaluator.bound_test_events();
++            assert_eq!((after.epochs, after.lookups, after.stores, after.hits),
++                (before.epochs + 1, before.lookups + 1, before.stores + 1, before.hits));
++            assert_eq!((cached.work(), cached.evaluator.stats), (plain.work(), plain.evaluator.stats));
++            assert_eq!((a.search_ply(), b.search_ply()), (0, 0));
++            assert!(cached.timing.is_none() && plain.timing.is_none());
++        }
++        assert_eq!(plain.evaluator.bound_test_events(), Default::default());
++        assert!(!plain.evaluator.bound_test_allocated());
++    }
++
++    #[test]
++    fn bound_host_seed_and_start_errors_leave_false_routes_inert_and_next_true_rebinds() {
++        struct Fails(u8);
++        impl crate::host::Host for Fails {
++            fn acquire_seed(&mut self, supplied: u32, _: u32) -> std::io::Result<u32> {
++                if self.0 == 0 { Err(std::io::ErrorKind::Other.into()) } else { Ok(supplied) }
++            }
++            fn started(&mut self, _: u32) -> std::io::Result<()> {
++                Err(std::io::ErrorKind::Other.into())
++            }
++        }
++        let position = Position::from_fen(START).unwrap();
++        for point in [0, 1] {
++            let mut search = Search::<true>::new(&position);
++            search.config.tts_bytes = 65536;
++            let (mut search, _) = search.map_host(Fails(point));
++            let mut history = SearchHistory::new(&position);
++            assert!(matches!(search.run_session_timed(position, &mut history, controls(), Limits::default()),
++                Err(Error::Host(_))));
++            assert!(search.timing.is_none());
++            assert_eq!(history.search_ply(), 0);
++            let before = search.evaluator.bound_test_events();
++            assert_eq!((before.epochs, before.lookups, before.stores, before.hits), (1, 1, 1, 0));
++            let (mut search, _) = search.map_host(crate::host::NoHost);
++            assert!(matches!(search.run_work_timed(position, &mut history, controls(), Limits { nodes: Some(0) }),
++                Err(Error::Stopped(Stopped::NodeLimit(0)))));
++            assert_eq!(search.evaluator.bound_test_events(), before);
++            assert!(matches!(search.run_session_timed(position, &mut history, controls(), Limits { nodes: Some(0) }),
++                Err(Error::Stopped(Stopped::NodeLimit(0)))));
++            let after = search.evaluator.bound_test_events();
++            assert_eq!((after.epochs, after.lookups, after.stores, after.hits), (2, 2, 2, 0));
++            assert_eq!(history.search_ply(), 0);
++            assert!(search.timing.is_none());
++        }
++    }
++}
++
+ /// These are the former root-local variables, never new Search/Node fields.
+-struct ActualEffects<'a,const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> {
++struct ActualEffects<'a,const D:bool,H:crate::host::Host,const ALLOW_IIO:bool,const ROOT_CACHE:bool> {
+     search:&'a mut Search<D,H>,
+     history:&'a mut SearchHistory,
+     root:&'a Node,
+@@ -591,8 +718,8 @@
+     adjustment:i32,
+     passes:Vec<Pass>,
+ }
+-impl<const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> Effects
+-    for ActualEffects<'_,D,H,ALLOW_IIO> {
++impl<const D:bool,H:crate::host::Host,const ALLOW_IIO:bool,const ROOT_CACHE:bool> Effects
++    for ActualEffects<'_,D,H,ALLOW_IIO,ROOT_CACHE> {
+     type Child=ActualChild;
+     type Stop=Stop;
+     type Interruption=Stopped;
+@@ -613,7 +740,7 @@
+     fn execute(&mut self,depth:u8,attempt:RootAttempt,child:&mut ActualChild)
+         ->Result<AttemptResult<Stopped>,Error> {
+         self.history.push(&child.node.position,Some(child.movement));
+-        let result=self.search.visit_ordinary_impl::<ALLOW_IIO>(
++        let result=self.search.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+             &mut child.node,self.history,Request{ply:1,depth:depth as i32-1,
+                 lower:-score_add(attempt.window[1],-child.adjustment),
+                 upper:-score_add(attempt.window[0],-child.adjustment),previous_extension:0,

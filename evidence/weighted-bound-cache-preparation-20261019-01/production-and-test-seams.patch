@@ -1,0 +1,623 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -17,6 +17,7 @@
+     pub nonking_squares: i32,
+     pub age: u8,
+ }
++
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub struct Node {
+@@ -258,6 +259,42 @@
+     pub finished: endgame::Finished,
+ }
+ 
++// Valid only inside the private coherent, fixed-root Session search instantiation.
++// No root-relative weighting or final Evaluation is reconstructed on a hit.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++struct BoundComponents {
++    pieces: [i32; 2],
++    activity: i32,
++    shelter: i32,
++    relation_queries: u64,
++}
++impl BoundComponents {
++    fn compute(position: &Position, influence: &Influence, material: i32, weights: Weights) -> Self {
++        let activity = activity::compute(position, influence, material, weights.mobility);
++        let shelter = shelter::compute(position, influence, activity.pressure, material, weights.shelter);
++        Self { pieces: activity.pieces, activity: activity.weighted,
++            shelter: shelter.weighted, relation_queries: activity.relation_queries }
++    }
++}
++#[repr(C, align(64))]
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct BoundEntry {
++    key: crate::attacks::AttackBits,
++    value: BoundComponents,
++}
++impl BoundEntry {
++    const EMPTY: Self = Self { key: crate::attacks::AttackBits::empty(),
++        value: BoundComponents { pieces: [0; 2], activity: 0, shelter: 0, relation_queries: 0 } };
++}
++#[cfg(test)]
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct BoundEvents {
++    pub(crate) epochs: u64,
++    pub(crate) lookups: u64,
++    pub(crate) hits: u64,
++    pub(crate) stores: u64,
++}
++
+ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
+     pub root: RootContext,
+     pub parameters: Parameters,
+@@ -265,6 +302,9 @@
+     pub variation_range: u32,
+     weights: Weights,
+     pawns: PawnCache,
++    bound: Option<Box<[BoundEntry; 1024]>>,
++    #[cfg(test)]
++    bound_events: BoundEvents,
+     pub stats: EvalStats,
+ }
+ 
+@@ -279,6 +319,9 @@
+             draw_preference,
+             variation_range,
+             pawns: PawnCache::new(),
++            bound: None,
++            #[cfg(test)]
++            bound_events: BoundEvents::default(),
+             stats: EvalStats::default(),
+         }
+     }
+@@ -293,6 +336,42 @@
+         self.stats = EvalStats::default();
+     }
+ 
++    // Called only AFTER root binding, BEFORE the first ROOT_CACHE full call.
++    pub(crate) fn prepare_bound_cache(&mut self) {
++        if let Some(entries) = self.bound.as_mut() {
++            entries.fill(BoundEntry::EMPTY);
++        } else {
++            let mut entries = Vec::with_capacity(1024);
++            entries.resize_with(1024, || BoundEntry::EMPTY);
++            let entries: Box<[BoundEntry]> = entries.into_boxed_slice();
++            self.bound = Some(entries.try_into().ok().expect("fixed bound cache length"));
++        }
++        #[cfg(test)] { self.bound_events.epochs += 1; }
++    }
++    fn bound_index(position: &Position) -> usize {
++        ((position.primary ^ position.secondary.rotate_left(16)) & 1023) as usize
++    }
++    fn bound_get(&mut self, position: &Position) -> Option<BoundComponents> {
++        let key = position.attack_view();
++        debug_assert_ne!(key, crate::attacks::AttackBits::empty());
++        let entry = &self.bound.as_ref().expect("bound root not prepared")[Self::bound_index(position)];
++        let result = (entry.key == key).then_some(entry.value);
++        #[cfg(test)] {
++            self.bound_events.lookups += 1;
++            self.bound_events.hits += u64::from(result.is_some());
++        }
++        result
++    }
++    fn bound_insert(&mut self, position: &Position, value: BoundComponents) {
++        self.bound.as_mut().expect("bound root not prepared")[Self::bound_index(position)] =
++            BoundEntry { key: position.attack_view(), value };
++        #[cfg(test)] { self.bound_events.stores += 1; }
++    }
++    #[cfg(test)]
++    pub(crate) fn bound_test_events(&self) -> BoundEvents { self.bound_events }
++    #[cfg(test)]
++    pub(crate) fn bound_test_allocated(&self) -> bool { self.bound.is_some() }
++
+     pub fn ensure_influence<'a>(
+         &mut self,
+         position: &Position,
+@@ -308,7 +387,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
++        self.full_impl::<false, false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -318,7 +397,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<false, false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -327,7 +406,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<true, false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -338,7 +417,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
++        self.full_impl::<true, false, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -348,9 +427,16 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
+-    }
+-    fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        self.full_impl::<false, false, _, _>(node, influence, in_check, |_| {}, observer)
++    }
++    /// Private permission is inherited from the validated fixed-root Session run.
++    /// The supplied map must be this current placement's locally built native map.
++    pub(crate) fn full_bound<const ROOT_CACHE: bool>(&mut self, node: &mut Node,
++        influence: &Influence, in_check: bool) -> Evaluation
++    {
++        self.full_impl::<false, ROOT_CACHE, _, _>(node, influence, in_check, |_| {}, |_| {})
++    }
++    fn full_impl<const FRESH: bool, const ROOT_CACHE: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+@@ -370,14 +456,12 @@
+             self.pawns.select(position, influence)
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        let activity = activity::compute(position, influence, material, self.weights.mobility);
+-        let shelter = shelter::compute(
+-            position,
+-            influence,
+-            activity.pressure,
+-            material,
+-            self.weights.shelter,
+-        );
++        let cached = if ROOT_CACHE { self.bound_get(position) } else { None };
++        let pure = if let Some(value) = cached { value } else {
++            let value = BoundComponents::compute(position, influence, material, self.weights);
++            if ROOT_CACHE { self.bound_insert(position, value); }
++            value
++        };
+         let structure = pawn_progress::structure_weighted(
+             phase,
+             pawn.structure,
+@@ -404,7 +488,7 @@
+         let tempo = if in_check {
+             0
+         } else {
+-            let magnitude = ((activity.pieces[position.side.index()] as i64 + 140)
++            let magnitude = ((pure.pieces[position.side.index()] as i64 + 140)
+                 * (5 * phase.opening as i64
+                     + 4 * phase.middlegame as i64
+                     + 2 * phase.endgame as i64)
+@@ -423,9 +507,9 @@
+                 .square_balance_from(position, node.retained.nonking_squares),
+             pawn_structure: structure,
+             pawn_progress: progress,
+-            activity: activity.weighted,
++            activity: pure.activity,
+             central: central.weighted,
+-            shelter: shelter.weighted,
++            shelter: pure.shelter,
+             bishops: patterns.bishop_coordination,
+             patterns: patterns.opening,
+             tempo,
+@@ -433,7 +517,7 @@
+         node.retained.positional = components.positional();
+         node.retained.pawn_progress = progress;
+         node.retained.age = 0;
+-        let queries = pawn.relation_queries + activity.relation_queries;
++        let queries = pawn.relation_queries + pure.relation_queries;
+         if DIAGNOSTICS {
+             self.stats.full += 1;
+             if selected.reused {
+@@ -533,7 +617,7 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
+-        self.select_noncheck_impl::<false, false, _, _, _>(
++        self.select_noncheck_impl::<false, false, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
+         )
+     }
+@@ -555,7 +639,7 @@
+         F: FnMut(FullDetails),
+         G: FnMut(FastDetails),
+     {
+-        self.select_noncheck_impl::<true, false, _, _, _>(
++        self.select_noncheck_impl::<true, false, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
+         )
+     }
+@@ -570,7 +654,7 @@
+         scratch: &mut Option<Influence>,
+         observer: F,
+     ) -> Selection {
+-        self.select_noncheck_impl::<false, true, _, _, _>(
++        self.select_noncheck_impl::<false, true, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
+         )
+     }
+@@ -596,9 +680,18 @@
+         evaluation
+     }
+ 
++    /// Private selector; scratch originates as None in the matching Q invocation.
++    pub(crate) fn select_noncheck_bound<const ROOT_CACHE: bool>(&mut self,
++        node: &mut Node, lower: i32, upper: i32, capture_exception: bool,
++        scratch: &mut Option<Influence>) -> Selection
++    {
++        self.select_noncheck_impl::<false, false, ROOT_CACHE, _, _, _>(
++            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {})
++    }
++
+     // Only stage call wrappers differ. The ordinary instantiation retains its
+     // original full/fast call sites; every selection condition stays shared.
+-    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, F, G, S>(
++    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, const ROOT_CACHE: bool, F, G, S>(
+         &mut self,
+         node: &mut Node,
+         lower: i32,
+@@ -630,6 +723,8 @@
+                     self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+                 } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
++                } else if ROOT_CACHE {
++                    self.full_bound::<ROOT_CACHE>(node, influence, false)
+                 } else {
+                     self.full(node, influence, false)
+                 },
+@@ -652,6 +747,8 @@
+                 self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+             } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
++            } else if ROOT_CACHE {
++                self.full_bound::<ROOT_CACHE>(node, influence, false)
+             } else {
+                 self.full(node, influence, false)
+             }
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -693,6 +693,13 @@
+     }
+ 
+     pub(crate) fn visit_ordinary_impl<const ALLOW_IIO: bool>(
++        &mut self, node: &mut Node, history: &mut SearchHistory,
++        request: Request, previous: Predecessor<'_>,
++    ) -> Result<i32, Stopped> {
++        self.visit_ordinary_bound::<ALLOW_IIO, false>(node, history, request, previous)
++    }
++
++    pub(crate) fn visit_ordinary_bound<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         node: &mut Node,
+         history: &mut SearchHistory,
+@@ -702,7 +709,7 @@
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+         if policy::quiescence_handoff(request.depth, p, self.config.maximum_depth) {
+-            return self.visit_q(
++            return self.visit_q_bound::<ROOT_CACHE>(
+                 node,
+                 history,
+                 TacticalEntry {
+@@ -793,7 +800,9 @@
+             }
+         }
+         let map = self.evaluator.ensure_influence(&position, &mut scratch);
+-        let evaluation = self.evaluator.full(node, map, checked);
++        let evaluation = if ROOT_CACHE {
++            self.evaluator.full_bound::<ROOT_CACHE>(node, map, checked)
++        } else { self.evaluator.full(node, map, checked) };
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+@@ -820,7 +829,7 @@
+                 }
+                 let mut child = node.null_child();
+                 history.push(&child.position, None);
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+                     &mut child,
+                     history,
+                     Request {
+@@ -895,7 +904,7 @@
+                 }
+                 let mut child = node.child(&self.evaluator.root, movement);
+                 history.push(&child.position, Some(movement));
+-                let returned = self.visit_q(
++                let returned = self.visit_q_bound::<ROOT_CACHE>(
+                     &mut child,
+                     history,
+                     TacticalEntry {
+@@ -931,7 +940,7 @@
+                 .marked_depth
+                 .is_none_or(|d| d < request.depth - 2)
+         {
+-            self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 0)?;
++            self.ordering_phase_bound::<ALLOW_IIO, ROOT_CACHE>(node, history, request, previous, map, checked, 0)?;
+         }
+         let mut best = effective_lower;
+         let mut lower = request.lower;
+@@ -1017,7 +1026,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
++                let returned = self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(&mut child, history, child_request, predecessor);
+                 let returned = match returned {
+                     Ok(value) => Ok(-value),
+                     Err(stop) => Err(stop),
+@@ -1030,7 +1039,7 @@
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
+-                        self.visit_ordinary_impl::<ALLOW_IIO>(
++                        self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+                             &mut child,
+                             history,
+                             Request {
+@@ -1069,7 +1078,7 @@
+             index += 1;
+             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
+             {
+-                self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 1)?;
++                self.ordering_phase_bound::<ALLOW_IIO, ROOT_CACHE>(node, history, request, previous, map, checked, 1)?;
+             }
+         }
+         best = best.min(effective_upper);
+@@ -1080,7 +1089,15 @@
+         Ok(best)
+     }
+ 
++    #[cfg(test)]
+     fn ordering_phase<const ALLOW_IIO: bool>(
++        &mut self, node: &Node, history: &mut SearchHistory, request: Request,
++        previous: Predecessor<'_>, map: &Influence, checked: bool, start: usize,
++    ) -> Result<(), Stopped> {
++        self.ordering_phase_bound::<ALLOW_IIO, false>(node, history, request, previous, map, checked, start)
++    }
++
++    fn ordering_phase_bound<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         node: &Node,
+         history: &mut SearchHistory,
+@@ -1137,7 +1154,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.iio_children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+                     &mut child,
+                     history,
+                     Request {
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -134,11 +134,18 @@
+         self.prepare_root_with_influence(position).0
+     }
+ 
+-    pub(crate) fn prepare_root_with_influence(
++    pub(crate) fn prepare_root_with_influence(&mut self, position: Position)
++        -> (Node, crate::influence::Influence)
++    {
++        self.prepare_root_bound::<false>(position)
++    }
++
++    pub(crate) fn prepare_root_bound<const ROOT_CACHE: bool>(
+         &mut self,
+         position: Position,
+     ) -> (Node, crate::influence::Influence) {
+         self.evaluator.begin_search(&position);
++        if ROOT_CACHE { self.evaluator.prepare_bound_cache(); }
+         self.learning.clear();
+         if let Some(table) = &mut self.remembered {
+             table.clear();
+@@ -146,11 +153,12 @@
+         let mut root = Node::root(position, &self.evaluator.root);
+         let mut scratch = None;
+         let influence = self.evaluator.ensure_influence(&position, &mut scratch);
+-        self.evaluator.full(
+-            &mut root,
+-            influence,
+-            movegen::in_check(&position, position.side),
+-        );
++        if ROOT_CACHE {
++            self.evaluator.full_bound::<ROOT_CACHE>(&mut root, influence,
++                movegen::in_check(&position, position.side));
++        } else {
++            self.evaluator.full(&mut root, influence, movegen::in_check(&position, position.side));
++        }
+         (root, scratch.unwrap())
+     }
+ 
+@@ -179,7 +187,7 @@
+         assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
+         self.begin_sequence(limits);
+         let parent = if O::ENABLED { O::parent(parent_retained) } else { O::Parent::default() };
+-        let score = self.visit_q_impl(node, history, entry, None, false, parent, observer)?;
++        let score = self.visit_q_impl::<false, O>(node, history, entry, None, false, parent, observer)?;
+         Ok(self.outcome(entry.ply, score))
+     }
+ 
+@@ -215,10 +223,21 @@
+         checked: Option<bool>,
+         replies_available: bool,
+     ) -> Result<i32, Stopped> {
+-        self.visit_q_impl(node, history, entry, checked, replies_available, (), &mut NoTrace)
+-    }
+-
+-    fn visit_q_impl<O: Observer>(
++        self.visit_q_bound::<false>(node, history, entry, checked, replies_available)
++    }
++
++    pub(crate) fn visit_q_bound<const ROOT_CACHE: bool>(
++        &mut self,
++        node: &mut Node,
++        history: &mut SearchHistory,
++        entry: Entry,
++        checked: Option<bool>,
++        replies_available: bool,
++    ) -> Result<i32, Stopped> {
++        self.visit_q_impl::<ROOT_CACHE, NoTrace>(node, history, entry, checked, replies_available, (), &mut NoTrace)
++    }
++
++    fn visit_q_impl<const ROOT_CACHE: bool, O: Observer>(
+         &mut self, node: &mut Node, history: &mut SearchHistory,
+         entry: Entry, checked: Option<bool>, replies_available: bool,
+         parent: O::Parent, observer: &mut O,
+@@ -261,6 +280,10 @@
+                     self.evaluator.select_noncheck_stages_observed(
+                         node, lower, entry.upper, entry.capture_exception, &mut influence,
+                         |stage| observer.stage(stage),
++                    )
++                } else if ROOT_CACHE {
++                    self.evaluator.select_noncheck_bound::<ROOT_CACHE>(
++                        node, lower, entry.upper, entry.capture_exception, &mut influence,
+                     )
+                 } else {
+                     self.evaluator.select_noncheck(
+@@ -440,10 +463,10 @@
+                 };
+                 let returned = if O::ENABLED {
+                     let parent = O::parent(&node.retained);
+-                    self.visit_q_impl(&mut child, history, child_entry, child_checked,
++                    self.visit_q_impl::<false, O>(&mut child, history, child_entry, child_checked,
+                         complete_replies, parent, observer)
+                 } else {
+-                    self.visit_q(&mut child, history, child_entry, child_checked, complete_replies)
++                    self.visit_q_bound::<ROOT_CACHE>(&mut child, history, child_entry, child_checked, complete_replies)
+                 };
+                 history.pop();
+                 let score = -returned?;
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -14,6 +14,7 @@
+ use crate::work_clock::Ledger;
+ 
+ pub const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub enum GameResult {
+@@ -499,7 +500,7 @@
+         iteration_capacity: u8,
+     ) -> Result<SearchResult, Error> {
+         let mut prepared = self.prepare_go(system_seconds, iteration_capacity)?;
+-        let result = self.search.as_mut().unwrap().run_work_timed(
++        let result = self.search.as_mut().unwrap().run_session_timed(
+             prepared.root,
+             &mut prepared.history,
+             prepared.controls,
+@@ -563,7 +564,7 @@
+             initial_side: self.states[0].side,
+             clock_color: self.clock_color,
+         });
+-        let result = active.run_work_timed(
++        let result = active.run_session_timed(
+             prepared.root,
+             &mut prepared.history,
+             prepared.controls,
+--- a/src/timed.rs
++++ b/src/timed.rs
+@@ -487,19 +487,39 @@
+         self.run_work_timed_entry::<false>(position, history, controls, limits)
+     }
+ 
++    /// Only Session go/go_live call this entry. Validate once, without changing
++    /// invalid-root admission: incoherent public states retain the old false path.
++    pub(crate) fn run_session_timed(&mut self, position: Position,
++        history: &mut SearchHistory, controls: Controls, limits: Limits)
++        -> Result<Outcome, Error>
++    {
++        if position.validate().is_ok() {
++            self.run_work_timed_bound_entry::<true, true>(position, history, controls, limits)
++        } else {
++            self.run_work_timed_entry::<true>(position, history, controls, limits)
++        }
++    }
++
+     fn run_work_timed_entry<const ALLOW_IIO: bool>(
++        &mut self, position: Position, history: &mut SearchHistory,
++        controls: Controls, limits: Limits,
++    ) -> Result<Outcome, Error> {
++        self.run_work_timed_bound_entry::<ALLOW_IIO, false>(position, history, controls, limits)
++    }
++
++    fn run_work_timed_bound_entry<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         position: Position,
+         history: &mut SearchHistory,
+         controls: Controls,
+         limits: Limits,
+     ) -> Result<Outcome, Error> {
+-        let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
++        let result = self.run_work_timed_inner::<ALLOW_IIO, ROOT_CACHE>(position, history, controls, limits);
+         self.timing = None;
+         result
+     }
+ 
+-    fn run_work_timed_inner<const ALLOW_IIO: bool>(
++    fn run_work_timed_inner<const ALLOW_IIO: bool, const ROOT_CACHE: bool>(
+         &mut self,
+         position: Position,
+         history: &mut SearchHistory,
+@@ -513,7 +533,7 @@
+         }
+         assert_eq!(history.search_ply(), 0);
+         self.ensure_table().map_err(Error::Table)?;
+-        let (root, influence) = self.prepare_root_with_influence(position);
++        let (root, influence) = self.prepare_root_bound::<ROOT_CACHE>(position);
+         let checked = movegen::in_check(&position, position.side);
+         let mut legal = MoveList::new();
+         movegen::generate_legal(&position, &mut legal);
+@@ -541,7 +561,7 @@
+         if H::ACTIVE {
+             self.host.started(controls.seed).map_err(Error::Host)?;
+         }
+-        let mut effects=ActualEffects::<D,H,ALLOW_IIO> {
++        let mut effects=ActualEffects::<D,H,ALLOW_IIO,ROOT_CACHE> {
+             search:self,history,root:&root,position:&position,influence:&influence,
+             initial_candidates:&initial_candidates,controls,checked,
+             iterations:Vec::new(),iteration:None,pv:Vec::new(),captures:CaptureSlot::new(),
+@@ -569,8 +589,9 @@
+ }
+ 
+ 
++
+ /// These are the former root-local variables, never new Search/Node fields.
+-struct ActualEffects<'a,const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> {
++struct ActualEffects<'a,const D:bool,H:crate::host::Host,const ALLOW_IIO:bool,const ROOT_CACHE:bool> {
+     search:&'a mut Search<D,H>,
+     history:&'a mut SearchHistory,
+     root:&'a Node,
+@@ -591,8 +612,8 @@
+     adjustment:i32,
+     passes:Vec<Pass>,
+ }
+-impl<const D:bool,H:crate::host::Host,const ALLOW_IIO:bool> Effects
+-    for ActualEffects<'_,D,H,ALLOW_IIO> {
++impl<const D:bool,H:crate::host::Host,const ALLOW_IIO:bool,const ROOT_CACHE:bool> Effects
++    for ActualEffects<'_,D,H,ALLOW_IIO,ROOT_CACHE> {
+     type Child=ActualChild;
+     type Stop=Stop;
+     type Interruption=Stopped;
+@@ -613,7 +634,7 @@
+     fn execute(&mut self,depth:u8,attempt:RootAttempt,child:&mut ActualChild)
+         ->Result<AttemptResult<Stopped>,Error> {
+         self.history.push(&child.node.position,Some(child.movement));
+-        let result=self.search.visit_ordinary_impl::<ALLOW_IIO>(
++        let result=self.search.visit_ordinary_bound::<ALLOW_IIO, ROOT_CACHE>(
+             &mut child.node,self.history,Request{ply:1,depth:depth as i32-1,
+                 lower:-score_add(attempt.window[1],-child.adjustment),
+                 upper:-score_add(attempt.window[0],-child.adjustment),previous_extension:0,
