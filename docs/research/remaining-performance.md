@@ -1,5 +1,10 @@
 # Remaining performance investigations
 
+Retained production is candidate25. Subsequent experiments26–31 are parked;
+current results and qualification limits are in
+[qualification gaps](../qualification-gaps.md) and decisions0016–0022.
+Entries below preserve the historical investigation record and artifact scopes.
+
 Current117 integrates the full-byte relation table after178 native/209 diagnostic
 units and fresh7673-case/117-operation success. Own-PGO79d19ebe passes its own
 54/eight-wire and a matched seven-case pilot0.702652% lower than activityd5ee1f3f

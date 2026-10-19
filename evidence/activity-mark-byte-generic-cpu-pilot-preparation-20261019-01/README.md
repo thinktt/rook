@@ -1,0 +1,22 @@
+# Experiment31 generic fixed70 preparation
+
+UNACTIVATED. Parent-review and all-owned-jobs-closed plan Booleans are FALSE. Native178/focused activity/backend/parent-acceptance/final closure inputs remain explicit null prerequisites. No engine, collector, parser/oracle, static tool, compiler/test/build, profile, archive, PGO or Git command ran here. All writes are confined to this new preparation directory; all closed30 and earlier files remain unchanged.
+
+Exact source69 graph31340f6b34e78ed71c74631a7af9be5ac7fdca16e1cea22e6e12005b76998d95, trial /home/legolas/rook2-work/imp2-activity-mark-byte-20261019-01. Candidate frozen generic image dcdd3c43ec95cb0202ce6258640f332eb573eecc41e8e6371c294432f68e45b9,7,007,296B0555 was supplied by parent after actual build40462a/session49704→d51fd5/0 and freezea83e85/0; no new image scan or execution here. Receipt source-before/after46native+23tools and toolchain/flags equality with exact25generic were checked from metadata. Baseline image2940ae5c003fa396b31639749b4c3ba29e52e8aebabfc96a7dde565b6d9abd04 stays at ordinary-projected-bits-generic-build-20261018-01/rook2-exact.
+
+The three helpers are mechanical copies from influence-delta-inplace-preparation-20261019-01. pilot.py and reconcile_pilot.py differ ONLY in experiment30→experiment31 docstrings; check_pilot.mjs is byte-identical. All comparator/account_native wait4/native raw/original70 oracle/medians/ranges/rule methods are unchanged. Diff files show exact changes. Source69 rather than71 and native178(176lib+2dev) rather than182 are metadata prerequisite changes; no old30 native qualification/proof is inherited. Parent must bind and accept31's actual focused/backend/native prerequisites before changing either launch Boolean. There is no separate mutable future clearance pinned as an immutable dependency.
+
+Seven cases remain01/02/04/05/29/35/08 in this order. Original comparator fixed schedule creates14warmups+56measured=70lifetimes, four measured samples per case per variant. No omissions, outlier removal, favorable-case repeats or retry. Rule remains sum-of-case-medians ratio<=.995 AND at least5/7 lower medians AND worst ratio<=1.02; otherwise park. This preparation authorizes no PGO or broader suite/adoption.
+
+Future commands after parent binds the missing proofs, freezes final plan and confirms quiet window:
+
+```
+taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-mark-byte-generic-cpu-pilot-preparation-20261019-01/pilot.py --plan /home/legolas/rook2/evidence/activity-mark-byte-generic-cpu-pilot-preparation-20261019-01/plan.json
+# Observe and retain actual outer session/initial/terminal/exit before dependent offline reconciliation.
+# Parent writes output/tool-terminal.json from that actual observation.
+taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-mark-byte-generic-cpu-pilot-preparation-20261019-01/reconcile_pilot.py --plan /home/legolas/rook2/evidence/activity-mark-byte-generic-cpu-pilot-preparation-20261019-01/plan.json
+```
+
+The pilot delegates to unchanged tools/compare_ordinary.py and tools/account_native.py: enginesCPU14/one native task, supervisors/helpersH and no owned sibling15 work. It records direct child exits, point guest/cgroup/CPU15 context and all raw receipts, rejects other owned native/build/profile/codegen/archive/Git jobs, and rechecks immutable inputs/images before/after. Independent script rechecks every manifest/run, wait4 user+system arithmetic, native image/argv/PID/affinity/tasks, original live comparator reports, all70 outputs through original checkReplay,14/56 schedule and per-case four-sample min/max/medians plus aggregate/rule. These unchanged methods do not claim PMU, host isolation, confidence, full-corpus qualification or source adoption. Prior generic/own-PGO gains do not transfer.
+
+Current plan pins actual31 proposal/receipt/source maps, archived baseline69, original tools/public replay-check+benchmark+workloads/oracle/runtime identities and accepted30 helper basis. It deliberately does not consume unrelated30 backend/native/source or old launch authority. Parent's missing accepted31 input hashes must join the final immutable union; this initial plan is not runnable. Helper/source text only was prepared; all owned preparation jobs close after final receipt.

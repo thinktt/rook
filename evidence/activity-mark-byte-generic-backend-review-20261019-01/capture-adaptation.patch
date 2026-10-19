@@ -1,0 +1,45 @@
+--- accepted27/capture.py
++++ trial31/capture.py
+@@ -1,8 +1,8 @@
+-"""Bounded own-image experiment27 static capture; no engine/search execution."""
++"""Bounded own-image experiment31 static capture; no engine/search execution."""
+ from pathlib import Path
+ import hashlib,json,re,subprocess
+ P=Path(__file__).resolve().parent;E=P.parent
+-D={'control':E/'ordinary-projected-bits-generic-build-20261018-01','candidate':E/'full-pressure-pair-sum-generic-build-20261019-01'}
++D={'control':E/'ordinary-projected-bits-generic-build-20261018-01','candidate':E/'activity-mark-byte-generic-build-20261019-01'}
+ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+ def put(n,v):
+  with (P/n).open('x') as f:json.dump(v,f,indent=2);f.write('\n')
+@@ -21,8 +21,8 @@
+ assert rs['control']['tool_sha256_before']==rs['candidate']['tool_sha256_before']
+ changed=[n for n,h in rs['control']['source_sha256_before'].items() if rs['candidate']['source_sha256_before'][n]!=h]
+ assert changed==['src/activity.rs']
+-for dirname,files in [('full-pressure-pair-sum-source-review-20261019-01',['review.md','native.patch','source-proof.json','source-manifest.json','tool-terminal.json']),('full-pressure-pair-sum-preparation-20261019-01',['selection.json','execution-binding.json'])]:
+- for n in files:p=E/dirname/n;pins[str(p)]=sha(p)
++for n in ['review.md','trial.patch','source-proof.json','source-manifest.json','closure.json','plan.json']:
++ p=E/'activity-mark-byte-preparation-20261019-01'/n;pins[str(p)]=sha(p)
+ for n in ['nm','objdump','size']:p=Path('/usr/bin')/n;pins[str(p)]=sha(p)
+ def run(argv,stem):
+  o=P/(stem+'.stdout');e=P/(stem+'.stderr');o.parent.mkdir(exist_ok=True)
+@@ -30,6 +30,7 @@
+  cmd.append({'argv':argv,'exit_code':r.returncode,'stdout':str(o),'stderr':str(e)})
+  assert r.returncode==0
+  return o.read_text()
++for n in ['nm','objdump','size']:run(['/usr/bin/'+n,'--version'],n+'-version')
+ for side,d in D.items():
+  image=str(d/'rook2-exact');nm=run(['/usr/bin/nm','--numeric-sort','--print-size','--demangle',image],side+'/nm')
+  run(['/usr/bin/size','-A',image],side+'/size');rows=[]
+@@ -38,9 +39,9 @@
+   if not m:continue
+   address,length,name=int(m[1],16),int(m[2],16),m[3]
+   selected='rook2::activity::compute' in name or 'rook2::activity::king_pressure' in name
+-  if selected or any(x in name for x in ['::visit_ordinary_impl','::visit_q_impl','::full_impl']):
+-   row={'address':hex(address),'bytes':length,'symbol':name,'captured':selected}
+-   if selected:
++  if selected or any(x in name for x in ['::visit_ordinary_impl','::visit_q_impl','::full_impl','::run_work_timed_impl']) or name=='rook2::run':
++   row={'address':hex(address),'bytes':length,'symbol':name,'captured':True}
++   if True:
+     stem=side+'/body-'+format(address,'x');text=run(['/usr/bin/objdump','-d','-w','-C','-Mintel','--no-show-raw-insn','--start-address='+hex(address),'--stop-address='+hex(address+length),image],stem)
+     a=[(m[1],m[2]) for s in text.splitlines() if (m:=re.match(r'^\s*([0-9a-f]+):\s+(.*)',s))]
+     row.update(assembly=stem+'.stdout',static_instructions=len(a),stack_memory_reference_instructions=[{'address':x,'instruction':y} for x,y in a if '[rsp' in y and not y.startswith(('lea','nop'))],rsp_adjustments=[{'address':x,'instruction':y} for x,y in a if re.match(r'(sub|add)\s+rsp,',y)],calls=[{'address':x,'instruction':y} for x,y in a if y.startswith('call')],imuls=[{'address':x,'instruction':y} for x,y in a if y.startswith('imul')])

@@ -1,0 +1,13 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -238,8 +238,8 @@
+ 
+ #[inline]
+ fn mark(marks: &mut Marks, color: Color, kind: PieceKind, target: Square, category: i64) {
+-    let byte = (1u8 + ((category as u8) >> 1)) << (2 * (kind.index() - 1));
+-    marks[color.index()][target.0 as usize] |= byte;
++    let bit = 2 * (kind.index() - 1) + usize::from(category >= 2);
++    marks[color.index()][target.0 as usize] |= 1 << bit;
+ }
+ 
+ fn transparent(color: Color, kind: PieceKind, step: (i8, i8), occupant: Piece) -> bool {

@@ -85,6 +85,12 @@ native timing pilot or establish a profitable hybrid selector. No further delta
 variant, IIO expansion, PGO or qualification run follows; see
 [decision0021](decisions/0021-influence-update-costs.md).
 
+Experiment31 arithmetic pressure marking is parked after focused8 activity
+checks and its fixed70 original replays. Generic summed case medians are0.229199%
+lower, but only2/7 cases improve; aggregate<=0.995 and>=5lower both fail. No
+PGO, broad178/117, standalone54/wire, games or source promotion follows; see
+[decision0022](decisions/0022-arithmetic-pressure-mark-trial.md).
+
 The isolated pure-component cache is parked after its own-PGO pilot fails the
 frozen aggregate advancement threshold (0.357338% lower versus required0.5%).
 No cache source is promoted and its prepared full117 validation is unexecuted.
