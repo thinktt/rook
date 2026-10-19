@@ -13,8 +13,11 @@ The [source-promotion checkpoint](../evidence/influence-bitsliced-sum-qualificat
 binds native/tools graph `e89dcb33`, combined native/tools/diagnostic graph
 `8a49fa28`, ordinary own-PGO image `36251ecf` and diagnostic image `b024c045`.
 The exact isolated tested images are retained; source promotion does not claim
-a separate canonical rebuild. Candidate44 is an isolated, unbuilt construction
-experiment and is not production.
+a separate canonical rebuild. Candidate44 was built in isolation and
+[parked at its compiler gate](../evidence/influence-direct-fill-parent-backend-review-20261019-01/decision.json):
+the intended copy survived, and the three inspected complete function bodies
+are byte-identical to43 generic. It ran no native tests or timing and is not
+production.
 
 Fresh [mandatory validation](../evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/validation-summary.json)
 passes189 native tests,209 diagnostic tests and7,673 cases across117 operations
