@@ -12,8 +12,12 @@ unchanged. Ordinaryc3166899 and diagnostica8720c47 are the immutable tested
 isolated-path artifacts, without a canonical rebuild claim.
 
 Generic fixed70 improves0.848680%; fresh own-source PGO fixed70 improves
-0.877002%, all7cases lower. Whole40 standard54 timing is pending. The latest
-complete whole54 numbers below remain bound to37. Current12 costs, final
+0.877002%, all7cases lower. Whole40 standard54 now independently reconciles216lifetimes/432offline
+checks:70.500search CPU/70.968677whole-native CPU summed medians. Previous37
+71.424373whole is a separate window; the0.638012%lower total is descriptive.
+Raw reference whole ratio1.118819 remains cross-hardware reported-only. See
+[whole54 report](evidence/pressure-value-static-standard54-20261019-01/README.md).
+Current12 costs, final
 same-hardware54/12 performance qualification, production-domain audit and
 external3288 gameplay remain open. No new Bee run or transfer is implied.
 See [decision0031](docs/decisions/0031-static-pressure-value-lookup.md) and

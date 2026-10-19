@@ -3,7 +3,8 @@
 Current retained production is40, an exact256-byte static pressure lookup over
 37. Own-PGO fixed70 improves0.877002%/7of7; all mandatory finite checks,185/209
 tests, optimized54/wire24 and regular12/632 plus continuity/seed controls pass.
-Current40 whole54 and fresh hot-cost attribution are next. The27 radix formula
+Current40 whole54 reconciles70.500search/70.968677whole-native CPU seconds;
+current12 costs and fresh hot-cost attribution are next. The27 radix formula
 and32 king-ray tables are historical failed trials, not fresh ideas to retry
 without distinct current evidence. A minimal borrowed-plane activity geometry
 proposal is feasible but unselected pending40 attribution. All earlier timing

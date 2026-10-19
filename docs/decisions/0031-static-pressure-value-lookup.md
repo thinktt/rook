@@ -1,4 +1,4 @@
-# Stage shared static pressure lookup after generic timing
+# Adopt shared static pressure lookup
 
 Experiment40 changes only activity.rs from retained37. A shared immutable
 256-byte table replaces pressure-value arithmetic for all possible u8 marks;
@@ -37,3 +37,11 @@ a8720c47 as tested isolated-path immutable artifacts. No canonical rebuild is
 implied. Full40 whole54 timing remains pending; final performance, production
 review and external3288 qualification remain open. See the
 [source promotion](../../evidence/pressure-value-static-integration-20261019-01/source-promotion.json).
+
+The subsequent complete40 standard54 collection reconciles216fresh lifetimes,
+54warmups/162measured, all432 original offline assertions and2496 posts.
+Search CPU sums70.500s; whole-native CPU sums70.968677s. Previous37 whole
+71.424373s is a separate window (0.638012%lower current total), not a current
+paired causal comparison. Raw whole-reference ratio1.118819 is reported-only
+across different hardware/windows. Current12 costs and final qualification
+remain open. See the [whole54 report](../../evidence/pressure-value-static-standard54-20261019-01/README.md).

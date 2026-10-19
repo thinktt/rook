@@ -4,7 +4,9 @@ Candidate40 now replaces37 by exact source115 equality after all mandatory
 finite checks,185native/209diagnostic tests, fresh optimized54/wire24 and
 regular12/632 plus continuity8 and required seed controls. Own-PGO fixed70
 improves0.877002%; this is a prescreen, not full54/12 qualification. Current40
-whole54 collection and12 costs remain pending. The37 timings below retain
+whole54 reconciles216lifetimes at70.500search/70.968677whole-native seconds,
+raw cross-hardware reference ratio1.118819. Current12 costs and formal
+performance qualification remain pending. The37 timings below retain
 their original artifact scope. Normative domain and external3288 obligations
 remain open. See [decision0031](decisions/0031-static-pressure-value-lookup.md).
 
@@ -39,7 +41,8 @@ Distinct40 shared static pressure lookup passes focused2 and generic70 at
 0.848680%lower/6of7. Fresh own-source PGO70 independently passes0.877002%lower/7of7. Full185
 native tests and optimized54/eight-wire24 pass; mandatory117/7673 and
 regular12 pre-gate subsequently pass, permitting exact source promotion.
-No current40 whole54 collection exists yet. These prescreens do not close final qualification gaps. See
+Current40 whole54 now sums70.968677s whole-native CPU, reported-only.
+These observations do not close final qualification gaps. See
 [decision0031](decisions/0031-static-pressure-value-lookup.md).
 
 Previous candidate25 projected Boolean source passes the complete mandatory

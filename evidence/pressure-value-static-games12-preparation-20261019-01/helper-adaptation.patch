@@ -1,0 +1,15 @@
+--- accepted117/reconcile.py
++++ current40/reconcile.py
+@@ -114,9 +114,9 @@
+   report['inputs']=inputs(plan)
+   if not args.check_inputs_only:
+    terminals=load(P/'collector-terminals.json')
+-   for k in ['ordinary54','games12']:assert terminals[k]['exit_code']==0 and terminals[k]['actual_terminal_chunk'],('missing actual terminal',k)
+-   report['terminals']=terminals;report['ordinary54']=ordinary(plan);report['games12']=games(plan)
+-   for k in ['ordinary54','games12']:
++   for k in ['games12']:assert terminals[k]['exit_code']==0 and terminals[k]['actual_terminal_chunk'],('missing actual terminal',k)
++   report['terminals']=terminals;report['games12']=games(plan)
++   for k in ['games12']:
+     units=report[k]['units'];a=sum(v['local']['median'] for v in units.values());b=sum(v['reference']['median'] for v in units.values());report[k]['sum_unit_medians_s']=a;report[k]['reference_sum_unit_medians_s']=b;report[k]['ratio_of_sums']=a/b;report[k]['cpu_context']=tick_delta(P/k)
+    report['descriptive_only']=True;report['qualified_performance_pass']=False
+   report['complete']=True
