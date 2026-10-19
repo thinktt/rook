@@ -1,0 +1,7 @@
+# Advance own-PGO40 to broad functional validation
+
+The independently reconciled fixed70 sums12.4871975s retained37 versus12.3776845s own40:0.877002%lower,7/7lower,worst0.995248202. Every original sample, strict live/offline replay, native wait4/PID/image/affinity/accounting check is retained and passes. Pilot72016a/session9697→4c136c/0; independent8c77ef/0 with70 original replays and zero extra engines. No retry/outlier deletion; frozen rule passes.
+
+Own40c3166899 is7114672B/0555, source72graph216c8f51, fresh profile7f795297. Four stages actualb0e404/9d2538/a4374f/a92737 all0; source/profile/training54/rawPIDs/original54/independent byte-identical remerge pass. All build archives matchd352485b. Generic0.848680%gain was not transferred. Actual PGO ray samples use indexed reads without copies and activity frame0x218 stays equal; partial operand provenance and original5-window analyzer scope plus preserved exclusive-output failure101aa4/1 remain explicit. All21binutils succeeded.
+
+Authorize exact frozen-source full185 native tests, fresh mandatory209/117/7673/115 diagnostic validation, optimized54/eight-wire24 and regular12-game pre-gate/continuity/requiredseed controls. Production37 stays retained until those actual results and source/archive equality close. No full3288 onVic or new external benchmark/transfer is authorized. Whole54/12 performance and normative domain qualification remain open.

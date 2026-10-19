@@ -37,9 +37,9 @@ No native tests or timing ran. See
 
 Distinct40 shared-static storage passes focused2 and its generic fixed70:
 0.848680%lower summed CPU medians,6/7lower,worst1.000070128. All original
-strict/raw/accounting checks reconcile. It advances only to fresh own-source
-PGO and a separately frozen comparison; full185/117/54/wire/games have not run.
-Retained37 remains exact. See
+strict/raw/accounting checks reconcile. Fresh own-source PGO70 also passes at0.877002%lower/7of7. Full185 native
+tests and optimized54/eight-wire24 pass; mandatory117/7673 and regular12
+pre-gate remain in progress. Retained37 remains exact. See
 [decision0031](docs/decisions/0031-static-pressure-value-lookup.md).
 
 ## Previous candidate25 projected Boolean checks, 2026-10-18
