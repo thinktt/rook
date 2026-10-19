@@ -1,0 +1,25 @@
+# Equal-length ordering boundary: source triage
+
+**Source-feasible, with a narrow compiler discriminator still missing.** A single private const-specialized implementation can retain the exact gap6 then1 algorithm. The public priority_sequence wrapper selects the original nonasserting route; order_by selects an equal-length route whose sole added precondition check is inside that implementation before the same loops. No storage, capacity, callback or ordering representation change is needed. This is not a selected49 trial and no LLVM check removal is assumed.
+
+## Actual construction and caller proof
+
+Canonical tactical.rs281–292 owns separate private Move[512] and u32[512] arrays. order_by318–333 borrows them, starts first=512, decrements first once for each priority>1, and passes scratch[first..] and priorities[first..]. Both lengths are exactly512−first. MoveList::as_slice uses moves[..len] (movegen.rs26–29); len>512 already panics before any priority callback. For a valid slice, first cannot underflow, and deferred_count+preferred_count<=512. Equality thus holds for all safe internal sort calls, not just generated chess positions.
+
+Runtime ordinary876 calls order_by. Q317 calls order_with_scratch, which delegates to order_by308; public order270 takes the same route with local scratch. Direct in-crate priority_sequence calls beyond333 are tests378/399; the helper itself is public and cannot be narrowed. The equal-length assertion belongs only on the internal constructed route, after the existing partition/callback work and before sorting.
+
+## Public full-domain preservation
+
+The public helper drives its loop bounds from moves.len(), not priorities.len() (246–260), and performs no upfront equality check. Preserve that exact false route, including mismatched-length behavior. If moves has0 or1 entries, even empty priorities returns without access/panic. Longer priorities may have an untouched suffix. Shorter priorities may panic only after earlier iterations have mutated the arrays: with8 moves and7 priorities [0,0,0,0,0,0,1], gap6 index6 swaps the0/6 pair before index7’s missing key panics. An unconditional assertion, zip/truncate, common minimum length, preflight validation or changed access order would alter this behavior. These are source-derived examples, not executed tests or released malformed-request guarantees.
+
+A const-false public route must enter the same original loop body with no new assertion. A private const-true branch can assert equality on the proven internal slices. A debug-only assertion does not provide release-mode knowledge; a real assertion may remain as added runtime work. No unsafe assume is needed or authorized. The false path must retain every original load/store/panic site order even though it shares the source body.
+
+All u32 priorities retain unsigned strict comparison (<), including0/1 and u32::MAX. The full opaque u16 Move payload is transported unchanged; no decode, bit restriction or packed record is needed. Gap6 stable insertion then gap1 stable insertion produces the specified permutation, not universally original-order-stable ties (tactical-capture-order.md9–30). order_by calls priority_for once per original item (322–323), reverses preferred>1 into the suffix, preserves deferred0/1 input order, then gathers preferred followed by deferred (333–336), matching search-candidate-order.md109–125 and quiescence-candidates.md138–146. Callback-panic/partial scratch behavior remains before the new internal check; the public helper’s mismatch behavior remains unchanged.
+
+## Evidence and limits
+
+The closed exact43 own-PGO report confirms separate WORD Move and DWORD key transfers in both passes, with bounds branches at35584/3559b/355c3 and35633/35653 reaching panic paths. That evidence does not identify every check as removable, and cold panic existence is not a dynamic failure count. Some constraints already follow from moves.len() and cursor<=index; equality may help prove priority bounds, or LLVM may not exploit it. The same first expression and fixed capacities were already available to an inlined compiler, so there is no guaranteed new optimization information beyond the asserted fact.
+
+One const-false and one const-true instantiation may duplicate code and affect inlining, size, registers or branch shape. An equality test may survive once per internal sort or disappear from construction proof; no result is assumed. Equal lengths alone do not remove copy streams, callback/partition/gather work, shifts, or comparison dependencies, and the full sorting cost is not a savings envelope. Actual normal ordinary/Q machine evidence would have to show fewer relevant bound checks without changed tie/access semantics, relocation or material code/frame overhead before any timing decision.
+
+This is distinct from the deferred packed-record option, which would grow512×6B nominal scratch to512×8B and add strided gather. It changes neither arrays nor capacity, but is still unimplemented. No source edit, helper import, build/test/engine, ELF/binutils, profiling, timing or Git action occurred. Canonical43 and frozen48 remain unchanged.

@@ -1,0 +1,25 @@
+--- a/src/tactical.rs
++++ b/src/tactical.rs
+@@ -244,13 +244,6 @@
+ /// ORDER-PRIORITY-SEQUENCE: stable descending within modulo-six classes,
+ /// restored to those positions, then stable descending over the resulting list.
+ pub fn priority_sequence(moves: &mut [Move], priorities: &mut [u32]) {
+-    priority_sequence_impl::<false>(moves, priorities);
+-}
+-
+-fn priority_sequence_impl<const EQUAL_LENGTH: bool>(moves: &mut [Move], priorities: &mut [u32]) {
+-    if EQUAL_LENGTH {
+-        assert_eq!(moves.len(), priorities.len());
+-    }
+     for gap in [6, 1] {
+         for index in gap..moves.len() {
+             let movement = moves[index];
+@@ -337,7 +330,7 @@
+             low += 1;
+         }
+     }
+-    priority_sequence_impl::<true>(&mut scratch[first..], &mut priorities[first..]);
++    priority_sequence(&mut scratch[first..], &mut priorities[first..]);
+     let preferred = MOVE_CAPACITY - first;
+     list.moves[..preferred].copy_from_slice(&scratch[first..]);
+     list.moves[preferred..preferred + low].copy_from_slice(&scratch[..low]);

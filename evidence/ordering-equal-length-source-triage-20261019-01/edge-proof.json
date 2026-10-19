@@ -1,0 +1,27 @@
+{
+  "source_feasible": true,
+  "implementation_selected": false,
+  "public_route": "existing priority_sequence signatures -> shared private const-false body, no initial assertion",
+  "internal_route": "order_by -> shared same body const-true, equality assertion only on construction-proven same-length suffixes",
+  "single_loop_body": "original gap6 then gap1 code unchanged",
+  "equality_proof": [
+    "OrderingScratch has two private fixed512 arrays",
+    "first begins512 and decreases once per preferred item",
+    "MoveList.as_slice validates public len before callbacks; admittedlen<=512",
+    "both sort slices use the same first and same capacity512"
+  ],
+  "runtime_callers": [
+    "ordinary.rs876 order_by",
+    "quiescence.rs317 order_with_scratch -> order_by",
+    "public tactical::order270 -> order_with_scratch -> order_by"
+  ],
+  "direct_public_helper_consumers": [
+    "tactical.rs378/399 tests",
+    "external library callers can supply unequal slices"
+  ],
+  "storage_capacity_change": false,
+  "keys": "all u32 unsigned",
+  "moves": "opaque full u16",
+  "public_mismatch_preservation": "false route must have no equality/prevalidation/restriction or range truncation",
+  "compiler_effect_unknown": true
+}
