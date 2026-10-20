@@ -47,6 +47,15 @@ partition semantics. The actual ordinary/Q mechanism,11focused controls and
 It is [parked without retry or own-PGO](decisions/0039-six-stream-ordering.md).
 Candidate51's accepted source and separate whole54/12 costs remain current.
 
+Experiment55 moves the preferred<=6 branch before entry to54's merge helper.
+Both actual ordinary/Q routes bypass that helper frame on small lists; unchanged
+caller frames and additional code/large-path guards are recorded. Twelve focused
+controls and70 original live/offline replays pass. Its fixed generic screen
+improves0.3123036%,6of7lower,worst1.002118181, missing the preset0.5%aggregate
+gate. It is [parked without retry or own-PGO](decisions/0040-small-ordering-entry.md).
+Production51 already directly sorts small lists; no helper-frame saving against
+51 is claimed. Candidate51's source and whole54/12 costs remain current.
+
 ## Previous43 checkpoint and parked44–50 history
 
 The following historical evidence predates51. Its original document is preserved

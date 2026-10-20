@@ -56,6 +56,15 @@ It is [parked without retry, PGO or adoption](docs/decisions/0039-six-stream-ord
 The extra helper frame, selector and small-path call costs remain recorded;
 no isolated cause or qualification claim follows.
 
+Experiment55 moves the preferred<=6 branch into ordinary/Q ordering callers,
+bypassing54's extra helper frame for small lists. Actual backend review and12
+focused controls pass, as do all70 original live/offline replays. Its fixed
+generic screen is0.3123036%lower,6of7lower,worst1.002118181, missing the preset
+0.5%aggregate improvement. It is
+[parked without retry, PGO or adoption](docs/decisions/0040-small-ordering-entry.md).
+The skipped104B helper layer is relative to54; production51 already directly
+sorts small lists. Candidate51 remains the best completed whole54/12 build.
+
 ## Previous retained candidate43 bit-sliced Influence, 2026-10-19
 
 Candidate43 replaces40 by exact equality of all115 tested source files after

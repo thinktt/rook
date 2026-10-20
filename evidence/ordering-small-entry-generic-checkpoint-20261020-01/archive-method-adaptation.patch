@@ -1,0 +1,46 @@
+--- /home/legolas/rook2/evidence/ordering-six-stream-generic-checkpoint-20261020-01/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/ordering-small-entry-generic-checkpoint-20261020-01/archive_checkpoint.py
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env python3
+-"""Closed54 generic evidence only; stream/reopen all bytes and independently justify source duplicates."""
++"""Closed55 generic evidence only; stream/reopen all bytes and independently justify source duplicates."""
+ from pathlib import Path, PurePosixPath
+ import hashlib,json,os,stat,sys,tarfile,gzip
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-PREFIX='ordering-six-stream-'
++PREFIX='ordering-small-entry-'
+ DATE='-20261020-01'
+ TREES=[PREFIX+s+DATE for s in ['parent-selection','kernel-preparation','test-preparation','parent-review','generic-build','backend-preparation','backend-review','focused-preparation','focused-native-check','generic-screen-preparation','generic-screen','generic-decision']]
+ BUILD=ROOT/(PREFIX+'generic-build'+DATE)
+@@ -49,7 +49,7 @@
+  expected=receipt['source_sha256_before']|receipt['tool_sha256_before']
+  assert len(receipt['source_sha256_before'])==52 and len(receipt['tool_sha256_before'])==23 and len(expected)==75
+  source_archive=BUILD/'verified-source-before.tar.gz'
+- assert sha(source_archive)==archived['sha256']=='1f51945a257d08dcb87f88c9d6d6d1a97b7948766f0457a5f6a6deb5207699ae'
++ assert sha(source_archive)==archived['sha256']=='d583a81b5fcd014ea32af0ebd4fc2e3518c74118db9c907dffcc480af77e7585'
+  assert archived['files']==75
+  actual={}
+  with tarfile.open(source_archive,'r:gz') as t:
+@@ -68,8 +68,8 @@
+  assert {name for name in originals if name.startswith(prefix)}=={prefix+name for name in expected}
+  image_name=(BUILD/'rook2-exact').relative_to(ROOT).as_posix()
+  image=originals[image_name]
+- assert image['sha256']==frozen['sha256']==receipt['binary_output']['sha256']==archived['binary_sha256']=='ceed19e23818db230f7864fd3fef4cc3e40f279ed70fe489dccaf0efeeb9fd5b'
+- assert image['bytes']==frozen['bytes']==7071472 and image['mode']==frozen['mode']==0o555
++ assert image['sha256']==frozen['sha256']==receipt['binary_output']['sha256']==archived['binary_sha256']=='fb8f7b779c118bb98515c874017710c6c511a31e8fbe666612fdb60fe3122dc0'
++ assert image['bytes']==frozen['bytes']==7077296 and image['mode']==frozen['mode']==0o555
+  proof=dict(complete=True,source_archive=str(source_archive),source_archive_sha256=sha(source_archive),source_archive_bytes=source_archive.stat().st_size,member_count=75,all_regular=True,no_extra_or_duplicate_members=True,all_member_bytes_hashes_equal_current_source_before=True,archive_and_current_source_modes_recorded_separately=True,all_source_hashes_equal_build_before_after=True,members=actual,excluded_image=dict(path=str(BUILD/'rook2-exact'),**image),limit='Exact ELF retained externally and excluded by assignment. Source-before files are byte-exact duplicates of the included verified75-source archive; historical source archive headers normalize modes0644 while current snapshot modes are recorded separately per member. Reconstruct payload from source archive then chmod to current_source_mode. Source archive independently reopened, not receipt-only.')
+  return proof,{prefix+name for name in expected}|{image_name}
+ 
+@@ -86,8 +86,8 @@
+  write('member-manifest.json',before)
+  decision_terminal=(ROOT/(PREFIX+'generic-decision'+DATE)/'tool-terminal.json').relative_to(ROOT).as_posix()
+  assert decision_terminal in before
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_selected_regular_files_captured_except_exact76=True,files=len(before),captured_original_bytes=sum(x['bytes'] for x in before.values()),original_scope_files=len(original_before),excluded_files=76,duplicate_source_files=75,source_archive_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),decision_tool_terminal_included=decision_terminal,scope='Closed54 generic source/backend/focused native/fixed70 PARK evidence only; no ownPGO/full native/broad-suite/promotion. Referenced external runtime payloads are not expanded.'))
+- archive=HERE/'closed-ordering-six-stream-generic.tar.gz'
++ write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_selected_regular_files_captured_except_exact76=True,files=len(before),captured_original_bytes=sum(x['bytes'] for x in before.values()),original_scope_files=len(original_before),excluded_files=76,duplicate_source_files=75,source_archive_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),decision_tool_terminal_included=decision_terminal,scope='Closed55 generic source/backend/focused native/fixed70 PARK evidence only; no ownPGO/full native/broad-suite/promotion. Referenced external runtime payloads are not expanded.'))
++ archive=HERE/'closed-ordering-small-entry-generic.tar.gz'
+  with archive.open('xb') as raw:
+   with gzip.GzipFile(filename='',mode='wb',fileobj=raw,mtime=0) as compressed:
+    with tarfile.open(fileobj=compressed,mode='w',format=tarfile.PAX_FORMAT) as t:
