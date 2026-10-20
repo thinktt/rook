@@ -79,12 +79,12 @@ All70 live/offline replays pass. Original backend metadata serialization failure
 and compact offline recovery remain explicit. No retry/full54_12/adoption follows.
 See [decision](evidence/caller-owned-child-decision-20261020-01/README.md).
 
-Experiment67 is isolated: Q borrows the parent placement after evaluation rather
-than copying it at entry. Only quiescence.rs changes; all other73 native/tool files
-match62 and no66 code is carried. All195 native tests, fresh own54 training,
-independent54 replay/raw/PID checks, byte-identical profile remerge and ExtTSP use
-pass (image6b87914c, ownprofile6197280b). Actual compiled-copy removal and timing
-remain pending; no speed or adoption claim.
+Experiment67 is parked. Only quiescence.rs changed and all195 native tests,
+fresh own54 training/remerge/use and consumedQ/ordinary backend review pass.
+The entry160B snapshot is removed without relocation, but the fixed70 screen is
+only0.078037% lower,5/7lower,worst1.004804860,5of7rangesoverlap. It misses the
+frozen0.5% minimum; all70 live/offline replays pass. No retry/full54_12/adoption.
+See [decision](evidence/q-parent-reborrow-decision-20261020-01/README.md).
 
 ## Historical checkpoint record — preceding57 state
 
