@@ -65,9 +65,9 @@ job or new local engine run was launched for the preparation.
 | Question | Current assignment / decision | Evidence needed to advance |
 |---|---|---|
 | Which semantic sequences are comparatively expensive? | Four-row study closed. Preserve the current ownership baseline; no broader functional framework or production cost partition is selected. | Revisit only for a specific decision that these boundaries cannot answer. |
-| Can checked generation avoid traversing irrelevant directions? | Source prototype reviewed. One isolated generic compiler/test discriminator is selected after pressure's failed screen; no timing or adoption yet. | Exact ordered inventories, bounded king-first exits and EP; actual skipped traversal versus setup, unchecked-path and code-size costs. |
+| Can checked generation avoid traversing irrelevant directions? | Compiler/tests closed:196 tests pass after a fixture-only repair. One unchanged fixed70 generic screen is selected on the built image; no result or adoption yet. | Whether skipped traversal outweighs entry dispatch, code growth and full-generator stack cost across the seven original cases. |
 | Can Activity pressure avoid materializing per-square mark bytes? | Parked. All200 library tests and70 live/offline replays pass, but the fixed generic screen is0.4281% slower, with3/7 cases lower. | No retune, second screen or PGO rescue. Preserve the failed result. |
-| Does the TT access population justify a different layout? | Imp2/Sol owns a source-only plan for one small probe/store census on35/08. No census execution or layout variant is selected. | Recent returns, metadata continuation, retained matches, identity/generation misses, stores and reset costs together. |
+| Does the TT access population justify a different layout? | One count-only35→08 census is selected, with preparation and execution owned by Imp2 after the checked timing window. No layout variant is selected. | Recent returns, metadata continuation, retained matches, identity/generation misses, stores and reset costs together. |
 | Can Phase reuse avoid both recomputation and extra call arguments? | Narrow dependency-owned field hypothesis reviewed, unselected. Keep behind current discriminators. | Actual producer/consumer costs and complete mutation ownership without narrowing supplied-count semantics. |
 
 ### Checked generation: narrow the work, preserve the semantics
@@ -99,6 +99,17 @@ slider direction across the B/R/Q groups on04/35; the proposed table load and
 mask branch have competing cost.
 This is a hypothesis of modest integrated benefit, not a forecast of parity.
 Do not attribute all generation cost or all off-mask counts to removable time.
+
+The [compiler/test discriminator](../experiments/checked-enumeration-compiler/report.md)
+confirms that the mask test precedes coordinate construction and mailbox loads.
+Unchecked directions have no new mask test, but still pay entry dispatch and
+changed register allocation. Generation code grows2,345 bytes and the full
+generator reserves another16 stack bytes. All196 library tests pass after a
+repair confined to a new fixture; the original failed attempt is preserved.
+The built generic image0cde6b78 is selected for one fixed70 comparison against
+admitted control5d10b2fa. Keep the unchanged aggregate<=0.995, at least5/7
+lower and worst<=1.02 gates, complete replays and no-retry rule. A miss parks
+the variant; a pass permits a production-PGO decision, not adoption.
 
 ### Pressure: change the producer/consumer boundary
 
@@ -144,19 +155,25 @@ then need payload access, and stores can become more expensive. Recent usable
 returns are especially important because today's recent record can already fit
 within one conditional64-byte line.
 
-The source-only census plan must price those populations together. Distinguish
+The [selected census](../experiments/current62-tt-census-design/README.md)
+observes those populations together on original35 then08, once each after the
+checked timing window. Imp2 owns isolated diagnostic preparation, build and
+execution under the fixed replay, count-reconciliation and resource scope.
+Distinguish
 recent metadata-only continuation from a usable recent return, and identity
 misses from generation rejection. Include replacement/displacement and clears,
 not just query counts. A conditional distinct-line ledger is useful but does
-not measure cache misses, residency or CPU cost.
+not measure cache misses, residency or CPU cost. These fresh single-search16MiB
+cases cannot price multi-search stale generations, wrap clearing,64MiB tables
+or full-game sequences.
 
 Two dense arrays—16 bytes of full identities and32 bytes of payload per semantic
 group—are one possible alternative to per-group headers or64-byte padding.
 They preserve48G payload and need no partial-identity filter. Dense-header
 residency is a separate hypothesis from reducing lines per query. The specified
-group count, collision and priority rules remain unchanged. Neither layout nor
-a native experiment is selected until the workload mix supports a concrete
-discriminator.
+group count, collision and priority rules remain unchanged. No layout prototype
+or native layout comparison is selected until the workload mix supports a
+concrete discriminator.
 
 ### Phase: own only the dependencies that justify reuse
 
