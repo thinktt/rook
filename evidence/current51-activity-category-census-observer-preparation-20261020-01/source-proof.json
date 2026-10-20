@@ -1,0 +1,55 @@
+{
+  "complete_source_only": true,
+  "owned_files": {
+    "src/activity/category_census.rs": "163e613eab90752bda80cb602dd8049db58ba9f5cbf66f4521a482d5b45c46c1",
+    "src/bin/rook2.rs": "2f2dc62ef66583ff04b7eb784a1587e5d4c8a56ee730a3f19d514ed4049dc12d"
+  },
+  "baseline73_scope": "Original74 except sibling-owned activity.rs; new observer child excluded from original-member inventory",
+  "unchanged_original_members": 72,
+  "original_member_delta_only": "src/bin/rook2.rs",
+  "bin_exact_inverse": true,
+  "run_body_and_error_branches_exact": true,
+  "observer_source_api": [
+    "pub(super) Group::new(color:usize,kind:usize,sources:usize)->Self",
+    "record(&mut self,target:u8,shortcut:bool,category:i64)",
+    "finish(&mut self)",
+    "pub write_from_env()->io::Result<()>"
+  ],
+  "ownership_and_arithmetic": [
+    "One u64 seen mask per Group; no per-target category storage/value reuse",
+    "32static rows,19checked u64 fields; per-encounter counters local, relaxed checked fetch_update once per group per nonzero field",
+    "Validated row0..31, target<64 before bit shift, category0..3 before array index; checked usize-to-u64 source conversion",
+    "All counter additions/subset sums/source multipliers checked; failure marks diagnostic invalid with no counter value feeding core decisions",
+    "Local finish once, zero-source groups retained; aggregate E=U+H and all shortcut/adjusted/category partitions validated",
+    "Snapshot only expected after normal synchronous run completes; collector independently checks cross-kindgroup invocation/source-bin/singleton invariants",
+    "write/create_new/flush errors ignored by success hook only; original semantic exit/stdout/stderr/error branches preserved"
+  ],
+  "new_tests": [
+    "activity::category_census::tests::category_census_first_repeat_splits_and_categories",
+    "activity::category_census::tests::category_census_reset_singleton_and_zero_source_groups",
+    "activity::category_census::tests::category_census_overflow_and_invalid_observations_fail_closed_locally"
+  ],
+  "new_declarations": 3,
+  "baseline193_old_declarations_untouched_by_this_owner": true,
+  "expected_combined_declarations": 196,
+  "expected_library": 194,
+  "development": 2,
+  "test_global_reset_race": false,
+  "test_scope": "First/repeat/sourcecategory/split+localAtomicRow; per-Group reset/singleton/zero; checkedlocal/atomic overflow and invalidindices, all local no globalreset",
+  "all_tests_unparsed_uncompiled_unrun": true,
+  "no_engine_Search_Node_Position_Retained_field_changes": true,
+  "no_N_R_Stats_parameter_protocol_decision_changes": true,
+  "no_CPU_or_layout_neutrality_claim": true,
+  "preserved_preexecution_failure": {
+    "tool_chunk": "50e454",
+    "exit_code": 1,
+    "reason": "new owned module directory absent; before module/bin writes"
+  },
+  "pins": {
+    "/home/legolas/rook2/evidence/current51-activity-category-census-selection-20261020-01/selection.json": {
+      "sha256": "510e167942933169c407c6b86c1bcc86c5593f5a7861d4d54bd1c1818a816d93",
+      "bytes": 9977
+    }
+  },
+  "all_owned_jobs_closed_at_write": true
+}

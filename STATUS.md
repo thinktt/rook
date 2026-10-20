@@ -2,6 +2,12 @@
 
 ## Current stage — candidate51 tactical check masks, 2026-10-20
 
+A diagnostic [category encounter census](evidence/current51-activity-category-census-20261020-01/README.md)
+passes11 focused tests and three original live/offline replay pairs. Repeats are
+2.0347%,1.7079% and0.0206% of calls; expensive repeats in hotspot35 are only0.2810%
+of all calls. Decline category caching without a prototype or performance claim.
+Production remains51; this diagnostic receives no optimization candidate number.
+
 Candidate51 replaces43 by exact equality of all117 tested source files after
 193 native tests,209 diagnostic tests, all7673 mandatory cases/117operations/
 115wholefiles, optimized strict54/eight-wire24, and regular12 pre-gate/632searches

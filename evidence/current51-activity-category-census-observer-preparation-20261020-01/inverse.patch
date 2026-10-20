@@ -1,0 +1,270 @@
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -120,10 +120,7 @@
+ 
+ fn main() -> ExitCode {
+     match run() {
+-        Ok(()) => {
+-            let _ = rook2::activity::category_census::write_from_env();
+-            ExitCode::SUCCESS
+-        }
++        Ok(()) => ExitCode::SUCCESS,
+         Err(Failure::Fatal) => ExitCode::from(1),
+         Err(Failure::Message(message)) => {
+             let _ = io::stderr().write_all(message.as_bytes());
+--- a/src/activity/category_census.rs
++++ /dev/null
+@@ -1,253 +0,0 @@
+-//! Diagnostic-only completed category encounters. No stored category values.
+-use std::fs::OpenOptions;
+-use std::io::{self, BufWriter, Write};
+-use std::path::Path;
+-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+-
+-const FIELDS: usize = 19;
+-const GROUPS: usize = 0;
+-const SOURCES: usize = 1;
+-const ENCOUNTERS: usize = 2;
+-const UNIQUE: usize = 3;
+-const REPEATS: usize = 4;
+-const SHORTCUT_E: usize = 5;
+-const ADJUSTED_E: usize = 6;
+-const SHORTCUT_U: usize = 7;
+-const ADJUSTED_U: usize = 8;
+-const SHORTCUT_R: usize = 9;
+-const ADJUSTED_R: usize = 10;
+-const CATEGORIES: usize = 11;
+-const REPEAT_CATEGORIES: usize = 15;
+-const NAMES: [&str; 11] = ["groups", "sources", "encounters", "unique", "repeats",
+-    "shortcut_encounters", "adjusted_encounters", "shortcut_unique", "adjusted_unique",
+-    "shortcut_repeats", "adjusted_repeats"];
+-
+-#[derive(Clone, Copy)]
+-struct Counts {
+-    values: [u64; FIELDS],
+-    invalid: bool,
+-}
+-impl Counts {
+-    const fn empty() -> Self { Self { values: [0; FIELDS], invalid: false } }
+-    fn bump(&mut self, field: usize) {
+-        match self.values[field].checked_add(1) {
+-            Some(value) => self.values[field] = value,
+-            None => self.invalid = true,
+-        }
+-    }
+-    fn consistent(&self) -> bool {
+-        let v = &self.values;
+-        let pair = |a: usize, b: usize, total: usize| v[a].checked_add(v[b]) == Some(v[total]);
+-        let sum4 = |start: usize| (0..4).try_fold(0u64, |sum, i| sum.checked_add(v[start + i]));
+-        !self.invalid && pair(UNIQUE, REPEATS, ENCOUNTERS)
+-            && pair(SHORTCUT_E, ADJUSTED_E, ENCOUNTERS)
+-            && pair(SHORTCUT_U, ADJUSTED_U, UNIQUE)
+-            && pair(SHORTCUT_R, ADJUSTED_R, REPEATS)
+-            && pair(SHORTCUT_U, SHORTCUT_R, SHORTCUT_E)
+-            && pair(ADJUSTED_U, ADJUSTED_R, ADJUSTED_E)
+-            && sum4(CATEGORIES) == Some(v[ENCOUNTERS])
+-            && sum4(REPEAT_CATEGORIES) == Some(v[REPEATS])
+-    }
+-}
+-
+-struct AtomicRow { values: [AtomicU64; FIELDS] }
+-impl AtomicRow {
+-    const fn new() -> Self { Self { values: [const { AtomicU64::new(0) }; FIELDS] } }
+-    fn merge(&self, counts: &Counts) -> bool {
+-        let mut valid = counts.consistent();
+-        for (cell, &increment) in self.values.iter().zip(&counts.values) {
+-            if increment != 0 && cell.fetch_update(Ordering::Relaxed, Ordering::Relaxed,
+-                |old| old.checked_add(increment)).is_err() {
+-                valid = false;
+-            }
+-        }
+-        valid
+-    }
+-    fn snapshot(&self) -> Counts {
+-        Counts { values: std::array::from_fn(|i| self.values[i].load(Ordering::Relaxed)), invalid: false }
+-    }
+-}
+-static ROWS: [AtomicRow; 32] = [const { AtomicRow::new() }; 32];
+-static INVALID: AtomicBool = AtomicBool::new(false);
+-
+-/// One invocation/color/kind group. Membership only, never a cached value.
+-pub(super) struct Group {
+-    seen: u64,
+-    local: Counts,
+-    row: Option<usize>,
+-    finished: bool,
+-}
+-impl Group {
+-    pub(super) fn new(color: usize, kind: usize, sources: usize) -> Self {
+-        let mut local = Counts::empty();
+-        local.values[GROUPS] = 1;
+-        match u64::try_from(sources) {
+-            Ok(value) => local.values[SOURCES] = value,
+-            Err(_) => local.invalid = true,
+-        }
+-        let row = if color < 2 && (1..=4).contains(&kind) {
+-            Some((color * 4 + kind - 1) * 4 + sources.min(3))
+-        } else {
+-            local.invalid = true;
+-            None
+-        };
+-        Self { seen: 0, local, row, finished: false }
+-    }
+-    /// Observe only after the original direct_category returned successfully.
+-    pub(super) fn record(&mut self, target: u8, shortcut: bool, category: i64) {
+-        if self.finished || target >= 64 || !(0..=3).contains(&category)
+-            || self.local.values[SOURCES] == 0 || self.row.is_none() {
+-            self.local.invalid = true;
+-            return;
+-        }
+-        let bit = 1u64 << target;
+-        let repeated = self.seen & bit != 0;
+-        self.seen |= bit;
+-        self.local.bump(ENCOUNTERS);
+-        self.local.bump(if repeated { REPEATS } else { UNIQUE });
+-        self.local.bump(if shortcut { SHORTCUT_E } else { ADJUSTED_E });
+-        self.local.bump(match (shortcut, repeated) {
+-            (true, false) => SHORTCUT_U, (false, false) => ADJUSTED_U,
+-            (true, true) => SHORTCUT_R, (false, true) => ADJUSTED_R,
+-        });
+-        self.local.bump(CATEGORIES + category as usize);
+-        if repeated { self.local.bump(REPEAT_CATEGORIES + category as usize); }
+-    }
+-    // Separately testable without resetting/touching process-global counters.
+-    fn finish_local(&mut self) -> Option<(usize, Counts)> {
+-        if self.finished {
+-            self.local.invalid = true;
+-            return None;
+-        }
+-        self.finished = true;
+-        if !self.local.consistent() { return None; }
+-        self.row.map(|row| (row, self.local))
+-    }
+-    pub(super) fn finish(&mut self) {
+-        match self.finish_local() {
+-            Some((row, counts)) => {
+-                if !ROWS[row].merge(&counts) { INVALID.store(true, Ordering::Relaxed); }
+-            }
+-            None => INVALID.store(true, Ordering::Relaxed),
+-        }
+-    }
+-}
+-
+-fn row_consistent(counts: &Counts, source_bin: usize) -> bool {
+-    if !counts.consistent() { return false; }
+-    let v = &counts.values;
+-    let source_ok = match source_bin {
+-        0 => v[SOURCES] == 0 && v[ENCOUNTERS] == 0,
+-        1 => v[SOURCES] == v[GROUPS],
+-        2 => v[GROUPS].checked_mul(2) == Some(v[SOURCES]),
+-        3 => v[GROUPS].checked_mul(3).is_some_and(|minimum| v[SOURCES] >= minimum),
+-        _ => false,
+-    };
+-    source_ok && v[GROUPS].checked_mul(64).is_some_and(|maximum| v[UNIQUE] <= maximum)
+-}
+-
+-/// Success-exit side file only. I/O errors do not change engine semantics;
+-/// the collector must reject absent, partial or incomplete output.
+-pub fn write_from_env() -> io::Result<()> {
+-    let Some(raw) = std::env::var_os("ROOK2_ACTIVITY_CATEGORY_CENSUS_FILE") else { return Ok(()); };
+-    let text = raw.to_str().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "census path must be UTF-8"))?;
+-    let pid = std::process::id();
+-    let expanded = text.replace("%p", &pid.to_string());
+-    let path = Path::new(&expanded);
+-    if !path.is_absolute() {
+-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "census path must be absolute"));
+-    }
+-    let rows: [Counts; 32] = std::array::from_fn(|i| ROWS[i].snapshot());
+-    let mut invalid = INVALID.load(Ordering::Relaxed);
+-    for (index, row) in rows.iter().enumerate() {
+-        if !row_consistent(row, index % 4) { invalid = true; }
+-    }
+-    let file = OpenOptions::new().write(true).create_new(true).open(path)?;
+-    let mut output = BufWriter::new(file);
+-    write!(output, "{{\"schema\":\"rook2-activity-category-census-v1\",\"pid\":{pid},\"complete\":{},\"overflow\":{},\"rows\":[", !invalid, invalid)?;
+-    for (index, row) in rows.iter().enumerate() {
+-        if index != 0 { write!(output, ",")?; }
+-        let color = index / 16;
+-        let kind = (index / 4) % 4 + 1;
+-        let source_bin = index % 4;
+-        write!(output, "{{\"color\":{color},\"kind\":{kind},\"source_bin\":{source_bin}")?;
+-        for (field, name) in NAMES.iter().enumerate() {
+-            write!(output, ",\"{name}\":{}", row.values[field])?;
+-        }
+-        for (name, start) in [("categories", CATEGORIES), ("repeat_categories", REPEAT_CATEGORIES)] {
+-            write!(output, ",\"{name}\":[{},{},{},{}]", row.values[start], row.values[start + 1], row.values[start + 2], row.values[start + 3])?;
+-        }
+-        write!(output, "}}")?;
+-    }
+-    writeln!(output, "]}}")?;
+-    output.flush()
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn category_census_first_repeat_splits_and_categories() {
+-        let mut group = Group::new(0, 1, 2);
+-        group.record(5, true, 0);
+-        group.record(5, true, 0);
+-        group.record(9, false, 3);
+-        group.record(9, false, 3);
+-        group.record(63, false, 2);
+-        let (row, counts) = group.finish_local().unwrap();
+-        assert_eq!(row, 2);
+-        assert_eq!(&counts.values[..11], &[1, 2, 5, 3, 2, 2, 3, 1, 2, 1, 1]);
+-        assert_eq!(&counts.values[CATEGORIES..REPEAT_CATEGORIES], &[2, 0, 1, 2]);
+-        assert_eq!(&counts.values[REPEAT_CATEGORIES..], &[1, 0, 0, 1]);
+-        let aggregate = AtomicRow::new();
+-        assert!(aggregate.merge(&counts));
+-        assert_eq!(aggregate.snapshot().values, counts.values);
+-    }
+-
+-    #[test]
+-    fn category_census_reset_singleton_and_zero_source_groups() {
+-        let mut first = Group::new(1, 4, 1);
+-        first.record(0, true, 1);
+-        first.record(63, false, 2);
+-        let (row, counts) = first.finish_local().unwrap();
+-        assert_eq!(row, 29);
+-        assert_eq!((counts.values[UNIQUE], counts.values[REPEATS]), (2, 0));
+-        let mut next = Group::new(1, 4, 1);
+-        next.record(0, true, 1);
+-        assert_eq!(next.finish_local().unwrap().1.values[UNIQUE], 1);
+-        let mut empty = Group::new(0, 2, 0);
+-        let (row, counts) = empty.finish_local().unwrap();
+-        assert_eq!(row, 4);
+-        assert_eq!(&counts.values[..3], &[1, 0, 0]);
+-        assert!(row_consistent(&counts, 0));
+-        assert!(empty.finish_local().is_none());
+-    }
+-
+-    #[test]
+-    fn category_census_overflow_and_invalid_observations_fail_closed_locally() {
+-        let mut overflow = Group::new(0, 1, 1);
+-        overflow.local.values[ENCOUNTERS] = u64::MAX;
+-        overflow.record(0, true, 0);
+-        assert!(overflow.local.invalid);
+-        assert_eq!(overflow.local.values[ENCOUNTERS], u64::MAX);
+-        assert!(overflow.finish_local().is_none());
+-        for (target, category) in [(64, 0), (0, -1), (0, 4)] {
+-            let mut invalid = Group::new(0, 1, 1);
+-            invalid.record(target, false, category);
+-            assert!(invalid.finish_local().is_none());
+-        }
+-        assert!(Group::new(2, 1, 1).finish_local().is_none());
+-        assert!(Group::new(0, 0, 1).finish_local().is_none());
+-        let mut empty = Group::new(0, 1, 0);
+-        empty.record(0, false, 0);
+-        assert!(empty.finish_local().is_none());
+-        let aggregate = AtomicRow::new();
+-        aggregate.values[ENCOUNTERS].store(u64::MAX, Ordering::Relaxed);
+-        let mut valid = Group::new(0, 1, 1);
+-        valid.record(1, true, 2);
+-        let counts = valid.finish_local().unwrap().1;
+-        assert!(!aggregate.merge(&counts));
+-        assert_eq!(aggregate.values[ENCOUNTERS].load(Ordering::Relaxed), u64::MAX);
+-    }
+-}

@@ -1,0 +1,114 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -5,6 +5,8 @@
+ };
+ use crate::position::{Phase, Position};
+ use crate::types::{Color, Piece, PieceKind, Square};
++
++pub mod category_census;
+ 
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+ pub struct Activity {
+@@ -169,13 +171,18 @@
+     queries: &mut u64,
+ ) {
+     let kind = PieceKind::ALL[KIND];
+-    for &source in position.piece_squares(color, kind) {
++    let sources = position.piece_squares(color, kind);
++    let mut group = category_census::Group::new(color.index(), kind.index(), sources.len());
++    for &source in sources {
+         let values = piece_destination_values::<KIND>(position, color, values);
+-        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
++        let mobility = destinations_kind_observed::<KIND>(
++            position, influence, color, source, values, marks, &mut group,
++        );
+         let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+         *score += piece;
+         *queries += work;
+     }
++    group.finish();
+ }
+ 
+ #[inline]
+@@ -236,6 +243,25 @@
+     capture_priority(kind, victim, category)
+ }
+ 
++fn observed_direct_category(
++    influence: &Influence,
++    color: Color,
++    kind: PieceKind,
++    target: Square,
++    victim: Piece,
++    group: &mut category_census::Group,
++) -> i64 {
++    let category = direct_category(influence, color, kind, target, victim);
++    let opponent = influence.code(color.opponent(), target);
++    let shortcut = if kind == PieceKind::Queen {
++        opponent == 0 || (!victim.is_empty() && victim.kind() == PieceKind::Queen)
++    } else {
++        opponent == 0 && (kind == PieceKind::Knight || victim.is_empty())
++    };
++    group.record(target.0, shortcut, category);
++    category
++}
++
+ #[inline]
+ fn mark(marks: &mut Marks, color: Color, kind: PieceKind, target: Square, category: i64) {
+     let bit = 2 * (kind.index() - 1) + usize::from(category >= 2);
+@@ -266,13 +292,14 @@
+     }
+ }
+ 
+-fn destinations_kind<const KIND: usize>(
++fn destinations_kind_observed<const KIND: usize>(
+     position: &Position,
+     influence: &Influence,
+     color: Color,
+     source: Square,
+     values: &[u8; 64],
+     marks: &mut Marks,
++    group: &mut category_census::Group,
+ ) -> Mobility {
+     let kind = PieceKind::ALL[KIND];
+     let mut result = Mobility::default();
+@@ -285,7 +312,7 @@
+             if !victim.is_empty() && victim.color() == color {
+                 continue;
+             }
+-            let category = direct_category(influence, color, kind, target, victim);
++            let category = observed_direct_category(influence, color, kind, target, victim, group);
+             result.categories += category;
+             result.total += category * values[target.0 as usize] as i64;
+             mark(marks, color, kind, target, category);
+@@ -320,7 +347,7 @@
+                         ) as i64,
+                     )
+                 } else {
+-                    let category = direct_category(influence, color, kind, target, victim);
++                    let category = observed_direct_category(influence, color, kind, target, victim, group);
+                     result.categories += category;
+                     mark(marks, color, kind, target, category);
+                     category
+@@ -343,6 +370,21 @@
+     }
+     result
+ }
++#[cfg(test)]
++fn destinations_kind<const KIND: usize>(
++    position: &Position,
++    influence: &Influence,
++    color: Color,
++    source: Square,
++    values: &[u8; 64],
++    marks: &mut Marks,
++) -> Mobility {
++    let mut group = category_census::Group::new(color.index(), KIND, 1);
++    destinations_kind_observed::<KIND>(
++        position, influence, color, source, values, marks, &mut group,
++    )
++}
++
+ 
+ fn piece_score_kind<const KIND: usize>(
+     influence: &Influence,

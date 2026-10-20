@@ -1,0 +1,312 @@
+--- /home/legolas/rook2/evidence/activity-paired-support-pgo-preparation-20261020-01/raw_model.py
++++ /home/legolas/rook2/evidence/current51-activity-category-census-preparation-20261020-01/raw_model.py
+@@ -1,6 +1,12 @@
+-from guard import *
+-import re
+-SPEC=Path("/home/legolas/king-spec/conformance")
++"""Selected-case raw replay and fixed activity-counter reconciliation; no PGO guard."""
++from pathlib import Path
++import hashlib,json,re
++SPEC=Path('/home/legolas/king-spec/conformance')
++CASES=['profile-01','profile-35','profile-08']
++def load(p):return json.loads(Path(p).read_text())
++def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
++def write(p,v):
++ with Path(p).open('x') as f:json.dump(v,f,indent=2);f.write('\n')
+ def semantic(s,wire=False):
+  if s.startswith('move '):return dict(type='move',move=s[5:])
+  if s.startswith('stat01: '):
+@@ -9,21 +15,48 @@
+  m=re.fullmatch(r'\s*(-?\d+)\s+([+-]?\d+)\s+(\d+)\s+(\d+)(?:\s+(.*))?',s);assert m,s
+  a,b,c,d=map(int,m.groups()[:4]);pv=(m[5] or '').strip().replace('0','O')
+  return dict(type='post',depthToken=a,evaluation=b,engineCentiseconds=c,searchId=d,pv=pv) if wire else dict(depth=a,score=b,workThousands=c,searchId=d,pv=pv)
+-
+-def replay(report_path,engine,training,raw_out):
++def replay(report_path,engine,case,raw_out=None):
+  report=load(report_path);work=load(SPEC/'profiling/workloads.json');oracle=load(SPEC/'profiling/replay-oracle.json')
+- assert report['status']=='pass' and len(report['results'])==len(work['cases'])==len(oracle['cases'])==54
+- assert report['selectedCases']==[c['id'] for c in work['cases']]
+- expected_command=(['/usr/bin/taskset','-c','14'] if training else [])+[str(engine),'--work-clock=kingwcr','--work-clock-post=work']
+- for row,c in zip(report['results'],work['cases']):
+-  answer=next(x for x in oracle['cases'] if x['id']==c['id'])
+-  assert row['case']==c['id'] and row['command']==expected_command and row['status']=='pass' and row['exit']==answer['exit']==dict(code=0,signal=None)
+-  assert row['error'] is None and row['complete'] and not row['truncated'] and not row.get('cleanupUnconfirmed',False) and row['discardedObservedBytes']==0
+-  assert row['stderr']==answer['stderr']=='' and row['stdout'].endswith('\n')
+-  lines=row['stdout'].splitlines();acks=[x for x in c['protocol']['recordsBeforeSearch'] if x.startswith('cm_parm ')]+['cm_parm rnd=0'];assert lines[:len(acks)]==acks;lines=lines[len(acks):]
+-  assert [semantic(x) for x in lines[:len(answer['posts'])]]==answer['posts']
+-  assert lines[len(answer['posts']):]==['move '+answer['move']]+answer['resultRecords']
+-  d=raw_out/c['id'];d.mkdir(parents=True);(d/'stdout.raw').write_text(row['stdout']);(d/'stderr.raw').write_text(row['stderr'])
+-  (d/'stdin.reconstructed').write_text('\n'.join(c['protocol']['recordsBeforeSearch']+['cm_parm rnd',c['protocol']['searchRecord'],c['protocol']['cleanupRecord']])+'\n')
+- return report
+-
++ assert case in CASES and report['status']=='pass' and report['selectedCases']==[case] and len(report['results'])==1
++ assert report['workloadSha256']==sha(SPEC/'profiling/workloads.json') and report['oracleSha256']==sha(SPEC/'profiling/replay-oracle.json')
++ c=next(x for x in work['cases'] if x['id']==case);answer=next(x for x in oracle['cases'] if x['id']==case);row=report['results'][0]
++ expected_command=['/usr/bin/taskset','-c','14',str(engine),'--work-clock=kingwcr','--work-clock-post=work']
++ assert row['case']==case and row['command']==expected_command and row['status']=='pass' and row['exit']==answer['exit']==dict(code=0,signal=None)
++ assert type(row['pid']) is int and row['pid']>0
++ assert row['error'] is None and row['complete'] and not row['truncated'] and not row.get('cleanupUnconfirmed',False) and row['discardedObservedBytes']==0
++ assert row['stderr']==answer['stderr']=='' and row['stdout'].endswith('\n')
++ assert row['retainedBytes']==len(row['stdout'].encode())+len(row['stderr'].encode())
++ lines=row['stdout'].splitlines();acks=[x for x in c['protocol']['recordsBeforeSearch'] if x.startswith('cm_parm ')]+['cm_parm rnd=0'];assert lines[:len(acks)]==acks;lines=lines[len(acks):]
++ assert [semantic(x) for x in lines[:len(answer['posts'])]]==answer['posts']
++ assert lines[len(answer['posts']):]==['move '+answer['move']]+answer['resultRecords']
++ payloads={'stdout.raw':row['stdout'].encode(),'stderr.raw':row['stderr'].encode(),'stdin.reconstructed': ('\n'.join(c['protocol']['recordsBeforeSearch']+['cm_parm rnd',c['protocol']['searchRecord'],c['protocol']['cleanupRecord']])+'\n').encode()}
++ if raw_out is not None:
++  raw_out=Path(raw_out)
++  for n,b in payloads.items():
++   with (raw_out/n).open('xb') as f:f.write(b)
++ return row,payloads
++COUNTERS=['groups','sources','encounters','unique','repeats','shortcut_encounters','adjusted_encounters','shortcut_unique','adjusted_unique','shortcut_repeats','adjusted_repeats']
++def counters(probe,native_pid):
++ assert probe['schema']=='rook2-activity-category-census-v1' and probe['pid']==native_pid and type(probe['pid']) is int
++ assert probe['complete'] is True and probe['overflow'] is False and len(probe['rows'])==32
++ bins={};totals={k:0 for k in COUNTERS};groups={}
++ for row in probe['rows']:
++  for k in ['color','kind','source_bin']+COUNTERS:assert type(row[k]) is int and row[k]>=0,(k,row)
++  c,k,b=row['color'],row['kind'],row['source_bin'];assert c in range(2) and k in range(1,5) and b in range(4) and (c,k,b) not in bins
++  bins[c,k,b]=row
++  for name in ['categories','repeat_categories']:assert len(row[name])==4 and all(type(x) is int and x>=0 for x in row[name])
++  assert row['encounters']==row['unique']+row['repeats'] and row['repeats']<=row['encounters']
++  for a in ['encounters','unique','repeats']:assert row['shortcut_'+a]+row['adjusted_'+a]==row[a]
++  assert row['shortcut_encounters']==row['shortcut_unique']+row['shortcut_repeats']
++  assert row['adjusted_encounters']==row['adjusted_unique']+row['adjusted_repeats']
++  assert sum(row['categories'])==row['encounters'] and sum(row['repeat_categories'])==row['repeats']
++  assert all(h<=e for h,e in zip(row['repeat_categories'],row['categories'])) and row['unique']<=64*row['groups']
++  if b==0:assert row['sources']==0 and all(row[x]==0 for x in COUNTERS if x not in ['groups','sources'])
++  elif b==1:assert row['sources']==row['groups'] and row['repeats']==0
++  elif b==2:assert row['sources']==2*row['groups']
++  else:assert row['sources']>=3*row['groups']
++  if row['groups']==0:assert all(row[x]==0 for x in COUNTERS) and not any(row['categories']+row['repeat_categories'])
++  for x in COUNTERS:totals[x]+=row[x]
++  groups[c,k]=groups.get((c,k),0)+row['groups']
++ assert set(bins)=={(c,k,b) for c in range(2) for k in range(1,5) for b in range(4)} and len(set(groups.values()))==1
++ return dict(rows=32,totals=totals,compute_groups_per_color_kind=next(iter(groups.values())),source_bin3_means='at least three sources',counts_only=True)
+--- /home/legolas/rook2/evidence/activity-paired-support-pgo-preparation-20261020-01/recheck.mjs
++++ /home/legolas/rook2/evidence/current51-activity-category-census-preparation-20261020-01/recheck.mjs
+@@ -1,25 +1,13 @@
+-// Offline original checker only: imports do not run replay-check's CLI.
++// Offline only: exactly three selected original checkReplay calls, zero engines.
+ import assert from 'node:assert/strict';
+ import {readFileSync} from 'node:fs';
+ import {checkReplay,workloads,oracle} from '/home/legolas/king-spec/conformance/profiling/replay-check.mjs';
+-if(process.argv.includes('--self-test')){
+- const c=workloads.cases[0],e=oracle.cases.find(x=>x.id===c.id);
+- const acks=c.protocol.recordsBeforeSearch.filter(x=>x.startsWith('cm_parm ')).concat('cm_parm rnd=0');
+- const lines=[...acks,...e.posts.map(p=>`${p.depth} ${p.score} ${p.workThousands} ${p.searchId} ${p.pv}`),'move '+e.move,...e.resultRecords];
+- const row={error:null,complete:true,exit:e.exit,stderr:e.stderr,stdout:lines.join('\n')+'\n'};
+- checkReplay(row,c,e);let rejected=0;
+- for(const changed of [{complete:false},{error:'host failure'},{exit:{code:1,signal:null}},{stdout:row.stdout+'extra\n'},{stderr:'unexpected'}]){
+-  assert.throws(()=>checkReplay({...row,...changed},c,e));rejected++;
+- }
+- console.log(JSON.stringify({offlineOnly:true,accepted:1,rejected}));
+-}else{
+- let count=0;
+- for(const path of process.argv.slice(2)){
+-  const r=JSON.parse(readFileSync(path));assert.equal(r.status,'pass');
+-  assert.deepEqual(r.selectedCases,workloads.cases.map(x=>x.id));assert.equal(r.results.length,54);
+-  for(const [i,row] of r.results.entries()){
+-   const c=workloads.cases[i],e=oracle.cases.find(x=>x.id===c.id);assert.equal(row.case,c.id);checkReplay(row,c,e);count++;
+-  }
+- }
+- assert.equal(count,54);console.log(JSON.stringify({offlineOnly:true,originalCheckReplayCount:count}));
++const ids=['profile-01','profile-35','profile-08'];
++assert.equal(process.argv.length,5);let count=0;
++for(const [i,path] of process.argv.slice(2).entries()){
++ const r=JSON.parse(readFileSync(path));assert.equal(r.status,'pass');
++ assert.deepEqual(r.selectedCases,[ids[i]]);assert.equal(r.results.length,1);
++ const row=r.results[0],c=workloads.cases.find(x=>x.id===ids[i]),e=oracle.cases.find(x=>x.id===ids[i]);
++ assert.equal(row.case,ids[i]);checkReplay(row,c,e);count++;
+ }
++assert.equal(count,3);console.log(JSON.stringify({offlineOnly:true,originalCheckReplayCount:count,selectedCases:ids}));
+--- /home/legolas/rook2/evidence/influence-eligibility-census-run-preparation-20261019-01/run.py
++++ /home/legolas/rook2/evidence/current51-activity-category-census-preparation-20261020-01/collect.py
+@@ -1,94 +1,101 @@
+ #!/usr/bin/env python3
+-"""Two fixed diagnostic lifetimes; source/build/schema/parent admission required."""
+-from pathlib import Path
+-import hashlib,json,os,subprocess,tarfile
++"""Three diagnostic-only direct released replays; no warmup/retry/CPU estimator."""
++from raw_model import *
++import os,signal,subprocess,time
+ P=Path(__file__).resolve().parent
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]
+-sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+-load=lambda p:json.loads(Path(p).read_text())
+-def write(p,j):
+- with Path(p).open('x') as f:json.dump(j,f,indent=2);f.write('\n')
+-def cpu15():
+- rows=[line.split()[1:] for line in Path('/proc/stat').read_text().splitlines() if line.startswith('cpu15 ')]
+- assert len(rows)==1
+- return list(map(int,rows[0]))
++def identity(pid):
++ try:
++  a=Path(f'/proc/{pid}/stat').read_text().rsplit(') ',1)[1].split()
++  return dict(pid=pid,start=a[19],pgid=int(a[2]),state=a[0])
++ except (FileNotFoundError,ProcessLookupError):return None
++def active(token):
++ now=identity(token['pid']);return now is not None and now['start']==token['start'] and now['pgid']==token['pgid'] and now['state']!='Z'
++def observe(child,owned):
++ # Only this owned Node's direct detached native children, never shared process groups.
++ try:ids=Path(f'/proc/{child.pid}/task/{child.pid}/children').read_text().split()
++ except FileNotFoundError:ids=[]
++ for x in ids:
++  t=identity(int(x))
++  if t and t['pgid']==t['pid'] and t['pgid']!=os.getpgrp():owned[(t['pid'],t['start'])]=t
++ def same(t):return t['pgid']==t['pid'] and t['pgid']!=os.getpgrp()
++ assert all(same(t) for t in owned.values())
++def stop_owned(child,owned):
++ observe(child,owned)
++ def send(sig):
++  for t in list(owned.values()):
++   if active(t):
++    try:os.killpg(t['pgid'],sig)
++    except ProcessLookupError:pass
++ send(signal.SIGTERM);until=time.monotonic()+5
++ while time.monotonic()<until and any(active(t) for t in owned.values()):child.poll();time.sleep(.02)
++ send(signal.SIGKILL);until=time.monotonic()+5
++ while time.monotonic()<until and any(active(t) for t in owned.values()):child.poll();time.sleep(.02)
++ try:code=child.wait(timeout=max(.01,until-time.monotonic()))
++ except subprocess.TimeoutExpired:code=None
++ return dict(node_returncode=code,node_reaped=code is not None,remaining_owned_active=[t for t in owned.values() if active(t)],tracked_owned=list(owned.values()))
++def admission(plan):
++ assert sorted(os.sched_getaffinity(0))==H and os.environ.get('TMPDIR')=='/home/legolas/rook2-build-tmp'
++ assert plan['cases']==CASES and plan['lifetimes']==3 and plan['overall_seconds']==180 and plan['probe_cap_bytes']==1048576 and plan['no_retries']
++ clearance=load(P/'execution-clearance.json');assert clearance['launch_authorized'] is True and clearance['plan_sha256']==sha(P/'plan.json') and clearance['parent_review_sha256']
++ assert all(plan[x] is True for x in ['parent_review_complete','source_review_complete','focused_complete','all_owned_jobs_closed','launch_authorized'])
++ pins=dict(plan['immutable_inputs'])
++ for name in ['parent_review','source_freeze','source_manifest','source_review','build_receipt','image_freeze','build_terminal','focused_proof','focused_terminal','source_archive_receipt']:
++  row=plan[name];assert row and row['sha256'] and sha(row['path'])==row['sha256'];pins[row['path']]=row['sha256']
++ assert clearance['parent_review_sha256']==plan['parent_review']['sha256']
++ assert plan['engine_sha256'] and sha(plan['engine'])==plan['engine_sha256'];pins[plan['engine']]=plan['engine_sha256']
++ receipt=load(plan['build_receipt']['path']);frozen=load(plan['image_freeze']['path'])
++ assert receipt['outcome']=='build-succeeded-with-stable-input-snapshot' and receipt['binary_output']['sha256']==frozen['sha256']==plan['engine_sha256']
++ assert receipt['source_sha256_before']==receipt['source_sha256_after'] and receipt['tool_sha256_before']==receipt['tool_sha256_after']
++ assert receipt['source_sha256_before']==plan['source_sha256'] and receipt['tool_sha256_before']==plan['tool_source_sha256']
++ assert len(receipt['tool_sha256_before'])==23 and frozen['mode']=='0555' and Path(plan['engine']).stat().st_mode & 0o777==0o555
++ assert receipt['mode']=='generic' and receipt['target_cpu']=='x86-64' and receipt['target_triple']=='x86_64-unknown-linux-gnu'
++ assert 'profile-' not in receipt['environment_overrides']['RUSTFLAGS']
++ assert plan['source_graph_sha256'] and plan['native_test_scope']=='Focused diagnostic guards only; no full-native/broad qualification' 
++ for rel,h in (receipt['source_sha256_before']|receipt['tool_sha256_before']).items():pins[str(Path(plan['build_receipt']['path']).parent/'source-before'/rel)]=h
++ for name in ['build_terminal','focused_terminal']:
++  t=load(plan[name]['path']);assert t['actual_tool_terminal_observed'] and t['exit_code']==0
++ assert all(sha(p)==h for p,h in pins.items())
++ pins[str(P/'plan.json')]=sha(P/'plan.json');pins[str(P/'execution-clearance.json')]=sha(P/'execution-clearance.json')
++ return pins
++
+ def main():
+- plan=load(P/'plan.json')
+- assert plan['launch'] is True and plan['all_native_and_timing_jobs_closed'] is True
+- assert plan['cases']==['profile-35','profile-08'] and plan['lifetimes']==2 and plan['repetitions_per_case']==1 and plan['no_retries'] and plan['no_sample_deletion']
+- assert sorted(os.sched_getaffinity(0))==H and os.environ.get('TMPDIR')=='/home/legolas/rook2-build-tmp'
+- assert os.environ.get('PATH')=='/usr/bin:/bin'
+- assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE','NODE_OPTIONS',plan['env_key']])
+- assert plan['census_schema_contract'] and plan['census_source_review'] and plan['parent_review']
+- pins=dict(plan['known_inputs'])
+- for field in ['parent_review','census_source_review','source_manifest','build_terminal']:
+-  row=plan[field];assert row and sha(row['path'])==row['sha256'];pins[row['path']]=row['sha256']
+- for field in ['parent_review','census_source_review']:assert load(plan[field]['path'])['complete'] is True
+- review=load(plan['parent_review']['path']);assert review['allow_engine_execution'] is True and review['cases']==plan['cases'] and review['engine_sha256']==plan['engine_sha256']
+- terminal=load(plan['build_terminal']['path']);assert terminal['actual_tool_terminal_observed'] and terminal['exit_code']==0 and (terminal.get('terminal_chunk_id') or terminal.get('chunk_id'))
+- assert plan['expected_script_sha256'] and all(sha(P/n)==h for n,h in plan['expected_script_sha256'].items())
+- for n,h in plan['expected_script_sha256'].items():pins[str(P/n)]=h
+- for name in ['engine','build_receipt','source_archive']:
+-  assert plan[name] and plan[name+'_sha256'];pins[plan[name]]=plan[name+'_sha256']
+- r=load(plan['build_receipt']);base=load(plan['compiler_baseline_receipt'])
+- assert r['mode']=='generic' and r['pgo']['mode']=='none' and r['cargo_exit_code']==0
+- assert r['source_identity_unchanged'] and r['tool_identity_unchanged'] and r['cargo_config_unchanged']
+- assert r['cargo_config_sha256_before']==r['cargo_config_sha256_after']
+- assert Path(plan['engine']).stat().st_mode & 0o777==0o555
+- assert r['binary_output']['sha256']==plan['engine_sha256'] and r['rust_flags']==plan['expected_rust_flags']
+- for field in ['toolchain','target_triple','target_cpu','jobs','cargo_config_sha256_before']:assert r[field]==base[field],field
+- assert r['target_cpu']=='x86-64' and not any('target-feature' in flag or 'profile-use' in flag or 'profile-generate' in flag for flag in r['rust_flags'])
+- assert r['tool_sha256_before']==base['tool_sha256_before'] and r['rust_flags']==base['rust_flags']
+- assert r['source_sha256_before']==r['source_sha256_after']==plan['source_sha256'] and r['tool_sha256_before']==r['tool_sha256_after']==plan['tool_source_sha256']
+- counts=plan['source_counts'];assert len(plan['source_sha256'])==counts['native'] and len(plan['tool_source_sha256'])==counts['tools']==23 and counts['total']==counts['native']+23
+- expected=plan['source_sha256']|plan['tool_source_sha256']
+- assert plan['census_schema_contract']['source_sha256']==expected[plan['census_source_file']] and plan['census_schema_contract']['all_work_fields']
+- manifest=load(plan['source_manifest']['path']);assert manifest['schema']=='relative-path-sha256-v1' and manifest['graph_sha256']==plan['source_graph_sha256'] and manifest['files']==expected
+- with tarfile.open(plan['source_archive'],'r:gz') as tar:
+-  members=tar.getmembers();assert len(members)==len(expected) and len({m.name for m in members})==len(members)
+-  assert all(m.isfile() and not m.name.startswith('/') and '..' not in Path(m.name).parts and m.name in expected for m in members)
+-  assert {m.name:hashlib.sha256(tar.extractfile(m).read()).hexdigest() for m in members}==expected
+- for name,h in expected.items():pins[str(Path(plan['build_receipt']).parent/'source-before'/name)]=h
+- pins[str(P/'plan.json')]=sha(P/'plan.json')
+- assert all(sha(p)==h for p,h in pins.items())
+- reference=load(plan['strict_reference']);assert reference['status']=='pass'
+- output=Path(plan['output']);assert not output.exists();output.mkdir()
+- write(output/'plan.json',plan);write(output/'input-closure.json',pins)
+- result=dict(complete=False,failure=None,cases=[],attempted_cases=0,engine_runs=None,performance_claim=False)
+- before=cpu15();write(output/'cpu15-before.json',before)
++ plan=load(P/'plan.json');pins=admission(plan);output=Path(plan['output']);assert not output.exists();output.mkdir()
++ write(output/'input-closure.json',pins);write(output/'plan.json',plan)
++ result=dict(complete=False,failure=None,cases=[],attempted_cases=0,performance_claim=False,engine_lifetimes=0);deadline=time.monotonic()+180
+  try:
+-  for case in plan['cases']:
+-   d=output/case;d.mkdir();census=d/'census.json';assert not census.exists()
+-   input_case=next(x for x in load('/home/legolas/king-spec/conformance/profiling/workloads.json')['cases'] if x['id']==case)
+-   expected_case=next(x for x in load('/home/legolas/king-spec/conformance/profiling/replay-oracle.json')['cases'] if x['id']==case)
+-   write(d/'input-expected.json',dict(input=input_case,expected=expected_case))
+-   env=dict(os.environ);env[plan['env_key']]=str(census.resolve())
+-   argv=['/usr/bin/node','/home/legolas/king-spec/conformance/profiling/replay-check.mjs','--case',case,'--','/usr/bin/python3','/home/legolas/rook2/tools/account_native.py','--engine',plan['engine'],'--record',str((d/'native.json').resolve()),'--known-single-process']
+-   with (d/'checker.stdout').open('xb') as out,(d/'checker.stderr').open('xb') as err:
+-    child=subprocess.Popen(argv,stdout=out,stderr=err,env=env);code=child.wait()
+-   command=dict(argv=argv,pid=child.pid,actual_child_return_observed=True,exit_code=code,census_env={plan['env_key']:str(census.resolve())})
+-   write(d/'command.json',command);result['attempted_cases']+=1
+-   assert code==0 and not (d/'checker.stderr').stat().st_size
+-   report=load(d/'checker.stdout');assert report['status']=='pass' and report['selectedCases']==[case] and len(report['results'])==1
+-   row=report['results'][0];native=load(d/'native.json');ref=next(x for x in reference['results'] if x['case']==case)
+-   assert row['complete'] and row['error'] is None and not row['truncated'] and not row.get('cleanupUnconfirmed',False) and row['discardedObservedBytes']==0 and row['exit']==dict(code=0,signal=None)
+-   assert row['stdout']==ref['stdout'] and row['stderr']==ref['stderr']==''
+-   assert native['failure'] is None and native['native_exit_code']==0 and native['native_wait_status']==0 and native['native_pid']!=row['pid'] and native['supervisor_pid']==row['pid']
+-   assert native['native_pre_exec']['affinity']==native['native_post_exec']['affinity']==[14] and native['supervisor_affinity']==H and native['native_post_exec']['tasks']==[str(native['native_pid'])]
+-   assert native['engine_sha256_before']==native['engine_sha256_after']==plan['engine_sha256'] and census.is_file()
+-   assert census.stat().st_size<=plan['census_file_cap_bytes']
+-   aggregate=load(census);assert aggregate['schema']==plan['census_schema'] and aggregate['native_pid']==native['native_pid'] and aggregate['complete'] and aggregate['engine_success']
+-   for stream in ['stdout','stderr']:(d/(stream+'.raw')).write_bytes(row[stream].encode())
+-   result['cases'].append(dict(case=case,native_pid=native['native_pid'],native_exit=0,census_sha256=sha(census),checker_sha256=sha(d/'checker.stdout'),native_receipt_sha256=sha(d/'native.json'),stdout_sha256=sha(d/'stdout.raw'),stderr_sha256=sha(d/'stderr.raw')))
+-  assert result['attempted_cases']==2 and len({r['native_pid'] for r in result['cases']})==2
+-  result['engine_runs']=2
+-  after=cpu15();write(output/'cpu15-after.json',after)
+-  delta=[b-a for a,b in zip(before,after)];assert all(x>=0 for x in delta)
+-  busy=sum(delta[i] for i in [0,1,2,5,6,7]) # Disclosure only: OS activity does not invalidate counts.
+-  result['cpu15_point_delta']=delta;result['cpu15_point_nonidle_ticks']=busy
+-  assert all(sha(p)==h for p,h in pins.items())
+-  result['complete']=True
+- except BaseException as error:result['failure']=repr(error);raise
++  for case in CASES:
++   assert time.monotonic()<deadline
++   d=output/case;d.mkdir();probes=output/'probes'/case;probes.mkdir(parents=True);assert not list(probes.iterdir())
++   env=dict(os.environ)
++   assert not any(env.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','NODE_OPTIONS','LLVM_PROFILE_FILE',plan['env_key']])
++   pattern=str((probes/'native-%p.json').resolve());env[plan['env_key']]=pattern
++   argv=['/usr/bin/node',str(SPEC/'profiling/replay-check.mjs'),'--case',case,'--','/usr/bin/taskset','-c','14',plan['engine']]
++   command=dict(argv=argv,env={plan['env_key']:pattern},node_pid=None,exit_code=None,cleanup=None,owned_observations=[])
++   child=None;owned={};result['attempted_cases']+=1
++   try:
++    with (d/'checker.stdout').open('xb') as out,(d/'checker.stderr').open('xb') as err:
++     child=subprocess.Popen(argv,stdout=out,stderr=err,env=env,start_new_session=True);command['node_pid']=child.pid
++     t=identity(child.pid);assert t and t['pgid']==child.pid;owned[(t['pid'],t['start'])]=t
++     while child.poll() is None:
++      observe(child,owned);assert time.monotonic()<deadline,'overall180s deadline'
++      files=list(probes.iterdir());assert len(files)<=1 and all(x.is_file() and not x.is_symlink() and x.stat().st_size<=1048576 for x in files),'probe cap/nonregular'
++      assert (d/'checker.stdout').stat().st_size<=33554432 and (d/'checker.stderr').stat().st_size<=1048576,'wrapper report cap'
++      time.sleep(.02)
++     code=child.wait();command['exit_code']=code;command['owned_observations']=list(owned.values())
++    assert code==0 and (d/'checker.stderr').stat().st_size==0
++    row,_=replay(d/'checker.stdout',plan['engine'],case,d)
++    files=list(probes.iterdir());assert len(files)==1 and files[0].name==f"native-{row['pid']}.json" and files[0].is_file() and not files[0].is_symlink() and files[0].stat().st_size<=1048576
++    summary=counters(load(files[0]),row['pid']);assert not any(active(t) for t in owned.values())
++    result['engine_lifetimes']+=1;result['cases'].append(dict(case=case,native_pid=row['pid'],exit=row['exit'],probe=str(files[0]),probe_sha256=sha(files[0]),checker_sha256=sha(d/'checker.stdout'),summary=summary))
++   except BaseException:
++    if child is not None:command['cleanup']=stop_owned(child,owned)
++    raise
++   finally:write(d/'command.json',command)
++  assert len(result['cases'])==result['engine_lifetimes']==result['attempted_cases']==3 and [x['case'] for x in result['cases']]==CASES
++  assert len({x['native_pid'] for x in result['cases']})==3
++  assert all(sha(p)==h for p,h in pins.items());result['complete']=True
++ except BaseException as e:result['failure']=repr(e);raise
+  finally:write(output/'result.json',result)
+- print(json.dumps(dict(complete=True,cases=plan['cases'],engine_runs=2,performance_claim=False)))
++ print(json.dumps(dict(complete=True,cases=CASES,engine_lifetimes=3,performance_claim=False,output=str(output))))
+ if __name__=='__main__':main()

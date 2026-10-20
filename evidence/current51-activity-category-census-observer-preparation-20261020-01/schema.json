@@ -1,0 +1,54 @@
+{
+  "schema": "rook2-activity-category-census-v1",
+  "top_keys": [
+    "schema",
+    "pid",
+    "complete",
+    "overflow",
+    "rows"
+  ],
+  "pid": "std::process::id() actual process",
+  "rows": 32,
+  "row_dimensions": {
+    "color": [
+      0,
+      1
+    ],
+    "kind": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "source_bin": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "source_bin3": "sources>=3 per group",
+  "scalar_counters": [
+    "groups",
+    "sources",
+    "encounters",
+    "unique",
+    "repeats",
+    "shortcut_encounters",
+    "adjusted_encounters",
+    "shortcut_unique",
+    "adjusted_unique",
+    "shortcut_repeats",
+    "adjusted_repeats"
+  ],
+  "array_counters": {
+    "categories": 4,
+    "repeat_categories": 4
+  },
+  "valid": "complete true and overflow false; all partition/bin/uniqueness arithmetic representable",
+  "invalid": "complete false, overflow true for any observed counter/domain/partition invalidity",
+  "writer": "absolute UTF-8 env path, %p replaced by actualpid, create_new; fixed bounded numeric output, explicitflush",
+  "private_env": "ROOK2_ACTIVITY_CATEGORY_CENSUS_FILE",
+  "success_exit_only": true,
+  "collector_must_reject_missing_partial_or_invalid": true
+}
