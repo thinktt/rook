@@ -1,6 +1,6 @@
 # Uncertified endpoint hint at ordinary completion
 
-Status: unresolved conditional composition/admission gap,2026-10-18. This is not
+Status: unresolved conditional composition/admission gap,2026-10-20. This is not
 a demonstrated reachable engine defect or an admitted direct diagnostic case.
 The exact released-contract and own-source review hashes plus specification-only
 consultation are in `evidence/spec-empty-source-hint-20261018/`.
@@ -27,9 +27,11 @@ A preceding quiet-mate replacement is also generated. Thus the empty-source
 inherited hint is excluded in that region. In first-half nodes the effective
 lower is -10000, so this exclusion applies conditional on incoming L >= -10000;
 the wider normalized-score bound alone does not prove that caller-window premise.
-The later caller analysis below discharges it at ply1, all ordinary entries at
-ply>=3, and ply2 under restricted timed scheduling. One unrestricted ply2
-root/TT join remains unresolved.
+The caller analysis and subsequent
+[permission-sensitive score proof](permission-sensitive-search-bounds.md)
+now discharge it at every native ordinary entry, including unrestricted ply2.
+Thus this inherited, unreplaced-hint completion route is excluded throughout
+the native first half; second-half composition remains unresolved.
 In second-half nodes the quiet-mate probe is automatically disabled. The open
 branch therefore requires effectiveLower > L and every consumed candidate score
 <= effectiveLower, along with an actually reachable uncertified empty-source
@@ -336,3 +338,27 @@ The next unresolved invariant is this specific producer/permission/root-query
 join, or directly the weaker ranked-second floor. No public violating prefix,
 larger witness search, runtime check, score clamp or changed behavior is supplied
 or selected by this analysis.
+
+## 2026-10-20: permission-sensitive proof closes the first half
+
+The [subsequent source proof](permission-sensitive-search-bounds.md) closes the
+specific TT/root join left above. Its simultaneous native invariants are:
+`s<U => s>=p-10000`, `s>L => s<=10000-p`, UPPER-permitted normalized scores
+are>=-10000, and LOWER-permitted normalized scores are<=10000. The proof uses
+directional consumed endpoint bounds and a new relational frontier floor of
+-8400; it assumes neither strict windows nor genuine-mate provenance. In
+particular, oversized negative LOWER-only records cannot be treated as arbitrary
+negative returns that create a new positive LOWER record through negation.
+
+An unrestricted iteration's first two full-window root calls therefore cannot
+produce the offending positive LOWER export. Their completed ranking scores
+are>=-10000, preserving the ranked-second floor for later roots. Combined with
+the earlier caller enclosures, **every native ordinary entry has lower>=-10000**.
+First-half effectiveLower=-10000 then excludes inherited, unreplaced hints from
+normal completion learning at all plies.
+
+This supersedes only the first-half unresolved premise in the preceding dated
+analysis. Second-half effectiveLower may still exceed incoming lower; its
+conditional zero-score completion lemma, unresolved admitted hint provenance
+and other consumers remain open. No engine change, runtime check, public
+violating prefix, new behavior or qualification claim accompanies the proof.

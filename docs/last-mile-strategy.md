@@ -302,10 +302,10 @@ ending. Two completed bounded pure-key enumerations exclude its proposed
 four-piece sibling recipe with H generated at Q, covering both noncapturing
 and capturing first-root branches. Separately, a source proof discharges the
 lower-window premise for normal ordinary direct root-child completions.
-A later caller proof also closes that premise at ply>=3 and restricted timed
-ply2. The remaining first-half exception reduces to a specific positive
-LOWER-permitted TT export among an unrestricted iteration's first two roots;
-its reachability is unresolved. Second-half completion and other hint consumers
-remain open. No public
-collision witness or authority for new behavior follows; the qualification
-question remains open.
+The later caller and [permission-sensitive score proofs](research/permission-sensitive-search-bounds.md)
+close that premise at every native ordinary entry: LOWER-permitted normalized
+TT scores cannot exceed10000, excluding the last proposed first-two-root export.
+Inherited, unreplaced hints are therefore excluded from normal learning
+throughout the first half. Second-half completion and other hint consumers
+remain open. No public collision witness or authority for new behavior follows;
+the general qualification question remains open.
