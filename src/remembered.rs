@@ -522,3 +522,18 @@ mod tests {
         assert_eq!(std::mem::size_of::<Group>(), 48);
     }
 }
+
+// Test-only observation of actual stored records; not a release API/observer.
+#[cfg(test)]
+impl RememberedTable {
+    pub(crate) fn test_matching_records(&self,group:usize,identity:u32)
+        -> Vec<(i32,i32,Option<Move>,Bound,bool,bool)>
+    {
+        self.groups[group].records.iter()
+            .filter(|r|r.matches(self.generation,identity))
+            .map(|r|(r.score as i32,r.depth as i32,
+                      (r.endpoints!=0).then_some(Move(r.endpoints)),r.bound(),
+                      r.flags&QUIET_CHECKED!=0,r.flags&MARKED_DEPTH!=0))
+            .collect()
+    }
+}

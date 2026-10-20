@@ -1,85 +1,37 @@
 # Current implementation status
 
-**Retained candidate62; last-mile goal active.** Updated2026-10-20.
-Candidate numbers identify artifacts/ideas, not a count of completed trials.
-The [working agreement](docs/leadership-working-agreement-last-mile.md) assigns
-strategy and architecture to imp2-lead and implementation/execution to Imp2.
-The initial four-route functional study is closed. Imp2 is executing the next
-isolated pressure build/tests/compiler review; a checked-slider source prototype
-remains unbuilt. See the [current strategy](docs/last-mile-strategy.md).
-No last-mile source variant has replaced62.
+**Current local candidate: first-main corrected build.** Updated2026-10-20. Retained62 is preserved as the initial comparison control. This is local adoption for continuing qualification; no qualified release or external action is implied.
 
-Candidate62 keeps candidate57's native engine and diagnostic source. Its only
-promotion delta was `tools/build.py`: explicit profile-covered ExtTSP placement
-using the immutable own57 profile. It was adopted from the tested isolated-path
-artifact; no canonical-path rebuild or fresh training is claimed. The
-[build guide](docs/production-build.md) gives exact image/profile/source identities,
-relocated binary paths and the explicit recipe. A default build does not select62.
+The [working agreement](docs/leadership-working-agreement-last-mile.md) assigns strategy/architecture to imp2-lead and implementation/execution to Imp2. The optimization batch is closed. The tested first-main correction, full mandatory completion, fresh own-PGO/full54 comparison and exact-image behavioral lane are now complete. No engine/build/profile job is active. The lead owns the [review map](docs/reviews/retained62-owner-review.md), [strategy](docs/last-mile-strategy.md) and qualification dispositions; their historical62 headings retain their documented scopes until updated.
 
-| Recorded workload on Vic | Whole-native CPU seconds |
+The [adoption record](experiments/first-main-cutoff-adoption/source-promotion.json) verifies the exact three source changes: `src/ordinary.rs`, `src/remembered.rs` and new `src/ordinary/first_main_tests.rs`. The release delta is the reviewed first-main cutoff guard after existing updates. The other additions are test-only. Canonical mapped source equals the tested118-file snapshot; all52 native build inputs match its own fresh training. The separate canonical archival utility remains preserved. No canonical-path rebuild was performed.
+
+| Current paired54 observation on Vic | Summed case medians, native CPU s |
 |---|---:|
-| Complete54-case suite | **67.640360** |
-| Regular12-game collection | **675.156653** |
+| First-main corrected image `5cf01208…` | **68.569086** |
+| Exact retained62 control `01237e6d…` | **68.446861** |
 
-New62 ordinary-image checks cover the paired fixed70 screen, full54 collection
-(216 fresh lifetimes,432 offline checks,2496 posts), wire8/24 and regular12
-(48 fresh lifetimes,2528 searches,23204 posts). Existing195 native tests,
-209 diagnostic tests,7673 mandatory cases/117 operations/115 whole fixture files,
-and57 continuity/seed/persistence controls are **reused unchanged-source and
-exact-companion evidence**, not new62 executions. See the frozen
-[source promotion](/home/legolas/rook2-experiments/original-worktree/evidence/exttsp-profiled-integration-20261020-01/source-promotion.json),
-[whole54](evidence/exttsp-profiled-standard54-results-20261020-01/README.md) and
-[whole12](evidence/exttsp-profiled-games12-results-20261020-01/README.md) reports.
+Ratio1.001785692: descriptive+0.178569%,13/54 lower case medians, worst ratio1.011773436. The [full54 report](experiments/first-main-cutoff-production/README.md) retains three measured samples per image/case plus excluded warmups, all432 lifetimes,4,992 posts and864 offline checks. This compares two exact production images with their own profiles; it is neither an optimization gain nor a confidence/parity determination.
 
-Finite checks are not final qualification. Separate-window and cross-hardware
-comparisons remain descriptive; no universal Vic-to-Bee conversion is established.
-CPU15 observations and unavailable per-search values retain the reports' limits.
+Corrected-build evidence:
 
-Latest closed work:
+- [Conditional source discriminator](experiments/first-main-cutoff-correction/README.md): three actual-owner regressions; old logic fails the equality regression and passes both controls. Corrected source passes196 library tests. These supplied TT/window contexts are not admitted public/native equality witnesses.
+- [Mandatory union](experiments/first-main-cutoff-correction/mandatory-completion/README.md):115 complete mandatory files/7,673 unique cases/117 operations,209 diagnostic and2 development tests. Exact corrected DIAG is `68a1c304…`. All supervised exec/wait/raw chains pass;7671/7673 post-exec point observations exist, with two unavailable short-child observations explicitly retained.
+- [Own-PGO production](experiments/first-main-cutoff-production/README.md): each original54 trained once, native PID/profile association, independent byte-identical remerge, one profiled-only ExtTSP use build and complete paired54 comparison. Both launcher-only setup failures/repairs remain preserved; no failed native request was retried.
+- [Fresh exact-image behavioral lane](experiments/first-main-cutoff-gameplay/README.md):12 games/632 searches/5,801 posts; continuity4 segments/8 searches; standard seed11 children; persistence3; wire8 fixtures/24 searches. All33 lifetimes,99 raw streams/791,104 bytes and native identities reconcile. The unchanged original combiner yields `completeFocusedReplay:true`, `completeGameplayQualification:false`. No full12 timing claim is made.
 
-- The [three-unit functional study](experiments/functional-cost-three-unit/report.md)
-  matches all four released projections. Opening position/evaluation observations
-  are below the reference; enclosing light search is above it. Observation,
-  setup, build and host differences prevent a pure-component or production cost
-  partition. The study derivative is separately identified;62 is unchanged.
-- Experiments63–67 are parked; none replaced62. See the
-  [brief catalog](docs/performance-experiments.md) for ideas and results.
-- Whole-Activity repeats were too low to select caching. The generation-safety
-  census completed195 native tests and two exact live/offline observations;
-  checked off-mask rejections already avoid projection. It selected no new
-  optimization or speed estimate. See the
-  [census](evidence/current62-generation-safety-census-results-20261020-01/README.md).
-- Current62's modeled branch/cache study retains a strict failure: header summary
-  exceeds SELF/footer/log totals by2 simulated instructions. Its partial findings
-  do not establish hardware costs or a qualified profile.
+Latest closed optimization work:
+
+- The [three-unit functional study](experiments/functional-cost-three-unit/report.md) matches the released projections; observer/setup/build/host differences prevent a production-component cost partition.
+- [Pressure-presence](experiments/pressure-presence-compiler/README.md), [checked-slider](experiments/checked-enumeration-compiler/README.md) and [compact48 TT](experiments/compact48-tt/README.md) trials are parked after their selected screens. None replaced62; no rescue variant or further native work is selected.
+- The [TT census](experiments/current62-tt-census/README.md) is count-only evidence. Earlier63–67 trials, generation-safety and branch/cache studies retain their original dispositions in the [catalog](docs/performance-experiments.md) and historical reports; the branch/cache footer discrepancy remains a strict failure.
 
 Remaining obligations:
 
-- Complete the production-domain review, including global TT/window/score/IIO/
-  stop joins, uncertified-hint admission, remaining caller/arithmetic premises,
-  command/framing/poll/publication behavior and admitted diagnostic combinations.
-  Local source lemmas remain conditional. No admitted empty-source hint witness
-  or general fallback rule is established.
-- Qualify whole54 and whole12 performance with compatible comparisons,
-  repeatability/uncertainty and resource/private-memory/no-swap scope. Historical
-  Rust-PGO totals are63.431779s/644.222971s; raw ratios alone are not acceptance.
-  PMU remains unavailable on Vic.
-- Prepare the exact artifact/evidence handoff for the external3288-game gate.
-  Regular12 success does not pass it. No new external run, export or gate launch
-  is authorized by these notes.
+- Specification-owner production acceptance and the lead's Q1 second-half inherited-hint composition disposition remain open. The first-main rule is locally corrected and conditionally tested; finite success does not prove all admitted inputs. Reuse the existing source lemmas and current owner-review map without reopening a general proof campaign.
+- External3,288-game qualification remains off Vic. The new [local handoff](experiments/first-main-cutoff-adoption/manifest.json) binds the corrected artifacts and leaves unavailable runner/corpus/oracle/schedule/checker/operator/host/receipt fields null. This creates no transfer, READY or execution authority.
+- Compatible full54/full12 performance qualification still needs fixed comparison/resource conditions, repeatability/uncertainty and private-memory/no-swap policy. The corrected image has no qualified full12 timing; PMU remains unavailable on Vic. Cross-host/history ratios are descriptive.
 
-The authoritative detailed scopes remain in the
-[production map](docs/production-map.md), [qualification gaps](docs/qualification-gaps.md)
-and [Vic gate scope](docs/qualification-scope.md). The last-mile goal is active;
-this orientation update performs no engine work or new measurements.
+Retained62 historical checkpoint: whole54 **67.640360 CPU s** and whole12 **675.156653 CPU s** belong to retained62's earlier collection windows. They are preserved in the [old handoff](experiments/retained62-game-handoff/README.md), [source promotion](/home/legolas/rook2-experiments/original-worktree/evidence/exttsp-profiled-integration-20261020-01/source-promotion.json) and frozen reports. They are not corrected-image timings or replacements for the new paired control. The old images/profile/source archives and comparison payload remain unchanged.
 
-Historical checkpoints and raw records:
-
-The complete preceding STATUS is preserved byte-for-byte in
-[STATUS-history-20261020.md](STATUS-history-20261020.md). Its “current” headings
-refer to their original checkpoints; they do not supersede this page. Historical
-qualification/map snapshots remain indexed by the detailed documents.
-Small reports/setups remain in `evidence/`; binaries, profiles and raw streams are
-under `/home/legolas/rook2-experiments/original-worktree/evidence/`. Frozen reports
-keep their original paths and commit IDs. Use the [relocation guide](docs/evidence-layout.md)
-and history maps rather than editing frozen provenance to make paths look current.
+The preceding comprehensive status remains in [STATUS-history-20261020.md](STATUS-history-20261020.md). Closed reports retain their original claims and paths. Raw records are outside Git under `/home/legolas/rook2-experiments`; use the [evidence guide](docs/evidence-layout.md) for older relocated paths. Before-map validations describe their historical interval; verify retained62 source through the preserved old Git commit after this adoption.

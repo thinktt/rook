@@ -1,75 +1,54 @@
-# Retained production build62
+# Current local production candidate
 
-Candidate62 is the retained ordinary image, with candidate57's native engine and
-the exact57 diagnostic companion. It changes the profile-use compiler layout,
-not the native engine source. Default `tools/build.py`/Cargo builds do **not**
-select this profile or ExtTSP recipe automatically.
+The **first-main corrected build** is the current locally adopted candidate for continuing qualification. The source is the tested correction with its test additions; the existing exact ordinary and diagnostic artifacts remain at their isolated build paths. Adoption did not rebuild either artifact. Retained62 is preserved as the initial comparison control.
 
-The archive root below is `/home/legolas/rook2-experiments/original-worktree`.
-Paths in frozen records still begin `/home/legolas/rook2/evidence/`; resolve their
-missing raw files under the archive root. See [storage layout](evidence-layout.md).
+Let `corrected_root` below mean `/home/legolas/rook2-experiments/first-main-cutoff-production-20261020-01`.
 
-| Retained item | Path relative to archive root |
+| Existing item | Absolute path |
 |---|---|
-| Ordinary image | `evidence/exttsp-profiled-pgo-use-build-20261020-01/rook2-exact` |
-| Diagnostic companion | `evidence/bitplane-pin-summary-conformance-build-20261020-01/rook2-diag-exact` |
-| Own57 merged profile | `evidence/bitplane-pin-summary-pgo-training-20261020-01/merged.profdata` |
-| Training provenance | `evidence/bitplane-pin-summary-pgo-training-20261020-01/training.json` |
-
-SHA256 identities:
+| Ordinary image | `/home/legolas/rook2-experiments/first-main-cutoff-production-20261020-01/use-build/rook2-exact` |
+| Separate JSON diagnostic | `/home/legolas/rook2-experiments/first-main-cutoff-correction-20261020-01/diagnostic-target/x86_64-unknown-linux-gnu/release/rook2-diag` |
+| Own merged profile | `/home/legolas/rook2-experiments/first-main-cutoff-production-20261020-01/training/merged.profdata` |
+| Training provenance | `/home/legolas/rook2-experiments/first-main-cutoff-production-20261020-01/training/training.json` |
+| Independent training verification | `/home/legolas/rook2-experiments/first-main-cutoff-production-20261020-01/training/verification.json` |
+| Ordinary build receipt / source archive | `corrected_root/use-build/receipt.json` / `corrected_root/use-build/verified-source-before.tar.gz` |
 
 ```text
-ordinary: 01237e6dfe89822e540d0f07c7b70f7227537a846ce8c69ea9e91167b759e98d
-DIAG:     eda652abd182cb536736dd758d330f779e94b1e7ad0e779ff7792c2235fffde2
-profile:  b4806420937681c8228903507018233d7176be0333ef98881a73d34c66df3a5c
-training: bd876da38bc812d43fa2e475b9582cd8d60c6e2a32354521f8c6999c6749ad05
+ordinary: 5cf0120892065f80bbf4a22297596358bfc28c4945c86c0bf3f65d38b8bff82a
+DIAG:     68a1c304f76435e4c100086d1a303b8dc94d8b5ecd63d26be834e3737bca2dda
+profile:  fda4b7fd45465c66c6bbda9a6aa249f5bd78b5f9f1dba4d8d98170524021594c
+training: f503aeee706339450320ba580cd1d9b98c35c655996f320875062bb2a88640b4
 ```
 
-The ordinary image is7118376 bytes; DIAG is14038464 bytes; both remain mode0555.
-Retained source manifests (not the entire evolving documentation/setup tree) are
-117 files, graph`32f3da5d7713aa588b170322a9bea828975c07a79804764b0e919f08e18ebdb7`,
-and74 native/tools files, graph`9729230374cb947d3e469140f634b670edf4df6ae87d9af4ab394f5bbc4e9cd0`.
-The [source promotion](/home/legolas/rook2-experiments/original-worktree/evidence/exttsp-profiled-integration-20261020-01/source-promotion.json)
-binds these identities and finite checks. Do not silently substitute a rebuild.
+Ordinary is7,118,416 bytes; DIAG14,038,952 bytes. The [adoption manifest](../experiments/first-main-cutoff-adoption/manifest.json) binds paths, sizes, hashes, source/build/profile archives and exact evidence. Its [promotion record](../experiments/first-main-cutoff-adoption/source-promotion.json) verifies118 mapped source files and preserves the extra canonical archival utility separately. All52 native source/build inputs exactly equal the fresh training map;23 mapped tool inputs accompany them in the75-file ordinary source archive. These counts do not identify the entire evolving repository.
 
-The existing own57 profile is valid for62 because **candidate57 and62 have the
-same native engine source**. The training record contains51 engine-source file
-hashes, all matching retained62. This file count is distinct from candidate51:
-57 changed `attacks.rs` and `movegen.rs` relative to candidate51. Future native
-changes require matching training provenance; blind profile reuse is invalid.
-Frozen shorthand such as “Native51” is left intact in historical records; use
-actual manifests rather than inferring a candidate identity from that label.
+The ordinary recipe is Rust1.85.1/LLVM19.1.7, generic`target-cpu=x86-64`, target`x86_64-unknown-linux-gnu`, O3/thinLTO/one-CGU/panic-abort/debug1. A separate instrumented build trained each original54 once; all native PID/profile bindings and original replay checks passed, and independent remerge was byte-identical. The measured ordinary image then used that fresh profile with profiled-only use-stage ExtTSP and zero missing/stale warnings. DIAG is the separate generic non-PGO corrected companion used for the mandatory suite.
 
-A recipe for a **new, unvalidated rebuild** from the current matching engine is
-shown below for reference; it was not executed for this documentation update.
-The output directory must be absent, and the recorded compiler/runtime inputs
-must be available and checked before comparing artifacts.
+Default Cargo/build-helper invocations do not select this tested PGO/ExtTSP artifact automatically. The following documents a **new, unvalidated ordinary rebuild**, using the corrected source's own profile/training receipt. It was not executed during adoption. The output directory must be absent; build/runtime inputs and effective compiler settings must be verified for any new artifact.
 
 ```sh
-archive=/home/legolas/rook2-experiments/original-worktree
-python3 tools/build.py --mode generic --bin rook2 --jobs 4 \
-  --pgo-use "$archive/evidence/bitplane-pin-summary-pgo-training-20261020-01/merged.profdata" \
-  --training-record "$archive/evidence/bitplane-pin-summary-pgo-training-20261020-01/training.json" \
+corrected_root=/home/legolas/rook2-experiments/first-main-cutoff-production-20261020-01
+PATH=/usr/bin:/bin TMPDIR=/home/legolas/rook2-build-tmp \
+  taskset -c 0-5,8-13 /usr/bin/python3 tools/build.py \
+  --mode generic --bin rook2 --jobs 4 \
+  --pgo-use "$corrected_root/training/merged.profdata" \
+  --training-record "$corrected_root/training/training.json" \
   --ext-tsp-profiled \
-  --output /home/legolas/rook2-experiments/fresh62-rebuild
+  --output /home/legolas/rook2-experiments/fresh-first-main-rebuild
 ```
 
-The recorded build uses rustc1.85.1/LLVM19.1.7, O3/thinLTO/one codegen unit,
-panic-abort/debug1, target`x86_64-unknown-linux-gnu`, generic`target-cpu=x86-64`.
-The ExtTSP switch requires profile use and emits one combined LLVM value:
+The ExtTSP switch emits the single combined LLVM value:
 
 ```text
 -pgo-warn-missing-function -enable-ext-tsp-block-placement=true -ext-tsp-apply-without-profile=false
 ```
 
-Missing/stale-profile checks remain enabled. Paths, toolchain and build metadata
-can affect a new image; this recipe does not promise byte-for-byte reproduction
-or transfer the existing artifact's validation to a rebuild. The original
-[receipt](../evidence/exttsp-profiled-pgo-use-build-20261020-01/receipt.json)
-records exact compiler hashes, arguments, environment and source snapshots.
-No fresh training or canonical-path rebuild was performed when62 was retained.
+A canonical-path rebuild is a new image. Paths, toolchain and metadata can alter its bytes/profile mapping; it needs its own warning checks and validation before substitution. A source change needs corresponding training provenance. The tested artifacts were built from `/home/legolas/rook2-experiments/first-main-cutoff-correction-20261020-01/candidate`; copying those exact source bytes into canonical does not claim a canonical-path rebuild. The build receipt's `fresh_training:false` means the helper did not launch training itself; the separately recorded fresh training/profile chain is authoritative.
 
-New62 ordinary-image54/wire/regular12 checks are separate from reused195 native,
-209 diagnostic and7673 mandatory-case evidence for unchanged engine/DIAG source
-and the exact companion. Finite success is not final qualification; see
-[current status](../STATUS.md) and [remaining obligations](qualification-gaps.md).
+The [paired54](../experiments/first-main-cutoff-production/README.md) records68.569086 corrected versus68.446861 retained62 CPU s, summed per-case medians; descriptive+0.178569%. [Gameplay](../experiments/first-main-cutoff-gameplay/README.md) is a single behavioral12/632 plus focused controls and wire8/24, with a literal original combined receipt. It supplies no full12 performance result. The corrected source/DIAG evidence reuses196 library,209 diagnostic,2 development tests and7,673 mandatory cases; those checks were not repeated during local adoption.
+
+## Preserved retained62 control
+
+Retained62 ordinary `01237e6d…`, diagnostic `eda652ab…` and own57 profile `b4806420…` remain at their original relocated paths under `/home/legolas/rook2-experiments/original-worktree/evidence/`. The [unchanged retained62 handoff](../experiments/retained62-game-handoff/manifest.json) supplies complete exact identities and its old source/build/profile archives. Its native source was unchanged from57 and its existing own57 profile belongs to that old source. The corrected source uses its own `fda4b7fd…` profile above.
+
+Retained62's historical54=67.640360 CPU s and12=675.156653 CPU s are retained62 observations from their original windows. They are not measurements of the corrected build. Earlier historical statements/maps remain preserved; the new promotion record binds the old source commit and after-adoption map separately. [Current status](../STATUS.md) and the lead-owned review/qualification notes distinguish local evidence from final acceptance. No new payload copy, external transfer, READY signal or full3288 execution is authorized by this guide.

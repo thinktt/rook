@@ -1082,6 +1082,13 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                     }
                 }
             }
+            // The released first-main rule ends processing even without a strict lower raise.
+            if index == 0 && score >= request.upper {
+                if DIAGNOSTICS {
+                    self.stats.cutoffs += 1;
+                }
+                break;
+            }
             index += 1;
             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
             {
@@ -1194,3 +1201,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "ordinary/first_main_tests.rs"]
+mod first_main_tests;
