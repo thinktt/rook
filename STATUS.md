@@ -51,6 +51,17 @@ counts do not price discovery/scatter, transport or frame costs, and no single
 backend cost is asserted as the cause. See [decision evidence](evidence/influence-mask-cancel-delta-decision-20261019-01/decision.json)
 and the [finite checkpoint](evidence/influence-mask-cancel-delta-checkpoint-20261019-01/README.md).
 
+Experiment51 constructs reverse checking masks in the privately geometry-authorized
+quiescence tactical generator, preserving the public scalar helper and ordered
+pawn/capture behavior. All10 focused tests and70 original live/offline replay
+checks pass. Its fixed generic screen sums13.7175975→13.5104215 CPU seconds in
+case medians:1.510294%lower,7of7lower,worst0.991068483, meeting the declared
+advancement rule. Fresh own-source PGO instrumentation is built; training,
+independent profile verification and a separate own-PGO timing screen remain
+pending. No51 adoption, whole54/12 result or qualification is claimed.
+See [generic reconciliation](evidence/tactical-check-mask-generic-screen-20261019-01/independent-reconciliation.json)
+and [parent decision](evidence/tactical-check-mask-parent-review-20261019-01/generic-decision.json).
+
 ## Previous candidate40 static pressure lookup, 2026-10-19
 
 Candidate40 replaces37 by exact tested source115 equality after185native and

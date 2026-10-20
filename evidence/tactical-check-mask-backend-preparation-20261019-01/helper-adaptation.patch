@@ -1,0 +1,48 @@
+--- /home/legolas/rook2/evidence/influence-mask-cancel-delta-backend-preparation-20261019-01/capture.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-backend-preparation-20261019-01/capture.py
+@@ -3,7 +3,7 @@
+ import hashlib,json,os,subprocess,sys
+ P=Path(__file__).resolve().parent;E=P.parent
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+-SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('influence-mask-cancel-delta',None)}
++SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('tactical-check-mask',None)}
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def load(p):return json.loads(Path(p).read_text())
+ def save(p,j):
+@@ -25,7 +25,7 @@
+              'expected_source_counts','expected_changed_source_files','expected_added_source_files']:
+   assert plan[key] is not None,key
+  assert plan['candidate_source_freeze']['sha256'] and plan['candidate_build_terminal']
+- assert sha(E/'influence-mask-cancel-delta-generic-build-20261019-01'/'receipt.json')==plan['candidate_receipt_sha256']
++ assert sha(E/'tactical-check-mask-generic-build-20261019-01'/'receipt.json')==plan['candidate_receipt_sha256']
+  for path,h in plan['input_sha256'].items():assert sha(path)==h,path
+  for row in [plan['candidate_build_terminal'],plan['candidate_source_freeze']]:
+   assert sha(row['path'])==row['sha256'],row['path']
+@@ -97,7 +97,7 @@
+   assert row['label'] in plan['allowed_body_labels'] and row['complete_body'] is True
+   assert any(fragment in row['actual_symbol'] for fragment in plan['allowed_symbol_fragments'][row['label']])
+   assert side in ('control','candidate')
+-  if row['label'] in ('delta','fill','ray','scatter'):assert side=='candidate'
++  if row['label'] in ('native','prefix','mask-constructor','source-correction'):assert side=='candidate'
+   exact=' '.join([format(start,'016x'),format(size,'016x')])
+   symbol_rows=[]
+   nm_path=Path(plan['control_saved_metadata']['nm']['path']) if side=='control' else P/(side+'-nm.stdout')
+--- /home/legolas/rook2/evidence/influence-mask-cancel-delta-backend-preparation-20261019-01/analyze.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-backend-preparation-20261019-01/analyze.py
+@@ -6,7 +6,7 @@
+ sha=lambda b:hashlib.sha256(b).hexdigest()
+ d=load(P/'discovery.json');requests=load(P/'body-request.json');bodyproof=load(P/'bodies.json')
+ assert bodyproof['complete'] and bodyproof['all_discovery_inputs_unchanged']
+-images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-generic-build'),('candidate','influence-mask-cancel-delta-generic-build')]}
++images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-generic-build'),('candidate','tactical-check-mask-generic-build')]}
+ plan=load(P/'plan.json')
+ assert plan['launch'] is True and plan['parent_backend_activation'] is True
+ assert len(requests)<=plan['max_complete_bodies']==10
+@@ -58,6 +58,6 @@
+   functionproof[label].update(complete_machine_bytes_identical=pair['control']['machine_sha256']==pair['candidate']['machine_sha256'],size_delta=pair['candidate']['bytes']-pair['control']['bytes'])
+ sectionproof={name:{side:sections[side][name] for side in ['control','candidate']} for name in ['.text','.rodata','.data.rel.ro']}
+ assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in d['pins'].items())
+-result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual source/call-target audit required: fresh shared-ray factoring, selected-ray discovery/cancellation/scatter, final parent-map initialization versus extra temporary, ordinary transport/frame/ABI and fresh Q. No automatic speed/admission verdict.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most10 complete linked bodies and2MiB new disassembly. Reused43 evidence counts toward complete-body scope. Inlined/private/absent symbols require truthful enclosing caller provenance, never a fictitious matched delta body.','Inspect one required128B parent-map initialization separately from updater-local/return/Option copies, retained160B Position and required child/PV transfers. Real fresh no-slider behavior, masks/carries/SSE2 and new normal calls must be assessed; no dynamic copy/work savings or census-count-to-CPU inference.'])
++result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual actual-call-target audit required: normal Q geometry permission forwarding, coherent ordered tactical generator, public scalar fallback/shared pawn-prefix, opaque occupancy with source vacancy, checking-only quiet enumeration and capture order. Measure emitted setup/correction/frame/code/copy/ISA costs; no automatic speed/admission verdict.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most10 complete linked bodies and2MiB new disassembly. Reused43 evidence counts toward complete-body scope. Inlined/private/absent symbols require truthful enclosing caller provenance, never a fictitious separate native generator or mask helper.','Inspect actual rejected-quiet traversal removal versus check-mask setup/source correction/scans, preserved chronological type/source/direction/near-to-far/prefix/promotion/capture order, family/no-slider guards and fallback duplication. No supplied geometry authority is created here. No dynamic work or CPU savings inferred from static code.'])
+ with (P/'analysis.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+ print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate'] if s in v} for k,v in functionproof.items()},all_inputs_unchanged=True)))

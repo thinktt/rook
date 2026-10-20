@@ -1,0 +1,79 @@
+{
+  "complete": true,
+  "source_only": true,
+  "recommendation": "DEPRIORITIZE_INFLUENCE_DELTAS_NO_NEW_TRIAL_OR_CENSUS",
+  "alternative_algebraically_distinct": true,
+  "parent_inverse_transpose": false,
+  "persistent_parent_planes": false,
+  "arithmetic_not_instruction_counts": [
+    {
+      "weight": 1,
+      "shift": 0,
+      "plane_xor_updates_per_nonempty_mask": 8,
+      "carry_or_borrow_propagations": 7
+    },
+    {
+      "weight": 2,
+      "shift": 1,
+      "plane_xor_updates_per_nonempty_mask": 7,
+      "carry_or_borrow_propagations": 6
+    },
+    {
+      "weight": 4,
+      "shift": 2,
+      "plane_xor_updates_per_nonempty_mask": 6,
+      "carry_or_borrow_propagations": 5
+    },
+    {
+      "weight": 16,
+      "shift": 4,
+      "plane_xor_updates_per_nonempty_mask": 4,
+      "carry_or_borrow_propagations": 3
+    },
+    {
+      "weight": 64,
+      "shift": 6,
+      "plane_xor_updates_per_nonempty_mask": 2,
+      "carry_or_borrow_propagations": 1
+    }
+  ],
+  "signed_update_formula": "At each bit b>=SHIFT: next=old XOR carry; carry=(carry AND old) for addition or (carry AND NOT old) for subtraction; discard outgoing bit8.",
+  "fixed_unconditional_two_color_alternative": {
+    "zeroed_u64_counter_words": 16,
+    "forward_transposes": 2,
+    "dense_wrapping_parent_byte_additions": 128,
+    "sse2_packed_byte_adds_if_chosen": 8,
+    "per_color_butterfly_swaps": 12,
+    "per_color_swap_bit_operations_excluding_loads_stores": 72,
+    "per_color_sse2_transfers": 8,
+    "per_color_sse2_unpacks": 12,
+    "per_color_sse2_stores": 4
+  },
+  "census_cohort_comparison": {
+    "profile-35": {
+      "mathematically_eligible_census_demands": 1418354,
+      "fresh_transposes": 2836708,
+      "unconditional_delta_only_transposes": 2836708,
+      "extra_transposes": 0,
+      "fresh_counter_words": 22693664,
+      "unconditional_delta_counter_words": 22693664,
+      "unchanged_source_changed_weight_target_events": 2372111,
+      "full_mover_victim_add_target_events": 17965898,
+      "not_runtime50_counts": true
+    },
+    "profile-08": {
+      "mathematically_eligible_census_demands": 218263,
+      "fresh_transposes": 95060,
+      "unconditional_delta_only_transposes": 436526,
+      "extra_transposes": 341466,
+      "fresh_counter_words": 760480,
+      "unconditional_delta_counter_words": 3492208,
+      "unchanged_source_changed_weight_target_events": 21969,
+      "full_mover_victim_add_target_events": 3231350,
+      "not_runtime50_counts": true
+    }
+  },
+  "missing_discriminator": "Nonempty signed masks by sign/weight/per-color after cancellation plus emitted carry/transpose/add/caller costs; popcounts do not provide these. No collection or prototype requested.",
+  "native_or_profile_cost_forecast": false,
+  "old29_30_costs_transferred": false
+}
