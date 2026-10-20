@@ -39,6 +39,14 @@ fixed generic screen is0.5211075%slower,2of7lower,worst1.008355323, failing both
 advancement gates. It is [parked without retry or own-PGO](decisions/0038-zero-opponent-support-counting.md);
 candidate51's source, artifacts and whole54/12 costs remain current.
 
+Experiment54 replaces the native finalgap1 insertion/gather with a six-stream
+merge after the exact gap6 pass, preserving post-gap6 tie order and callback/
+partition semantics. The actual ordinary/Q mechanism,11focused controls and
+70original live/offline replay checks pass. Its fixed generic screen improves
+0.3250712%,7of7lower,worst0.999908553, failing the preset0.5%aggregate gate.
+It is [parked without retry or own-PGO](decisions/0039-six-stream-ordering.md).
+Candidate51's accepted source and separate whole54/12 costs remain current.
+
 ## Previous43 checkpoint and parked44–50 history
 
 The following historical evidence predates51. Its original document is preserved

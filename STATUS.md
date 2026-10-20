@@ -48,6 +48,14 @@ generic compiler emits the bypass for allfour piece kinds. Its fixed screen is
 [parked without retry, PGO or adoption](docs/decisions/0038-zero-opponent-support-counting.md).
 Candidate51's whole54/12 best times remain unchanged.
 
+Experiment54 keeps gap6 ordering and merges its six sorted streams directly
+into the native output. Actual ordinary/Q routes use the mechanism; all11focused
+controls and70original live/offline replays pass. The fixed generic screen is
+0.3250712%lower,7of7lower,worst0.999908553, below the preset0.5%aggregate gain.
+It is [parked without retry, PGO or adoption](docs/decisions/0039-six-stream-ordering.md).
+The extra helper frame, selector and small-path call costs remain recorded;
+no isolated cause or qualification claim follows.
+
 ## Previous retained candidate43 bit-sliced Influence, 2026-10-19
 
 Candidate43 replaces40 by exact equality of all115 tested source files after

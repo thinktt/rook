@@ -1,0 +1,87 @@
+--- /home/legolas/rook2/evidence/activity-zero-opponent-backend-preparation-20261020-01/capture.py
++++ /home/legolas/rook2/evidence/ordering-six-stream-backend-preparation-20261020-01/capture.py
+@@ -6,7 +6,7 @@
+ ENTERED=time.monotonic();DEADLINE=None
+ 
+ def check():
+- assert DEADLINE is not None and time.monotonic()<DEADLINE, '120s whole-capture elapsed deadline'
++ assert DEADLINE is not None and time.monotonic()<DEADLINE, '180s whole-capture elapsed deadline'
+ def read(path):
+  start=time.monotonic();chunks=[]
+  with Path(path).open('rb') as f:
+@@ -28,14 +28,15 @@
+  assert plan['launch'] is True and plan['parent_backend_activation'] is True
+  assert os.sched_getaffinity(0)==H and os.environ['PATH']=='/usr/bin:/bin' and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
+- assert plan['max_complete_bodies']==4 and plan['max_new_raw_disassembly_bytes']==1048576 and plan['per_read_or_command_wall_s']==30 and plan['total_elapsed_wall_s']==120
++ assert plan['max_complete_bodies']==12 and plan['max_new_raw_disassembly_bytes']==4194304 and plan['per_read_or_command_wall_s']==30 and plan['total_elapsed_wall_s']==180
+  if stage=='discover':
+-  DEADLINE=ENTERED+120
++  DEADLINE=ENTERED+180
+   save(P/'capture-clock.json',dict(started_monotonic=ENTERED,boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),deadline=DEADLINE))
+  else:
+   c=json.loads((P/'capture-clock.json').read_text());DEADLINE=c['deadline']
+-  assert Path('/proc/sys/kernel/random/boot_id').read_text().strip()==c['boot_id'] and DEADLINE==c['started_monotonic']+120
++  assert Path('/proc/sys/kernel/random/boot_id').read_text().strip()==c['boot_id'] and DEADLINE==c['started_monotonic']+180
+  check()
++ assert plan['allowed_body_labels']==['ordinary0','ordinary1','q0','q1','preferred','priority','order0','order1']
+  assert plan['candidate_image_sha256'] and plan['candidate_receipt_sha256'] and plan['candidate_build_terminal'] and plan['candidate_source_graph_sha256']
+  assert plan['expected_source_counts'] and plan['expected_added_native_files'] is not None and plan['candidate_source_freeze']['sha256'] and plan['runtime_sha256']
+  assert all(sha(p)==h for p,h in plan['input_sha256'].items())
+@@ -45,7 +46,7 @@
+  return plan
+ 
+ def run(argv,stem,raw_cap=1048576):
+- check();assert 0<raw_cap<=1048576
++ check();assert 0<raw_cap<=4194304
+  started=time.monotonic();failure=None
+  def cap():resource.setrlimit(resource.RLIMIT_FSIZE,(raw_cap,raw_cap))
+  with (P/(stem+'.stdout')).open('xb') as out,(P/(stem+'.stderr')).open('xb') as err:
+@@ -85,7 +86,7 @@
+  a,b=receipts.values()
+  for key in ['toolchain','mode','target_triple','target_cpu','jobs','rust_flags','build_effective_environment','cargo_config_sha256_before']:assert a[key]==b[key],key
+  assert a['tool_sha256_before']==b['tool_sha256_before'] and len(b['tool_sha256_before'])==23
+- changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'].get(n));assert changed==['src/activity.rs']
++ changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'].get(n));assert changed==['src/tactical.rs']
+  assert not (set(a['source_sha256_before'])-set(b['source_sha256_before']))
+  added=sorted(set(b['source_sha256_before'])-set(a['source_sha256_before']));assert added==plan['expected_added_native_files']
+  assert b['source_sha256_before']|b['tool_sha256_before']==freeze['files_sha256']
+@@ -97,12 +98,14 @@
+ 
+ def bodies():
+  plan=setup('bodies');d=load(P/'discovery.json');assert all(sha(p)==h for p,h in d['pins'].items())
+- request=load(P/'body-request.json');assert 2<=len(request)<=4
+- assert {(r['side'],r['label']) for r in request}>={('control','activity'),('candidate','activity')}
++ request=load(P/'body-request.json');assert 4<=len(request)<=12
++ roles={(r['side'],r['label']) for r in request}
++ assert any(all((side,label) in roles for side in ['control','candidate']) for label in ['ordinary0','ordinary1'])
++ assert any(all((side,label) in roles for side in ['control','candidate']) for label in ['q0','q1'])
+  assert len({(r['side'],r['label']) for r in request})==len(request)
+  total=0;rows=[]
+  for row in request:
+-  assert row['side'] in ['control','candidate'] and row['label'] in ['activity','full'] and row['complete_body'] is True and row['source_role']
++  assert row['side'] in ['control','candidate'] and row['label'] in ['ordinary0','ordinary1','q0','q1','preferred','priority','order0','order1'] and row['complete_body'] is True and row['source_role']
+   side=row['side'];image=Path(plan[side+'_build'])/'rook2-exact';start=int(row['start'],16);size=int(row['bytes']);assert size>0
+   selected=[]
+   for line in read(P/(side+'-nm.stdout')).decode().splitlines():
+@@ -114,8 +117,8 @@
+    fields=line.split(maxsplit=3)
+    if len(fields)==4 and fields[2] in ['t','T'] and int(fields[0],16)==start and int(fields[1],16)==size:mangled.append(fields[3])
+   assert row['actual_mangled_symbol'] in mangled
+-  result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],side+'-'+row['label'],1048576-total)
+-  total+=result['stdout_bytes'];assert total<=1048576
++  result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],side+'-'+row['label'],4194304-total)
++  total+=result['stdout_bytes'];assert total<=4194304
+   rows.append(dict(**row,command=result,raw_bytes=result['stdout_bytes']))
+  assert all(sha(p)==h for p,h in d['pins'].items())
+  save(P/'bodies.json',dict(complete=True,bodies=rows,total_raw_bytes=total,all_discovery_inputs_unchanged=True))
+--- /home/legolas/rook2/evidence/activity-zero-opponent-backend-preparation-20261020-01/analyze.py
++++ /home/legolas/rook2/evidence/ordering-six-stream-backend-preparation-20261020-01/analyze.py
+@@ -52,6 +52,6 @@
+  else:functionproof[label]['unpaired_actual_owner']=True
+ sectionproof={name:{side:sections[side][name] for side in ['control','candidate']} for name in ['.text','.rodata','.data.rel.ro']}
+ assert all(file_sha(p)==h for p,h in d['pins'].items())
+-result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual generic51-to53 complete consumer proof required: both source counts bypassed for opponent0 in actual four-kind/two-color instances, original nonzero penalty and downstream bytes/R preserved. No speed inference.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most four requested complete paired Activity/common full bodies; no Q/ordinary/root recursion or newly outlined helper body is inspected without new authority.','Opposing-zero/both-zero/nonzero branches, original count correction and later knight exemption/source relation/R, calls/copies/frame/spills/ISA require manual review. Any unexpectedly outlined arithmetic remains an explicit scope limit, not an invented body correspondence.'])
++result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual generic51-to54 ordinary/Q ordering mechanism proof required: exact stable gap6 retained; large-n final gap1 insertion shifts/gather replaced by six-head rank+1/zero-exhaustion direct output; n<=6 old path. Actual source/callback/argument/frame/call/copy costs remain required; no speed inference.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most12complete bodies/4MiB new disassembly; actual paired ordinary/Q required, additional actual preferred/priority/order helper or short fallback only within cap. No fabricated counterpart for newly outlined helpers.','Gap6, n<=6 original path, callback once/order/deferred partition and untouched public priority helper require actual source/linked-role proof. Raw frame/code/calls/stack refs are static facts, not dynamic saving estimates.','Six-head selector/rank+1/zero-exhaustion/direct output versus removed final gap1 shifts/gather must be manually established; unresolved/relocated mechanism or material unexplained cost does not authorize native tests/timing.'])
+ with (P/'analysis.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+ print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate'] if s in v} for k,v in functionproof.items()},all_inputs_unchanged=True)))
