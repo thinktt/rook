@@ -51,6 +51,15 @@ change an architectural choice, not merely fill a table.
 Meanwhile, investigate whole-path opportunities directly. Do not make a
 complete 23-unit study a prerequisite for useful source work.
 
+A [contemporary same-host comparison](../experiments/retained62-reference-pair/README.md)
+is now prepared locally for owner review: exact retained62 and approved
+generic-PGO KingRE, all54 original cases, one warmup plus three measured
+lifetimes per artifact/case, fixed paired order. The432-lifetime proposal is a
+descriptive baseline, not the unadopted final uncertainty policy. Payload
+copies and source/workload identities are verified. External transfer,
+operator contact and execution await explicit owner authority; no external
+job or new local engine run was launched for the preparation.
+
 ## Current architectural questions
 
 | Question | Current assignment / decision | Evidence needed to advance |
