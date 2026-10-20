@@ -256,3 +256,21 @@ This imports canonical coherent placement, admitted kings/inventory, the unchang
 Activity bound, strict parsing and effective parameter/lifetime ownership. It
 does not close arbitrary Rust helper arguments, stale public mutations, the whole
 evaluator subtotal or retained-cache/hint composition. No source or timing changes.
+
+## Current57 diagnostic refresh and joined evaluator capacity
+
+One exact57 original profile35 lifetime independently passes the original live/
+offline replay and SELF reconciliation at43940740008 simulated user instructions.
+Activity remains the leading recorded owner; no native timing/PMU conclusion
+follows. Four original-source annotations and the separate current transition
+body review support a bounded capture-clear question, not an adopted change.
+See [the current profile](../evidence/current57-callgrind-results-20261020-01/README.md).
+
+The [joined-capacity acceptance](../evidence/current57-evaluator-capacity-review-20261020-01/parent-acceptance.json)
+and [independent review](../evidence/current57-evaluator-capacity-independent-review-20261020-01/review.md)
+bound the named positional subtotal±114127, full base±163541 and fast base±163469,
+including intermediate additions, under the imported admitted producer/root/
+cache-origin/coherent-transition/P-G lifetime premises. Tempo is within±68;
+the conservative existing78 allowance remains valid. This closes the arithmetic
+join, not those provenance premises or TT/window/IIO/hint and global-counter
+composition. No engine source changes.
