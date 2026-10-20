@@ -43,6 +43,11 @@ study:2 simulated Ir are unattributed. A separately labeled partial postmortem
 reconciles every other event and keeps that gap unknown. It supplies hypothesis
 context, with no new native timing, candidate63 or qualification claim.
 
+Experiment63 is parked after a real same-profile build/backend review and fixed70
+comparison:0.468239353% slower overall, only1/7 cases lower. All70 original live
+and offline replays pass. No retry, full54/12 or adoption follows;62 stays current.
+See the [decision](evidence/machine-split-profiled-decision-20261020-01/README.md).
+
 ## Historical checkpoint record — preceding57 state
 
 Statements below describe their original checkpoints; current adoption is62 above.

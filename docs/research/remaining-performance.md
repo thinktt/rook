@@ -7,7 +7,8 @@ only the explicit profile-use compiler layout recipe changes. See the
 [current production map](../production-map.md) and [decision0048](../decisions/0048-exttsp-profiled-layout.md).
 
 Experiments58–61 remain parked with their original failed advancement gates.
-No63 is selected. The one current62 branch/cache capture completed its target
+Experiment63 is parked after its fixed70 screen (0.468239353%slower,1/7lower). The one current62
+branch/cache capture completed its target
 and original output checks, but the strict study is incomplete: summary has2
 simulated Ir absent from SELF/totals. All twelve other counters reconcile.
 A separately labeled partial postmortem keeps those2Ir unattributed, with exact
@@ -17,9 +18,13 @@ native CPU or causal57-to62 evidence. See the [report](../../evidence/current62-
 
 Activity and main ordinary NAME groups lead the modeled contexts; selected raw
 source tables point to ray traversal/occupancy and tactical insertion ordering.
-These are hypotheses, not removable-cost or speed predictions. A source/metadata
-feasibility review of distinct LLVM MachineFunctionSplitter cold-block placement
-alongside62ExtTSP is pending; no build, candidate or trial is selected.
+These are hypotheses, not removable-cost or speed predictions. The source/metadata
+feasibility review conditionally supports distinct LLVM MachineFunctionSplitter
+cold-block placement alongside62ExtTSP. Root selected63 with one extra direct
+enable flag, unchanged native source and the same own57 profile; private opt-in
+recipe built and the actual splitter mechanism survived emitted-code review.
+Its fixed70 screen then failed the unchanged gate; all70 live/offline replays pass.
+No retry/full54_12/promotion follows. See the [park decision](../../evidence/machine-split-profiled-decision-20261020-01/README.md).
 
 The direct/additional-ray forced capture-category bypass was checked against
 prior experiments and is an exact duplicate of parked46. Its historical fixed
