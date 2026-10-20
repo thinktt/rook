@@ -41,6 +41,13 @@ annotations and separate caller arcs guide the next experiment. These are
 diagnostic translated instructions, not native timing or qualification. See the
 [profile report](evidence/current51-callgrind-results-20261020-01/README.md).
 
+Experiment53 bypasses both support-count expansions for an opposing zero byte.
+All11 focused controls and70 original live/offline replays pass, and the actual
+generic compiler emits the bypass for allfour piece kinds. Its fixed screen is
+0.5211075%slower,2of7lower,worst1.008355323. It is
+[parked without retry, PGO or adoption](docs/decisions/0038-zero-opponent-support-counting.md).
+Candidate51's whole54/12 best times remain unchanged.
+
 ## Previous retained candidate43 bit-sliced Influence, 2026-10-19
 
 Candidate43 replaces40 by exact equality of all115 tested source files after

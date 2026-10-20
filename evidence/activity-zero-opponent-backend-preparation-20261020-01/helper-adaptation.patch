@@ -1,0 +1,256 @@
+--- /home/legolas/rook2/evidence/activity-capture-override-generic-backend-review-20261019-01/capture.py
++++ /home/legolas/rook2/evidence/activity-zero-opponent-backend-preparation-20261020-01/capture.py
+@@ -1,87 +1,123 @@
+ #!/usr/bin/env python3
+ from pathlib import Path
+-import hashlib,json,os,subprocess,sys
+-P=Path(__file__).resolve().parent;E=P.parent
++import hashlib,json,os,subprocess,sys,time,resource
++P=Path(__file__).resolve().parent
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+-SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('activity-capture-override',None)}
+-def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+-def load(p):return json.loads(Path(p).read_text())
++ENTERED=time.monotonic();DEADLINE=None
++
++def check():
++ assert DEADLINE is not None and time.monotonic()<DEADLINE, '120s whole-capture elapsed deadline'
++def read(path):
++ start=time.monotonic();chunks=[]
++ with Path(path).open('rb') as f:
++  while True:
++   check();assert time.monotonic()-start<30, '30s read deadline'
++   b=f.read(1048576)
++   if not b:break
++   chunks.append(b)
++ check();return b''.join(chunks)
++def sha(p):return hashlib.sha256(read(p)).hexdigest()
++def load(p):return json.loads(read(p))
+ def save(p,j):
++ check()
+  with Path(p).open('x') as f:json.dump(j,f,indent=2);f.write('\n')
+-def run(argv,stem):
++def setup(stage):
++ global DEADLINE
++ # Read only the local small activation plan before the timed, pinned read API.
++ start=time.monotonic();plan=json.loads((P/'plan.json').read_text());assert time.monotonic()-start<30
++ assert plan['launch'] is True and plan['parent_backend_activation'] is True
++ assert os.sched_getaffinity(0)==H and os.environ['PATH']=='/usr/bin:/bin' and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
++ assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
++ assert plan['max_complete_bodies']==4 and plan['max_new_raw_disassembly_bytes']==1048576 and plan['per_read_or_command_wall_s']==30 and plan['total_elapsed_wall_s']==120
++ if stage=='discover':
++  DEADLINE=ENTERED+120
++  save(P/'capture-clock.json',dict(started_monotonic=ENTERED,boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),deadline=DEADLINE))
++ else:
++  c=json.loads((P/'capture-clock.json').read_text());DEADLINE=c['deadline']
++  assert Path('/proc/sys/kernel/random/boot_id').read_text().strip()==c['boot_id'] and DEADLINE==c['started_monotonic']+120
++ check()
++ assert plan['candidate_image_sha256'] and plan['candidate_receipt_sha256'] and plan['candidate_build_terminal'] and plan['candidate_source_graph_sha256']
++ assert plan['expected_source_counts'] and plan['expected_added_native_files'] is not None and plan['candidate_source_freeze']['sha256'] and plan['runtime_sha256']
++ assert all(sha(p)==h for p,h in plan['input_sha256'].items())
++ assert all(sha(p)==h for p,h in plan['runtime_sha256'].items())
++ terminal=plan['candidate_build_terminal'];assert sha(terminal['path'])==terminal['sha256']
++ t=load(terminal['path']);assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['terminal_chunk_id']
++ return plan
++
++def run(argv,stem,raw_cap=1048576):
++ check();assert 0<raw_cap<=1048576
++ started=time.monotonic();failure=None
++ def cap():resource.setrlimit(resource.RLIMIT_FSIZE,(raw_cap,raw_cap))
+  with (P/(stem+'.stdout')).open('xb') as out,(P/(stem+'.stderr')).open('xb') as err:
+-  child=subprocess.Popen(argv,stdout=out,stderr=err);code=child.wait()
+- row=dict(argv=argv,pid=child.pid,actual_child_return_observed=True,exit_code=code,stdout_sha256=sha(P/(stem+'.stdout')),stderr_sha256=sha(P/(stem+'.stderr')))
+- save(P/(stem+'-command.json'),row);assert code==0,row
++  child=subprocess.Popen(argv,stdout=out,stderr=err,preexec_fn=cap)
++  try:code=child.wait(timeout=min(30,max(0.001,DEADLINE-time.monotonic())))
++  except subprocess.TimeoutExpired:
++   child.kill();code=child.wait();failure='command/aggregate deadline exceeded; stopped and reaped'
++ elapsed=time.monotonic()-started
++ # Preserve actual command/exit even when the deadline or output cap failed.
++ row=dict(argv=argv,pid=child.pid,actual_child_return_observed=True,exit_code=code,elapsed_wall_s=elapsed,failure=failure,stdout_bytes=(P/(stem+'.stdout')).stat().st_size,stderr_bytes=(P/(stem+'.stderr')).stat().st_size)
++ with (P/(stem+'-command.json')).open('x') as f:json.dump(row,f,indent=2);f.write('\n')
++ assert failure is None and code==0 and elapsed<=30 and row['stderr_bytes']==0,row
++ check();row.update(stdout_sha256=sha(P/(stem+'.stdout')),stderr_sha256=sha(P/(stem+'.stderr')))
++ # Hash record is separate so the observed terminal record is never overwritten.
++ save(P/(stem+'-output-pins.json'),{k:row[k] for k in ['stdout_sha256','stderr_sha256']})
+  return row
+ 
+-def admit():
+- plan=load(P/'plan.json')
+- assert plan['launch'] is True and plan['parent_backend_activation'] is True
+- assert os.sched_getaffinity(0)==H and os.environ['PATH']=='/usr/bin:/bin'
+- assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
+- assert plan['candidate_image_sha256'] and plan['candidate_build_terminal'] is not None
+- for path,h in plan['input_sha256'].items():assert sha(path)==h,path
+- row=plan['candidate_build_terminal'];assert sha(row['path'])==row['sha256']
+- terminal=load(row['path']);assert terminal['actual_tool_terminal_observed'] is True and terminal['exit_code']==0 and terminal['terminal_chunk_id']
+- SIDES['control']=(SIDES['control'][0],plan['control_image_sha256'])
+- SIDES['candidate']=(SIDES['candidate'][0],plan['candidate_image_sha256'])
+- return plan
+-
+ def discover():
+- plan=admit()
+- pins={str(P/'plan.json'):sha(P/'plan.json'),str(P/'capture.py'):sha(P/'capture.py'),str(P/'analyze.py'):sha(P/'analyze.py')};pins.update(plan['input_sha256']);pins[plan['candidate_build_terminal']['path']]=plan['candidate_build_terminal']['sha256'];receipts={};commands=[]
+- for side,(name,expected) in SIDES.items():
+-  build=E/(name+'-generic-build-20261019-01');image=build/'rook2-exact';receipt=load(build/'receipt.json')
+-  assert sha(image)==expected==receipt['binary_output']['sha256']
+-  assert receipt['source_sha256_before']==receipt['source_sha256_after'] and receipt['tool_sha256_before']==receipt['tool_sha256_after']
+-  assert receipt['source_identity_unchanged'] and receipt['tool_identity_unchanged'] and receipt['cargo_config_unchanged']
+-  assert receipt['mode']=='generic' and receipt['pgo']['mode']=='none'
+-  for p in [image,build/'receipt.json',build/'frozen-image.json']:
+-   pins[str(p)]=sha(p)
+-  for name2,h in (receipt['source_sha256_before']|receipt['tool_sha256_before']).items():
+-   q=build/'source-before'/name2;assert sha(q)==h;pins[str(q)]=h
+-  receipts[side]=receipt
+-  for stem,argv in [('nm',['/usr/bin/nm','-n','-S','--defined-only','--demangle',str(image)]),('nm-mangled',['/usr/bin/nm','-n','-S','--defined-only',str(image)]),('sections',['/usr/bin/readelf','-SW',str(image)]),('relocations',['/usr/bin/readelf','-rW',str(image)]),('size',['/usr/bin/size','-A',str(image)])]:
+-   commands.append(run(argv,side+'-'+stem))
++ plan=setup('discover');pins={str(P/n):sha(P/n) for n in ['capture.py','analyze.py','plan.json']};pins.update(plan['input_sha256']);pins.update(plan['runtime_sha256']);commands=[];receipts={}
++ freeze=load(plan['candidate_source_freeze']['path']);assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
++ assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
++ pins[plan['candidate_source_freeze']['path']]=plan['candidate_source_freeze']['sha256'];pins[plan['candidate_build_terminal']['path']]=plan['candidate_build_terminal']['sha256']
++ for side in ['control','candidate']:
++  build=Path(plan[side+'_build']);image=build/'rook2-exact';r=load(build/'receipt.json');receipts[side]=r
++  assert sha(image)==plan[side+'_image_sha256']==r['binary_output']['sha256']
++  if side=='candidate':assert sha(build/'receipt.json')==plan['candidate_receipt_sha256']
++  assert image.stat().st_mode&0o777==0o555
++  assert r['mode']=='generic' and r['pgo']['mode']=='none' and r['target_cpu']=='x86-64'
++  assert r['source_sha256_before']==r['source_sha256_after'] and r['tool_sha256_before']==r['tool_sha256_after']
++  assert r['source_identity_unchanged'] and r['tool_identity_unchanged'] and r['cargo_config_unchanged']
++  for p in [image,build/'receipt.json',build/'frozen-image.json']:pins[str(p)]=sha(p)
++  for n,h in (r['source_sha256_before']|r['tool_sha256_before']).items():
++   p=build/'source-before'/n;assert sha(p)==h;pins[str(p)]=h
++  for stem,argv in [('nm',['/usr/bin/nm','-n','-S','--defined-only','--demangle',str(image)]),('nm-mangled',['/usr/bin/nm','-n','-S','--defined-only',str(image)]),('sections',['/usr/bin/readelf','-SW',str(image)]),('relocations',['/usr/bin/readelf','-rW',str(image)]),('size',['/usr/bin/size','-A',str(image)])]:commands.append(run(argv,side+'-'+stem))
+  for exe in ['/usr/bin/nm','/usr/bin/objdump','/usr/bin/readelf','/usr/bin/size']:
+-  pins[exe]=sha(exe);commands.append(run([exe,'--version'],Path(exe).name+'-version'))
++  assert exe in plan['runtime_sha256'];pins[exe]=sha(exe);commands.append(run([exe,'--version'],Path(exe).name+'-version'))
+  a,b=receipts.values()
+- for key in ['toolchain','mode','target_triple','target_cpu','jobs','rust_flags','build_effective_environment','cargo_config_sha256_before']:
+-  assert a[key]==b[key],key
+- assert a['tool_sha256_before']==b['tool_sha256_before']
+- changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/activity.rs']
+- freeze=load(plan['candidate_source_freeze']['path'])
+- assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+- assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
++ for key in ['toolchain','mode','target_triple','target_cpu','jobs','rust_flags','build_effective_environment','cargo_config_sha256_before']:assert a[key]==b[key],key
++ assert a['tool_sha256_before']==b['tool_sha256_before'] and len(b['tool_sha256_before'])==23
++ changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'].get(n));assert changed==['src/activity.rs']
++ assert not (set(a['source_sha256_before'])-set(b['source_sha256_before']))
++ added=sorted(set(b['source_sha256_before'])-set(a['source_sha256_before']));assert added==plan['expected_added_native_files']
+  assert b['source_sha256_before']|b['tool_sha256_before']==freeze['files_sha256']
+- assert len(b['source_sha256_before'])==49 and len(b['tool_sha256_before'])==23
+- assert b['mode']=='generic' and b['pgo']['mode']=='none'
++ counts=dict(native=len(b['source_sha256_before']),tools=len(b['tool_sha256_before']),total=len(b['source_sha256_before'])+len(b['tool_sha256_before']));assert counts==plan['expected_source_counts']
++ assert len(a['source_sha256_before'])==51 and len(a['tool_sha256_before'])==23
+  assert all(sha(p)==h for p,h in pins.items())
+- save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,compiler_settings_equal=True,only_activity_source_changed=changed,source_files=72,native49_tools23=True))
+- print(json.dumps(dict(complete=True,commands=len(commands),pins=len(pins),only_changed=changed)))
++ save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,compiler_settings_equal=True,changed_existing_files=changed,added_files=added,candidate_source_counts=counts))
++ print(json.dumps(dict(complete=True,commands=len(commands),pins=len(pins),changed=changed,added=added)))
+ 
+ def bodies():
+- plan=admit()
+- d=load(P/'discovery.json');assert all(sha(p)==h for p,h in d['pins'].items())
+- request=load(P/'body-request.json');assert len(request)<=12
++ plan=setup('bodies');d=load(P/'discovery.json');assert all(sha(p)==h for p,h in d['pins'].items())
++ request=load(P/'body-request.json');assert 2<=len(request)<=4
++ assert {(r['side'],r['label']) for r in request}>={('control','activity'),('candidate','activity')}
++ assert len({(r['side'],r['label']) for r in request})==len(request)
+  total=0;rows=[]
+  for row in request:
+-  side=row['side'];name,_=SIDES[side];image=E/(name+'-generic-build-20261019-01')/'rook2-exact'
+-  start=int(row['start'],16);size=int(row['bytes']);assert size>0
+-  assert row['label'] in plan['allowed_body_labels'] and row['complete_body'] is True
+-  exact=' '.join([format(start,'016x'),format(size,'016x')])
+-  symbol_rows=[]
+-  for line in (P/(side+'-nm.stdout')).read_text().splitlines():
+-   parts=line.split(maxsplit=3)
+-   if len(parts)==4 and parts[2] in ['t','T'] and int(parts[0],16)==start and int(parts[1],16)==size:symbol_rows.append(parts[3])
+-  assert row['actual_symbol'] in symbol_rows,(row,symbol_rows)
+-  stem=side+'-'+row['label']
+-  result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],stem)
+-  total+=(P/(stem+'.stdout')).stat().st_size;assert total<=1048576,total
+-  rows.append(dict(**row,command=result,raw_bytes=(P/(stem+'.stdout')).stat().st_size))
++  assert row['side'] in ['control','candidate'] and row['label'] in ['activity','full'] and row['complete_body'] is True and row['source_role']
++  side=row['side'];image=Path(plan[side+'_build'])/'rook2-exact';start=int(row['start'],16);size=int(row['bytes']);assert size>0
++  selected=[]
++  for line in read(P/(side+'-nm.stdout')).decode().splitlines():
++   fields=line.split(maxsplit=3)
++   if len(fields)==4 and fields[2] in ['t','T'] and int(fields[0],16)==start and int(fields[1],16)==size:selected.append(fields[3])
++  assert row['actual_symbol'] in selected
++  mangled=[]
++  for line in read(P/(side+'-nm-mangled.stdout')).decode().splitlines():
++   fields=line.split(maxsplit=3)
++   if len(fields)==4 and fields[2] in ['t','T'] and int(fields[0],16)==start and int(fields[1],16)==size:mangled.append(fields[3])
++  assert row['actual_mangled_symbol'] in mangled
++  result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],side+'-'+row['label'],1048576-total)
++  total+=result['stdout_bytes'];assert total<=1048576
++  rows.append(dict(**row,command=result,raw_bytes=result['stdout_bytes']))
+  assert all(sha(p)==h for p,h in d['pins'].items())
+  save(P/'bodies.json',dict(complete=True,bodies=rows,total_raw_bytes=total,all_discovery_inputs_unchanged=True))
+  print(json.dumps(dict(complete=True,bodies=len(rows),raw_bytes=total)))
+-if __name__=='__main__':
+- {'discover':discover,'bodies':bodies}[sys.argv[1]]()
++if __name__=='__main__':{'discover':discover,'bodies':bodies}[sys.argv[1]]()
+--- /home/legolas/rook2/evidence/activity-capture-override-generic-backend-review-20261019-01/analyze.py
++++ /home/legolas/rook2/evidence/activity-zero-opponent-backend-preparation-20261020-01/analyze.py
+@@ -1,32 +1,34 @@
+ #!/usr/bin/env python3
+ from pathlib import Path
+ import hashlib,json,re
++from capture import setup,read,sha as file_sha
++plan=setup('analyze')
+ P=Path(__file__).resolve().parent
+-load=lambda p:json.loads(Path(p).read_text())
++load=lambda p:json.loads(read(p))
+ sha=lambda b:hashlib.sha256(b).hexdigest()
+ d=load(P/'discovery.json');requests=load(P/'body-request.json');bodyproof=load(P/'bodies.json')
+ assert bodyproof['complete'] and bodyproof['all_discovery_inputs_unchanged']
+-images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-generic-build'),('candidate','activity-capture-override-generic-build')]}
++images={side:Path(plan[side+'_build'])/'rook2-exact' for side in ['control','candidate']}
+ sections={};raw={};symbols={}
+ for side,image in images.items():
+- raw[side]=image.read_bytes();assert sha(raw[side])==d['pins'][str(image)]
++ raw[side]=read(image);assert sha(raw[side])==d['pins'][str(image)]
+  sections[side]={}
+- for line in (P/(side+'-sections.stdout')).read_text().splitlines():
++ for line in read(P/(side+'-sections.stdout')).decode().splitlines():
+   m=re.match(r'\s*\[\s*\d+\]\s+(\S+)\s+(\S+)\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)\s+',line)
+   if m:
+    name,kind,addr,offset,size=m.groups();sections[side][name]=dict(kind=kind,address=int(addr,16),offset=int(offset,16),bytes=int(size,16))
+  symbols[side]={}
+- for line in (P/(side+'-nm.stdout')).read_text().splitlines():
++ for line in read(P/(side+'-nm.stdout')).decode().splitlines():
+   m=re.match(r'([0-9a-f]+) ([0-9a-f]+) ([tT]) (.+)$',line)
+   if m:symbols[side][int(m[1],16)]=dict(bytes=int(m[2],16),name=m[4])
+ def get(side,address,size):
+- s=next(s for s in sections[side].values() if s['kind']=='PROGBITS' and s['address']<=address and address+size<=s['address']+s['bytes'])
++ s=sections[side]['.text'];assert s['kind']=='PROGBITS' and s['address']<=address and address+size<=s['address']+s['bytes']
+  offset=s['offset']+address-s['address'];return raw[side][offset:offset+size]
+ def resolve(side,instruction):
+  m=re.search(r'# ([0-9a-f]+)',instruction)
+  if not m:return None
+  slot=int(m[1],16)
+- rows=[line for line in (P/(side+'-relocations.stdout')).read_text().splitlines() if re.match(r'^0*'+format(slot,'x')+r'\s',line)]
++ rows=[line for line in read(P/(side+'-relocations.stdout')).decode().splitlines() if re.match(r'^0*'+format(slot,'x')+r'\s',line)]
+  if len(rows)!=1:return dict(slot=hex(slot),resolved=False)
+  line=rows[0]
+  if 'R_X86_64_RELATIVE' in line:
+@@ -41,7 +43,7 @@
+   assert len(matches)==1
+   r=matches[0];address=int(r['start'],16);code=get(side,address,r['bytes'])
+   assert symbols[side][address]==dict(bytes=r['bytes'],name=r['actual_symbol'])
+-  text=(P/(side+'-'+label+'.stdout')).read_text();ins=re.findall(r'^\s*([0-9a-f]+):\s+(.+)$',text,re.M)
++  text=read(P/(side+'-'+label+'.stdout')).decode();ins=re.findall(r'^\s*([0-9a-f]+):\s+(.+)$',text,re.M)
+   calls=[dict(address=a,operand=i,resolved=resolve(side,i)) for a,i in ins if re.match(r'call\s',i)]
+   refs=[dict(address=a,operand=i,resolved=resolve(side,i)) for a,i in ins if '# ' in i and resolve(side,i)]
+   pair[side]=dict(address=hex(address),bytes=r['bytes'],machine_sha256=sha(code),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',i)) for _,i in ins),call_sites=calls,resolved_RIP_references=refs,instructions=len(ins),AND_instructions=[dict(address=a,operand=i) for a,i in ins if re.match(r'and\s',i)],conditional_branches=[dict(address=a,operand=i) for a,i in ins if re.match(r'j(?!mp)[a-z]+\s',i)])
+@@ -49,7 +51,7 @@
+  if set(pair)=={'control','candidate'}:functionproof[label].update(complete_machine_bytes_identical=pair['control']['machine_sha256']==pair['candidate']['machine_sha256'],size_delta=pair['candidate']['bytes']-pair['control']['bytes'])
+  else:functionproof[label]['unpaired_actual_owner']=True
+ sectionproof={name:{side:sections[side][name] for side in ['control','candidate']} for name in ['.text','.rodata','.data.rel.ro']}
+-assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in d['pins'].items())
+-result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual generic-to-generic complete-body forced-victim dominance/lookup bypass proof required. Static branch/AND counts do not establish bypass or savings.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','Only requested complete activity/common full and actually necessary outlined classifier bodies; recursive/Q/timed owners not dumped.','Forced/unforced numerical paths, existing Queen/direct shortcuts, additional charge, empty/pawn branch costs, calls/copies/frame/spills and ISA require manual review. No transferred PGO-control finding.'])
++assert all(file_sha(p)==h for p,h in d['pins'].items())
++result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual generic51-to53 complete consumer proof required: both source counts bypassed for opponent0 in actual four-kind/two-color instances, original nonzero penalty and downstream bytes/R preserved. No speed inference.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most four requested complete paired Activity/common full bodies; no Q/ordinary/root recursion or newly outlined helper body is inspected without new authority.','Opposing-zero/both-zero/nonzero branches, original count correction and later knight exemption/source relation/R, calls/copies/frame/spills/ISA require manual review. Any unexpectedly outlined arithmetic remains an explicit scope limit, not an invented body correspondence.'])
+ with (P/'analysis.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+ print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate'] if s in v} for k,v in functionproof.items()},all_inputs_unchanged=True)))

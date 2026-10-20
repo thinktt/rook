@@ -1,0 +1,63 @@
+--- /home/legolas/rook2/evidence/activity-separated-boundary-generic-checkpoint-20261020-01/archive_checkpoint-02.py
++++ /home/legolas/rook2/evidence/activity-zero-opponent-generic-checkpoint-20261020-01/archive_checkpoint.py
+@@ -1,12 +1,12 @@
+ #!/usr/bin/env python3
+-"""Closed52 generic evidence only; stream/reopen all bytes and independently justify source duplicates."""
++"""Closed53 generic evidence only; stream/reopen all bytes and independently justify source duplicates."""
+ from pathlib import Path, PurePosixPath
+ import hashlib,json,os,stat,sys,tarfile,gzip
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-PREFIX='activity-separated-boundary-'
++PREFIX='activity-zero-opponent-'
+ DATE='-20261020-01'
+-TREES=[PREFIX+s+DATE for s in ['feasibility','parent-selection','kernel-preparation','test-preparation','parent-review','backend-preparation','generic-build','focused-preparation','focused-native-check','generic-screen-preparation','generic-screen','generic-decision']]
++TREES=[PREFIX+s+DATE for s in ['parent-selection','kernel-preparation','test-preparation','parent-review','generic-build','backend-preparation','backend-review','focused-preparation','focused-native-check','generic-screen-preparation','generic-screen','generic-decision']]
+ BUILD=ROOT/(PREFIX+'generic-build'+DATE)
+ def digest(f):
+  h=hashlib.sha256();n=0
+@@ -49,7 +49,7 @@
+  expected=receipt['source_sha256_before']|receipt['tool_sha256_before']
+  assert len(receipt['source_sha256_before'])==52 and len(receipt['tool_sha256_before'])==23 and len(expected)==75
+  source_archive=BUILD/'verified-source-before.tar.gz'
+- assert sha(source_archive)==archived['sha256']
++ assert sha(source_archive)==archived['sha256']=='e67bf131c9c8c9862d6bfd7022684d962d5a872416aa40f90a0a0196c47e5056'
+  assert archived['files']==75
+  actual={}
+  with tarfile.open(source_archive,'r:gz') as t:
+@@ -57,6 +57,7 @@
+   for member in members:
+    name=safe(member.name)
+    assert member.isfile() and name in expected and name not in actual,name
++   assert stat.S_IMODE(member.mode)==0o644,name
+    with t.extractfile(member) as stream:h,n=digest(stream)
+    assert h==expected[name] and n==member.size,name
+    original_name=(BUILD/'source-before'/name).relative_to(ROOT).as_posix()
+@@ -67,8 +68,8 @@
+  assert {name for name in originals if name.startswith(prefix)}=={prefix+name for name in expected}
+  image_name=(BUILD/'rook2-exact').relative_to(ROOT).as_posix()
+  image=originals[image_name]
+- assert image['sha256']==frozen['sha256']==receipt['binary_output']['sha256']==archived['binary_sha256']=='62c52b3d1c56c538940ae15045de60698e40a69b6ab53406226c1602a26cea09'
+- assert image['bytes']==frozen['bytes']==7092264 and image['mode']==int(frozen['mode'],8)==0o555
++ assert image['sha256']==frozen['sha256']==receipt['binary_output']['sha256']==archived['binary_sha256']=='db2bedb99752697351429b99376185b6afb5209b26460c171f3b0bce4df58b63'
++ assert image['bytes']==frozen['bytes']==7066368 and image['mode']==frozen['mode']==0o555
+  proof=dict(complete=True,source_archive=str(source_archive),source_archive_sha256=sha(source_archive),source_archive_bytes=source_archive.stat().st_size,member_count=75,all_regular=True,no_extra_or_duplicate_members=True,all_member_bytes_hashes_equal_current_source_before=True,archive_and_current_source_modes_recorded_separately=True,all_source_hashes_equal_build_before_after=True,members=actual,excluded_image=dict(path=str(BUILD/'rook2-exact'),**image),limit='Exact ELF retained externally and excluded by assignment. Source-before files are byte-exact duplicates of the included verified75-source archive; historical source archive headers normalize modes0644 while current snapshot modes are recorded separately per member. Reconstruct payload from source archive then chmod to current_source_mode. Source archive independently reopened, not receipt-only.')
+  return proof,{prefix+name for name in expected}|{image_name}
+ 
+@@ -85,8 +86,8 @@
+  write('member-manifest.json',before)
+  decision_terminal=(ROOT/(PREFIX+'generic-decision'+DATE)/'tool-terminal.json').relative_to(ROOT).as_posix()
+  assert decision_terminal in before
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_selected_regular_files_captured_except_exact76=True,files=len(before),captured_original_bytes=sum(x['bytes'] for x in before.values()),original_scope_files=len(original_before),excluded_files=76,duplicate_source_files=75,source_archive_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),decision_tool_terminal_included=decision_terminal,scope='Closed52 generic source/backend/focused13/fixed70 PARK evidence only; no ownPGO/full199/broad-suite/promotion. Referenced external runtime payloads are not expanded.'))
+- archive=HERE/'closed-activity-separated-boundary-generic.tar.gz'
++ write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_selected_regular_files_captured_except_exact76=True,files=len(before),captured_original_bytes=sum(x['bytes'] for x in before.values()),original_scope_files=len(original_before),excluded_files=76,duplicate_source_files=75,source_archive_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),decision_tool_terminal_included=decision_terminal,scope='Closed53 generic source/backend/focused native/fixed70 PARK evidence only; no ownPGO/full native/broad-suite/promotion. Referenced external runtime payloads are not expanded.'))
++ archive=HERE/'closed-activity-zero-opponent-generic.tar.gz'
+  with archive.open('xb') as raw:
+   with gzip.GzipFile(filename='',mode='wb',fileobj=raw,mtime=0) as compressed:
+    with tarfile.open(fileobj=compressed,mode='w',format=tarfile.PAX_FORMAT) as t:
+@@ -117,4 +118,4 @@
+  print((HERE/'verification.json').read_text())
+ if __name__=='__main__':
+  try:main()
+- except BaseException as error:write('failure-02.json',dict(error=repr(error),archive_attempt_preserved=True));raise
++ except BaseException as error:write('failure.json',dict(error=repr(error),archive_attempt_preserved=True));raise

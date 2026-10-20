@@ -33,6 +33,12 @@ screen is0.198734%higher CPU,2of7lower,worst1.007862818; aggregate and minimum-l
 gates fail. It is [parked without retry, PGO or adoption](decisions/0037-separated-activity-boundary.md).
 Candidate51 and its completed whole54/12 evidence remain current.
 
+Experiment53's exact opposing-zero support shortcut passes11focused controls,
+actual generic mechanism review and70original live/offline replay checks. Its
+fixed generic screen is0.5211075%slower,2of7lower,worst1.008355323, failing both
+advancement gates. It is [parked without retry or own-PGO](decisions/0038-zero-opponent-support-counting.md);
+candidate51's source, artifacts and whole54/12 costs remain current.
+
 ## Previous43 checkpoint and parked44–50 history
 
 The following historical evidence predates51. Its original document is preserved

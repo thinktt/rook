@@ -1,0 +1,9 @@
+# Experiment53 independent source-only controls
+
+Three `experiment53_` tests are frozen in `src/activity/zero_opponent_tests.rs`; parent owns module registration and combined-source freeze. No further test-source writes are planned.
+
+The exhaustive test calls each four const KIND implementations on every65536 supplied-byte pair in both color orientations. C3/T0 isolates the complete old support penalty and preserves incoming query17; independent mixed-radix division/remainder decodes uncapped normalized counts. It explicitly distinguishes both-zero subtraction2 and uncapped six-vs-five support. This is the original formula, not the proposed zero-opponent identity as oracle.
+
+The second test covers live low-mobility C0..3, explicit relative-square penalties and source-query increments, correct normalized-pawn knight exemption, non-pawn64-bit confusion, off-exemption c7 and special d7. Nonzero opponent cases use own0/opponent255, whose unfavorable relation is fixed by the released rule. The third computes actual full Activity for each kind/color on coherent FENs with eight friendly pawn blockers, independently built by coordinates. All destinations are blocked; C=T=0, no marks/destination queries, and the retained source query or knight exemption is observable. It asserts exact signed rounded pieces, pressure0, semantic R and personality/phase weighted result on custom maps.
+
+All524288 isolated +480 low-mobility calls and40 full computations are prospective test bodies, **not executed counts**. Three new declarations imply196 total/194lib+2dev against193 baseline, pending parent combined inventory. Baseline test identities and containing-file hashes are pinned separately; this owner wrote no old file or activity module declaration. No parser/formatter/compiler/test/native/profile/Git/binutils/archive operation occurred. Future runtime remains unmeasured; no speed-control readback is exposed.

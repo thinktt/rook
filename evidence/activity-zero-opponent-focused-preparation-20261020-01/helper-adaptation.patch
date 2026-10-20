@@ -1,0 +1,38 @@
+--- /home/legolas/rook2/evidence/activity-separated-boundary-focused-preparation-20261020-01/run.py
++++ /home/legolas/rook2/evidence/activity-zero-opponent-focused-preparation-20261020-01/run.py
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env python3
+-"""Focused experiment52 controls only; inert until exact parent source/build/backend admission."""
++"""Focused experiment53 controls only; inert until exact parent source/build/backend admission."""
+ from pathlib import Path
+ import hashlib, json, os, re, subprocess
+ 
+ HERE = Path(__file__).resolve().parent
+-WORK = Path('/home/legolas/rook2-work/imp2-activity-separated-boundary-20261020-01')
++WORK = Path('/home/legolas/rook2-work/imp2-activity-zero-opponent-20261020-01')
+ H = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13}
+ sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+ load = lambda path: json.loads(Path(path).read_text())
+@@ -69,10 +69,10 @@
+     library_total = plan['declarations']['library']
+     assert plan['declarations']['native'] == library_total + plan['declarations']['development']
+     assert plan['declarations']['development'] == 2
+-    new_tests = plan['experiment52_tests']
++    new_tests = plan['experiment53_tests']
+     controls = plan['existing_controls']
+-    assert len(new_tests) == plan['declarations']['new_experiment52']
+-    assert all('::experiment52_' in name for name in new_tests)
++    assert len(new_tests) == plan['declarations']['new_experiment53']
++    assert all('::experiment53_' in name for name in new_tests)
+     assert len(new_tests + controls) == len(set(new_tests + controls))
+     out = Path(plan['output'])
+     out.mkdir(exist_ok=False)
+@@ -85,7 +85,7 @@
+     env = dict(os.environ)
+     env.update(receipt['environment_overrides'])
+     try:
+-        groups = [('experiment52_', new_tests, False)] + [(name, [name], True) for name in controls]
++        groups = [('experiment53_', new_tests, False)] + [(name, [name], True) for name in controls]
+         for index, (filter_name, expected, exact) in enumerate(groups):
+             argv = ['/usr/bin/cargo', 'test', '--offline', '--locked', '--release',
+                     '--target', receipt['target_triple'], '--jobs', '4',
