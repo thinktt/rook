@@ -1,0 +1,26 @@
+--- /home/legolas/rook2/evidence/influence-bitsliced-sum-standard54-checkpoint-20261019-01/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-standard54-checkpoint-20261020-01/archive_checkpoint.py
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env python3
+-"""Closed43 whole54 trees only; no exclusions, deterministic gzip/full reopen/original recheck."""
++"""Closed51 whole54 trees only; no exclusions, deterministic gzip/full reopen/original recheck."""
+ from pathlib import Path
+ import gzip,hashlib,json,os,stat,sys,tarfile
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-TREES=['influence-bitsliced-sum-standard54-preparation-20261019-01','influence-bitsliced-sum-standard54-20261019-01']
++TREES=['tactical-check-mask-standard54-preparation-20261020-01','tactical-check-mask-standard54-20261020-01']
+ EXACT_EXCLUSIONS={}
+ DUPLICATE_PREFIX=None
+ def digest(f):
+@@ -49,8 +49,8 @@
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  before,excluded=inventory();write('member-manifest.json',before);write('excluded-members.json',excluded)
+- write('scope.json',dict(complete_closed_trees=TREES,exact_exclusions=EXACT_EXCLUSIONS,duplicate_prefix=DUPLICATE_PREFIX,external_payload_expansion=False,own_checkpoint_excluded=True,files=len(before),excluded_files=len(excluded),original_bytes=sum(x['bytes'] for x in before.values()),scope='Complete closed43 whole54 raw/method/report preservation; no omissions or external payload expansion; not self-contained runtime deployment or qualification'))
+- archive=HERE/'closed-influence-bitsliced-sum-standard54.tar.gz'
++ write('scope.json',dict(complete_closed_trees=TREES,exact_exclusions=EXACT_EXCLUSIONS,duplicate_prefix=DUPLICATE_PREFIX,external_payload_expansion=False,own_checkpoint_excluded=True,files=len(before),excluded_files=len(excluded),original_bytes=sum(x['bytes'] for x in before.values()),scope='Complete closed51 whole54 raw/method/report preservation; no omissions or external payload expansion; not self-contained runtime deployment or qualification'))
++ archive=HERE/'closed-tactical-check-mask-standard54.tar.gz'
+  with archive.open('xb') as raw:
+   with gzip.GzipFile(filename='',mode='wb',compresslevel=6,fileobj=raw,mtime=0) as gz:
+    with tarfile.open(fileobj=gz,mode='w|',format=tarfile.PAX_FORMAT) as t:

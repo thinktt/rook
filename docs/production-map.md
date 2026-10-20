@@ -14,8 +14,10 @@ native/tools graph05a848bb, combined graph3b816cf8, own-PGO48ee57b1/profile1ce0e
 and diagnostic38c3025d. Fresh193/209 tests, all7673 original mandatory cases across
 117operations/115files, optimized54/eight-wire24 and regular12/632 plus continuity8,
 seed11 and persistence3 independently pass. Generic and own-PGO fixed70 screens
-improve1.510294% and1.573704%, all7 cases lower. Whole51 timing is pending;
-43's whole54/12 remain the latest completed cost windows. Exact isolated images
+improve1.510294% and1.573704%, all7 cases lower. Whole51 standard54 independently closes at69.417194whole CPU seconds,
+0.562211%lower than43's separate69.809672window (39lower/15higher medians).
+CPU15 showed58 nonidle ticks, so no exclusive guest/host condition is claimed.
+Whole51 12 timing is pending;43's701.276947 remains the completed whole12 window. Exact isolated images
 are retained, without a canonical rebuild claim. [Decision0036](decisions/0036-tactical-check-masks.md)
 records local check-mask ownership. The bounded [production review](../evidence/tactical-check-mask-production-review-20261020-01/review.md)
 accepts this consumer under inherited coherent-placement premises; existing

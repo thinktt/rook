@@ -15,8 +15,10 @@ permission creator, numerical search policy or semantic charge changes.
 Generic fixed70 improves1.510294%; fresh own-source PGO fixed70 improves1.573704%,
 all7 cases lower in each. Ordinary48ee57b1/profile1ce0e391 and diagnostic38c3025d
 are the exact isolated tested artifacts; source promotion claims no canonical
-rebuild. Full51 whole54/12 timing is pending. Best completed whole54 remains
-43's69.809672 CPU seconds; best completed whole12 remains43's701.276947.
+rebuild. Full51 whole54 independently reconciles216 lifetimes/432 offline checks at
+69.417194 whole-native CPU seconds (69.050 search),0.562211%lower than43's separate
+window; the latest best whole54 is51's69.417194. Whole51 12 timing remains pending;
+best completed whole12 remains43's701.276947.
 Final performance qualification, inherited production-domain review and external
 3288 gameplay remain open. See [source promotion](evidence/tactical-check-mask-integration-20261020-01/source-promotion.json),
 [own-PGO screen](evidence/tactical-check-mask-pgo-screen-20261020-01/independent-reconciliation.json)
