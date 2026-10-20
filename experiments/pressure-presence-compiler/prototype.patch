@@ -1,0 +1,842 @@
+diff --git a/src/activity.rs b/src/activity.rs
+index 78d5cecc..af0097e6 100644
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -5,6 +5,10 @@ use crate::influence::{
+ };
+ use crate::position::{Phase, Position};
+ use crate::types::{Color, Piece, PieceKind, Square};
++use std::arch::x86_64::{
++    _mm_add_epi8, _mm_and_si128, _mm_cvtsi128_si64, _mm_sad_epu8, _mm_set1_epi8,
++    _mm_set_epi64x, _mm_setzero_si128, _mm_srli_epi16, _mm_srli_si128, _mm_sub_epi8,
++};
+ 
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+ pub struct Activity {
+@@ -81,6 +85,10 @@ const CURVE: [u8; 120] = [
+     28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 33, 33, 33,
+     33, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36,
+ ];
++// One color/kind at a time: weak and strong presence across all its pieces.
++type Presence = [u64; 2];
++
++#[cfg(test)]
+ type Marks = [[u8; 64]; 2];
+ 
+ #[derive(Clone, Copy, Debug, Default)]
+@@ -99,59 +107,67 @@ pub fn compute(
+ ) -> Activity {
+     debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+     let phase = position.phase();
+-    let mut marks = [[0u8; 64]; 2];
+     let mut raw_scores = [0i64; 2];
++    let mut pressure = [0i32; 2];
+     let mut relation_queries = 0;
+     for color in [Color::White, Color::Black] {
+         let values = &DESTINATION_VALUES[color.index()];
+-        accumulate_kind::<1>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<2>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<3>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<4>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
++        let counts = &position.counts[color.index()];
++        let king = position.piece_squares(color.opponent(), PieceKind::King)[0];
++        let mut raw_pressure = 0;
++        if counts[PieceKind::Knight.index()] != 0 {
++            let mut presence = [0; 2];
++            accumulate_kind::<1>(
++                position, influence, color, values, &mut presence, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++            raw_pressure += presence_pressure::<1>(
++                &presence, knight_pressure_mask(position, color, king),
++            );
++        }
++        // Construct each slider family only when first consumed. The queen
++        // reuses B/R visibility, or constructs the missing family after its
++        // own destination loop. No visibility enters a destination call.
++        let mut diagonal = 0;
++        if counts[PieceKind::Bishop.index()] != 0 {
++            let mut presence = [0; 2];
++            accumulate_kind::<2>(
++                position, influence, color, values, &mut presence, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++            diagonal = slider_pressure_mask(position, color, king, &DIRECTIONS[..4]);
++            raw_pressure += presence_pressure::<2>(&presence, diagonal);
++        }
++        let mut orthogonal = 0;
++        if counts[PieceKind::Rook.index()] != 0 {
++            let mut presence = [0; 2];
++            accumulate_kind::<3>(
++                position, influence, color, values, &mut presence, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++            orthogonal = slider_pressure_mask(position, color, king, &DIRECTIONS[4..]);
++            raw_pressure += presence_pressure::<3>(&presence, orthogonal);
++        }
++        if counts[PieceKind::Queen.index()] != 0 {
++            let mut presence = [0; 2];
++            accumulate_kind::<4>(
++                position, influence, color, values, &mut presence, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++            if counts[PieceKind::Bishop.index()] == 0 {
++                diagonal = slider_pressure_mask(position, color, king, &DIRECTIONS[..4]);
++            }
++            if counts[PieceKind::Rook.index()] == 0 {
++                orthogonal = slider_pressure_mask(position, color, king, &DIRECTIONS[4..]);
++            }
++            raw_pressure += presence_pressure::<4>(&presence, diagonal | orthogonal);
++        }
++        pressure[color.opponent().index()] = (raw_pressure - 12).max(0);
+     }
+     let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
+     Activity {
+         pieces,
+-        pressure: [
+-            king_pressure(position, Color::White, &marks),
+-            king_pressure(position, Color::Black, &marks),
+-        ],
++        pressure,
+         weighted: weighted(pieces, material_score, weights, phase),
+         relation_queries,
+     }
+@@ -163,7 +179,7 @@ fn accumulate_kind<const KIND: usize>(
+     influence: &Influence,
+     color: Color,
+     values: &'static DestinationValues,
+-    marks: &mut Marks,
++    presence: &mut Presence,
+     endgame: u16,
+     score: &mut i64,
+     queries: &mut u64,
+@@ -171,7 +187,7 @@ fn accumulate_kind<const KIND: usize>(
+     let kind = PieceKind::ALL[KIND];
+     for &source in position.piece_squares(color, kind) {
+         let values = piece_destination_values::<KIND>(position, color, values);
+-        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
++        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, presence);
+         let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+         *score += piece;
+         *queries += work;
+@@ -236,6 +252,12 @@ fn direct_category(
+     capture_priority(kind, victim, category)
+ }
+ 
++#[inline]
++fn record_presence(presence: &mut Presence, target: Square, category: i64) {
++    presence[usize::from(category >= 2)] |= 1u64 << target.0;
++}
++
++#[cfg(test)]
+ #[inline]
+ fn mark(marks: &mut Marks, color: Color, kind: PieceKind, target: Square, category: i64) {
+     let bit = 2 * (kind.index() - 1) + usize::from(category >= 2);
+@@ -272,7 +294,7 @@ fn destinations_kind<const KIND: usize>(
+     color: Color,
+     source: Square,
+     values: &[u8; 64],
+-    marks: &mut Marks,
++    presence: &mut Presence,
+ ) -> Mobility {
+     let kind = PieceKind::ALL[KIND];
+     let mut result = Mobility::default();
+@@ -288,7 +310,7 @@ fn destinations_kind<const KIND: usize>(
+             let category = direct_category(influence, color, kind, target, victim);
+             result.categories += category;
+             result.total += category * values[target.0 as usize] as i64;
+-            mark(marks, color, kind, target, category);
++            record_presence(presence, target, category);
+         }
+         return result;
+     }
+@@ -322,7 +344,7 @@ fn destinations_kind<const KIND: usize>(
+                 } else {
+                     let category = direct_category(influence, color, kind, target, victim);
+                     result.categories += category;
+-                    mark(marks, color, kind, target, category);
++                    record_presence(presence, target, category);
+                     category
+                 };
+                 let value = values[target.0 as usize];
+@@ -395,17 +417,28 @@ fn destinations(
+     source: Square,
+     marks: &mut Marks,
+ ) -> Mobility {
+-    match kind {
++    let mut presence = [0; 2];
++    let mobility = match kind {
+         PieceKind::Knight => destinations_kind::<1>(position, influence, color, source,
+-            piece_destination_values::<1>(position, color, &DESTINATION_VALUES[color.index()]), marks),
++            piece_destination_values::<1>(position, color, &DESTINATION_VALUES[color.index()]), &mut presence),
+         PieceKind::Bishop => destinations_kind::<2>(position, influence, color, source,
+-            piece_destination_values::<2>(position, color, &DESTINATION_VALUES[color.index()]), marks),
++            piece_destination_values::<2>(position, color, &DESTINATION_VALUES[color.index()]), &mut presence),
+         PieceKind::Rook => destinations_kind::<3>(position, influence, color, source,
+-            piece_destination_values::<3>(position, color, &DESTINATION_VALUES[color.index()]), marks),
++            piece_destination_values::<3>(position, color, &DESTINATION_VALUES[color.index()]), &mut presence),
+         PieceKind::Queen => destinations_kind::<4>(position, influence, color, source,
+-            piece_destination_values::<4>(position, color, &DESTINATION_VALUES[color.index()]), marks),
++            piece_destination_values::<4>(position, color, &DESTINATION_VALUES[color.index()]), &mut presence),
+         _ => unreachable!("non-activity piece"),
++    };
++    // Preserve the existing destination tests' byte observations while they
++    // exercise the new producer. The independent old producer is test-only.
++    for (label, mut targets) in presence.into_iter().enumerate() {
++        while targets != 0 {
++            let target = targets.trailing_zeros() as usize;
++            targets &= targets - 1;
++            marks[color.index()][target] |= 1 << (2 * (kind.index() - 1) + label);
++        }
+     }
++    mobility
+ }
+ #[cfg(test)]
+ fn piece_score(
+@@ -425,7 +458,80 @@ fn piece_score(
+     }
+ }
+ 
++#[inline]
++fn slider_pressure_mask(
++    position: &Position,
++    attacker: Color,
++    king: Square,
++    directions: &[(i8, i8)],
++) -> u64 {
++    let mut visible = 0;
++    for &step in directions {
++        let mut cursor = king;
++        while let Some(target) = cursor.offset(step.0, step.1) {
++            let piece = position.board[target.0 as usize];
++            if !piece.is_empty() && piece.color() == attacker {
++                break;
++            }
++            visible |= 1u64 << target.0;
++            if !piece.is_empty() {
++                break;
++            }
++            cursor = target;
++        }
++    }
++    visible
++}
++
++#[inline]
++fn knight_pressure_mask(position: &Position, attacker: Color, king: Square) -> u64 {
++    let mut visible = 0;
++    for step in KNIGHT {
++        if let Some(target) = king.offset(step.0, step.1) {
++            let piece = position.board[target.0 as usize];
++            if piece.is_empty() || piece.color() == attacker.opponent() {
++                visible |= 1u64 << target.0;
++            }
++        }
++    }
++    visible
++}
++
++#[inline]
++fn presence_pressure<const KIND: usize>(presence: &Presence, visible: u64) -> i32 {
++    // SAFETY: SSE2 is baseline on the x86-64 target, as in influence/coherent.
++    // These intrinsics operate only on values, without pointer/alignment
++    // preconditions. Word shifts may cross a byte boundary, but the following
++    // 0x55/0x33/0x0f masks discard those bits. Each final byte is in 0..=8;
++    // SAD against zero therefore sums each independent eight-byte half.
++    unsafe {
++        let mut counts = _mm_set_epi64x(
++            (presence[1] & visible) as i64, (presence[0] & visible) as i64,
++        );
++        counts = _mm_sub_epi8(
++            counts, _mm_and_si128(_mm_srli_epi16::<1>(counts), _mm_set1_epi8(0x55)),
++        );
++        counts = _mm_add_epi8(
++            _mm_and_si128(counts, _mm_set1_epi8(0x33)),
++            _mm_and_si128(_mm_srli_epi16::<2>(counts), _mm_set1_epi8(0x33)),
++        );
++        counts = _mm_and_si128(
++            _mm_add_epi8(counts, _mm_srli_epi16::<4>(counts)), _mm_set1_epi8(0x0f),
++        );
++        let sums = _mm_sad_epu8(counts, _mm_setzero_si128());
++        let weak = _mm_cvtsi128_si64(sums) as i32;
++        let strong = _mm_cvtsi128_si64(_mm_srli_si128::<8>(sums)) as i32;
++        if KIND == PieceKind::Knight.index() {
++            16 * weak + 24 * strong
++        } else {
++            8 * weak + 16 * strong
++        }
++    }
++}
++
++// Retain the independent byte consumer for differential tests.
+ // Each mark bit contributes independently; every sum is at most 112.
++#[cfg(test)]
+ static PRESSURE_VALUES: [u8; 256] = {
+     let weights = [16u8, 24, 8, 16, 8, 16, 8, 16];
+     let mut values = [0u8; 256];
+@@ -446,10 +552,12 @@ static PRESSURE_VALUES: [u8; 256] = {
+ };
+ 
+ #[inline]
++#[cfg(test)]
+ fn pressure_value(mark: u8) -> i32 {
+     i32::from(PRESSURE_VALUES[usize::from(mark)])
+ }
+ 
++#[cfg(test)]
+ fn king_pressure(position: &Position, defender: Color, marks: &Marks) -> i32 {
+     let source = position.piece_squares(defender, PieceKind::King)[0];
+     let attacker = defender.opponent();
+@@ -508,6 +616,10 @@ fn weighted(pieces: [i32; 2], material_score: i32, weights: [i32; 2], phase: Pha
+         .div_euclid(4096)) as i32
+ }
+ 
++#[cfg(test)]
++#[path = "activity/pressure_presence_tests.rs"]
++mod pressure_presence_tests;
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/src/activity/pressure_presence_tests.rs b/src/activity/pressure_presence_tests.rs
+new file mode 100644
+index 00000000..319598a4
+--- /dev/null
++++ b/src/activity/pressure_presence_tests.rs
+@@ -0,0 +1,500 @@
++//! Pressure-boundary differential controls. The byte producer below is the
++//! pre-prototype scalar loop; it does not call the presence producer/reducer.
++//! Shared classification/scoring helpers are unchanged by this experiment.
++use super::*;
++
++fn square(text: &str) -> Square {
++    Square::parse(text).unwrap()
++}
++
++fn position(placement: &str) -> Position {
++    Position::from_fen(&format!("{placement} w - - 0 1")).unwrap()
++}
++
++fn next_random(state: &mut u64) -> u64 {
++    *state ^= *state << 13;
++    *state ^= *state >> 7;
++    *state ^= *state << 17;
++    *state
++}
++
++fn from_board(board: &[Piece; 64]) -> Position {
++    let mut rows = Vec::new();
++    for rank in (0..8).rev() {
++        let mut row = String::new();
++        let mut empty = 0u8;
++        for file in 0..8 {
++            let piece = board[rank * 8 + file];
++            if piece.is_empty() {
++                empty += 1;
++            } else {
++                if empty != 0 {
++                    row.push(char::from(b'0' + empty));
++                    empty = 0;
++                }
++                row.push(piece.fen_char());
++            }
++        }
++        if empty != 0 {
++            row.push(char::from(b'0' + empty));
++        }
++        rows.push(row);
++    }
++    position(&rows.join("/"))
++}
++
++// Original byte-producing destination loop, retained independently of the
++// new destinations_kind and record_presence. Additional rays do not mark.
++fn byte_destinations<const KIND: usize>(
++    position: &Position,
++    influence: &Influence,
++    color: Color,
++    source: Square,
++    values: &[u8; 64],
++    marks: &mut Marks,
++) -> Mobility {
++    let kind = PieceKind::ALL[KIND];
++    let mut result = Mobility::default();
++    if kind == PieceKind::Knight {
++        let targets = &KNIGHT_SOURCES[source.0 as usize];
++        for &target in &targets.squares[..targets.len as usize] {
++            debug_assert!(target < 64);
++            let target = Square(target & 63);
++            let victim = position.board[target.0 as usize];
++            if !victim.is_empty() && victim.color() == color {
++                continue;
++            }
++            let category = direct_category(influence, color, kind, target, victim);
++            result.categories += category;
++            result.total += category * values[target.0 as usize] as i64;
++            mark(marks, color, kind, target, category);
++        }
++        return result;
++    }
++    let directions = match kind {
++        PieceKind::Bishop => 0..4,
++        PieceKind::Rook => 4..8,
++        PieceKind::Queen => 0..8,
++        _ => unreachable!("non-activity piece"),
++    };
++    for direction in directions {
++        let step = DIRECTIONS[direction];
++        let mut additional = false;
++        let ray = &ATTACK_RAYS.0[source.0 as usize][direction];
++        for &target in &ray.squares[..ray.len as usize] {
++            debug_assert!(target < 64);
++            let target = Square(target & 63);
++            let victim = position.board[target.0 as usize];
++            let friendly = !victim.is_empty() && victim.color() == color;
++            if !friendly {
++                let category = if additional {
++                    result.queries += 1;
++                    capture_priority(
++                        kind,
++                        victim,
++                        relation(
++                            influence.code(color, target),
++                            influence.code(color.opponent(), target),
++                            kind,
++                        ) as i64,
++                    )
++                } else {
++                    let category = direct_category(influence, color, kind, target, victim);
++                    result.categories += category;
++                    mark(marks, color, kind, target, category);
++                    category
++                };
++                let value = values[target.0 as usize];
++                let vertical = if kind == PieceKind::Rook && step.0 == 0 {
++                    2
++                } else {
++                    1
++                };
++                result.total += category * value as i64 * vertical;
++            }
++            if !victim.is_empty() {
++                if !transparent(color, kind, step, victim) {
++                    break;
++                }
++                additional = true;
++            }
++        }
++    }
++    result
++}
++
++fn byte_accumulate<const KIND: usize>(
++    position: &Position,
++    influence: &Influence,
++    color: Color,
++    marks: &mut Marks,
++    endgame: u16,
++    score: &mut i64,
++    queries: &mut u64,
++) {
++    for &source in position.piece_squares(color, PieceKind::ALL[KIND]) {
++        let values = piece_destination_values::<KIND>(
++            position, color, &DESTINATION_VALUES[color.index()],
++        );
++        let mobility = byte_destinations::<KIND>(position, influence, color, source, values, marks);
++        let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
++        *score += piece;
++        *queries += work;
++    }
++}
++
++fn byte_compute(
++    position: &Position,
++    influence: &Influence,
++    material_score: i32,
++    weights: [i32; 2],
++) -> Activity {
++    let phase = position.phase();
++    let mut marks = [[0; 64]; 2];
++    let mut scores = [0i64; 2];
++    let mut relation_queries = 0;
++    for color in [Color::White, Color::Black] {
++        byte_accumulate::<1>(position, influence, color, &mut marks, phase.endgame,
++            &mut scores[color.index()], &mut relation_queries);
++        byte_accumulate::<2>(position, influence, color, &mut marks, phase.endgame,
++            &mut scores[color.index()], &mut relation_queries);
++        byte_accumulate::<3>(position, influence, color, &mut marks, phase.endgame,
++            &mut scores[color.index()], &mut relation_queries);
++        byte_accumulate::<4>(position, influence, color, &mut marks, phase.endgame,
++            &mut scores[color.index()], &mut relation_queries);
++    }
++    let pieces = scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
++    Activity {
++        pieces,
++        pressure: [
++            king_pressure(position, Color::White, &marks),
++            king_pressure(position, Color::Black, &marks),
++        ],
++        weighted: weighted(pieces, material_score, weights, phase),
++        relation_queries,
++    }
++}
++
++fn check_activity(position: &Position, influence: &Influence, material: i32, weights: [i32; 2]) {
++    let expected = byte_compute(position, influence, material, weights);
++    let actual = compute(position, influence, material, weights);
++    assert_eq!(actual, expected);
++    assert_eq!(
++        crate::shelter::compute(position, influence, actual.pressure, material, weights),
++        crate::shelter::compute(position, influence, expected.pressure, material, weights),
++    );
++}
++
++fn check_pair(presence: Presence, visible: u64) {
++    let weak = (presence[0] & visible).count_ones() as i32;
++    let strong = (presence[1] & visible).count_ones() as i32;
++    assert_eq!(presence_pressure::<1>(&presence, visible), 16 * weak + 24 * strong);
++    let sliders = 8 * weak + 16 * strong;
++    assert_eq!(presence_pressure::<2>(&presence, visible), sliders);
++    assert_eq!(presence_pressure::<3>(&presence, visible), sliders);
++    assert_eq!(presence_pressure::<4>(&presence, visible), sliders);
++}
++
++#[test]
++fn packed_presence_reduction_matches_scalar_counts_and_lane_boundaries() {
++    for presence in [[0, 0], [u64::MAX, 0], [0, u64::MAX], [u64::MAX; 2],
++        [1, 1 << 63], [1 << 63, 1], [0x8080_8080_8080_8080, 0x0101_0101_0101_0101]] {
++        check_pair(presence, u64::MAX);
++        check_pair(presence, 0);
++    }
++    // Every byte pattern in every byte lane, with different opposite-half
++    // data and mask patterns, detects contamination across either boundary.
++    for lane in 0..8 {
++        for byte in 0u64..256 {
++            let presence = [byte << (8 * lane), (255 - byte) << (8 * (7 - lane))];
++            for visible in [u64::MAX, 0x5555_5555_5555_5555, 0xaaaa_aaaa_aaaa_aaaa] {
++                check_pair(presence, visible);
++            }
++        }
++    }
++    let mut random = 0x82ca_f951_1e37_64bdu64;
++    for _ in 0..4096 {
++        let presence = [next_random(&mut random), next_random(&mut random)];
++        check_pair(presence, next_random(&mut random));
++    }
++}
++
++#[test]
++fn presence_union_preserves_zero_coexisting_labels_and_same_kind_duplicates() {
++    let target = square("d5");
++    let mut presence = [0; 2];
++    record_presence(&mut presence, target, 0);
++    record_presence(&mut presence, target, 1);
++    record_presence(&mut presence, target, 2);
++    record_presence(&mut presence, target, 3);
++    record_presence(&mut presence, target, 2);
++    let bit = 1u64 << target.0;
++    assert_eq!(presence, [bit, bit]);
++    assert_eq!(presence_pressure::<1>(&presence, bit), 40);
++    assert_eq!(presence_pressure::<3>(&presence, bit), 24);
++
++    let pos = position("k7/8/8/8/8/r6r/8/3K4");
++    let influence = Influence { profiles: [[0; 64]; 2] };
++    let result = compute(&pos, &influence, 0, [1024; 2]);
++    // Strong rook marks at a1, d3 and h1; d3 is marked by both rooks.
++    assert_eq!(result.pressure, [36, 0]);
++    assert_eq!(result, byte_compute(&pos, &influence, 0, [1024; 2]));
++}
++
++#[test]
++fn scalar_visibility_covers_every_king_ray_blocker_and_knight_admission() {
++    let template = position("7k/8/8/8/8/8/8/K7");
++    for attacker in [Color::White, Color::Black] {
++        for source in 0..64 {
++            let king = Square(source);
++            for step in DIRECTIONS {
++                let mut targets = Vec::new();
++                let mut cursor = king;
++                while let Some(target) = cursor.offset(step.0, step.1) {
++                    targets.push(target);
++                    cursor = target;
++                }
++                // This private geometry test varies every canonical occupant,
++                // including synthetic second kings; complete tests below use
++                // admitted placements. Cached planes/lists are irrelevant.
++                let mut pos = template;
++                pos.board = [Piece::EMPTY; 64];
++                pos.board[source as usize] = Piece::new(attacker.opponent(), PieceKind::King);
++                let all = targets.iter().fold(0u64, |mask, target| mask | (1u64 << target.0));
++                assert_eq!(slider_pressure_mask(&pos, attacker, king, &[step]), all);
++                for stop in 0..targets.len() {
++                    for color in [attacker, attacker.opponent()] {
++                        for kind in PieceKind::ALL {
++                            let mut blocked = pos;
++                            blocked.board[targets[stop].0 as usize] = Piece::new(color, kind);
++                            if stop + 1 < targets.len() {
++                                blocked.board[targets[stop + 1].0 as usize] =
++                                    Piece::new(attacker.opponent(), PieceKind::Queen);
++                            }
++                            let included = stop + usize::from(color != attacker);
++                            let expected = targets[..included].iter()
++                                .fold(0u64, |mask, target| mask | (1u64 << target.0));
++                            assert_eq!(slider_pressure_mask(&blocked, attacker, king, &[step]),
++                                expected, "king={king} step={step:?} stop={stop} piece={color:?}/{kind:?}");
++                        }
++                    }
++                }
++            }
++            let mut pos = template;
++            pos.board = [Piece::EMPTY; 64];
++            let targets: Vec<_> = KNIGHT.into_iter()
++                .filter_map(|step| king.offset(step.0, step.1)).collect();
++            let all = targets.iter().fold(0u64, |mask, target| mask | (1u64 << target.0));
++            assert_eq!(knight_pressure_mask(&pos, attacker, king), all);
++            for target in targets {
++                for color in [attacker, attacker.opponent()] {
++                    for kind in PieceKind::ALL {
++                        let mut blocked = pos;
++                        blocked.board[target.0 as usize] = Piece::new(color, kind);
++                        let expected = if color == attacker { all & !(1u64 << target.0) } else { all };
++                        assert_eq!(knight_pressure_mask(&blocked, attacker, king), expected);
++                    }
++                }
++            }
++        }
++    }
++}
++
++// Test-only transpose of supplied byte marks. No production path transposes
++// byte marks, and the independent reference consumer remains king_pressure.
++fn reduced_byte_marks(position: &Position, defender: Color, marks: &Marks) -> i32 {
++    let attacker = defender.opponent();
++    let king = position.piece_squares(defender, PieceKind::King)[0];
++    let counts = position.counts[attacker.index()];
++    let diagonal = if counts[2] != 0 || counts[4] != 0 {
++        slider_pressure_mask(position, attacker, king, &DIRECTIONS[..4])
++    } else { 0 };
++    let orthogonal = if counts[3] != 0 || counts[4] != 0 {
++        slider_pressure_mask(position, attacker, king, &DIRECTIONS[4..])
++    } else { 0 };
++    let knight = if counts[1] != 0 {
++        knight_pressure_mask(position, attacker, king)
++    } else { 0 };
++    let mut raw = 0;
++    for kind in 1..=4 {
++        let mut presence = [0; 2];
++        for target in 0..64 {
++            for label in 0..2 {
++                if marks[attacker.index()][target] & (1 << (2 * (kind - 1) + label)) != 0 {
++                    presence[label] |= 1u64 << target;
++                }
++            }
++        }
++        raw += match kind {
++            1 => presence_pressure::<1>(&presence, knight),
++            2 => presence_pressure::<2>(&presence, diagonal),
++            3 => presence_pressure::<3>(&presence, orthogonal),
++            4 => presence_pressure::<4>(&presence, diagonal | orthogonal),
++            _ => unreachable!(),
++        };
++    }
++    (raw - 12).max(0)
++}
++
++#[test]
++fn pressure_consumer_matches_old_bytes_with_family_gates_and_one_final_clamp() {
++    for placement in [
++        "7k/6q1/7r/8/3K4/8/6bn/8",
++        "7k/8/8/8/3K4/8/8/8",
++        "7k/8/8/8/3K4/8/7n/8",
++        "7k/8/8/8/3K4/8/7b/8",
++        "7k/8/8/8/3K4/8/7r/8",
++        "7k/8/8/8/3K4/8/7q/8",
++        "7r/8/3P4/8/3Kp3/8/8/k7",
++        "8/8/8/4k3/3K4/8/8/8",
++    ] {
++        let pos = position(placement);
++        for defender in [Color::White, Color::Black] {
++            for byte in 0u8..=255 {
++                let marks = [[byte; 64]; 2];
++                assert_eq!(reduced_byte_marks(&pos, defender, &marks),
++                    king_pressure(&pos, defender, &marks), "{placement} {defender:?} {byte}");
++            }
++            // Remove each label from each square while other marks remain,
++            // so the final clamp cannot hide ordinary weak-mark differences.
++            for target in 0..64 {
++                for bit in 0..8 {
++                    let mut marks = [[255; 64]; 2];
++                    marks[defender.opponent().index()][target] &= !(1 << bit);
++                    assert_eq!(reduced_byte_marks(&pos, defender, &marks),
++                        king_pressure(&pos, defender, &marks));
++                }
++            }
++        }
++    }
++    let pos = position("7k/6q1/7r/8/3K4/8/6bn/8");
++    let mut marks = [[0; 64]; 2];
++    marks[1][square("d5").0 as usize] = 0x0c; // B on an orthogonal square.
++    marks[1][square("c5").0 as usize] = 0x30; // R on a diagonal square.
++    marks[1][square("e6").0 as usize] = 0xc0; // Q on a knight square.
++    assert_eq!(reduced_byte_marks(&pos, Color::White, &marks), 0);
++    assert_eq!(king_pressure(&pos, Color::White, &marks), 0);
++    marks = [[0; 64]; 2];
++    marks[1][square("d5").0 as usize] = 0x10; // Weak R: 8.
++    marks[1][square("c5").0 as usize] = 0x04; // Weak B: 8.
++    assert_eq!(reduced_byte_marks(&pos, Color::White, &marks), 4);
++    assert_eq!(king_pressure(&pos, Color::White, &marks), 4);
++}
++
++#[test]
++fn complete_presence_activity_covers_every_attacker_kind_inventory() {
++    for attacker in [Color::White, Color::Black] {
++        for inventory in 0..16 {
++            let mut board = position("7k/8/8/8/8/8/8/K7").board;
++            for (bit, (kind, target)) in [
++                (PieceKind::Knight, "c3"), (PieceKind::Bishop, "d6"),
++                (PieceKind::Rook, "g4"), (PieceKind::Queen, "f5"),
++            ].into_iter().enumerate() {
++                if inventory & (1 << bit) != 0 {
++                    board[square(target).0 as usize] = Piece::new(attacker, kind);
++                }
++            }
++            let pos = from_board(&board);
++            check_activity(&pos, &Influence::build(&pos), 217, [1024; 2]);
++            check_activity(&pos, &Influence { profiles: [[0; 64]; 2] }, -100_000, [0, 10_240]);
++            check_activity(&pos, &Influence { profiles: [[255; 64]; 2] }, 100_000, [10_240, 7153]);
++        }
++    }
++}
++
++#[test]
++fn complete_presence_activity_matches_byte_oracle_on_random_supplied_maps() {
++    let mut random = 0x6a93_b7c2_40ed_815fu64;
++    for case in 0..256 {
++        let mut board = [Piece::EMPTY; 64];
++        for color in [Color::White, Color::Black] {
++            loop {
++                let target = (next_random(&mut random) & 63) as usize;
++                if board[target].is_empty() {
++                    board[target] = Piece::new(color, PieceKind::King);
++                    break;
++                }
++            }
++        }
++        // At most fifteen non-kings/color, three pawns and six knights:
++        // promoted inventories and adjacent kings remain admitted.
++        for n in 0..(case % 31) {
++            loop {
++                let target = (next_random(&mut random) & 63) as usize;
++                if !board[target].is_empty() {
++                    continue;
++                }
++                let color = if n % 2 == 0 { Color::White } else { Color::Black };
++                let mut kind = PieceKind::ALL[(n / 2 + case) % 5];
++                if kind == PieceKind::Pawn && !(8..56).contains(&target) {
++                    kind = PieceKind::Knight;
++                }
++                board[target] = Piece::new(color, kind);
++                break;
++            }
++        }
++        let mut pos = from_board(&board);
++        let material = (next_random(&mut random) % 200_001) as i32 - 100_000;
++        let weights = [(next_random(&mut random) % 10_241) as i32,
++            (next_random(&mut random) % 10_241) as i32];
++        check_activity(&pos, &Influence::build(&pos), material, weights);
++        let mut supplied = Influence { profiles: [[0; 64]; 2] };
++        for color in 0..2 {
++            for target in 0..64 {
++                supplied.profiles[color][target] = next_random(&mut random) as u8;
++            }
++        }
++        check_activity(&pos, &supplied, material, weights);
++        check_activity(&pos, &Influence { profiles: [[case as u8; 64]; 2] }, material, weights);
++        let first = compute(&pos, &supplied, material, weights);
++        for color in [Color::White, Color::Black] {
++            let mut start = 0;
++            for kind in PieceKind::ALL {
++                let len = pos.counts[color.index()][kind.index()] as usize;
++                pos.squares[color.index()][start..start + len].reverse();
++                start += len;
++            }
++        }
++        pos.validate().unwrap();
++        check_activity(&pos, &supplied, material, weights);
++        assert_eq!(first, compute(&pos, &supplied, material, weights));
++        // Interpose an unrelated invocation before checking fresh lifetime.
++        let other = position("7k/8/8/8/8/8/8/K7");
++        check_activity(&other, &supplied, -material, [0, 10_240]);
++        assert_eq!(first, compute(&pos, &supplied, material, weights));
++    }
++}
++
++#[test]
++fn presence_activity_uses_mailbox_and_supplied_bytes_with_stale_private_planes() {
++    let coherent = position("r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R");
++    let mut stale = position("7k/8/8/8/8/8/8/K7");
++    let old_planes = stale.attack_view();
++    stale.board = coherent.board;
++    stale.squares = coherent.squares;
++    stale.counts = coherent.counts;
++    stale.starting_units = coherent.starting_units;
++    assert_eq!(stale.attack_view(), old_planes);
++    assert_ne!(stale.attack_view(), coherent.attack_view());
++    let mut supplied = Influence { profiles: [[0; 64]; 2] };
++    for color in 0..2 {
++        for target in 0..64 {
++            supplied.profiles[color][target] = (target * 73 + color * 151) as u8;
++        }
++    }
++    check_activity(&stale, &supplied, -100_000, [10_240, 7153]);
++    assert_eq!(compute(&stale, &supplied, -100_000, [10_240, 7153]),
++        compute(&coherent, &supplied, -100_000, [10_240, 7153]));
++    // Canonical low tags and color bits stay intact under all valid high
++    // aliases; mailbox geometry must not authenticate cached attack planes.
++    for high in 0..16 {
++        let mut alias = stale;
++        for piece in &mut alias.board {
++            if !piece.is_empty() {
++                piece.0 |= high << 4;
++            }
++        }
++        assert_eq!(compute(&alias, &supplied, 217, [1024; 2]),
++            byte_compute(&alias, &supplied, 217, [1024; 2]));
++    }
++}
