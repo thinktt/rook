@@ -198,6 +198,88 @@ native ownership/arithmetic premises. It does not re-audit those imported
 premises. The lead checked the complete memo against the actual source and
 retained the second-half and general qualification limits above.
 
+## Native weak window ordering and the remaining cutoff question
+
+A further consequence, checked against the actual fixed, seeded and timed
+root owners, is **L <= U at every descendant ordinary/Q entry**. Equality is
+allowed. This uses the preceding directional theorem, which was proved without
+an ordering premise, so the reasoning is not circular. The prepared-native
+placement, arithmetic, table-origin and normal-return premises remain in force;
+arbitrary supplied component windows and injected records are not covered.
+
+Let I=[-9999,9999] and A(x,d)=`score_add(x,d)`. For a fixed d, A is
+nondecreasing: inside[-8999,8999] it is a clamped translation; outside it is
+identity, with the interior image between the adjacent -9000/9000 values.
+A preserves I and fixes both full-window sentinels for every admitted adjustment.
+
+Each actual iteration starts with an empty completed ranking. Its first child
+has[-10000,10000], so both directional implications at ply1 put its return in I.
+Negation and root addition preserve I. Fixed/seeded and unrestricted timed roots
+give their second candidate the same full window. Thereafter the ranked second
+is in I, giving child[-10000,-A(second,-adjustment)] with upper in I and strict
+order. The positive implication bounds its return above unless it is already
+<=-10000; the negative implication bounds it below unless it is already>=childUpper.
+Thus every return and inserted ranking score stays in I. Fewer than two ranked
+entries retain the -10000 default. See [fixed/seeded roots](../../src/ordinary.rs#L585)
+and [the schedule owner](../../src/root_schedule.rs#L82).
+
+For restricted timed candidates after the first, let B be completed best and P
+the previous completed iteration's best. Both are in I; the actual sequence
+initializes P to **0**. Requested endpoints are
+`l=A(B,2)` and `u=A(min(10000,max(B,P)+1),2)`. Therefore l<=u, l is in I and
+u<=10000. Applying A with the same negative move adjustment to both endpoints,
+then negating/exchanging, preserves order: Lc<=Uc, with Uc in I. If a returned
+s>Lc, the directional theorem bounds s<=9999; otherwise s<=Lc<=Uc<=9999.
+If s<Uc, it bounds s>=-9999; otherwise s>=Uc>=-9999. Hence every returned root
+score, random addition and optional ranking adjustment -2 remains in I.
+Retry replaces requested u with10000, retaining order and the same Uc.
+[Sequence completion](../../src/timed_sequence.rs#L35) installs P only after a
+completed continuing iteration. Interrupted children/retries commit no ranking;
+root/iteration stops produce no later request. See
+[actual child transformation](../../src/timed.rs#L619).
+
+Induct next over recursive call events. Ordinary-to-Q delegation preserves
+endpoints. Null[-U,1-U] and quiet-mate[-9000,-8999] windows are strict. A node
+reaching the ordinary main list survived the effectiveLower>=U return test, so initial
+best=effectiveLower<U and U>-10000. Running lower starts at L<=U.
+Before each continuing main candidate, best and running lower remain<=U:
+an admitted frontier estimate is<=their maximum; any actual score>U strictly
+raises both and cuts off. Equality may continue. Its full, scout and retry
+windows are therefore ordered respectively by
+`-U <= -max(best,L)`, `-min(best+1,U) <= -best` and `-U <= -best`.
+Retry uses the unchanged pre-scout best. See
+[main candidate processing](../../src/ordinary.rs#L1000).
+
+Every IIO pass starts passBest=-10000<U and uses original L/U. Any score>U
+strictly improves passBest, exceeds L and cuts off that pass; a continuing pass
+keeps passBest<=U. Its child[-U,-max(passBest,L)] is ordered, including in the
+tail. Each new target resets passBest. Noncheck Q continuation starts
+standing<U and runningLower=max(L,standing)<=U. Checked Q reaches descendants
+only after its mate-distance gate, so initial best=-10000<U. Optimistic capture
+updates are<=max(best,runningLower); any actual score>U raises runningLower
+and cuts off. Every continuing child[-U,-runningLower] is ordered. Early
+returns/stops create no further child. See [IIO](../../src/ordinary.rs#L1139)
+and [Q](../../src/quiescence.rs#L269).
+
+This supplies a precise replacement for the open strict-window premise in the
+accepted IIO review. Before the first main score, best=effectiveLower<U and
+running lower=L. For a normally completed first main score s>=U, s strictly
+improves best. The nested cutoff is taken exactly when s>L. Failure to cut off
+means s<=L; combined with L<=U<=s, this is exactly **s=L=U**. Conversely that
+equality updates best but fails the strict lower update. This equivalence
+concerns the cutoff branch, not unconditional tail execution: an unconsumed
+suffix, D>=5 and entry bound exactly Lower are still required. With one
+candidate, list exhaustion already ends processing.
+
+The released [IIO sentence](/home/legolas/king-spec/spec/ordinary-iterations.md#internal-iterative-ordering)
+says a first-main result reaching U immediately ends candidate processing.
+Its join with the later strict-update rule is now confined to the equality
+case. Neither its actual joint reachability nor its exclusion is proved here;
+no widening, extra cutoff or revised behavioral authority is inferred.
+The [independent Astra check](/home/legolas/agent-memos/rook2-weak-window-ordering-to-lead-20261020.md)
+and the lead's source review agree on this scope. No engine/helper execution,
+new witness or production edit supports this additional result.
+
 ## Reviewed source identity
 
 Source hashes read at repository HEAD5b625c5a, before this documentation-only
@@ -217,3 +299,8 @@ The retained62 artifact and native source are unchanged.
 | evaluator.rs | 0ea2af3606dfb20409b8c15d46a0c745bf3204c22bccee6e00d3493615a55c61 |
 | root_schedule.rs | 550146f895ef9a43b8ecdc6fce5e26fb973602e6f5d5b17add1a4920768a72d8 |
 | timed.rs | f62d6ea5591fc23515da241ee3dfefd30d500c79e0349068ca595076f8044d2e |
+
+The weak-ordering supplement additionally checks `src/timed_sequence.rs`,
+SHA256 `3089985b5b23dc397770cbf4e228219a27c71db1c01a8a553305e4adb3e3f08f`,
+against that same frozen117-file promotion map. Its actual previous-score
+initialization is0. The ten source owners above remain unchanged.

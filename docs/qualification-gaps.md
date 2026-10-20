@@ -1,5 +1,12 @@
 # Remaining qualification work
 
+The [current specification-owner review map](reviews/retained62-owner-review.md)
+consolidates the production obligations and their supporting evidence. Owner
+acceptance remains pending. Its two explicit source questions are second-half
+inherited-hint learning and first-main cutoff at score=lower=upper; the new
+[weak ordering proof](research/permission-sensitive-search-bounds.md#native-weak-window-ordering-and-the-remaining-cutoff-question)
+excludes inverted native windows under the prepared-search premises.
+
 Candidate62 is the retained production build, 2026-10-20. It adds an explicit
 `--ext-tsp-profiled` profile-use-only option in `tools/build.py`. Native engine
 and diagnostic source are unchanged from57. The exact ordinary image is
@@ -36,6 +43,11 @@ finite evidence. It creates no transfer or execution authority. The external
 full3288 runner, corpus, continuous schedule, completion checker and receipts
 remain unresolved. Prior57 continuity is distinguished from exact62 evidence;
 same-artifact focused continuity disposition remains explicit in the manifest.
+The released same-artifact requirement is a concrete remaining obligation:
+one exact62 continuity8 plus standard seed11/persistence3 closure is assigned,
+reusing the existing62 independent12 evidence with native-identity/configuration
+reconciliation. No rebuild,12 rerun or new timing comparison is selected.
+Fresh results are pending; the frozen57 handoff receipts are not relabeled.
 
 See [source promotion](../evidence/exttsp-profiled-integration-20261020-01/source-promotion.json),
 [whole54](../evidence/exttsp-profiled-standard54-results-20261020-01/README.md),
@@ -46,8 +58,10 @@ The [learned-state source acceptance](../evidence/current62-learned-remembered-p
 accepts remembered numeric/metadata ownership, direct diagnostic transport,
 direct cutoff history bounds10504/5636, and normal evaluating-lifetime retention
 under stated premises. The later acceptance below closes prescribed numeric
-TT collision/table association; uncertified-hint completion, full TT/window/IIO
-joins and general lexical/framing behavior remain open.
+TT collision/table association. The current owner-review map consolidates the
+accepted local TT/IIO/window and wire work, preserves each premise, and isolates
+the two specific remaining semantic joins. It does not assert whole-production
+acceptance or require another exhaustive equivalence proof.
 Existing detailed ownership obligations below remain applicable where not
 superseded by this explicitly scoped evidence.
 

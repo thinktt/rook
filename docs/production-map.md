@@ -1,5 +1,11 @@
 # Production ownership and qualification map
 
+Start with the [compact retained62 specification-owner review map](reviews/retained62-owner-review.md).
+It consolidates the current source/evidence dispositions, isolates two concrete
+semantic questions and keeps artifact-specific gameplay/performance obligations
+separate. Specification-owner acceptance is pending. The chronological material
+below retains its original scopes and is not a list of new proof prerequisites.
+
 Candidate62 is the retained production build, 2026-10-20. It adds an explicit
 `--ext-tsp-profiled` profile-use-only option in `tools/build.py`. Native engine
 and diagnostic source are unchanged from57. The exact ordinary image is
@@ -39,8 +45,9 @@ The [learned-state source acceptance](../evidence/current62-learned-remembered-p
 accepts remembered numeric/metadata ownership, direct diagnostic transport,
 direct cutoff history bounds10504/5636, and normal evaluating-lifetime retention
 under stated premises. The later acceptance below closes prescribed numeric
-TT collision/table association; uncertified-hint completion, full TT/window/IIO
-joins and general lexical/framing behavior remain open.
+TT collision/table association. The current review map carries the remaining
+second-half hint admission and first-main equal-window cutoff questions, along
+with the existing wire source/finite runtime evidence, for owner disposition.
 Existing detailed ownership obligations below remain applicable where not
 superseded by this explicitly scoped evidence.
 

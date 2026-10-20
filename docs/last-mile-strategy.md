@@ -284,6 +284,18 @@ Do not multiply approval documents or rerun unchanged proof layers.
 
 ## Completion remains broader than optimization
 
+The [compact specification-owner map](reviews/retained62-owner-review.md) is
+the current review deliverable. Reuse the existing local IIO/store/wire ledgers;
+the specific source questions are second-half inherited-hint learning and the
+first-main equality cutoff. Native weak ordering now confines the latter to
+score=lower=upper without establishing its joint reachability. No broad proof
+campaign is a prerequisite to presenting the map for owner disposition.
+
+Separately, close the released exact-artifact focused gap with one62
+continuity8 and seed11/persistence3 lane, reusing its existing independent12
+evidence. This is required local behavioral coverage, not a performance trial;
+no rebuild, repeat12 or external action is selected. Results remain pending.
+
 The [qualification gaps](qualification-gaps.md) and
 [Vic scope](qualification-scope.md) remain obligations. Parity is the
 optimization target; qualification uses the released acceptance policy and
