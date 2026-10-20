@@ -307,3 +307,39 @@ is1.036641% higher,0/7 lower,worst1.023642. The intended register-input/scalar-r
 boundary exists; all calls, spills, code growth and full scoped stack costs
 are priced in its backend review. No PGO, retuning or adoption follows.
 Production57 and best completed whole54/whole12 totals remain unchanged.
+
+## Current57 placement domain and local evaluation selection
+
+The [placement-domain crosswalk](../evidence/current57-placement-admission-review-20261020-01/review.md),
+[independent critique](../evidence/current57-placement-admission-independent-review-20261020-01/review.md)
+and [parent acceptance](../evidence/current57-placement-admission-review-20261020-01/parent-acceptance.json)
+connect the arithmetic inventory/king/interior-pawn premises to actual admitted
+normal evaluating CLI roots and completed generated/null descendants. EP removes
+the actual opposite nonking, including nonpawn victims; promotions preserve
+population; the specified king-victim exception reaches fatal preparation before
+evaluation. The phase range lemma proves radix material≤780 and product≤65536,
+with nonnegative O/M/E summing256 even for represented arbitrary u8 counts.
+This does not certify full move legality, arbitrary public Position mutation or
+all derived-state semantics.
+
+The [evaluation-selection crosswalk](../evidence/current57-evaluation-window-review-20261020-01/review.md)
+and [bounded acceptance](../evidence/current57-evaluation-window-review-20261020-01/parent-acceptance.json)
+close local native selection and immediate consumer order under their imported
+premises: ordinary FAST sites have positive depth; sparse Q requests FULL without
+preliminary FAST; strict refresh uses the finished oriented FAST score; effective
+bounds and Q return precedence retain their normative order. The eight prior
+window-owner source files remain byte-identical. Root clamp-collapse reachability,
+full TT/IIO/hint composition and arbitrary public-helper admission remain open.
+No source edits or additional native runs support either source-only conclusion.
+
+## Current57 remembered-state epoch isolation
+
+The [lifecycle crosswalk](../evidence/current57-remembered-lifecycle-review-20261020-01/review.md)
+and [parent acceptance](../evidence/current57-remembered-lifecycle-review-20261020-01/parent-acceptance.json)
+close the native cross-go table isolation join. Each evaluating lifetime clears
+before query; private generation equality makes stale slots logically empty,
+and physical clearing precedes generation-byte reuse. Fresh insertion precedence
+is preserved and old-root/personality records cannot reappear after wrap.
+Within-search records remain available across roots, retries and iterations.
+This does not close same-search identity collisions, uncertified hints or all
+normalization/depth/window/IIO store semantics. No source or runtime changes.

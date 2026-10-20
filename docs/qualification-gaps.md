@@ -1,43 +1,50 @@
 # Remaining qualification work
 
-Current retained source is candidate51, native/tools graph05a848bb and combined
-117-file graph3b816cf8. Ordinary48ee57b1 uses its own profile1ce0e391; diagnostic
-38c3025d remains a separate companion. Exact source promotion claims no canonical
-rebuild. See [local validation](../evidence/tactical-check-mask-qualification-20261020-01/README.md),
-[current ownership map](production-map.md) and [decision0036](decisions/0036-tactical-check-masks.md).
-The previous qualification notes are preserved [byte for byte](qualification-gaps-history-20261020-01.md);
-all artifact-specific claims there are historical.
+Current retained source is candidate57, native/tools graphb845e921 and combined
+117-file grapha58e7cad. Ordinaryaf849f92 uses its own profileb4806420; diagnostic
+eda652ab remains a separate companion. Exact source promotion claims no canonical
+rebuild. See [source promotion](../evidence/bitplane-pin-summary-integration-20261020-01/source-promotion.json),
+[current ownership map](production-map.md) and [decision0043](decisions/0043-bitplane-pin-summary.md).
+The preceding qualification notes are preserved [byte for byte](qualification-gaps-history-20261020-02.md);
+artifact-specific claims there remain historical.
 
 ## Closed local finite evidence
 
-193 native tests,209 diagnostic tests, all7673 mandatory cases across117operations/
-115wholefiles, optimized strict54/eight interruption fixtures/24searches, and
-regular12/632 plus continuity8/seed11/persistence3 independently pass. The
-functional archive preserves original inputs, expected/raw/actual responses and
-process exits. Finite fixture success does not prove every admitted input or
-complete all production compositions.
+195 native tests (193library+2development),209 diagnostic tests, all7673 mandatory
+cases across117operations/115wholefiles, optimized strict54/eight interruption
+fixtures/24searches and regular12/632 plus continuity8/seed11/persistence3
+independently pass. The functional archive preserves original inputs,
+expected/raw/actual responses and process exits. Finite fixture success does
+not prove every admitted input or close all production compositions.
 
-Current51 standard54 independently closes216 fresh lifetimes (54warm/162measured)
-and432 original offline checks at69.417194 whole-native CPU seconds,69.050 search.
-The prior43 separate window is69.809672: descriptive0.562211%lower,39 medians lower
-and15 higher. CPU15 shows58 nonidle guest ticks in finite snapshots; no exclusive
-host/guest condition or causal correction is claimed. See [whole54 report](../evidence/tactical-check-mask-standard54-20261020-01/README.md).
+Current57 standard54 independently closes216 fresh lifetimes (54warm/162measured)
+and432 original offline checks at69.051049 whole-native CPU seconds,68.640 search.
+Compared to51 in a separate window, the descriptive reduction is0.527456%,48/54
+case medians lower. CPU15 shows53 nonidle guest ticks. See [whole54](../evidence/bitplane-pin-summary-standard54-results-20261020-01/README.md).
 
-Current51 whole12 independently reconciles48fresh lifetimes/2528searches and
-23204semantic posts at698.491201whole-native CPU seconds, 0.397239%lower than43's
-separate701.276947window (10of12lower). All243 input pins match before/after;
-293unresolved measured per-search CPU values stay null. CPU15 shows501nonidle ticks;
-no exclusive host/guest condition or correction is claimed. The [whole12 report](../evidence/tactical-check-mask-games12-results-20261020-01/README.md)
-retains raw1.084238historical-reference ratio as reported-only. Functional pre-gate
-and timing evidence remain separate.
+Current57 whole12 independently closes48 fresh lifetimes/2528searches and23204
+semantic posts at689.783349 whole-native CPU seconds,1.246666%lower than51's
+separate window,12/12game medians lower. CPU15 shows2nonidle/2iowait ticks;
+285measured per-search CPU values remain null. See [whole12](../evidence/bitplane-pin-summary-games12-results-20261020-01/README.md).
+The raw historical-reference ratios1.088588/1.070721 are report-only; no exclusive
+host condition, universal hardware conversion or final qualification follows.
 
-The [current51 capacity review](../evidence/current51-capacity-parent-review-20261020-01/README.md)
-closes remaining-depth i16, produced-target i32 and history u32 capacity for
-root-produced requests under its stated caller premises. It also closes Activity
-intermediate/cast capacity for coherent admitted placements, native effective
-weights and arbitrary supplied u8 Influence profiles. These narrow lemmas do not
-close complete evaluator arithmetic, semantic depth/IIO, remembered-hint behavior
-or cumulative lifetime u64 capacity.
+Experiments58,59,60 are parked after fixed generic comparisons; no retry, PGO
+or adoption follows.60 passed195 library tests and70 original live/offline
+replays but costs1.036641% more CPU,0/7lower. Production57 stays unchanged.
+
+The [capacity disposition](../evidence/current51-capacity-parent-review-20261020-01/README.md)
+closes remaining-depth i16, produced-target i32, history u32 and Activity capacity
+under its named caller premises. Current57 [Shelter](../evidence/current57-shelter-arithmetic-domain-review-20261020-01/parent-acceptance.json)
+and [joined evaluator capacity](../evidence/current57-evaluator-capacity-review-20261020-01/parent-acceptance.json)
+close named arithmetic joins, and [native retained-origin induction](../evidence/current57-retained-origin-review-20261020-01/parent-acceptance.json)
+closes normal evaluating-lifetime P/G and private cache-payload provenance under
+imported producer premises. The [placement/phase acceptance](../evidence/current57-placement-admission-review-20261020-01/parent-acceptance.json)
+now ties the named native arithmetic domain to actual root/descendant owners;
+the [local evaluation-selection crosswalk](../evidence/current57-evaluation-window-review-20261020-01/parent-acceptance.json)
+closes its named native-stage caller facts and immediate consumers. Collision
+semantic identity, arbitrary public mutations, full window/TT/IIO/hint composition
+and cumulative counters remain separate. Normal Result restoration is not general panic recovery.
 
 ## Remaining obligations
 
@@ -49,7 +56,7 @@ or cumulative lifetime u64 capacity.
   must be resolved as prescribed; raw ratios are reported only. PMU is unavailable
   on Vic. No privileged deployment or new external run is authorized here.
 - Finish individual normative production obligations in the ownership map:
-  evaluator/endpoints/intermediate arithmetic premises; TT collision, score,
+  remaining evaluator/endpoints/intermediate arithmetic and admitted caller premises; TT collision, score,
   depth, age and lifecycle semantics; remembered-hint composition; natural IIO
   tail/multipass/extension/interruption; command/framing/poll/publication behavior;
   and all admitted diagnostic/schema combinations beyond finite fixtures.
