@@ -1,0 +1,106 @@
+--- /home/legolas/rook2/evidence/tactical-check-mask-backend-preparation-20261019-01/capture.py
++++ /home/legolas/rook2/evidence/activity-separated-boundary-backend-preparation-20261020-01/capture.py
+@@ -3,7 +3,7 @@
+ import hashlib,json,os,subprocess,sys
+ P=Path(__file__).resolve().parent;E=P.parent
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+-SIDES={'control':('influence-bitsliced-sum',None), 'candidate':('tactical-check-mask',None)}
++SIDES={'control':('tactical-check-mask',None), 'candidate':('activity-separated-boundary',None)}
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def load(p):return json.loads(Path(p).read_text())
+ def save(p,j):
+@@ -25,7 +25,7 @@
+              'expected_source_counts','expected_changed_source_files','expected_added_source_files']:
+   assert plan[key] is not None,key
+  assert plan['candidate_source_freeze']['sha256'] and plan['candidate_build_terminal']
+- assert sha(E/'tactical-check-mask-generic-build-20261019-01'/'receipt.json')==plan['candidate_receipt_sha256']
++ assert sha(Path(plan['candidate_build_directory'])/'receipt.json')==plan['candidate_receipt_sha256']
+  for path,h in plan['input_sha256'].items():assert sha(path)==h,path
+  for row in [plan['candidate_build_terminal'],plan['candidate_source_freeze']]:
+   assert sha(row['path'])==row['sha256'],row['path']
+@@ -39,7 +39,7 @@
+  plan=admit()
+  pins={str(P/'plan.json'):sha(P/'plan.json'),str(P/'capture.py'):sha(P/'capture.py'),str(P/'analyze.py'):sha(P/'analyze.py')};pins.update(plan['input_sha256']);pins[plan['candidate_build_terminal']['path']]=plan['candidate_build_terminal']['sha256'];pins[plan['candidate_source_freeze']['path']]=plan['candidate_source_freeze']['sha256'];receipts={};commands=[]
+  for side,(name,expected) in SIDES.items():
+-  build=E/(name+'-generic-build-20261019-01');image=build/'rook2-exact';receipt=load(build/'receipt.json')
++  build=E/(name+'-generic-build-'+plan['build_dates'][side]);image=build/'rook2-exact';receipt=load(build/'receipt.json')
+   assert sha(image)==expected==receipt['binary_output']['sha256']
+   assert receipt['source_sha256_before']==receipt['source_sha256_after'] and receipt['tool_sha256_before']==receipt['tool_sha256_after']
+   assert receipt['source_identity_unchanged'] and receipt['tool_identity_unchanged'] and receipt['cargo_config_unchanged']
+@@ -76,7 +76,7 @@
+  assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+  assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
+  assert b['source_sha256_before']|b['tool_sha256_before']==freeze['files_sha256']
+- assert len(a['source_sha256_before'])==49 and len(a['tool_sha256_before'])==23
++ assert len(a['source_sha256_before'])==51 and len(a['tool_sha256_before'])==23
+  counts=plan['expected_source_counts']
+  assert len(b['source_sha256_before'])==counts['native'] and len(b['tool_sha256_before'])==counts['tools']==23
+  assert counts['total']==counts['native']+counts['tools']
+@@ -88,16 +88,17 @@
+ def bodies():
+  plan=admit()
+  d=load(P/'discovery.json');assert all(sha(p)==h for p,h in d['pins'].items())
+- request=load(P/'body-request.json');assert 0<len(request)<=plan['max_complete_bodies']==10
++ request=load(P/'body-request.json');assert 0<len(request)<=plan['max_complete_bodies']==12
+  assert len({(r['side'],r['start']) for r in request})==len(request)
+  total=0;scope_total=0;rows=[]
+  for row in request:
+-  side=row['side'];name,_=SIDES[side];image=E/(name+'-generic-build-20261019-01')/'rook2-exact'
++  side=row['side'];name,_=SIDES[side];image=E/(name+'-generic-build-'+plan['build_dates'][side])/'rook2-exact'
+   start=int(row['start'],16);size=int(row['bytes']);assert size>0
+   assert row['label'] in plan['allowed_body_labels'] and row['complete_body'] is True
+   assert any(fragment in row['actual_symbol'] for fragment in plan['allowed_symbol_fragments'][row['label']])
+   assert side in ('control','candidate')
+-  if row['label'] in ('native','prefix','mask-constructor','source-correction'):assert side=='candidate'
++  if row['label'] in plan['candidate_only_body_labels']:assert side=='candidate'
++  assert row.get('role_provenance',{}).get('source_owner') and row['role_provenance'].get('actual_caller_or_entry_evidence'),row
+   exact=' '.join([format(start,'016x'),format(size,'016x')])
+   symbol_rows=[]
+   nm_path=Path(plan['control_saved_metadata']['nm']['path']) if side=='control' else P/(side+'-nm.stdout')
+@@ -105,6 +106,12 @@
+    parts=line.split(maxsplit=3)
+    if len(parts)==4 and parts[2] in ['t','T'] and int(parts[0],16)==start and int(parts[1],16)==size:symbol_rows.append(parts[3])
+   assert row['actual_symbol'] in symbol_rows,(row,symbol_rows)
++  mangled_path=Path(plan['control_saved_metadata']['nm-mangled']['path']) if side=='control' else P/(side+'-nm-mangled.stdout')
++  mangled_rows=[]
++  for line in mangled_path.read_text().splitlines():
++   parts=line.split(maxsplit=3)
++   if len(parts)==4 and parts[2] in ['t','T'] and int(parts[0],16)==start and int(parts[1],16)==size:mangled_rows.append(parts[3])
++  assert row['actual_mangled_symbol'] in mangled_rows,(row,mangled_rows)
+   if row.get('reuse'):
+    assert side=='control'
+    prior=plan['reusable_control_bodies'][row['label']]
+@@ -118,7 +125,7 @@
+    stem=side+'-'+row['label']
+    result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],stem)
+    raw_path=P/(stem+'.stdout');total+=raw_path.stat().st_size;reused=False
+-  assert total<=plan['max_new_raw_disassembly_bytes']==2097152,total
++  assert total<=plan['max_new_raw_disassembly_bytes']==3145728,total
+   scope_total+=raw_path.stat().st_size
+   rows.append(dict(**row,command=result,raw_path=str(raw_path),raw_bytes=raw_path.stat().st_size,reused=reused))
+  assert all(sha(p)==h for p,h in d['pins'].items())
+--- /home/legolas/rook2/evidence/tactical-check-mask-backend-preparation-20261019-01/analyze.py
++++ /home/legolas/rook2/evidence/activity-separated-boundary-backend-preparation-20261020-01/analyze.py
+@@ -6,11 +6,11 @@
+ sha=lambda b:hashlib.sha256(b).hexdigest()
+ d=load(P/'discovery.json');requests=load(P/'body-request.json');bodyproof=load(P/'bodies.json')
+ assert bodyproof['complete'] and bodyproof['all_discovery_inputs_unchanged']
+-images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','influence-bitsliced-sum-generic-build'),('candidate','tactical-check-mask-generic-build')]}
++images={side:Path(next(p for p in d['pins'] if p.endswith('/rook2-exact') and name in p)) for side,name in [('control','tactical-check-mask-generic-build'),('candidate','activity-separated-boundary-generic-build')]}
+ plan=load(P/'plan.json')
+ assert plan['launch'] is True and plan['parent_backend_activation'] is True
+-assert len(requests)<=plan['max_complete_bodies']==10
+-assert bodyproof['total_raw_bytes']<=plan['max_new_raw_disassembly_bytes']==2097152
++assert len(requests)<=plan['max_complete_bodies']==12
++assert bodyproof['total_raw_bytes']<=plan['max_new_raw_disassembly_bytes']==3145728
+ def metadata(side,stem):
+  return Path(plan['control_saved_metadata'][stem]['path']) if side=='control' else P/(side+'-'+stem+'.stdout')
+ sections={};raw={};symbols={}
+@@ -58,6 +58,6 @@
+   functionproof[label].update(complete_machine_bytes_identical=pair['control']['machine_sha256']==pair['candidate']['machine_sha256'],size_delta=pair['candidate']['bytes']-pair['control']['bytes'])
+ sectionproof={name:{side:sections[side][name] for side in ['control','candidate']} for name in ['.text','.rodata','.data.rel.ro']}
+ assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in d['pins'].items())
+-result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual actual-call-target audit required: normal Q geometry permission forwarding, coherent ordered tactical generator, public scalar fallback/shared pawn-prefix, opaque occupancy with source vacancy, checking-only quiet enumeration and capture order. Measure emitted setup/correction/frame/code/copy/ISA costs; no automatic speed/admission verdict.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most10 complete linked bodies and2MiB new disassembly. Reused43 evidence counts toward complete-body scope. Inlined/private/absent symbols require truthful enclosing caller provenance, never a fictitious separate native generator or mask helper.','Inspect actual rejected-quiet traversal removal versus check-mask setup/source correction/scans, preserved chronological type/source/direction/near-to-far/prefix/promotion/capture order, family/no-slider guards and fallback duplication. No supplied geometry authority is created here. No dynamic work or CPU savings inferred from static code.'])
++result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual actual-role audit REQUIRED: distinguish separate constant scalar/geometry Activity kernels by exact mangled/address/caller and dispatch/argument evidence, not demangled name. Resolve normal WireHost full/Q/ordinary/root supply, permission-first any-slider guard and setup placement; price complete call/sret/argument/frame/copy/code costs. Unresolved normal role or merged runtime-bool Activity is a mechanism NO-GO; no automatic timing authority.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most12 complete linked bodies and3MiB new disassembly. Reused43 evidence counts toward complete-body scope. Inlined/private/absent symbols require truthful consumed-caller provenance; absent observer monomorphs remain source-only. Kernel roles need actual mangled/address/caller matching.','Inspect separate constant Activity consumers and dispatch/no-slider guard; distinguish earlier Influence producer plane work. Preserve supplied map/numeric/marks/R owners; no generic-to-PGO or static-to-CPU claim. Price additional bool/sret/spills/copies, duplicated code and per-group derived geometry setup. No geometry authority creator is introduced.'])
+ with (P/'analysis.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+ print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate'] if s in v} for k,v in functionproof.items()},all_inputs_unchanged=True)))

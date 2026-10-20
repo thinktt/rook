@@ -27,6 +27,13 @@ Final performance qualification, inherited production-domain review and external
 [own-PGO screen](evidence/tactical-check-mask-pgo-screen-20261020-01/independent-reconciliation.json)
 and [decision0036](docs/decisions/0036-tactical-check-masks.md).
 
+Experiment52 separates complete scalar/coherent Activity consumers and puts the
+permission/any-slider guard before coherent entry. Actual backend separation and
+13focused tests pass, as do all70 original live/offline replays. Its fixed generic
+screen is0.198734%higher CPU,2of7lower,worst1.007862818; aggregate and minimum-lower
+gates fail. It is [parked without retry, PGO or adoption](docs/decisions/0037-separated-activity-boundary.md).
+Candidate51 and its completed whole54/12 evidence remain current.
+
 ## Previous retained candidate43 bit-sliced Influence, 2026-10-19
 
 Candidate43 replaces40 by exact equality of all115 tested source files after

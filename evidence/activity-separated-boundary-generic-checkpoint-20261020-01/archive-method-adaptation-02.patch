@@ -1,0 +1,37 @@
+--- /home/legolas/rook2/evidence/activity-separated-boundary-generic-checkpoint-20261020-01/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/activity-separated-boundary-generic-checkpoint-20261020-01/archive_checkpoint-02.py
+@@ -60,8 +60,8 @@
+    with t.extractfile(member) as stream:h,n=digest(stream)
+    assert h==expected[name] and n==member.size,name
+    original_name=(BUILD/'source-before'/name).relative_to(ROOT).as_posix()
+-   row=dict(bytes=n,sha256=h,mode=stat.S_IMODE(member.mode))
+-   assert originals[original_name]==row,name
++   row=dict(bytes=n,sha256=h,archive_mode=stat.S_IMODE(member.mode),current_source_mode=originals[original_name]['mode'])
++   assert originals[original_name]['bytes']==n and originals[original_name]['sha256']==h,name
+    actual[name]=row
+  prefix=(BUILD/'source-before').relative_to(ROOT).as_posix()+'/'
+  assert {name for name in originals if name.startswith(prefix)}=={prefix+name for name in expected}
+@@ -69,7 +69,7 @@
+  image=originals[image_name]
+  assert image['sha256']==frozen['sha256']==receipt['binary_output']['sha256']==archived['binary_sha256']=='62c52b3d1c56c538940ae15045de60698e40a69b6ab53406226c1602a26cea09'
+  assert image['bytes']==frozen['bytes']==7092264 and image['mode']==int(frozen['mode'],8)==0o555
+- proof=dict(complete=True,source_archive=str(source_archive),source_archive_sha256=sha(source_archive),source_archive_bytes=source_archive.stat().st_size,member_count=75,all_regular=True,no_extra_or_duplicate_members=True,all_member_bytes_modes_hashes_equal_current_source_before=True,all_source_hashes_equal_build_before_after=True,members=actual,excluded_image=dict(path=str(BUILD/'rook2-exact'),**image),limit='Exact ELF retained externally and excluded by assignment. Source-before files are byte/mode duplicates of the included verified75-source archive; source archive independently reopened, not receipt-only.')
++ proof=dict(complete=True,source_archive=str(source_archive),source_archive_sha256=sha(source_archive),source_archive_bytes=source_archive.stat().st_size,member_count=75,all_regular=True,no_extra_or_duplicate_members=True,all_member_bytes_hashes_equal_current_source_before=True,archive_and_current_source_modes_recorded_separately=True,all_source_hashes_equal_build_before_after=True,members=actual,excluded_image=dict(path=str(BUILD/'rook2-exact'),**image),limit='Exact ELF retained externally and excluded by assignment. Source-before files are byte-exact duplicates of the included verified75-source archive; historical source archive headers normalize modes0644 while current snapshot modes are recorded separately per member. Reconstruct payload from source archive then chmod to current_source_mode. Source archive independently reopened, not receipt-only.')
+  return proof,{prefix+name for name in expected}|{image_name}
+ 
+ def main():
+@@ -81,7 +81,7 @@
+  before={k:v for k,v in original_before.items() if k not in excluded}
+  write('original-scope-manifest.json',original_before)
+  write('source-archive-duplicate-proof.json',proof)
+- write('excluded-manifest.json',{k:dict(**original_before[k],reason='Exact ELF excluded by assignment' if k.endswith('/rook2-exact') else 'Exact duplicate source member independently reopened in included verified-source-before.tar.gz') for k in sorted(excluded)})
++ write('excluded-manifest.json',{k:dict(**original_before[k],reason='Exact ELF excluded by assignment' if k.endswith('/rook2-exact') else 'Exact duplicate source payload independently reopened in included verified-source-before.tar.gz; reconstruct with recorded original mode',reconstruction_mode=original_before[k]['mode']) for k in sorted(excluded)})
+  write('member-manifest.json',before)
+  decision_terminal=(ROOT/(PREFIX+'generic-decision'+DATE)/'tool-terminal.json').relative_to(ROOT).as_posix()
+  assert decision_terminal in before
+@@ -117,4 +117,4 @@
+  print((HERE/'verification.json').read_text())
+ if __name__=='__main__':
+  try:main()
+- except BaseException as error:write('failure.json',dict(error=repr(error),archive_attempt_preserved=True));raise
++ except BaseException as error:write('failure-02.json',dict(error=repr(error),archive_attempt_preserved=True));raise

@@ -26,6 +26,13 @@ records local check-mask ownership. The bounded [production review](../evidence/
 accepts this consumer under inherited coherent-placement premises; existing
 whole-engine qualification obligations below remain open.
 
+Experiment52 separates complete scalar/coherent Activity consumers and puts the
+permission/any-slider guard before coherent entry. Actual backend separation and
+13focused tests pass, as do all70 original live/offline replays. Its fixed generic
+screen is0.198734%higher CPU,2of7lower,worst1.007862818; aggregate and minimum-lower
+gates fail. It is [parked without retry, PGO or adoption](decisions/0037-separated-activity-boundary.md).
+Candidate51 and its completed whole54/12 evidence remain current.
+
 ## Previous43 checkpoint and parked44–50 history
 
 The following historical evidence predates51. Its original document is preserved
