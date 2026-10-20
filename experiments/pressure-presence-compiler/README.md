@@ -1,8 +1,9 @@
 # Pressure presence experiment
 
-`report.md` closes the build/test/compiler discriminator. `closed-summary.json`
-pins the actual artifacts and named external support records. No production code
-is adopted by this setup.
+`report.md` closes the build/test/compiler discriminator; `closed-summary.json`
+pins its artifacts/supports. [The fixed70 screen](screen-results.md) then missed
+the unchanged gate and parked this source. `screen-closed-summary.json` pins the
+measurement result. No production code is adopted by this setup.
 
 Reproduction starts from detached base `e2301c04352cd21eb923b4c20982c2e31c55669f`
 in an isolated worktree, then applies `prototype.patch`. Check the exact two

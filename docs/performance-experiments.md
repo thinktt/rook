@@ -121,7 +121,7 @@ Current proposals and source trials:
 | Idea | Current position |
 |---|---|
 | Enumerate checked destinations through the existing evasion mask | Isolated B/R/Q source prototype complete; lead reviewed. Retain original walker on intersecting directions and an unpruned oracle. No build/test/timing yet. |
-| Replace pressure mark bytes with per-kind weak/strong presence sets | [Compiler discriminator closed](../experiments/pressure-presence-compiler/report.md):200 tests pass; byte consumer retired, paired SSE2 present, smaller frames but combined Activity code +13.19% and stack RMWs remain. One fixed70 generic screen selected separately; no speed or adoption claim yet. |
+| Replace pressure mark bytes with per-kind weak/strong presence sets | [Parked after fixed70](../experiments/pressure-presence-compiler/screen-results.md):generic0.4281% slower,3/7 lower; all70 live/offline checks pass. Compiler stage passed200 tests and retired the byte consumer, but smaller frames did not produce a passing CPU screen. No retune/PGO rescue. |
 | Replace unchecked pinned-source projections with a pin-ray test | Lower-priority hypothesis; proof and added setup costs unresolved. |
 | Reorganize TT identity headers/payloads, or align groups | Source/access review only; compare miss filtering, hit costs and larger footprint. No variant selected. |
 | Counts-guided mailbox attacks | Earlier R8 hypothesis; never implemented or measured. |
