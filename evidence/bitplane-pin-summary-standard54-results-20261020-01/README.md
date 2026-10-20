@@ -1,0 +1,5 @@
+Candidate57 local standard54 independently closes216 fresh lifetimes:54 excluded warmups and162 measured, with432 original offline checks and2496 posts exact. Whole-native CPU sum of case medians is69.051049s; search-boundary sum is68.640s. Whole-native was69.417194s for51 in a separate window: current is0.527456%lower, with48of54 lower case medians. This is descriptive historical comparison, not a paired causal gain.
+
+Published KingRE Rust generic-PGO whole-native sum is63.431779s; raw current/reference ratio1.088587615. There are0cases above the raw1.25 individual comparison, maximum1.194455580. These are separate hardware/windows and do not establish qualified reference ratios or a performance pass. All samples/ranges, case ratios and exact reference hash are in report.json; raw source/accounting/original proof remains in the prepared collection.
+
+CPU14 engine, H helpers;53CPU15 nonidle ticks retained. No exclusive-host, PMU, uncertainty/profile, universal domain or external3288 qualification claim. Full57 whole12 timing is pending. Exact image af849f92/profile b4806420/source74 b845e921/source117 a58e7cad, committed source4435523e2.

@@ -18,8 +18,12 @@ movegen.rs change; checked/special projection and all ordering/work remain.
 The [bounded source review](../evidence/bitplane-pin-summary-production-review-20261020-01/review.md)
 imports the existing canonical-tag/coherent-plane Position invariant; it does
 not certify manually stale public mutations. Generic/own-PGO fixed70 improves
-1.0570045%/1.1563291%,7of7lower each. Full57 whole54/12 is pending;51 still owns
-the best completed69.417194/698.491201whole CPU seconds. No canonical rebuild,
+1.0570045%/1.1563291%,7of7lower each. Full57 whole54 independently closes216lifetimes/432original checks at69.051049
+whole-native CPU seconds (68.640search),0.527456%lower than51
+in a separate window,48of54lower. CPU15 had53nonidle ticks. Full57 whole12
+is pending;51 still owns the best completed698.491201whole-game CPU seconds.
+The [whole54 report](../evidence/bitplane-pin-summary-standard54-results-20261020-01/README.md)
+preserves all samples and raw/reference comparison limits. No canonical rebuild,
 whole-engine qualification or external3288 completion follows. The existing
 uncertified empty-source cutoff-hint composition remains unresolved, including
 the existing implementation's no-op; it is not a released normative rule.

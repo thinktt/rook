@@ -14,8 +14,12 @@ rebuild is claimed. The bounded production review accepts the pin identity
 under the existing canonical-tag/coherent-plane Position invariant.
 
 Generic and own-source PGO fixed70 comparisons improve1.0570045% and1.1563291%,
-7of7lower each. Full57 whole54/12 timing is pending; the latest best completed
-whole54/12 remains51 at69.417194/698.491201 whole-native CPU seconds.
+7of7lower each. Full57 whole54 independently closes216 lifetimes/432 original offline checks
+at69.051049whole-native CPU seconds (68.640search),0.527456%lower than51
+in a separate window,48of54lower. This is the new best completed whole54.
+CPU15 had53nonidle ticks. Full57 whole12 timing remains pending;51 still owns
+the best completed698.491201whole-game CPU seconds. See the
+[whole54 report](evidence/bitplane-pin-summary-standard54-results-20261020-01/README.md).
 [Decision0043](docs/decisions/0043-bitplane-pin-summary.md) records adoption.
 Finite checks do not close all production-domain obligations; uncertified
 empty-source cutoff-hint composition, final performance qualification and the

@@ -43,3 +43,12 @@ rebuild is claimed. Full57 whole54/12 measurements remain pending, with51's
 The scoped production review supports the geometric identity under the imported
 coherent canonical Position invariant. All inherited domain/composition and
 final performance/external3288 obligations remain open.
+
+The first complete57 whole54 now independently closes216lifetimes/432original
+offline checks at69.051049whole-native CPU seconds (68.640search),0.527456%
+lower than51's separate window;48of54case medians lower. This descriptive
+historical comparison supports the new best completed result but not a paired
+causal claim. CPU15 had53nonidle ticks. Whole57 12 is pending. Published
+Rust-PGO reference63.431779s gives raw ratio1.088588 and maximum individual
+1.194456, with no raw ratio above1.25; cross-hardware/window and unresolved
+profile/uncertainty prerequisites prevent a qualification claim.
