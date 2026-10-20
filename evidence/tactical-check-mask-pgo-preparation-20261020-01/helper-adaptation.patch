@@ -1,0 +1,164 @@
+--- /home/legolas/rook2/evidence/ordering-equal-length-pgo-preparation-20261019-01/guard.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-pgo-preparation-20261020-01/guard.py
+@@ -23,12 +23,12 @@
+ 
+ def validate_authority(c):
+  assert c.get('authorized') is True and c.get('all_conflicting_native_work_terminal') is True
+- assert c.get('scope')=='ordering-equal-length-own-pgo-build-train-no-cpu'
++ assert c.get('scope')=='tactical-check-mask-own-pgo-build-train-no-cpu'
+  assert c['plan_sha256']==sha(HERE/'plan.json')
+  assert c['source_root']==str(SOURCE)
+  assert c['prepared_scripts_sha256']==load(HERE/'script-pins.json')
+  assert c['source_candidate_accepted'] is True
+- assert c['focused_native6_accepted'] is True
++ assert c['focused_native10_accepted'] is True
+  assert c['generic_pilot_independent_terminal_path'] in c['generic_pilot_actual_terminals']
+  assert c['generic_pilot_advance_accepted'] is True
+  assert isinstance(PLAN['generic_candidate_sha256'],str) and len(PLAN['generic_candidate_sha256'])==64
+@@ -79,7 +79,7 @@
+   if kind=='bin': assert options.get('lto')=='thin' and 'linker-plugin-lto' not in options
+   else: assert options.get('linker-plugin-lto') is True and 'lto' not in options
+   profile='profile-generate' if mode=='instrumented' else 'profile-use'
+-  expected=str(Path(PLAN['training'])/('raw' if mode=='instrumented' else 'merged.profdata'))
++  expected=str(Path(PLAN['profile_raw']) if mode=='instrumented' else Path(PLAN['training'])/'merged.profdata')
+   assert options.get(profile)==expected and ('profile-use' if mode=='instrumented' else 'profile-generate') not in options
+   observed[source]=options
+  return observed
+--- /home/legolas/rook2/evidence/ordering-equal-length-pgo-preparation-20261019-01/build_stage.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-pgo-preparation-20261020-01/build_stage.py
+@@ -11,8 +11,8 @@
+  command=[sys.executable,str(ROOT/'tools/build.py'),'--crate',str(SOURCE),'--mode','generic','--bin','rook2','--jobs','4','--output',str(out)]
+  assert sha(ROOT/'tools/build.py')==PLAN['tool_source_sha256']['tools/build.py']
+  if stage=='instrumented':
+-  assert not train.exists();train.mkdir() # raw MUST remain absent; build.py creates it.
+-  command+=['--pgo-generate',str(train/'raw')]
++  assert not train.exists() # Separate raw root remains absent; build.py creates it.
++  command+=['--pgo-generate',str(Path(PLAN['profile_raw']))]
+  else:
+   terminal(train/'tool-terminal.json');terminal(train/'verify-tool-terminal.json')
+   t=load(train/'training.json');v=load(train/'verification.json')
+@@ -26,7 +26,7 @@
+  assert r['tool_sha256_before']==r['tool_sha256_after']==PLAN['tool_source_sha256']
+  assert r['cargo_config_sha256_before']==r['cargo_config_sha256_after']==PLAN['cargo_config_sha256']
+  assert r['toolchain']==PLAN['toolchain'] and r['mode']=='generic' and r['target_cpu']=='x86-64' and r['target_triple']==PLAN['target_triple'] and r['jobs']==4
+- expected=PLAN['base_flags']+(['-C',f"profile-generate={train/'raw'}"] if stage=='instrumented' else ['-C',f"profile-use={train/'merged.profdata'}",'-C','llvm-args=-pgo-warn-missing-function'])
++ expected=PLAN['base_flags']+(['-C',f"profile-generate={Path(PLAN['profile_raw'])}"] if stage=='instrumented' else ['-C',f"profile-use={train/'merged.profdata'}",'-C','llvm-args=-pgo-warn-missing-function'])
+  assert r['rust_flags']==expected
+  effective=check_thin_build(out,'instrumented' if stage=='instrumented' else 'profile-use')
+  warning=(out/'build.stderr').read_text().lower()
+--- /home/legolas/rook2/evidence/ordering-equal-length-pgo-preparation-20261019-01/train.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-pgo-preparation-20261020-01/train.py
+@@ -9,13 +9,13 @@
+ import sys
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "ordering-equal-length-pgo-training-20261019-01"
++OUT = HERE.parent / "tactical-check-mask-pgo-training-20261020-01"
+ ROOT = HERE.parents[1]
+-BUILD = ROOT / 'evidence/ordering-equal-length-pgo-instrumented-build-20261019-01'
+-SOURCE = Path('/home/legolas/rook2-work/imp2-ordering-equal-length-20261019-01')
++BUILD = ROOT / 'evidence/tactical-check-mask-pgo-instrumented-build-20261020-01'
++SOURCE = Path('/home/legolas/rook2-work/imp2-tactical-check-mask-20261019-01')
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ sys.dont_write_bytecode=True
+-sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/ordering-equal-length-pgo-preparation-20261019-01')))
++sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/tactical-check-mask-pgo-preparation-20261020-01')))
+ from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_thin_build
+ sys.path.insert(0, str(SOURCE / 'tools'))
+ from build import source_snapshot, cargo_configs, tool_snapshot
+@@ -45,7 +45,10 @@
+     assert build['cargo_config_sha256_before'] == cargo_configs(SOURCE)
+     engine = BUILD / 'rook2-exact'
+     assert sha(engine) == build['binary_output']['sha256']
+-    assert not list((OUT / 'raw').iterdir())
++    raw_directory = Path(json.loads((HERE / 'plan.json').read_text())['profile_raw'])
++    assert raw_directory.is_dir() and not list(raw_directory.iterdir())
++    assert not OUT.exists()
++    OUT.mkdir()
+     inputs = [SPEC / name for name in ['workloads.json', 'replay-oracle.json', 'replay-check.mjs', 'benchmark.mjs']]
+     before = {str(p):sha(p) for p in inputs}
+     plan = json.loads((HERE / 'plan.json').read_text())
+@@ -59,7 +62,7 @@
+     write('input-closure.json',closure)
+     command = ['/usr/bin/node', str(SPEC / 'replay-check.mjs'), '--',
+                '/usr/bin/taskset', '-c', '14', str(engine)]
+-    env = dict(os.environ, LLVM_PROFILE_FILE=str(OUT / 'raw/native-%m-%p.profraw'))
++    env = dict(os.environ, LLVM_PROFILE_FILE=str(raw_directory / 'native-%m-%p.profraw'))
+     write('launch.json', dict(command=command, cwd=str(ROOT),
+                              driver_sha256=sha(HERE / 'train.py'),
+                              profile_environment={'LLVM_PROFILE_FILE':env['LLVM_PROFILE_FILE']},
+@@ -78,7 +81,7 @@
+     assert sha(engine) == build['binary_output']['sha256']
+     assert build['source_sha256_before'] == source_snapshot(SOURCE)
+     assert before == {str(p):sha(p) for p in inputs}
+-    raw = sorted((OUT / 'raw').glob('*.profraw'))
++    raw = sorted(raw_directory.glob('*.profraw'))
+     assert len(raw) == 54, ('expected one unique raw image per native process', len(raw))
+     assert len({row['pid'] for row in report['results']}) == 54
+     assert {int(path.stem.rsplit('-',1)[1]) for path in raw} == {row['pid'] for row in report['results']}
+--- /home/legolas/rook2/evidence/ordering-equal-length-pgo-preparation-20261019-01/verify.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-pgo-preparation-20261020-01/verify.py
+@@ -8,12 +8,12 @@
+ import subprocess
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "ordering-equal-length-pgo-training-20261019-01"
++OUT = HERE.parent / "tactical-check-mask-pgo-training-20261020-01"
+ ROOT = HERE.parents[1]
+ sys.dont_write_bytecode=True
+-sys.path.insert(0,'/home/legolas/rook2/evidence/ordering-equal-length-pgo-preparation-20261019-01')
++sys.path.insert(0,'/home/legolas/rook2/evidence/tactical-check-mask-pgo-preparation-20261020-01')
+ from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_thin_build,run
+-sys.path.insert(0,'/home/legolas/rook2-work/imp2-ordering-equal-length-20261019-01/tools')
++sys.path.insert(0,'/home/legolas/rook2-work/imp2-tactical-check-mask-20261019-01/tools')
+ from build import source_snapshot,tool_snapshot
+ 
+ 
+@@ -38,13 +38,13 @@
+     terminal(OUT/'tool-terminal.json')
+     training = load(OUT/'training.json')
+     replay = load(OUT/'replay.json')
+-    build_path = ROOT/'evidence/ordering-equal-length-pgo-instrumented-build-20261019-01/receipt.json'
++    build_path = ROOT/'evidence/tactical-check-mask-pgo-instrumented-build-20261020-01/receipt.json'
+     build = load(build_path)
+     effective = check_thin_build(build_path.parent,'instrumented')
+     assert training['effective_rustc_options']==effective
+     assert training['complete'] and training['schema'] == 'rook2-pgo-training-v1'
+     assert len(training['raw_profiles_sha256']) == 54
+-    assert set(training['raw_profiles_sha256']) == {str(p) for p in (OUT/'raw').glob('*.profraw')}
++    assert set(training['raw_profiles_sha256']) == {str(p) for p in Path(load(HERE/'plan.json')['profile_raw']).glob('*.profraw')}
+     assert all(sha(Path(p)) == h for p, h in training['raw_profiles_sha256'].items())
+     workloads = load(Path('/home/legolas/king-spec/conformance/profiling/workloads.json'))
+     assert replay['status'] == 'pass' and len(replay['results']) == 54
+@@ -57,19 +57,19 @@
+         assert row['exit']=={'code':0,'signal':None} and row['error'] is None and row['stderr']==''
+         assert row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
+     assert not (OUT/'replay.stderr').stat().st_size
+-    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../ordering-equal-length-pgo-preparation-20261019-01/train.py', 'driver_sha256'),
++    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../tactical-check-mask-pgo-preparation-20261020-01/train.py', 'driver_sha256'),
+                           ('merged.profdata', 'profile_sha256'), ('merged.profdata.gz', 'profile_archive_sha256')]:
+         assert sha(OUT/filename) == training[key]
+     assert gzip.decompress((OUT/'merged.profdata.gz').read_bytes()) == (OUT/'merged.profdata').read_bytes()
+     assert all(sha(Path(p)) == h for p, h in training['input_sha256'].items())
+     assert sha(build_path) == training['instrumented_build_receipt']['sha256']
+     assert sha(build_path.parent/'rook2-exact') == training['instrumented_engine_sha256'] == build['binary_output']['sha256']
+-    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-ordering-equal-length-20261019-01'))
++    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-tactical-check-mask-20261019-01'))
+     assert sha(Path('/usr/bin/llvm-profdata-19').resolve()) == training['merge_tool_sha256']
+     terminal_receipt = load(OUT/'tool-terminal.json')
+     assert terminal_receipt['exit_code'] == 0
+     assert all(sha(Path(path))==h for path,h in load(OUT/'input-closure.json').items())
+-    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-ordering-equal-length-20261019-01'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
++    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-tactical-check-mask-20261019-01'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
+     # Reuse the accepted raw protocol model and released original checker on
+     # training only; post-use54/wire is deliberately gated after the CPU pilot.
+     from raw_model import replay as verify_raw_replay
+@@ -87,7 +87,7 @@
+     verification = dict(complete=True, effective_rustc_options=effective, independent_remerge_byte_identical=True, independent_remerge_exit_code=result.returncode, independent_remerge_command=command, independent_profile_sha256=sha(merged), strict_replays=54, original_checkReplay_count=54, raw_training_protocol_cases=54, raw_profiles_independently_hashed=54,
+           merged_profile_sha256=training['profile_sha256'], training_record_sha256=sha(OUT/'training.json'),
+           driver_terminal_sha256=sha(OUT/'tool-terminal.json'), verifier_sha256=sha(Path(__file__)),
+-          scope='Own exact ordering-equal-length candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
++          scope='Own exact tactical-check-mask candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
+     check_inputs()
+     write('verification.json', verification)
+     print(json.dumps(verification))

@@ -1,0 +1,26 @@
+--- capture-before-actual-binding.py
++++ capture.py
+@@ -65,9 +65,21 @@
+   term=load(path);assert term['actual_tool_terminal_observed'] is True and term['exit_code']==0 and (term.get('terminal_chunk_id') or term.get('chunk_id') or '').strip()
+   pins[str(path)]=sha(path);stages[stage]=term
+  for stage in ['instrumented','use']:
+-  path=prep/(stage+'-stage.json');meta=load(path);assert meta['complete'] and meta['missing_or_stale_profile_warnings']==0;pins[str(path)]=sha(path)
++  if side=='candidate' and stage=='instrumented':
++   path=prep/'instrumented-stage-adoption.json';meta=load(path);assert meta['complete'] and meta['duplicate_build'] is False and meta['source74_verified'] is True
++   assert meta['receipt_sha256']==sha(inst/'receipt.json')
++   settings_path=inst/'effective-settings-verification.json';settings=load(settings_path);assert settings['complete'] is True
++   assert {row['kind'] for row in settings['commands']}=={'lib','bin'}
++   effective={('src/lib.rs' if row['kind']=='lib' else 'src/bin/rook2.rs'):row['options'] for row in settings['commands']}
++   assert len(effective)==2
++   pins[str(settings_path)]=sha(settings_path);pins[str(inst/'build.stderr')]=sha(inst/'build.stderr')
++   assert not re.search(r'no profile data|mismatched.*profile|out[- ]of[- ]date.*profile|function control flow change detected|hash mismatch',(inst/'build.stderr').read_text(),re.I)
++  else:
++   path=prep/(stage+'-stage.json');meta=load(path);assert meta['complete'] and meta['missing_or_stale_profile_warnings']==0
++   effective=meta['effective_rustc_options']
++  pins[str(path)]=sha(path)
+   assert meta['artifact_sha256']==(ir if stage=='instrumented' else r)['binary_output']['sha256']
+-  for unit,options in meta['effective_rustc_options'].items():
++  for unit,options in effective.items():
+    assert options['opt-level']=='3' and options['panic']=='abort' and options['codegen-units']=='1' and options['debuginfo']=='1' and options['target-cpu']=='x86-64'
+    if unit=='src/bin/rook2.rs':assert options['lto']=='thin'
+    if stage=='use':assert options['profile-use']==str(profile)

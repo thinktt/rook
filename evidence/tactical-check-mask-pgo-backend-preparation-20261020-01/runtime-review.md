@@ -1,0 +1,30 @@
+# Own51 PGO bounded backend gate
+
+The intended tactical check-mask mechanism survives actual own-PGO compilation. No static mechanism blocker was found to one root-admitted, predeclared own-PGO screen. This is not native/timing authority, a speed prediction or adoption. No engine/test/build was run by this review.
+
+Exact51 use image48ee57b14e436338037e21f0f01f0f340959d7b05771f5cd759a3eab38d655b4/profile1ce0e39170d9fd3c83386ff39be9da94ec04608f5c481c49090545f501a97b7f is compared with43 own-PGO36251ecf12cfdc9437c9bfc5b7a571c1992471bee611cab024fc692ac79e91b2/profile132fc1fd85d81592173cdc97a22cfb223616b97e33a4a270c968331f8558a93f. Discovery binds actual four-stage terminals, each own-source instrumented/training/use receipt, original54/raw verification and byte-identical remerge, source74 versus72, tools23, compiler and matched thin-LTO/base settings. Only exact profile paths are normalized in effective build environments. All216 pins remain unchanged. No generic code/gain is transferred.
+
+|Complete actual owner|43 bytes / main rsp|51 bytes / main rsp|
+|---|---:|---:|
+|public scalar generate|4092 /0xd8|1450 /0xb8|
+|native generate_for_search|absent|7782 /0x98|
+|shared pawn_candidates|in old generate|2082 /0x78|
+|normal Q visit_q_impl|19503 /0x5c8|19517 /0x5c8|
+
+Generators save six registers; Q retains its old additional transient8-byte reservations and93 callsites. The selected generator family totals11314B versus4092B (+7222); whole .text541675→550603 (+8928), .rodata320216→320248 (+32), .data.rel.ro19952→20040 (+88). The remaining section growth is not assigned wholesale to this selected family. These are static sizes/reservations, not stack high-water, traffic or CPU cost.
+
+Actual Q reads existing geometry_permission at2e1cf, stores rsp+f, reloads it into edx at2eb09 and calls2eb16 through GOTf0a88→2b930 generate_for_search. Control Q's actual old call2cee1/GOTeefe8 resolves2b3a0 scalar generate. The same consumed Q role is proven by source positions and relocations; other Q/observer/root/ordinary bodies are not claimed. Q grows14B/three static instruction rows and retains its frame/call count.
+
+Native entry2b930 saves six registers/reserves0x98 before testing edx. False branches2d71b, restores that frame and tail-jumps2d72f/GOTf0fe8→e910 public scalar. False therefore still pays wrapper setup/restore; true and false do not execute pawn prefix twice. True calls the one shared pawn_candidates at2b9da; public scalar calls it at e9b6. Source-reviewed scalar fallback and pawn numerical/ordering semantics remain separate proof obligations, not consequences of small code.
+
+The constructor and source correction are INLINED here; no separate sized symbols or per-source helper calls were invented from generic evidence. B/R/Q count logic2bd88..2bdb9 and2c746..2c767 takes all-zero sliders directly toward king handling, bypassing occupancy union/family prefix setup2bdc8+. Pawn/king lookup/count handling still occurs. Constructor iterates eight direction decisions, selecting required families before ray loads at2be3c..2be51. Occupancy/masks primarily occupy registers with surrounding stack spills; there is no outlined40B returned context/copy. No original-plane block copy is claimed absent globally.
+
+Bishop example: first-blocker bit test2bedf selects source correction2cfd5 only when necessary. The correction removes source bit from occupied (`not r11; and r11,r10` at2d5c2), loads the affected king ray and merges the corrected prefix at2d66e..2d677. Other typed paths have corresponding inlined correction/merge blocks. This costs register/control-flow work and in-body code even without a normal call; no unconditional zero-cost correction claim is made.
+
+Ray prefix is intersected with checking mask BEFORE emission (`and rbx,r9`2bf1b); the selected quiet loop2cd9f..2cdfa emits guarded low bits and clears them. Decreasing rays use BSR at2ce14 with matching selected-mask clear loop. Rejected empty targets do not enter those emission loops. Nearest occupied endpoint is then tested at2bf24 and loaded from the real mailbox at2bf2e for capture admission. R/Q similarly use typed/family masks, selected quiet targets and separate nearest capture handling. Knight endpoints retain victim checks and checking membership; king remains captures-only. The old control scalar body is captured completely, rather than inferring its current lowering from generic or historical profiles.
+
+Native has14 static callsites: one normal pawn call and13 cold panic/bounds/slice routines. Prefix has six cold calls; public scalar has one normal pawn call and seven cold calls. In these complete generator bodies no memcpy/memset/allocator call appears; Q's existing copies and other calls remain distinct. No new persistent state or permission creator is introduced by this codegen observation. Scoped instructions use ordinary integer/SSE2 operations and guarded bit scans; printed TZCNT on nonzero paths does not establish a newly required target feature. Compiler flags remain generic x86-64.
+
+Material unknowns for the fixed screen are setup/spill/scan/control costs versus rejected-quiet work, larger linked code and scalar/native duplication. Actual PGO unrolls/factors differently from generic; no dynamic frequencies or physical saving is inferred. Six complete bodies were reviewed within the ceiling,600691B new raw plus reused exact43 PGO Q. No unrelated whole bodies or further captures were needed.
+
+Actual discovery2fe7f6/0, bodies152352/0, analyzer498bf3/0 are sessionless; ten new binutils children all exited0. Commands/PIDs/raw hashes are in discovery.json and bodies.json; exact machine hashes/frames/calls/relocations in analysis.json. All tools are terminal. The only helper adaptation after inert preparation binds the actual51 instrumented-stage-adoption and independently recorded effective settings instead of nonexistent instrumented-stage.json; preserved helper/plan and actual-binding-helper.patch expose that schema correction. No fake normalized record, failed capture, source mutation, retry or expanded scope occurred. Historical inert closure remains historical and unchanged.

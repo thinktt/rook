@@ -56,9 +56,14 @@ quiescence tactical generator, preserving the public scalar helper and ordered
 pawn/capture behavior. All10 focused tests and70 original live/offline replay
 checks pass. Its fixed generic screen sums13.7175975→13.5104215 CPU seconds in
 case medians:1.510294%lower,7of7lower,worst0.991068483, meeting the declared
-advancement rule. Fresh own-source PGO instrumentation is built; training,
-independent profile verification and a separate own-PGO timing screen remain
-pending. No51 adoption, whole54/12 result or qualification is claimed.
+advancement rule. Fresh own-source PGO training passes all54 original outputs
+with54 distinct native profiles; independent verification reproduces the merged
+profile byte for byte. Optimized48ee57b1 builds with zero missing/stale-profile
+warnings. The actual own-PGO backend review closes; its separate fixed70
+screen passes all70 original checks at12.3288455→12.134826 CPU seconds in case
+medians:1.573704%lower,7of7lower,worst0.991026040. Full native/diagnostic,
+optimized54/wire and regular12 validation are next. No51 adoption, whole54/12
+timing result or final qualification is claimed.
 See [generic reconciliation](evidence/tactical-check-mask-generic-screen-20261019-01/independent-reconciliation.json)
 and [parent decision](evidence/tactical-check-mask-parent-review-20261019-01/generic-decision.json).
 
