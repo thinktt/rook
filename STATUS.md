@@ -71,6 +71,14 @@ worst1.006151267; it misses the prospective0.5% minimum improvement. All70 origi
 live/offline replays pass. No retry, full54/12, retuning or adoption follows.
 See [decision](evidence/one-sided-relations-decision-20261020-01/README.md).
 
+Experiment66 is parked. All195 native tests, fresh own54 PGO training/remerge/use
+and scoped main/public backend review pass. The main postapply160B copy is removed;
+public Node::child keeps its old shape. The fixed70 screen gives0.286698% lower
+summed CPU medians,4/7lower,worst1.002966785, missing the frozen0.5% and5/7 gates.
+All70 live/offline replays pass. Original backend metadata serialization failure
+and compact offline recovery remain explicit. No retry/full54_12/adoption follows.
+See [decision](evidence/caller-owned-child-decision-20261020-01/README.md).
+
 ## Historical checkpoint record — preceding57 state
 
 Statements below describe their original checkpoints; current adoption is62 above.
