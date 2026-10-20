@@ -1,0 +1,7 @@
+# Analyze original failed capture without rerecording
+
+Original strict study remains incomplete (739cfd/1). All thirteen SELF sums equal raw totals; raw summary has exactly2 additional Ir and matches all twelve other totals. The local primary format permits costs in summary absent from cost lines. Independent gap review supports a separately labelled partial-attribution postmortem, contingent on named annotator and original-output/runtime/resource checks. These checks do not retroactively pass the strict study.
+
+Use only exact raw SHA0cb25d4d. A separate exact-raw-bound parser copy admits nonnegative summary-minus-SELF, requires SELF==totals for every event, and preserves the difference as unknown/unattributed per-event counts. Do not relocate the two Ir, renormalize counts, infer their owner or claim complete attribution. Original frozen parser and method remain unchanged. All source groups remain NAME attribution. Record independent annotator totals and both raw summary/attributed totals explicitly.
+
+Authorize offline function display, raw parsing/ranking and at most2 root-selected source displays only within the original remaining shared deadline/resource envelope. No new engine/model/recording/control/case/geometry/retry, no native timing, no causal performance or qualification claim. This may guide source hypotheses for subsequent native experiments; model counts alone do not prove removable work or speedup.

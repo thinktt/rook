@@ -7,10 +7,24 @@ only the explicit profile-use compiler layout recipe changes. See the
 [current production map](../production-map.md) and [decision0048](../decisions/0048-exttsp-profiled-layout.md).
 
 Experiments58–61 remain parked with their original failed advancement gates.
-No63 is selected. A current62 branch/cache simulation feasibility review supports
-one future single-case diagnostic only after a named-vector parser and offline
-canaries. Its cache geometry is illustrative, not VM or hardware geometry; no
-recording has run and it cannot explain a causal57-to62 native speedup.
+No63 is selected. The one current62 branch/cache capture completed its target
+and original output checks, but the strict study is incomplete: summary has2
+simulated Ir absent from SELF/totals. All twelve other counters reconcile.
+A separately labeled partial postmortem keeps those2Ir unattributed, with exact
+raw-bound parsing and independent named annotator totals. No recording retry or
+second model ran. The illustrative model is not VM/hardware geometry, PMU,
+native CPU or causal57-to62 evidence. See the [report](../../evidence/current62-branch-cache-results-20261020-01/README.md).
+
+Activity and main ordinary NAME groups lead the modeled contexts; selected raw
+source tables point to ray traversal/occupancy and tactical insertion ordering.
+These are hypotheses, not removable-cost or speed predictions. A source/metadata
+feasibility review of distinct LLVM MachineFunctionSplitter cold-block placement
+alongside62ExtTSP is pending; no build, candidate or trial is selected.
+
+The direct/additional-ray forced capture-category bypass was checked against
+prior experiments and is an exact duplicate of parked46. Its historical fixed
+screen improved only0.048659%,3/7lower. [Decline a duplicate trial](../../evidence/current62-capture-override-opportunity-20261020-01/review.md);
+no current occurrence/savings claim follows from that old result.
 
 ## Preserved chronological checkpoints —43 and earlier
 

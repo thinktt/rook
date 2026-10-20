@@ -1,0 +1,35 @@
+{
+  "module": "vector_parser.py",
+  "API": "parse_file(path, expected_events=list) -> dict; rank(parsed) -> list",
+  "collector_required_events": [
+    "Ir",
+    "Dr",
+    "Dw",
+    "I1mr",
+    "D1mr",
+    "D1mw",
+    "ILmr",
+    "DLmr",
+    "DLmw",
+    "Bc",
+    "Bcm",
+    "Bi",
+    "Bim"
+  ],
+  "result_keys": [
+    "events",
+    "summary",
+    "totals",
+    "SELF_sum",
+    "raw_SELF_rows",
+    "raw_inclusive_call_arcs_NOT_ADDED",
+    "raw_path",
+    "raw_sha256"
+  ],
+  "counts": "named unsigned 64-bit integers; header order retained; expected list validates exact set; trailing and entirely omitted cost counters are zero",
+  "domain": "ASCII v1 single-part complete whole-program line-only dump; no thread splits, derived events, jump records, or instruction positions. Full summary and totals vectors required; exact SELF=summary=totals for every event. General Callgrind partial summaries need not obey this stronger workflow condition.",
+  "attribution": "coalesced object/function-NAME totals and file partitions, not unique physical function ownership; raw row numbers/text, name tokens and literal source/object/callee context retained; inherited callee objects explicitly unresolved",
+  "rates": "Bcm/Bc and Bim/Bi only, null with absent/zero denominator; not hardware rates/cycles/weighted cost",
+  "no_import_side_effects": "definitions/imports only; CLI writes only when explicitly invoked; no subprocess in parser",
+  "execution_authorized": false
+}
