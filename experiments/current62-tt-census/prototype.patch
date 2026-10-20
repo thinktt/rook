@@ -1,0 +1,581 @@
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -120,7 +120,10 @@
+ 
+ fn main() -> ExitCode {
+     match run() {
+-        Ok(()) => ExitCode::SUCCESS,
++        Ok(()) => /* TT_CENSUS_BEGIN */{
++            if rook2::remembered::census::write_from_env().is_err() { return ExitCode::from(1); }
++            /* TT_CENSUS_END */ExitCode::SUCCESS/* TT_CENSUS_BEGIN */
++        }/* TT_CENSUS_END */,
+         Err(Failure::Fatal) => ExitCode::from(1),
+         Err(Failure::Message(message)) => {
+             let _ = io::stderr().write_all(message.as_bytes());
+--- a/src/remembered.rs
++++ b/src/remembered.rs
+@@ -6,7 +6,9 @@
+ use crate::position::Position;
+ use crate::types::{Color, Move};
+ 
+-const LOWER: u8 = 1;
++/* TT_CENSUS_BEGIN */pub mod census;
++
++/* TT_CENSUS_END */const LOWER: u8 = 1;
+ const UPPER: u8 = 2;
+ const QUIET_CHECKED: u8 = 4;
+ const MARKED_DEPTH: u8 = 8;
+@@ -91,7 +93,8 @@
+ 
+     #[inline]
+     fn matches(self, generation: u8, identity: u32) -> bool {
+-        self.generation == generation && self.identity == identity
++/* TT_CENSUS_BEGIN */        census::filter(self.generation, self.identity, generation, identity);
++/* TT_CENSUS_END */        self.generation == generation && self.identity == identity
+     }
+ 
+     #[inline]
+@@ -124,15 +127,19 @@
+         let mate_cutoff = (normalized >= 9000 && lower_cutoff)
+                        || (normalized <= -9000 && upper_cutoff);
+         if mate_cutoff {
+-            self.depth = self.depth.max(required);
++/* TT_CENSUS_BEGIN */            let tt_old_depth = self.depth;
++/* TT_CENSUS_END */            self.depth = self.depth.max(required);
+             result.score = Some(score);
+-            return true;
++/* TT_CENSUS_BEGIN */            census::considered(1, tt_old_depth != self.depth);
++/* TT_CENSUS_END */            return true;
+         }
+         if self.depth >= required && (lower_cutoff || upper_cutoff) {
+             result.score = Some(score);
+-            return true;
+-        }
+-        false
++/* TT_CENSUS_BEGIN */            census::considered(0, false);
++/* TT_CENSUS_END */            return true;
++        }
++/* TT_CENSUS_BEGIN */        census::considered(2, false);
++/* TT_CENSUS_END */        false
+     }
+ }
+ 
+@@ -155,7 +162,7 @@
+ impl RememberedTable {
+     pub fn with_groups(count: usize) -> Self {
+         assert!(count >= 1, "remembered table needs at least one group");
+-        Self { groups: vec![Group::default(); count], generation: 1 }
++        /* TT_CENSUS_BEGIN */census::allocated(/* TT_CENSUS_END */Self { groups: vec![Group::default(); count], generation: 1 }/* TT_CENSUS_BEGIN */)/* TT_CENSUS_END */
+     }
+ 
+     pub fn from_tts(tts: usize) -> Result<Self, String> {
+@@ -163,7 +170,8 @@
+         let mut groups = Vec::new();
+         groups.try_reserve_exact(count).map_err(|e| format!("cannot allocate remembered groups: {e}"))?;
+         groups.resize(count, Group::default());
+-        Ok(Self { groups, generation: 1 })
++/* TT_CENSUS_BEGIN */        census::allocation(groups.len(), groups.capacity());
++/* TT_CENSUS_END */        Ok(Self { groups, generation: 1 })
+     }
+ 
+     #[inline]
+@@ -173,9 +181,11 @@
+         if self.generation == u8::MAX {
+             self.groups.fill(Group::default());
+             self.generation = 1;
+-        } else {
++/* TT_CENSUS_BEGIN */            census::cleared(true, self.groups.len());
++/* TT_CENSUS_END */        } else {
+             self.generation += 1;
+-        }
++/* TT_CENSUS_BEGIN */            census::cleared(false, self.groups.len());
++/* TT_CENSUS_END */        }
+     }
+ 
+     #[inline]
+@@ -192,7 +202,8 @@
+     pub fn store(&mut self, store: Store) {
+         let record = Record::from_store(store, self.generation);
+         let group = &mut self.groups[store.query.group];
+-
++/* TT_CENSUS_BEGIN */        let tt_census = census::begin_store();
++/* TT_CENSUS_END */
+         // Only retained slots participate in the identity match. Recent may
+         // duplicate an identity and is deliberately ignored during storage.
+         if let Some(index) = group.records[..RECENT].iter()
+@@ -200,42 +211,53 @@
+         {
+             if record.depth < group.records[index].depth {
+                 group.records[RECENT] = record;
+-            } else {
++/* TT_CENSUS_BEGIN */                census::branch(0, index);
++/* TT_CENSUS_END */            } else {
+                 group.records[index] = record;
+-            }
+-            return;
++/* TT_CENSUS_BEGIN */                census::branch(1, index);
++/* TT_CENSUS_END */            }
++/* TT_CENSUS_BEGIN */            tt_census.finish_store();
++/* TT_CENSUS_END */            return;
+         }
+ 
+         // An empty priority is less valuable than every valid signed depth.
+         if let Some(index) = group.records[..RECENT].iter()
+-            .position(|r| r.generation != self.generation)
++            .position(|r| /* TT_CENSUS_BEGIN */census::empty_test(/* TT_CENSUS_END */r.generation != self.generation/* TT_CENSUS_BEGIN */)/* TT_CENSUS_END */)
+         {
+             group.records[index] = record;
+             group.records[RECENT] = Record::default();
+-            return;
++/* TT_CENSUS_BEGIN */            census::branch(2, index);
++            tt_census.finish_store();
++/* TT_CENSUS_END */            return;
+         }
+ 
+         let mut least = 0;
+         for index in 1..RECENT {
+-            if group.records[index].depth < group.records[least].depth { least = index; }
++/* TT_CENSUS_BEGIN */            census::least_compare();
++/* TT_CENSUS_END */            if group.records[index].depth < group.records[least].depth { least = index; }
+         }
+         if record.depth >= group.records[least].depth {
+             group.records[RECENT] = group.records[least];
+             group.records[least] = record;
+-        } else {
++/* TT_CENSUS_BEGIN */            census::branch(3, least);
++/* TT_CENSUS_END */        } else {
+             group.records[RECENT] = record;
+-        }
+-    }
++/* TT_CENSUS_BEGIN */            census::branch(4, least);
++/* TT_CENSUS_END */        }
++/* TT_CENSUS_BEGIN */        tt_census.finish_store();
++/* TT_CENSUS_END */    }
+ 
+     pub fn probe(&mut self, query: Query) -> ProbeResult {
+         let required = query.remaining_depth();
+         let group = &mut self.groups[query.group];
+-        let mut result = ProbeResult::default();
++/* TT_CENSUS_BEGIN */        let tt_census = census::begin_probe(group as *const Group as usize);
++/* TT_CENSUS_END */        let mut result = ProbeResult::default();
+         let recent = &mut group.records[RECENT];
+         if recent.matches(self.generation, query.identity)
+             && recent.consider(query, required, &mut result)
+         {
+-            return result;
++/* TT_CENSUS_BEGIN */            tt_census.finish_probe(result.score.is_some());
++/* TT_CENSUS_END */            return result;
+         }
+         for record in &mut group.records[..RECENT] {
+             if record.matches(self.generation, query.identity) {
+@@ -243,7 +265,8 @@
+                 break;
+             }
+         }
+-        result
++/* TT_CENSUS_BEGIN */        tt_census.finish_probe(result.score.is_some());
++/* TT_CENSUS_END */        result
+     }
+ }
+ 
+--- /dev/null
++++ b/src/remembered/census.rs
+@@ -0,0 +1,398 @@
++//! Count-only private derivative. No observation is a search decision.
++//! Physical slots 0..2 retained, 3 recent. See the frozen external schema.
++use super::RememberedTable;
++use std::cell::{Cell, RefCell};
++use std::fmt::Write as _;
++use std::io::{self, Write};
++
++#[derive(Clone)]
++struct Counts {
++    probe_calls: u64, joint: [[u64; 8]; 4], probe_filter: [[u64; 3]; 4],
++    consider: [[u64; 3]; 4], mate_depth: [[u64; 2]; 4],
++    returns_score: u64, returns_no_score: u64,
++    read_lines: [u64; 3], mate_write_lines: [u64; 3], phase: [u64; 64],
++    store_calls: u64, store_filter: [[u64; 3]; 3], branches: [u64; 5],
++    branch_slot: [[u64; 3]; 5], retained_writes: [u64; 3], recent_writes: [u64; 4],
++    empty_scan: [[u64; 2]; 3], least_comparisons: u64,
++    allocations: u64, groups: u64, capacity: u64, initialized: u64,
++    max_groups: u64, max_capacity: u64, generation_clears: u64,
++    wrap_clears: u64, wrap_groups: u64,
++}
++impl Default for Counts {
++    fn default() -> Self {
++        Self {
++            probe_calls: 0, joint: [[0; 8]; 4], probe_filter: [[0; 3]; 4],
++            consider: [[0; 3]; 4], mate_depth: [[0; 2]; 4],
++            returns_score: 0, returns_no_score: 0,
++            read_lines: [0; 3], mate_write_lines: [0; 3], phase: [0; 64],
++            store_calls: 0, store_filter: [[0; 3]; 3], branches: [0; 5],
++            branch_slot: [[0; 3]; 5], retained_writes: [0; 3], recent_writes: [0; 4],
++            empty_scan: [[0; 2]; 3], least_comparisons: 0,
++            allocations: 0, groups: 0, capacity: 0, initialized: 0,
++            max_groups: 0, max_capacity: 0, generation_clears: 0,
++            wrap_clears: 0, wrap_groups: 0,
++        }
++    }
++}
++fn add(value: &mut u64, amount: u64, overflow: &mut bool) {
++    if let Some(next) = value.checked_add(amount) { *value = next; }
++    else { *overflow = true; }
++}
++#[derive(Clone, Copy)]
++struct Probe {
++    phase: usize, next: usize, last: usize, expecting: bool,
++    recent: usize, retained: usize, reads: u8, writes: u8,
++}
++#[derive(Clone, Copy)]
++struct StoreEvent { next: usize, empty: usize, branch: bool }
++#[derive(Clone, Copy)]
++enum Event { Probe(Probe), Store(StoreEvent) }
++#[derive(Default)]
++struct State { c: Counts, active: Option<Event>, overflow: bool, invalid: bool }
++thread_local! {
++    static STATE: RefCell<State> = RefCell::new(State::default());
++    static BORROW_ERROR: Cell<bool> = const { Cell::new(false) };
++}
++fn observe(f: impl FnOnce(&mut State)) {
++    STATE.with(|cell| {
++        if let Ok(mut state) = cell.try_borrow_mut() { f(&mut state); }
++        else { BORROW_ERROR.with(|flag| flag.set(true)); }
++    });
++}
++
++pub(super) struct Guard { done: Cell<bool>, opened: bool }
++impl Guard {
++    pub(super) fn finish_probe(&self, score: bool) {
++        if self.opened && !self.done.replace(true) { observe(|s| s.finish_probe(score)); }
++        else { observe(|s| s.invalid = true); }
++    }
++    pub(super) fn finish_store(&self) {
++        if self.opened && !self.done.replace(true) {
++            observe(|s| match s.active.take() {
++                Some(Event::Store(e)) if e.branch => {},
++                _ => s.invalid = true,
++            });
++        } else { observe(|s| s.invalid = true); }
++    }
++}
++impl Drop for Guard {
++    fn drop(&mut self) {
++        if self.opened && !self.done.get() {
++            observe(|s| { s.invalid = true; s.active = None; });
++        }
++    }
++}
++pub(super) fn begin_probe(address: usize) -> Guard {
++    let mut opened = false;
++    observe(|s| {
++        if s.active.is_some() { s.invalid = true; return; }
++        let phase = address & 63;
++        if phase & 3 != 0 { s.invalid = true; }
++        add(&mut s.c.probe_calls, 1, &mut s.overflow);
++        add(&mut s.c.phase[phase], 1, &mut s.overflow);
++        s.active = Some(Event::Probe(Probe { phase, next: 0, last: 3,
++            expecting: false, recent: 4, retained: 1, reads: 0, writes: 0 }));
++        opened = true;
++    });
++    Guard { done: Cell::new(false), opened }
++}
++pub(super) fn begin_store() -> Guard {
++    let mut opened = false;
++    observe(|s| {
++        if s.active.is_some() { s.invalid = true; return; }
++        add(&mut s.c.store_calls, 1, &mut s.overflow);
++        s.active = Some(Event::Store(StoreEvent { next: 0, empty: 0, branch: false }));
++        opened = true;
++    });
++    Guard { done: Cell::new(false), opened }
++}
++impl State {
++    fn filter(&mut self, identity_equal: bool, generation_equal: bool) {
++        let outcome = if !identity_equal { 0 } else if !generation_equal { 1 } else { 2 };
++        match self.active {
++            Some(Event::Probe(mut e)) => {
++                if e.next >= 4 || e.expecting { self.invalid = true; return; }
++                let slot = [3, 0, 1, 2][e.next];
++                e.next += 1; e.last = slot; e.expecting = outcome == 2;
++                add(&mut self.c.probe_filter[slot][outcome], 1, &mut self.overflow);
++                e.reads |= 1 << ((e.phase + slot * 12) / 64);
++                if identity_equal { e.reads |= 1 << ((e.phase + slot * 12 + 11) / 64); }
++                if slot == 3 { e.recent = outcome; }
++                else if outcome == 2 { e.retained = 2 + 2 * slot; }
++                self.active = Some(Event::Probe(e));
++            }
++            Some(Event::Store(mut e)) => {
++                if e.next >= 3 || e.branch { self.invalid = true; return; }
++                add(&mut self.c.store_filter[e.next][outcome], 1, &mut self.overflow);
++                e.next += 1; self.active = Some(Event::Store(e));
++            }
++            None => self.invalid = true,
++        }
++    }
++    fn considered(&mut self, kind: usize, changed: bool) {
++        let Some(Event::Probe(mut e)) = self.active else { self.invalid = true; return; };
++        if !e.expecting || kind >= 3 { self.invalid = true; return; }
++        e.expecting = false;
++        add(&mut self.c.consider[e.last][kind], 1, &mut self.overflow);
++        if kind == 1 {
++            add(&mut self.c.mate_depth[e.last][usize::from(changed)], 1, &mut self.overflow);
++            // The baseline writes the naturally aligned WORD even when max is unchanged.
++            e.writes |= 1 << ((e.phase + e.last * 12 + 6) / 64);
++        } else if changed { self.invalid = true; }
++        if kind != 2 {
++            if e.last == 3 { e.recent = 3; e.retained = 0; }
++            else { e.retained += 1; }
++        }
++        self.active = Some(Event::Probe(e));
++    }
++    fn finish_probe(&mut self, score: bool) {
++        let Some(Event::Probe(e)) = self.active.take() else { self.invalid = true; return; };
++        let expected_score = e.recent == 3 || matches!(e.retained, 3 | 5 | 7);
++        if e.recent >= 4 || e.retained >= 8 || e.expecting || score != expected_score {
++            self.invalid = true; return;
++        }
++        if (e.recent == 3 && e.next != 1)
++            || (e.recent != 3 && e.retained == 1 && e.next != 4) {
++            self.invalid = true;
++        }
++        add(&mut self.c.joint[e.recent][e.retained], 1, &mut self.overflow);
++        if score { add(&mut self.c.returns_score, 1, &mut self.overflow); }
++        else { add(&mut self.c.returns_no_score, 1, &mut self.overflow); }
++        let read = e.reads.count_ones() as usize;
++        let write = e.writes.count_ones() as usize;
++        if read > 2 || write > 1 { self.invalid = true; return; }
++        add(&mut self.c.read_lines[read], 1, &mut self.overflow);
++        add(&mut self.c.mate_write_lines[write], 1, &mut self.overflow);
++    }
++    fn branch(&mut self, branch: usize, slot: usize) {
++        let Some(Event::Store(mut e)) = self.active else { self.invalid = true; return; };
++        if e.branch || branch >= 5 || slot >= 3 { self.invalid = true; return; }
++        e.branch = true;
++        add(&mut self.c.branches[branch], 1, &mut self.overflow);
++        add(&mut self.c.branch_slot[branch][slot], 1, &mut self.overflow);
++        if matches!(branch, 1 | 2 | 3) {
++            add(&mut self.c.retained_writes[slot], 1, &mut self.overflow);
++        }
++        let recent = match branch { 0 => Some(0), 2 => Some(1), 3 => Some(2), 4 => Some(3), _ => None };
++        if let Some(cause) = recent { add(&mut self.c.recent_writes[cause], 1, &mut self.overflow); }
++        self.active = Some(Event::Store(e));
++    }
++}
++pub(super) fn filter(record_generation: u8, record_identity: u32, generation: u8, identity: u32) {
++    observe(|s| s.filter(record_identity == identity, record_generation == generation));
++}
++pub(super) fn considered(kind: usize, changed: bool) { observe(|s| s.considered(kind, changed)); }
++pub(super) fn branch(branch: usize, slot: usize) { observe(|s| s.branch(branch, slot)); }
++/// Identity observer: this is the original generation predicate evaluated once.
++pub(super) fn empty_test(empty: bool) -> bool {
++    observe(|s| {
++        let Some(Event::Store(mut e)) = s.active else { s.invalid = true; return; };
++        if e.empty >= 3 || e.branch { s.invalid = true; return; }
++        add(&mut s.c.empty_scan[e.empty][usize::from(empty)], 1, &mut s.overflow);
++        e.empty += 1; s.active = Some(Event::Store(e));
++    });
++    empty
++}
++pub(super) fn least_compare() {
++    observe(|s| add(&mut s.c.least_comparisons, 1, &mut s.overflow));
++}
++pub(super) fn allocation(groups: usize, capacity: usize) {
++    observe(|s| {
++        add(&mut s.c.allocations, 1, &mut s.overflow);
++        add(&mut s.c.groups, groups as u64, &mut s.overflow);
++        add(&mut s.c.capacity, capacity as u64, &mut s.overflow);
++        add(&mut s.c.initialized, groups as u64, &mut s.overflow);
++        s.c.max_groups = s.c.max_groups.max(groups as u64);
++        s.c.max_capacity = s.c.max_capacity.max(capacity as u64);
++        if capacity < groups { s.invalid = true; }
++    });
++}
++/// Identity observer around the original with_groups return expression.
++pub(super) fn allocated(table: RememberedTable) -> RememberedTable {
++    allocation(table.groups.len(), table.groups.capacity());
++    table
++}
++pub(super) fn cleared(wrap: bool, groups: usize) {
++    observe(|s| {
++        if wrap {
++            add(&mut s.c.wrap_clears, 1, &mut s.overflow);
++            add(&mut s.c.wrap_groups, groups as u64, &mut s.overflow);
++        } else { add(&mut s.c.generation_clears, 1, &mut s.overflow); }
++    });
++}
++
++fn array<const N: usize>(out: &mut String, values: &[u64; N]) {
++    out.push('[');
++    for (i, v) in values.iter().enumerate() {
++        if i != 0 { out.push(','); }
++        let _ = write!(out, "{v}");
++    }
++    out.push(']');
++}
++fn matrix<const R: usize, const C: usize>(out: &mut String, values: &[[u64; C]; R]) {
++    out.push('[');
++    for (i, row) in values.iter().enumerate() {
++        if i != 0 { out.push(','); } array(out, row);
++    }
++    out.push(']');
++}
++fn serialize(c: &Counts, overflow: bool, invalid: bool) -> String {
++    let mut out = String::with_capacity(8192);
++    let complete = !overflow && !invalid;
++    let _ = write!(out, "{{\"schema\":\"rook2-tt-probe-store-census-v1\",\"pid\":{},\"complete\":{complete},\"overflow\":{overflow},\"invalid\":{invalid},\"probes\":{{\"calls\":{},\"returns_score\":{},\"returns_no_score\":{},\"joint\":", std::process::id(), c.probe_calls, c.returns_score, c.returns_no_score);
++    matrix(&mut out, &c.joint);
++    out.push_str(",\"filter\":"); matrix(&mut out, &c.probe_filter);
++    out.push_str(",\"consider\":"); matrix(&mut out, &c.consider);
++    out.push_str(",\"mate_depth\":"); matrix(&mut out, &c.mate_depth);
++    out.push_str(",\"read_line_hist\":"); array(&mut out, &c.read_lines);
++    out.push_str(",\"mate_write_line_hist\":"); array(&mut out, &c.mate_write_lines);
++    out.push_str(",\"group_phase\":"); array(&mut out, &c.phase);
++    let _ = write!(out, "}},\"stores\":{{\"calls\":{},\"least_depth_comparisons\":{},\"filter\":", c.store_calls, c.least_comparisons);
++    matrix(&mut out, &c.store_filter);
++    out.push_str(",\"branches\":"); array(&mut out, &c.branches);
++    out.push_str(",\"branch_slot\":"); matrix(&mut out, &c.branch_slot);
++    out.push_str(",\"retained_writes\":"); array(&mut out, &c.retained_writes);
++    out.push_str(",\"recent_writes\":"); array(&mut out, &c.recent_writes);
++    out.push_str(",\"empty_scan\":"); matrix(&mut out, &c.empty_scan);
++    let _ = write!(out, "}},\"lifecycle\":{{\"allocations\":{},\"groups_allocated\":{},\"capacity_groups_allocated\":{},\"initialized_groups\":{},\"max_groups\":{},\"max_capacity_groups\":{},\"generation_clears\":{},\"wrap_clears\":{},\"wrap_groups_cleared\":{}", c.allocations, c.groups, c.capacity, c.initialized, c.max_groups, c.max_capacity, c.generation_clears, c.wrap_clears, c.wrap_groups);
++    out.push_str("}}\n");
++    out
++}
++/// Cold main-thread export; no hot environment or I/O and no overwrite.
++pub fn write_from_env() -> io::Result<()> {
++    let Some(path) = std::env::var_os("ROOK2_TT_CENSUS_PATH") else { return Ok(()); };
++    let path = std::path::PathBuf::from(path);
++    if !path.is_absolute() { return Err(io::Error::other("TT census path must be absolute")); }
++    let (c, overflow, invalid) = STATE.with(|cell| {
++        if let Ok(s) = cell.try_borrow() {
++            (s.c.clone(), s.overflow, s.invalid || s.active.is_some() || BORROW_ERROR.with(Cell::get))
++        } else { (Counts::default(), false, true) }
++    });
++    let body = serialize(&c, overflow, invalid);
++    if body.len() > 65536 { return Err(io::Error::other("TT census body cap")); }
++    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
++    file.write_all(body.as_bytes())?; file.flush()?;
++    if overflow || invalid { return Err(io::Error::other("invalid TT census")); }
++    Ok(())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use super::super::{Query, Record, Store};
++
++    // Each test owns this thread's observer state and restores it even on unwind.
++    struct LocalState { old: Option<State>, borrow_error: bool }
++    impl LocalState {
++        fn new() -> Self {
++            let old = STATE.with(|s| std::mem::take(&mut *s.borrow_mut()));
++            let borrow_error = BORROW_ERROR.with(|s| s.replace(false));
++            Self { old: Some(old), borrow_error }
++        }
++    }
++    impl Drop for LocalState {
++        fn drop(&mut self) {
++            STATE.with(|s| *s.borrow_mut() = self.old.take().unwrap());
++            BORROW_ERROR.with(|s| s.set(self.borrow_error));
++        }
++    }
++    fn query(identity: u32, depth: i32, upper: i32) -> Query {
++        Query { group: 0, identity, ply: 0, target: depth, lower: -100, upper }
++    }
++    fn entry(identity: u32, depth: i32, score: i32) -> Store {
++        Store { query: Query { lower: -200, upper: 200, ..query(identity, depth, 200) },
++            score, move_hint: None, quiet_mate_checked: false, mark_depth: true }
++    }
++    fn counts() -> Counts {
++        STATE.with(|s| {
++            let s = s.borrow();
++            assert!(!s.invalid && !s.overflow && s.active.is_none());
++            s.c.clone()
++        })
++    }
++
++    #[test]
++    fn tt_census_actual_probe_prefixes_and_joint_results() {
++        let _local = LocalState::new();
++        let mut table = RememberedTable::with_groups(1);
++        assert_eq!(table.probe(query(9, 5, 0)).score, None);
++        table.groups[0].records[3] = Record::from_store(entry(9, 1, 30), 0);
++        table.groups[0].records[1] = Record::from_store(entry(9, 10, 40), 1);
++        assert_eq!(table.probe(query(9, 5, 0)).score, Some(40));
++        table.groups[0].records[3] = Record::from_store(entry(9, 1, 30), 1);
++        table.groups[0].records[1] = Record::default();
++        table.groups[0].records[0] = Record::from_store(entry(9, 10, 40), 1);
++        let result = table.probe(query(9, 5, 0));
++        assert_eq!((result.score, result.marked_depth), (Some(40), Some(10)));
++        assert_eq!(table.probe(query(9, 1, 0)).score, Some(30));
++        let c = counts();
++        assert_eq!(c.probe_calls, 4);
++        assert_eq!((c.joint[0][1], c.joint[1][5], c.joint[2][3], c.joint[3][0]), (1,1,1,1));
++        assert_eq!(c.probe_filter[3], [1,1,2]);
++        assert_eq!(c.probe_filter[0], [2,0,1]);
++        assert_eq!(c.probe_filter[1], [1,0,1]);
++        assert_eq!(c.probe_filter[2], [1,0,0]);
++        assert_eq!(c.consider[3], [1,0,1]);
++        assert_eq!((c.returns_score, c.returns_no_score), (3,1));
++    }
++
++    #[test]
++    fn tt_census_five_store_branches_keep_selected_physical_slots() {
++        let _local = LocalState::new();
++        let mut table = RememberedTable::with_groups(1);
++        for (id, depth) in [(1,10),(2,20),(3,30),(1,9),(1,10),(4,10),(5,-1)] {
++            table.store(entry(id, depth, 42));
++        }
++        assert_eq!(table.groups[0].records[0].identity, 4);
++        assert_eq!(table.groups[0].records[3].identity, 5);
++        let c = counts();
++        assert_eq!(c.store_calls, 7);
++        assert_eq!(c.branches, [1,1,3,1,1]);
++        assert_eq!(c.branch_slot, [[1,0,0],[1,0,0],[1,1,1],[1,0,0],[1,0,0]]);
++        assert_eq!(c.retained_writes, [3,1,1]);
++        assert_eq!(c.recent_writes, [1,3,1,1]);
++        assert_eq!(c.least_comparisons, 4);
++        assert_eq!(c.empty_scan, [[4,1],[3,1],[2,1]]);
++    }
++
++    #[test]
++    fn tt_census_usable_mate_counts_unchanged_word_store_too() {
++        let _local = LocalState::new();
++        let mut table = RememberedTable::with_groups(1);
++        let mut mate = entry(7, 1, 9000);
++        mate.query.lower = 0; mate.query.upper = 9000;
++        table.store(mate);
++        let first = table.probe(query(7, 10, 9000));
++        let second = table.probe(query(7, 10, 9000));
++        assert_eq!((first.score, first.marked_depth), (Some(9000), Some(1)));
++        assert_eq!((second.score, second.marked_depth), (Some(9000), Some(10)));
++        let c = counts();
++        assert_eq!(c.consider[0], [0,2,0]);
++        assert_eq!(c.mate_depth[0], [1,1]);
++        assert_eq!(c.mate_write_lines, [0,2,0]);
++        assert_eq!(c.joint[0][3], 2);
++    }
++
++    #[test]
++    fn tt_census_lifecycle_and_diagnostic_failure_do_not_own_table_values() {
++        let _local = LocalState::new();
++        let mut table = RememberedTable::with_groups(2);
++        let other = RememberedTable::from_tts(96).unwrap();
++        table.store(entry(1, 2, 42));
++        table.generation = 254;
++        table.clear(); table.clear();
++        assert_eq!(table.generation, 1);
++        assert_eq!(table.probe(query(1, 2, 0)).score, None);
++        assert_eq!(other.group_count(), 2);
++        let c = counts();
++        assert_eq!((c.allocations, c.groups, c.initialized), (2,4,4));
++        assert!(c.capacity >= c.groups);
++        assert_eq!((c.generation_clears, c.wrap_clears, c.wrap_groups), (1,1,2));
++        observe(|s| { s.c.store_calls = u64::MAX; add(&mut s.c.store_calls, 1, &mut s.overflow); });
++        { let _unfinished = begin_probe(0); }
++        STATE.with(|s| { let s = s.borrow(); assert!(s.overflow && s.invalid && s.active.is_none()); });
++        // Counter failure does not change the actual store/probe return owner.
++        table.store(entry(2, 3, 55));
++        assert_eq!(table.probe(query(2, 3, 0)).score, Some(55));
++    }
++}

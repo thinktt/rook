@@ -1,0 +1,166 @@
+{
+  "schema": "rook2-tt-probe-store-census-v1",
+  "top": [
+    "schema",
+    "pid",
+    "complete",
+    "overflow",
+    "invalid",
+    "probes",
+    "stores",
+    "lifecycle"
+  ],
+  "scope": "whole main-thread process; count-only isolated derivative, not search-only/cachemiss/traffic/CPU",
+  "integer_domain": "checkedu64; anyoverflow/unfinishedevent/invalidassociation invalidates, never feeds numerical decisions",
+  "probes": {
+    "scalars": [
+      "calls",
+      "returns_score",
+      "returns_no_score"
+    ],
+    "arrays": {
+      "joint": [
+        4,
+        8
+      ],
+      "filter": [
+        4,
+        3
+      ],
+      "consider": [
+        4,
+        3
+      ],
+      "mate_depth": [
+        4,
+        2
+      ],
+      "read_line_hist": [
+        3
+      ],
+      "mate_write_line_hist": [
+        3
+      ],
+      "group_phase": [
+        64
+      ]
+    }
+  },
+  "stores": {
+    "scalars": [
+      "calls",
+      "least_depth_comparisons"
+    ],
+    "arrays": {
+      "filter": [
+        3,
+        3
+      ],
+      "branches": [
+        5
+      ],
+      "retained_writes": [
+        3
+      ],
+      "recent_writes": [
+        4
+      ],
+      "empty_scan": [
+        3,
+        2
+      ],
+      "branch_slot": [
+        5,
+        3
+      ]
+    }
+  },
+  "lifecycle": {
+    "scalars": [
+      "allocations",
+      "groups_allocated",
+      "capacity_groups_allocated",
+      "initialized_groups",
+      "max_groups",
+      "max_capacity_groups",
+      "generation_clears",
+      "wrap_clears",
+      "wrap_groups_cleared"
+    ]
+  },
+  "enums": {
+    "slot": [
+      "retained0",
+      "retained1",
+      "retained2",
+      "recent"
+    ],
+    "filter": [
+      "identity_different",
+      "identity_equal_generation_stale",
+      "live_match"
+    ],
+    "consider": [
+      "normal_usable",
+      "mate_usable",
+      "no_score"
+    ],
+    "mate_depth": [
+      "unchanged",
+      "changed"
+    ],
+    "joint_recent": [
+      "identity_different",
+      "identity_equal_stale",
+      "live_no_score",
+      "live_usable"
+    ],
+    "joint_retained": [
+      "not_consulted",
+      "no_live_match",
+      "slot0_no_score",
+      "slot0_score",
+      "slot1_no_score",
+      "slot1_score",
+      "slot2_no_score",
+      "slot2_score"
+    ],
+    "store_branches": [
+      "matched_shallower_to_recent",
+      "matched_equal_or_deeper_retained",
+      "first_invalid_fill",
+      "full_displace",
+      "full_shallow_to_recent"
+    ],
+    "recent_writes": [
+      "matched_shallower",
+      "invalid_clear",
+      "displacement",
+      "new_shallow"
+    ],
+    "empty_scan": [
+      "valid",
+      "invalid"
+    ],
+    "line_hist": "index=distinct conditional64B lines0/1/2",
+    "group_phase": "actualgroupaddressmodulo64; mainthread diagnosticaddresscoverageonly"
+  },
+  "env": "ROOK2_TT_CENSUS_PATH",
+  "env_path": "exactabsolute/create_new/noPIDexpansion",
+  "body_cap_bytes": 65536,
+  "ledger": "Baseline READ union ofactualvisitedidentityDWORD plusgenerationBYTE onlyifidentityequal; thesecoverconsiderlines for12B record. MateWORD writeunioncountsallusablemateconsiders,includingunchangeddepth. No outlinedstore/counterfactuallayoutledger.",
+  "reconciliation": [
+    "probes.calls=sumjoint=sumphase=sumreadhist=sumwritehist",
+    "probe.filter[3].sum=probes.calls; slots0/1/2orderedprefix derivedfromjoint",
+    "livefiltermatches per-slot=consider per-slot",
+    "considers=normal+mate+no_score; mates=sum mate_depthcolumns",
+    "returns_score=jointrecentusable+retainedscorecells; returns_score+returns_no_score=calls",
+    "writehist[1]=allmate_depth; writehist[2]=0; writehist[0]=calls-writehist[1]",
+    "stores.calls=sumbranches; retained_writes.sum=branches1+2+3; recent_writes=[branch0,branch2,branch3,branch4]",
+    "least_depth_comparisons=2*(branches3+branches4)",
+    "lifecycle initialized_groups=groups_allocated; capacity>=groups; wrap/group totals only observed, no syntheticwraps",
+    "branch_slot eachrow.sum=branches[row]; branch4 selectedslot is comparison only",
+    "retained_writes[i]=branch_slot[1][i]+branch_slot[2][i]+branch_slot[3][i]",
+    "store.filter[i][live]=branch_slot[0][i]+branch_slot[1][i]; empty_scan[i][invalid]=branch_slot[2][i]"
+  ]
+}

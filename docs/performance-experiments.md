@@ -111,6 +111,7 @@ Additional work and diagnostics:
 | Current62 branch/cache accounting | Strict study failed with a2-instruction discrepancy; only partial findings usable. |
 | Current62 generation-safety census | Two exact observations; many off-mask rejects already skip projection. No speed claim. |
 | TT baseline access/layout review | Actual loads checked; potential layout tradeoff remains unmeasured. |
+| Current62 TT probe/store census | [Two cases closed](../experiments/current62-tt-census/report.md):all-identity misses80.85%/31.61%; stores88.87/51.35 per100 probes.197 tests and both live/offline replays pass; no layout or speed claim. |
 | CPU affinity, accounting, PGO and calibration checks | Reproducible local comparisons; no universal Vic-to-Bee conversion or live PMU. |
 | Candidate25 external Bee benchmark and functional probes | External reference point, not proof of later gains or final qualification. |
 | Last-mile three-unit functional study | [Four-route study closed](../experiments/functional-cost-three-unit/report.md): opening position/evaluation observations below reference, enclosing light search above; observer/build/host boundaries prevent a production cost partition. Retained62 unchanged. |
@@ -123,7 +124,7 @@ Current proposals and source trials:
 | Enumerate checked destinations through the existing evasion mask | [Parked after fixed70](../experiments/checked-enumeration-compiler/screen-results.md):generic0.27077% lower,4/7 lower; all70 live/offline checks pass.196 tests/compiler review established pruning with code/frame growth. No retune/repeat/PGO rescue. |
 | Replace pressure mark bytes with per-kind weak/strong presence sets | [Parked after fixed70](../experiments/pressure-presence-compiler/screen-results.md):generic0.4281% slower,3/7 lower; all70 live/offline checks pass. Compiler stage passed200 tests and retired the byte consumer, but smaller frames did not produce a passing CPU screen. No retune/PGO rescue. |
 | Replace unchecked pinned-source projections with a pin-ray test | Lower-priority hypothesis; proof and added setup costs unresolved. |
-| Reorganize TT identity headers/payloads, or align groups | [Source-only census plan](../experiments/current62-tt-census-design/README.md):one proposed35→08 count-only probe/store/reset observation before comparing48B headers versus dense16G/32G slabs. No prototype or run selected. |
+| Reorganize TT identity headers/payloads, or align groups | [Two-case census closed](../experiments/current62-tt-census/report.md); recommend one compact48B header/payload compiler discriminator at sameG/single allocation. Dense16G/32G slabs remain an alternative. No layout prototype/timing selected. |
 | Counts-guided mailbox attacks | Earlier R8 hypothesis; never implemented or measured. |
 | Skip private shelter work with an exact zero multiplier | Source proposal only; retain public component behavior. |
 | Direct-output Influence with safe initialization/rollback | Unimplemented transport alternative; distinct from E44. |

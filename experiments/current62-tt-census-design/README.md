@@ -1,4 +1,4 @@
-# TT probe/store census design — unexecuted
+# TT probe/store census design — historical preparation stage
 
 Recommend one count-only census of original requests35 then08 before selecting
 a layout prototype. The existing access reviews establish identity-first
@@ -68,3 +68,7 @@ This census is the single proposed next discriminator. If filter-only demand
 is sparse, park; otherwise reassess complete hit/store/reset/footprint costs
 before selecting one compiler/layout experiment. A favorable miss count alone
 cannot authorize a layout or establish a gain.
+
+The subsequently selected [two-case count-only study](../current62-tt-census/report.md)
+is now closed. The unexecuted/bindings-unset statements above describe this
+earlier source-only design stage; consult the study report for actuals and limits.
