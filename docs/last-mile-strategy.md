@@ -311,15 +311,22 @@ now closes all 7,673 cases/115 files/117 operations on exact DIAG `68a1c304`,
 joining the preserved 22-file report and 93-file complement. All 209 diagnostic
 and two development tests pass, alongside the reused 196 library tests.
 
-The selected [production step](/home/legolas/agent-memos/rook2-lead-to-imp2-first-main-production-comparison-20261020-01.md)
-uses fresh own-source PGO training on the original54 once, then one production
-build with retained ExtTSP settings and one paired full54 comparison to exact62.
-One warmup and three measured fresh lifetimes per image/case give 432 lifetimes,
-with case/repetition-balanced image order frozen before collection. This measures
-complete-search cost for the correction; there is no optimization gain gate,
-automatic promotion or KingRE parity claim. Regular12/focused/wire receipts and
-source promotion remain later decisions. The empty-source hint consultation is
-already recorded and has not been reopened without new evidence.
+The [production step](../experiments/first-main-cutoff-production/README.md)
+is closed at `a8dfb656`: fresh own-source PGO, retained ExtTSP settings and all
+432 paired full54 lifetimes pass, with 864 independent offline checks. Corrected
+ordinary `5cf01208` costs 68.569086 CPU s against exact62 at 68.446861 s in this
+paired run, +0.178569%. This is a small observed cost for the conformance fix;
+there is no optimization gain gate, automatic promotion or KingRE parity claim.
+Historical totals from other windows are not substituted for this paired control.
+
+The [next selected lane](/home/legolas/agent-memos/rook2-lead-to-imp2-corrected-gameplay-closure-20261020-01.md)
+closes exact-image regular12/632, continuity8, seed11, persistence3 and wire8/24
+once each. It reuses the completed diagnostic/source evidence, adds no timing
+comparison and preserves retained62. Promotion and full12 performance
+qualification remain later decisions.
+The bounded tiny-table domain consultation establishes neither admission nor
+exclusion of the proposed tiny production capacities; it supplies no qualified
+hint witness and selects no broader witness search or new engine rule.
 
 The [qualification gaps](qualification-gaps.md) and
 [Vic scope](qualification-scope.md) remain obligations. Parity is the

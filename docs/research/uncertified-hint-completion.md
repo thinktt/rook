@@ -362,3 +362,27 @@ analysis. Second-half effectiveLower may still exceed incoming lower; its
 conditional zero-score completion lemma, unresolved admitted hint provenance
 and other consumers remain open. No engine change, runtime check, public
 violating prefix, new behavior or qualification claim accompanies the proof.
+
+## 2026-10-20: a tiny table does not supply admitted witness provenance
+
+A bounded released-spec review considered whether ordinary `cm_parm tts=96`
+or `tts=65536` could reduce the group-collision constraint in a future witness.
+The command storage contract does not qualify searches with every accepted
+integer. SEARCH-GENERIC-TIMED-SEARCH covers capacities 4,194,304..67,108,864;
+joined ingress lists four capacities. Both expressly describe diagnostic
+coverage, so neither establishes a general production lower bound.
+The session rule to use current `tts` supplies no missing numeric admission
+rule. Native parameter acceptance or an internal small-table test likewise
+does not establish released production admission.
+
+The [focused specification-only consultation](/home/legolas/agent-memos/20261020-imp1-tiny-tts-released-domain-answer.md)
+confirms that neither admission nor exclusion of those tiny production values
+can be derived from these released clauses. It used no implementation findings
+or runs. Such a setup would therefore leave an additional admission question;
+it cannot currently support a qualified public witness. No new table-size
+restriction, parser rejection or engine behavior follows from this finding.
+
+Moreover, both completed sibling-route enumerations above failed on secondary
+identity before group selection. Changing `tts` alone cannot reopen either
+excluded recipe. No broader enumeration or native witness search is selected.
+The second-half inherited-hint question remains open on its existing terms.

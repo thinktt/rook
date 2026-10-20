@@ -74,6 +74,10 @@ The [completion note](../research/uncertified-hint-completion.md) and
 inherited, unreplaced hints at every native **first-half** normal completion.
 Two completed four-piece key enumerations exclude only their proposed sibling
 recipes. No actual public second-half violating prefix is established.
+The [tiny-table domain review](../research/uncertified-hint-completion.md#2026-10-20-a-tiny-table-does-not-supply-admitted-witness-provenance)
+supplies no shortcut: released clauses establish neither production admission
+nor exclusion for the proposed tiny capacities. Both excluded recipes already
+fail secondary identity before table-group selection. No wider witness run is selected.
 
 **Needed disposition:** establish exclusion at this remaining native consumer,
 or exhibit an admitted public prefix and obtain specification-authority behavior
@@ -139,10 +143,33 @@ SHA256 is `1cdedcbf2b6c867880e88d197670391519c8ec9b686fc102324755324d0c0b86`.
 All 7,673 exec/wait/exit0 chains reconcile; two post-exec point observations are
 unavailable and remain disclosed. No runtime repairs or diagnostic rebuild occurred.
 
-One fresh own-source PGO production build and paired full54 comparison against
-retained62 are selected next. This measures the correction's complete-search
-cost without an optimization gain threshold; it does not promote the candidate.
-Production gameplay receipts and specification-owner acceptance remain separate.
+The [production comparison](../../experiments/first-main-cutoff-production/README.md),
+committed at `a8dfb656`, now closes fresh own-source PGO and all 54 paired cases.
+Ordinary image `5cf01208` uses fresh profile `fda4b7fd`; training on each original
+case once and independent byte-identical remerge pass. All 432 comparison
+lifetimes, 4,992 semantic posts and 864 offline checks pass. Summed native CPU
+medians are 68.569086 s corrected versus 68.446861 s retained62: +0.122225 s,
+or +0.178569%. Thirteen case medians are lower; the worst ratio is 1.011773436.
+All samples remain. This small observed cost supports continuing the conformance
+correction through gameplay qualification; it is not a performance gain or
+formal noninferiority/parity finding.
+
+The lead accepts the finite production comparison. Check `cf6a89/0` verifies
+137 plan pins, candidate/canonical source maps, 25 result path/hash/size bindings,
+the exact 432-life alternating schedule, all case medians/totals and the bounded
+Path-only launcher repair. It also confirms successful stage terminals and
+their absent process IDs. The independently reviewed reconciler accounts for
+all native/supervisor lifetimes and complete raw exchanges. Result SHA256 is
+`bb20e82f44e8ddcc023adae01308698c81be981274587c4383c77f65c1c68098`.
+Both pre-native setup failures are preserved; there were no native request
+retries. The original 1,800-second clock closed at 866.65 seconds. Guest
+observations do not establish exclusive-host, private-memory or no-swap qualification.
+
+One [same-image behavioral lane](/home/legolas/agent-memos/rook2-lead-to-imp2-corrected-gameplay-closure-20261020-01.md)
+is selected next: regular12/632, continuity8, seed11, persistence3 and wire8/24,
+without warmups, repetitions or a new timing claim. Canonical source and
+retained62 remain unchanged. Production promotion, specification-owner acceptance,
+full-game and compatible performance qualification remain separate.
 Tail execution in
 the old implementation additionally needs an unconsumed suffix, D>=5 and entry
 bound exactly Lower; endpoint clamping alone remains no witness. Existing

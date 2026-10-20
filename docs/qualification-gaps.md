@@ -14,9 +14,12 @@ library tests pass. The [same-image completion](../experiments/first-main-cutoff
 adds passing 209 diagnostic and two development tests and closes all 7,673
 mandatory cases/115 files/117 operations across two preserved reports.
 The lead accepts the finite union. Candidate DIAG `68a1c304` and source remain
-isolated; retained62 is unchanged. Fresh own-source PGO and one paired full54
-comparison are selected next. No public equality witness, production promotion,
-timing result or owner acceptance is claimed. See
+isolated; retained62 is unchanged. The [fresh own-PGO production comparison](../experiments/first-main-cutoff-production/README.md)
+now passes all 432 lifetimes and 864 offline checks. Corrected ordinary `5cf01208`
+costs 68.569086 CPU s against 68.446861 s for exact62 in the same paired run,
+a descriptive +0.178569%. One same-image regular12/focused/wire behavioral pass
+is selected next. No public equality witness, production promotion, KingRE parity
+or owner acceptance is claimed. See
 [Q2 disposition](reviews/retained62-owner-review.md#q2-first-main-cutoff-at-an-equal-window).
 
 Candidate62 is the retained production build, 2026-10-20. It adds an explicit
