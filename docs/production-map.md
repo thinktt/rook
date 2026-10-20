@@ -35,6 +35,15 @@ the existing implementation's no-op; it is not a released normative rule.
 See [decision0043](decisions/0043-bitplane-pin-summary.md) and the exact
 [previous51 map](production-map-history-20261020-02.md).
 
+
+Experiment58 aggregate pawn Influence seeding passes196 library tests and all70
+original live/offline replays. The actual pawn loop is removed, with104B more
+producer code,16B more common frame and a partly hoisted decode. Its sole fixed
+screen improves only0.171598%,4of7lower,worst1.017251803, failing aggregate and
+minimum-lower gates. It is [parked without retry or own-PGO](decisions/0044-aggregate-pawn-influence-seed.md).
+An invalid new FEN fixture was repaired only in test source; both ordinary builds
+are byte-identical. Production57 and its completed whole54/12 totals stay current.
+
 ## Earlier retained51 evidence
 
 Previous candidate51 was retained by [exact117-file source promotion](../evidence/tactical-check-mask-integration-20261020-01/source-promotion.json):

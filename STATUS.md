@@ -29,6 +29,15 @@ Finite checks do not close all production-domain obligations; uncertified
 empty-source cutoff-hint composition, final performance qualification and the
 external3288 game gate remain open.
 
+
+Experiment58 aggregate pawn Influence seeding passes196 library tests and all70
+original live/offline replays. The actual pawn loop is removed, with104B more
+producer code,16B more common frame and a partly hoisted decode. Its sole fixed
+screen improves only0.171598%,4of7lower,worst1.017251803, failing aggregate and
+minimum-lower gates. It is [parked without retry or own-PGO](docs/decisions/0044-aggregate-pawn-influence-seed.md).
+An invalid new FEN fixture was repaired only in test source; both ordinary builds
+are byte-identical. Production57 and its completed whole54/12 totals stay current.
+
 ## Earlier checkpoints and measurements
 
 A diagnostic [category encounter census](evidence/current51-activity-category-census-20261020-01/README.md)
