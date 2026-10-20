@@ -30,6 +30,10 @@ Existing195 native tests,209 diagnostic tests and7673 mandatory cases across
 engine/diagnostic source and the same diagnostic companion. They were not
 newly rerun for62. Original57 continuity8/seed11/persistence3 results are also
 inherited evidence. New main-artifact coverage is stated separately above.
+Fresh [exact62 focused controls](../experiments/retained62-focused-closure/README.md)
+now add continuity8/90 posts,11 seed children and persistence3, all passing with
+independent raw reconciliation. The required eight fatal seed exits are passes
+for those controls. The original57 receipts are preserved without relabeling.
 
 Final behavioral/performance qualification remains open. Raw historical-reference
 ratios are1.066348 for54 and1.048017 for12, with maximum individual ratios
@@ -43,11 +47,15 @@ finite evidence. It creates no transfer or execution authority. The external
 full3288 runner, corpus, continuous schedule, completion checker and receipts
 remain unresolved. Prior57 continuity is distinguished from exact62 evidence;
 same-artifact focused continuity disposition remains explicit in the manifest.
-The released same-artifact requirement is a concrete remaining obligation:
-one exact62 continuity8 plus standard seed11/persistence3 closure is assigned,
-reusing the existing62 independent12 evidence with native-identity/configuration
-reconciliation. No rebuild,12 rerun or new timing comparison is selected.
-Fresh results are pending; the frozen57 handoff receipts are not relabeled.
+The exact62 local focused receipt gap is now closed by
+[de478938](../experiments/retained62-focused-closure/README.md): deterministic
+original repeat0 independent12/632/5,801 posts plus the fresh same-image
+continuity8/seed11/persistence3. The lead accepts the reviewed native-identity/
+configuration equivalence under the released prior-evidence rule; see the
+[current disposition](reviews/retained62-owner-review.md#separate-qualification-receipts-and-decisions).
+The literal released collector was not used to combine differing launcher
+receipt fields. No report was rewritten, no rebuild/12 rerun/timing occurred,
+and specification-owner acceptance/full3288/performance remain open.
 
 See [source promotion](../evidence/exttsp-profiled-integration-20261020-01/source-promotion.json),
 [whole54](../evidence/exttsp-profiled-standard54-results-20261020-01/README.md),

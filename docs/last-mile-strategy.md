@@ -291,10 +291,19 @@ first-main equality cutoff. Native weak ordering now confines the latter to
 score=lower=upper without establishing its joint reachability. No broad proof
 campaign is a prerequisite to presenting the map for owner disposition.
 
-Separately, close the released exact-artifact focused gap with one62
-continuity8 and seed11/persistence3 lane, reusing its existing independent12
-evidence. This is required local behavioral coverage, not a performance trial;
-no rebuild, repeat12 or external action is selected. Results remain pending.
+The [exact62 focused closure](../experiments/retained62-focused-closure/README.md)
+now supplies continuity8 and seed11/persistence3, with independent raw checks,
+reusing original repeat0 independent12/632. The lead accepts the custom reviewed
+native-equivalence route; it is not a fabricated released-collector pass.
+No rebuild, repeat12, new timing or external action occurred in that lane.
+
+A released-contract-only consultation reads the first-main reaches-U clause as
+requiring immediate completion if the equality state is admitted. Assess a
+minimal first-main-only correction against that clause and strict-window
+preservation; an exclusion proof or native witness is not automatically a
+prerequisite to a justified correction. This assessment is source-only, with
+no implementation/adoption selected. The empty-source hint consultation is
+already recorded and has not been reopened without a new witness.
 
 The [qualification gaps](qualification-gaps.md) and
 [Vic scope](qualification-scope.md) remain obligations. Parity is the

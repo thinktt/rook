@@ -280,6 +280,14 @@ The [independent Astra check](/home/legolas/agent-memos/rook2-weak-window-orderi
 and the lead's source review agree on this scope. No engine/helper execution,
 new witness or production edit supports this additional result.
 
+The subsequent [released-contract consultation](/home/legolas/agent-memos/20261020-first-main-equality-released-reading.md)
+reads the explicit first-main sentence as requiring completion if the joint
+equality state is admitted, without changing preferred/PV at equality. It finds
+no explicit numerical composed L<U admission/rejection clause in its bounded
+reading. This is interpretation support, not a specification amendment or a
+native witness. A source-only correction assessment is separate from this proof;
+the retained implementation and its qualification limits remain unchanged.
+
 ## Reviewed source identity
 
 Source hashes read at repository HEAD5b625c5a, before this documentation-only

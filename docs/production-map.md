@@ -29,6 +29,10 @@ Existing195 native tests,209 diagnostic tests and7673 mandatory cases across
 engine/diagnostic source and the same diagnostic companion. They were not
 newly rerun for62. Original57 continuity8/seed11/persistence3 results are also
 inherited evidence. New main-artifact coverage is stated separately above.
+Fresh [exact62 continuity8/seed11/persistence3](../experiments/retained62-focused-closure/README.md)
+now also passes. The lead's compact map accepts local focused coverage through
+reviewed native-identity/configuration equivalence with the existing62 games;
+it does not relabel57 receipts or assert a released-collector combined pass.
 
 Final behavioral/performance qualification remains open. Raw historical-reference
 ratios are1.066348 for54 and1.048017 for12, with maximum individual ratios
