@@ -34,6 +34,13 @@ screen is0.198734%higher CPU,2of7lower,worst1.007862818; aggregate and minimum-l
 gates fail. It is [parked without retry, PGO or adoption](docs/decisions/0037-separated-activity-boundary.md).
 Candidate51 and its completed whole54/12 evidence remain current.
 
+A fresh one-lifetime Callgrind profile of exact51 profile35 passes original live
+and offline replay equality. Exclusive rows reconcile44,100,272,048 simulated
+instructions; Activity owns20.758%, the largest recorded function. Four source
+annotations and separate caller arcs guide the next experiment. These are
+diagnostic translated instructions, not native timing or qualification. See the
+[profile report](evidence/current51-callgrind-results-20261020-01/README.md).
+
 ## Previous retained candidate43 bit-sliced Influence, 2026-10-19
 
 Candidate43 replaces40 by exact equality of all115 tested source files after

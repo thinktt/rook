@@ -72,6 +72,12 @@ entry passes false and can reject at actual IIO entry. This is a source-level
 boundary fact, not closure of all IIO semantics. See the [current entry review](../evidence/current51-iio-entry-source-review-20261020-01/README.md)
 and the earlier [diagnostic-domain review](../evidence/current25-iio-diagnostic-domain-20261019-01/review.md).
 
+The [window-composition source review](../evidence/current51-window-admission-review-20261020-01/review.md)
+proves recursive strictness conditionally. Root numeric contracts explicitly
+permit clamping collapse, so universal strictness is not imposed as a new
+requirement. The supplied algebra examples do not establish public production
+reachability or a defect; actual composed-domain behavior remains open.
+
 ## Reference and calibration limits
 
 KingRE Rust v1.1.1 generic PGO bf71485c is the performance reference. Supplied
