@@ -56,9 +56,10 @@ complete 23-unit study a prerequisite for useful source work.
 | Question | Current assignment / decision | Evidence needed to advance |
 |---|---|---|
 | Which semantic sequences are comparatively expensive? | Four-row study closed. Preserve the current ownership baseline; no broader functional framework or production cost partition is selected. | Revisit only for a specific decision that these boundaries cannot answer. |
-| Can checked generation avoid traversing irrelevant directions? | Imp2/Sol source prototype complete; lead reviewed the patch. No build or tests executed; parked behind the pressure compiler discriminator. | Exact ordered inventories, preservation of bounded king-first exits and EP, actual skipped traversal versus added mask/setup cost. |
-| Can Activity pressure avoid materializing per-square mark bytes? | Astra source prototype complete and reviewed by the lead. Imp2 now owns one generic build, focused/library tests and actual caller/helper review. Timing and adoption are not selected. | Actual lowering, register and frame costs before deciding whether it deserves a native screen. |
-| Does the TT access population justify a different layout? | Deferred behind the initial discriminators. Existing source/access reviews are sufficient; do not repeat them. | Recent-return versus retained/miss populations, complete probe/store and footprint costs. |
+| Can checked generation avoid traversing irrelevant directions? | Source prototype reviewed. One isolated generic compiler/test discriminator is selected after pressure's failed screen; no timing or adoption yet. | Exact ordered inventories, bounded king-first exits and EP; actual skipped traversal versus setup, unchecked-path and code-size costs. |
+| Can Activity pressure avoid materializing per-square mark bytes? | Parked. All200 library tests and70 live/offline replays pass, but the fixed generic screen is0.4281% slower, with3/7 cases lower. | No retune, second screen or PGO rescue. Preserve the failed result. |
+| Does the TT access population justify a different layout? | Imp2/Sol owns a source-only plan for one small probe/store census on35/08. No census execution or layout variant is selected. | Recent returns, metadata continuation, retained matches, identity/generation misses, stores and reset costs together. |
+| Can Phase reuse avoid both recomputation and extra call arguments? | Narrow dependency-owned field hypothesis reviewed, unselected. Keep behind current discriminators. | Actual producer/consumer costs and complete mutation ownership without narrowing supplied-count semantics. |
 
 ### Checked generation: narrow the work, preserve the semantics
 
@@ -108,12 +109,74 @@ placement/supplied-map boundary without a new coherence permission.
 
 The isolated prototype uses baseline SSE2 byte-SWAR and PSADBW to count the two
 masked words together. An independent old byte producer/consumer and seven
-focused differential controls are present but unexecuted. The lead's source
-review found no semantic objection. This differs from rebuilding the whole
-Activity frontend or only accelerating king-ray traversal, but does not remove
+focused differential controls passed in the [compiler discriminator](../experiments/pressure-presence-compiler/report.md).
+The lead's source review found no semantic objection. This differs from
+rebuilding the whole Activity frontend or only accelerating king-ray traversal, but does not remove
 most king geometry. Indexed word updates, shifts, two accumulator dependency
 chains, SIMD transfers, live visibility masks and outlining can erase any gain.
 A smaller source scratch array is not evidence of fewer spills or faster code.
+
+The compiler exposed that tradeoff: the intended SSE2 reduction replaced the old byte
+consumer, but destination updates remained stack read/modify/write operations.
+The active Activity stack chain shrank632→456 bytes while its combined code
+grew9119→10322 bytes. One unchanged [fixed70 generic screen](../experiments/pressure-presence-compiler/screen-results.md) then measured summed
+medians13.392375s control versus13.4497075s candidate, ratio1.00428098.
+Only3/7 cases improved; worst ratio1.00773765. All70 original live and independent
+offline replays passed. The screen does not isolate the cause of the loss.
+The miss parks the source; correctness and smaller
+frames do not authorize a retune or PGO rescue. Retained62 remains unchanged.
+
+### TT: filter identity before fetching payload
+
+Existing access reviews already show conditional scalar identity-first loads.
+There is no eager48-byte group read to remove. A compact identity header could
+reduce distinct lines touched by misses; a live or stale identity match would
+then need payload access, and stores can become more expensive. Recent usable
+returns are especially important because today's recent record can already fit
+within one conditional64-byte line.
+
+The source-only census plan must price those populations together. Distinguish
+recent metadata-only continuation from a usable recent return, and identity
+misses from generation rejection. Include replacement/displacement and clears,
+not just query counts. A conditional distinct-line ledger is useful but does
+not measure cache misses, residency or CPU cost.
+
+Two dense arrays—16 bytes of full identities and32 bytes of payload per semantic
+group—are one possible alternative to per-group headers or64-byte padding.
+They preserve48G payload and need no partial-identity filter. Dense-header
+residency is a separate hypothesis from reducing lines per query. The specified
+group count, collision and priority rules remain unchanged. Neither layout nor
+a native experiment is selected until the workload mix supports a concrete
+discriminator.
+
+### Phase: own only the dependencies that justify reuse
+
+An unselected alternative to E26's extra Phase arguments is a packed field in
+Position's existing padding, reached through the already-passed Position pointer.
+For phases produced by the current formula, opening/16 needs five bits and
+endgame needs nine; middlegame is256 minus the other two. Source layout suggests
+a u16 at126 without changing Position160/Node176. Actual sizes, copies and
+lowering would still need verification.
+
+The invariant would be exactly `cached = phase_formula(counts, starting_units)`.
+It must not require those supplied counts to agree with the mailbox. Released
+material diagnostics deliberately admit independent counts. Private mutation
+of just those two dependencies, readonly access and literal supplied-count
+setters could establish this narrower invariant. Explicit independent Phase
+arguments remain authoritative and need not satisfy the cache's encoding.
+
+Refresh once at a completed dependency-changing transition; preserve raw
+starting occupancy below its material gate. Do not increment a simple weighted
+material total: carry normalization means a capture can increase that measure.
+Quiescence's material-only hypothetical must remain counts-only through one
+material formula, without acquiring a Phase refresh.
+
+This is different transport from E26, but its economic objection is substantial:
+capture/promotion children can return from repetition/TT or enter checked
+quiescence without ever demanding Phase. The cache shifts work into those
+producers and adds loads/unpacking elsewhere. E26's old measured phase pool was
+small, and source call counts overstate savings where the compiler already
+shares work. Keep this as a reserve hypothesis, not a selected refactor.
 
 ### Dependency elimination: a narrower opportunity than whole shelter
 
@@ -151,3 +214,8 @@ The [qualification gaps](qualification-gaps.md) and
 optimization target; qualification uses the released acceptance policy and
 requires compatible measurements, behavioral evidence and the external game
 gate. No raw ratio, microbenchmark or partial profile closes those obligations.
+
+The [uncertified-hint note](research/uncertified-hint-completion.md) now has a
+smaller conditional completion certificate based on a zero-valued sparse
+ending. It supplies no public collision witness or authority for new behavior;
+that qualification question remains open.

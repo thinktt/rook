@@ -55,3 +55,61 @@ and authority clarification of its behavior, or a justified proof that this
 state is excluded by the full production contract/invariants. Keep the
 production review obligation open. Existing finite replay success and direct
 component eligibility tests do not close it.
+
+## 2026-10-20: smaller conditional completion certificate
+
+A source/spec review, independently checked by the lead, discharges the
+candidate-score premise for one sparse family. It does **not** establish a
+reachable collision, close this gap or change the guard's behavioral authority.
+No engine execution or implementation accompanies this result.
+
+Let P have exactly a king and one minor of each color, no other pieces. Require
+P unchecked, at least two legal moves, no legal move giving check, arrival by a
+noncapture and no entry repetition return. At ply2, remaining depth1, take an
+incoming window `L<0<U`, an admitted depth limit and no interruption. Suppose
+actual lookup supplies H without a score.
+
+Both insufficient-material endpoint assignments apply. The current phase is
+endgame256, so FULL returns score/lower/upper all zero, independently of root
+variation. Capturing either minor preserves the zero endpoints. Ordinary's
+fast gate fails for these inventories; shallow cutoff fails because0<U.
+Effective bounds remain0/0 in this second-half node. Quiet-mate and IIO gates
+are disabled at this ply/depth. These facts follow from
+[endgame adjustment](../../src/endgame.rs), [evaluation selection](../../src/evaluator.rs)
+and the [ordinary policy](../../src/ordinary_policy.rs).
+
+Fresh extensions are zero: the position is neither checked nor sole, the
+combined two-minor inventory is not the single-piece sparse class, the preceding
+move was noncapturing and there are no pawns. Searched children enter noncheck
+Q at depth0 with upper boundary0. Sparse evaluation is FULL and its lower
+bound0 returns immediately. A consumed frontier estimate is at most current
+best0 by its admission test. Thus all consumed main scores are at most0;
+best stays0 and never replaces H. Completion caps to0, exceeds L and invokes
+learning with H. Requiring both H endpoints empty in P gives the unresolved
+consumer condition.
+
+One possible certificate to seek is iteration3 of one admitted, fresh,
+fixed-iteration four-piece search. Its first root move a reaches Q at ply1/depth2
+and must finish at zero with a generated H. Its second root move b reaches B at ply1/depth2; B's first
+ordered reply c reaches a P satisfying the conditions above. The first two
+root children have the full window; B is first-half, so its first reply also
+gets that window. This route needs no extreme randomization or separately
+supplied TT contents.
+
+Q and P must actually have the same secondary identity and the same selected
+conflict group, including side/rights/EP in group selection. Q's interior exact
+zero record can export H without a usable score even at sufficient depth.
+Q's completion store is immediately before B; B makes no store before its first
+reply on the proposed sparse/full-window route. Matching recent/retained
+selection still needs verification.
+
+What remains is a complete admitted root/history, actual root/reply ordering,
+legal a/b/c, Q's zero completion and H, the two numerical identity equalities,
+P's empty endpoints, and all enclosing admission/entry gates. The released
+permission for collisions does not prove that such a tightly constrained pair
+exists. Use the chosen operation's actual table size and lifecycle; a synthetic
+one-group table or a record preloaded by a separate search is insufficient.
+
+This is a local sufficient-condition proof and a shorter search recipe.
+Universal first-half caller-window exclusion remains conditional as above.
+No public witness, newly specified fallback or final production closure follows.
