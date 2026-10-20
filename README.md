@@ -1,108 +1,52 @@
 # Rook2
 
-An independent Rust implementation of the KingRE ordinary-play specification,
-designed around efficient integrated search and eventual exact behavioral and
-performance qualification.
+An independent Rust implementation of the released KingRE ordinary-play
+specification. The guiding [mission](../imp-perf-mission.md) and released
+[KingRE v2.5.0 contracts](../king-spec/README.md) govern behavior and qualification.
 
-The governing mission is [imp-perf-mission.md](../imp-perf-mission.md).
-The released behavioral and performance contracts are in
-[king-spec](../king-spec/README.md), currently v2.5.0.
+**Retained build: candidate62.** Its native engine and diagnostic source are
+unchanged from candidate57;62 adds explicit profile-covered ExtTSP compiler
+layout using the existing own57 PGO profile. Position owns coherent attack
+planes; search keeps copied-child state, retained evaluation and ordinary/
+tactical recursion. The current architecture and its scoped review are indexed
+in [STATUS](STATUS.md) and the [production map](docs/production-map.md).
 
-This repository contains an integrated development engine: compact position
-state, legal generation, composed retained evaluation and recursive ordinary/
-tactical search, a work-timed root controller and persistent ordinary session.
-The `rook2` executable serves the live King XBoard byte stream, including
-search-time controls/status, natural seed acquisition, gate seed commands and
-fine-work posts. A separate [diagnostic adapter](diagnostic/README.md) implements
-117 mandatory operations with7673 cases across115 original whole fixture files.
-Retained candidate37 uses guarded coherent Influence production and projected
-Boolean checks with unchanged Position160/Node176.185native tests,209diagnostic
-tests, all mandatory fixtures, fresh optimized54/eight-wire24 and regular12-game
-pre-gate/632searches plus continuity/seed controls pass independent reconciliation.
-Own-PGO image54be6552 has its own training profile and a paired seven-case screen
-2.147243%lower in summed CPU medians than25. Its complete Vic54 collection sums
-71.050search/71.424373whole-native CPU medians; final performance qualification,
-production-domain audit and external3288-game gate remain open.
-See [decision0028](docs/decisions/0028-coherent-influence-masks.md) and
-[current timing](evidence/coherent-influence-masks-standard54-20261019-01/README.md).
-See [STATUS.md](STATUS.md) for artifact-specific evidence and limitations.
+The exact retained ordinary image completed the full54-case collection at
+**67.640360 whole-native CPU seconds** and regular12-game collection at
+**675.156653 seconds** on Vic. These are local engineering measurements;
+**final behavioral and performance qualification remains open**. Finite checks
+do not prove every admitted production input, and the full3288-game gate belongs
+off Vic. See [remaining obligations](docs/qualification-gaps.md).
 
-Placement now includes exact attack planes owned by Position160/Node176,
-retaining copied-child state and independent retained evaluation. The measured
-storage/kernel decision and its validation boundaries are recorded in
-[decision0004](docs/decisions/0004-persistent-attack-planes.md).
-Influence retains scalar typed lists for public/untrusted entry and leapers;
-validated native roots borrow existing planes for the guarded slider producer
-under decision0028. Typed-list ownership began in
-[decision0006](docs/decisions/0006-typed-influence-enumeration.md).
-The immutable relation kernel now indexes original profile-byte pairs directly;
-its measured storage/dependency tradeoff is recorded in decision0013.
-Private activity specialization and its separate generic/own-PGO comparisons
-are recorded in [decision0007](docs/decisions/0007-static-activity-kinds.md).
-The offline [relation generator](scripts/generate_relation_table.py) reproduces
-the source table from the general formula; `--check src/relation_table.rs`
-verifies exact bytes without writing it.
+Start with [retained artifacts, profile and build recipe](docs/production-build.md).
+It identifies the tested binaries and their relocated paths. **Default builds do
+not reproduce candidate62 automatically**:62 requires both the matching profile/
+training provenance and `--ext-tsp-profiled`. A fresh rebuild is a new artifact,
+not an automatic replacement for the tested image.
 
-Build the ordinary executable with retained settings and identity:
+The ordinary `rook2` executable serves the live King XBoard byte stream. Its
+optional `--diagnostic-seed-command` enables the persistent `king_seed` command;
+`--work-clock=kingwcr` selects the default work clock explicitly, and
+`--work-clock-post=work` enables fine-work posts. The ordinary binary has no
+JSON diagnostic mode. The separate [diagnostic adapter](diagnostic/README.md)
+serves the mandatory diagnostic operations; `rook2-dev` exposes development
+interfaces described in [tools](tools/README.md).
+
+For a fresh **generic development build**, with no PGO or62 layout selection:
 
 ```sh
-python3 tools/build.py --output evidence/fresh-ordinary-build --bin rook2
+python3 tools/build.py --bin rook2 --output /home/legolas/rook2-experiments/fresh-generic-build
 ```
 
-Run the emitted binary directly for the ordinary silent-startup profile.
-`--diagnostic-seed-command` enables the opt-in persistent `king_seed` command
-and consumed-seed stderr observations. `--work-clock=kingwcr` selects the default
-work clock explicitly; `--work-clock-post=work` enables fine-work posts. The
-ordinary binary has no diagnostic JSON mode or host wall-clock mode.
+The output directory must be absent. Substitute `--bin rook2-dev` for development
+commands such as `inspect`, `perft` or `search`; this is not the ordinary protocol
+or diagnostic adapter. Consult the retained-build recipe before timing a rebuild.
 
-Build the development executable with retained settings and identity:
+Navigation:
 
-```sh
-python3 tools/build.py --output evidence/fresh-build --bin rook2-dev
-```
-
-Run `rook2-dev inspect`, `perft --depth 4`, or `search --depth 4` from the emitted
-binary path. Its JSON output identifies the search omissions and development
-scope. It is a native development seam, not the XBoard or DIAG-TRANSPORT interface.
-
-`rook2-dev quiescence --moves 'e2e4 d7d5' --root-move e4d5` exercises the newer
-retained evaluator and tactical recursion. `--diagnostics off` selects its
-specialization without development counters while preserving charged work. Each repeat starts
-a fresh search lifetime; output excludes the preparatory root from subtree
-counters. A node-budget stop is an error. The older
-[frozen baseline](evidence/quiescence-v1/README.md) identifies its partial
-evaluation scope; it is not a timing denominator for the current evaluator.
-
-`rook2-dev first-iteration` visits the complete natural root list once, using
-the specified second-ranked-score window and shared pawn-cache lifetime across
-actual tactical children. Its diagnostic steps expose the returned windows,
-ranking and PV. This mode stops at that first pass.
-
-`rook2-dev ordinary --depth 4 --max-nodes 1000000` runs the newer iterative
-ordinary/tactical pipeline with remembered results, learned ordering, pruning,
-extensions and internal ordering passes. Its default TT budget is64 MiB;
-`--tts-bytes` supports explicit development collision experiments. Timing and
-public personality/protocol omissions are reported in every result. Selected
-complete fixed-iteration observations match the released expectations; see
-[native evaluation/root checks](evidence/evaluation-check-20261017-roots/README.md)
-and the [current CPU baseline](evidence/neutral-evaluation-v2/README.md).
-
-`rook2-dev work-timed --seed 0 --max-nodes 8192` runs neutral work-timed search
-with explicit seed, randomness 50 and 1cs average/maximum allowances. The native
-controller applies seeded root windows, adaptive checks, 4096-work polls,
-interruption and retained captures. `--average-cs`, `--maximum-cs`,
-`--randomness` and `--iteration-cap` expose development controls. Public seed
-acquisition, host commands, persistent sessions and post/PV rendering remain
-separate. See [native timing evidence](evidence/timing-check-20261017-frozen/README.md)
-and the [timed CPU baseline](evidence/work-timed-v1/README.md).
-
-Native [session/output checks](evidence/session-output-check-20261017-frozen/README.md)
-cover persistent work-clock/seed lifetime, complete semantic post trails and
-the inherited-settings three-search sequence. These run the actual session
-model; they do not establish live protocol timing or command polling.
-
-See [STATUS.md](STATUS.md) for the current milestones and
-[AGENTS.md](AGENTS.md) for contribution and clean-room boundaries.
-
-Performance history: [brief ideas and outcomes](docs/performance-experiments.md).
-Bulk evidence/history archive: [storage layout](docs/evidence-layout.md).
+- [Current status](STATUS.md): retained state, latest closed work and open obligations.
+- [Performance ideas/results](docs/performance-experiments.md): brief trials and untried proposals.
+- [Production build](docs/production-build.md): exact artifact and profile identities.
+- [Evidence layout](docs/evidence-layout.md): retained summaries versus relocated raw records.
+- [Historical status snapshot](STATUS-history-20261020.md): preceding checkpoints, not current guidance.
+- [Contribution and clean-room rules](AGENTS.md).
