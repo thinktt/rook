@@ -65,7 +65,7 @@ job or new local engine run was launched for the preparation.
 | Question | Current assignment / decision | Evidence needed to advance |
 |---|---|---|
 | Which semantic sequences are comparatively expensive? | Four-row study closed. Preserve the current ownership baseline; no broader functional framework or production cost partition is selected. | Revisit only for a specific decision that these boundaries cannot answer. |
-| Can checked generation avoid traversing irrelevant directions? | Compiler/tests closed:196 tests pass after a fixture-only repair. One unchanged fixed70 generic screen is selected on the built image; no result or adoption yet. | Whether skipped traversal outweighs entry dispatch, code growth and full-generator stack cost across the seven original cases. |
+| Can checked generation avoid traversing irrelevant directions? | Parked. Compiler mechanism and196 tests pass, but the fixed70 generic screen improves only0.27077%, with4/7 cases lower. All70 live/offline replays pass. | No retune, repeat or PGO rescue. The tested traversal reduction did not earn advancement. |
 | Can Activity pressure avoid materializing per-square mark bytes? | Parked. All200 library tests and70 live/offline replays pass, but the fixed generic screen is0.4281% slower, with3/7 cases lower. | No retune, second screen or PGO rescue. Preserve the failed result. |
 | Does the TT access population justify a different layout? | One count-only35→08 census is selected, with preparation and execution owned by Imp2 after the checked timing window. No layout variant is selected. | Recent returns, metadata continuation, retained matches, identity/generation misses, stores and reset costs together. |
 | Can Phase reuse avoid both recomputation and extra call arguments? | Narrow dependency-owned field hypothesis reviewed, unselected. Keep behind current discriminators. | Actual producer/consumer costs and complete mutation ownership without narrowing supplied-count semantics. |
@@ -106,10 +106,14 @@ Unchecked directions have no new mask test, but still pay entry dispatch and
 changed register allocation. Generation code grows2,345 bytes and the full
 generator reserves another16 stack bytes. All196 library tests pass after a
 repair confined to a new fixture; the original failed attempt is preserved.
-The built generic image0cde6b78 is selected for one fixed70 comparison against
-admitted control5d10b2fa. Keep the unchanged aggregate<=0.995, at least5/7
-lower and worst<=1.02 gates, complete replays and no-retry rule. A miss parks
-the variant; a pass permits a production-PGO decision, not adoption.
+The [fixed70 screen](../experiments/checked-enumeration-compiler/screen-results.md)
+of generic image0cde6b78 against admitted control5d10b2fa then measured summed
+medians13.406918s versus13.370616s, ratio0.9972922934. Four of seven cases are
+lower; worst ratio1.007133475. This misses the unchanged aggregate<=0.995 and
+minimum5/7 gates. All70 live and independent replay checks pass, with all
+samples retained. Park the variant without retune, repeat or PGO rescue.
+The04 improvement and35/08 regressions are observations, not a causal
+attribution to particular assembly changes.
 
 ### Pressure: change the producer/consumer boundary
 
