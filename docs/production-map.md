@@ -1,6 +1,6 @@
 # Production ownership and qualification map
 
-Current retained implementation: candidate51, 2026-10-20. This is an engineering
+Current retained implementation: candidate57, 2026-10-20. This is an engineering
 review map, not a completed clause-by-clause qualification audit. The released
 KingRE v2.5.0 package remains behavioral authority. The [historical map and
 chronological notes](production-map-history-20261019-01.md) preserve the
@@ -9,7 +9,26 @@ are historical.
 
 ## Current integrated evidence
 
-Candidate51 is retained by [exact117-file source promotion](../evidence/tactical-check-mask-integration-20261020-01/source-promotion.json):
+Candidate57 is retained by [exact117-file promotion](../evidence/bitplane-pin-summary-integration-20261020-01/source-promotion.json):
+native/tools graph b845e921, full graph a58e7cad, own-PGO af849f92/profile b4806420
+and diagnostic eda652ab. Fresh195 native/209 diagnostic tests,7673 mandatory
+cases/117operations/115wholefiles, optimized54/eight-wire24 and regular12/632
+plus continuity8/seed11/persistence3 independently pass. Only attacks.rs and
+movegen.rs change; checked/special projection and all ordering/work remain.
+The [bounded source review](../evidence/bitplane-pin-summary-production-review-20261020-01/review.md)
+imports the existing canonical-tag/coherent-plane Position invariant; it does
+not certify manually stale public mutations. Generic/own-PGO fixed70 improves
+1.0570045%/1.1563291%,7of7lower each. Full57 whole54/12 is pending;51 still owns
+the best completed69.417194/698.491201whole CPU seconds. No canonical rebuild,
+whole-engine qualification or external3288 completion follows. The existing
+uncertified empty-source cutoff-hint composition remains unresolved, including
+the existing implementation's no-op; it is not a released normative rule.
+See [decision0043](decisions/0043-bitplane-pin-summary.md) and the exact
+[previous51 map](production-map-history-20261020-02.md).
+
+## Earlier retained51 evidence
+
+Previous candidate51 was retained by [exact117-file source promotion](../evidence/tactical-check-mask-integration-20261020-01/source-promotion.json):
 native/tools graph05a848bb, combined graph3b816cf8, own-PGO48ee57b1/profile1ce0e391
 and diagnostic38c3025d. Fresh193/209 tests, all7673 original mandatory cases across
 117operations/115files, optimized54/eight-wire24 and regular12/632 plus continuity8,

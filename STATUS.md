@@ -1,20 +1,33 @@
 # Implementation status
 
-## Current stage — candidate51 tactical check masks, 2026-10-20
+## Current stage — candidate57 placement-plane pin summary, 2026-10-20
 
-Experiment57 replaces only the unchecked GenerationSafety pin scan with existing
-placement-plane ray queries. All193 library tests pass; the one generic fixed70
-screen passes original live/offline checks at1.0570045%lower summed CPU medians,
-7of7lower. Fresh own-source PGO then passes54 original training/raw/profile checks
-and the separate fixed70 at1.1563291%lower,7of7lower.
-[Advance to full validation and the regular12 pregate](docs/decisions/0043-bitplane-pin-summary.md);
-no production adoption or new whole54/12 result is claimed.
+Candidate57 replaces the unchecked legal generator's mailbox pin scan with
+nearest/next occupied-square queries on existing coherent placement planes.
+Only attacks.rs and movegen.rs change; no state or cache is added. Fresh195
+native tests (193library+2development),209 adapter tests, all7673 mandatory
+cases/117operations/115wholefiles, optimized54/eight-wire24 and regular12/632
+plus continuity8/seed11/persistence3 independently pass, including original raw
+bytes and exits. [Exact117-file source promotion](evidence/bitplane-pin-summary-integration-20261020-01/source-promotion.json)
+binds ordinary af849f92/profile b4806420 and diagnostic eda652ab; no canonical
+rebuild is claimed. The bounded production review accepts the pin identity
+under the existing canonical-tag/coherent-plane Position invariant.
+
+Generic and own-source PGO fixed70 comparisons improve1.0570045% and1.1563291%,
+7of7lower each. Full57 whole54/12 timing is pending; the latest best completed
+whole54/12 remains51 at69.417194/698.491201 whole-native CPU seconds.
+[Decision0043](docs/decisions/0043-bitplane-pin-summary.md) records adoption.
+Finite checks do not close all production-domain obligations; uncertified
+empty-source cutoff-hint composition, final performance qualification and the
+external3288 game gate remain open.
+
+## Earlier checkpoints and measurements
 
 A diagnostic [category encounter census](evidence/current51-activity-category-census-20261020-01/README.md)
 passes11 focused tests and three original live/offline replay pairs. Repeats are
 2.0347%,1.7079% and0.0206% of calls; expensive repeats in hotspot35 are only0.2810%
 of all calls. Decline category caching without a prototype or performance claim.
-Production remains51; this diagnostic receives no optimization candidate number.
+The diagnostic did not change production51; it received no optimization candidate number.
 
 Candidate51 replaces43 by exact equality of all117 tested source files after
 193 native tests,209 diagnostic tests, all7673 mandatory cases/117operations/

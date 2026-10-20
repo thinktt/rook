@@ -1,4 +1,4 @@
-# Advance the placement-plane pin summary to own-source PGO
+# Retain the placement-plane pin summary
 
 Experiment57 replaces the unchecked legal generator's mailbox pin scan with
 nearest/next occupied-square extraction on existing placement planes. The first
@@ -32,3 +32,14 @@ and final qualification remain separate.
 
 See the [own-PGO checkpoint](../../evidence/bitplane-pin-summary-pgo-checkpoint-20261020-01/README.md)
 and [full-validation admission](../../evidence/bitplane-pin-summary-pgo-decision-20261020-01/decision.json).
+
+The full validation and regular12 pre-gate now independently pass: fresh195
+native/209 diagnostic tests, all7673 mandatory cases across117operations and
+115wholefiles, optimized54/eight-wire24, regular12/632 and continuity8/seed11/
+persistence3. Every raw output/exit is reconciled. Retain57 by exact two-file
+promotion and full117 equality; all115 other files are unchanged. No canonical
+rebuild is claimed. Full57 whole54/12 measurements remain pending, with51's
+69.417194/698.491201whole CPU seconds still the best completed results.
+The scoped production review supports the geometric identity under the imported
+coherent canonical Position invariant. All inherited domain/composition and
+final performance/external3288 obligations remain open.

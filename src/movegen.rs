@@ -304,33 +304,7 @@ impl GenerationSafety {
                 .iter()
                 .any(|kind| position.counts[enemy.index()][kind.index()] != 0)
         {
-            let queen = Piece::new(enemy, PieceKind::Queen);
-            for (direction, ray) in ATTACK_RAYS.0[king.0 as usize].iter().enumerate() {
-                let slider = Piece::new(
-                    enemy,
-                    if direction < 4 {
-                        PieceKind::Bishop
-                    } else {
-                        PieceKind::Rook
-                    },
-                );
-                let mut blocker = 0;
-                for &square in &ray.squares[..ray.len as usize] {
-                    let piece = position.board[(square & 63) as usize];
-                    if piece.is_empty() {
-                        continue;
-                    }
-                    if blocker == 0 {
-                        if piece.color() == position.side {
-                            blocker = 1u64 << square;
-                            continue;
-                        }
-                    } else if piece == queen || piece == slider {
-                        pinned |= blocker;
-                    }
-                    break;
-                }
-            }
+            pinned = position.attack_view().absolute_pins(king, position.side);
         }
         Self {
             king,
