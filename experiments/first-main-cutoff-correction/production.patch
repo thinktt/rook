@@ -1,0 +1,16 @@
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -1082,6 +1082,13 @@
+                     }
+                 }
+             }
++            // The released first-main rule ends processing even without a strict lower raise.
++            if index == 0 && score >= request.upper {
++                if DIAGNOSTICS {
++                    self.stats.cutoffs += 1;
++                }
++                break;
++            }
+             index += 1;
+             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
+             {

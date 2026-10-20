@@ -1,0 +1,119 @@
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -1194,3 +1194,7 @@
+         Ok(())
+     }
+ }
++
++#[cfg(test)]
++#[path = "ordinary/first_main_tests.rs"]
++mod first_main_tests;
+--- a/src/remembered.rs
++++ b/src/remembered.rs
+@@ -522,3 +522,18 @@
+         assert_eq!(std::mem::size_of::<Group>(), 48);
+     }
+ }
++
++// Test-only observation of actual stored records; not a release API/observer.
++#[cfg(test)]
++impl RememberedTable {
++    pub(crate) fn test_matching_records(&self,group:usize,identity:u32)
++        -> Vec<(i32,i32,Option<Move>,Bound,bool,bool)>
++    {
++        self.groups[group].records.iter()
++            .filter(|r|r.matches(self.generation,identity))
++            .map(|r|(r.score as i32,r.depth as i32,
++                      (r.endpoints!=0).then_some(Move(r.endpoints)),r.bound(),
++                      r.flags&QUIET_CHECKED!=0,r.flags&MARKED_DEPTH!=0))
++            .collect()
++    }
++}
+--- a/src/ordinary/first_main_tests.rs
++++ b/src/ordinary/first_main_tests.rs
+@@ -0,0 +1,85 @@
++//! Conditional internal owner contexts, not admitted public/native witnesses.
++use super::*;
++
++// Parent target6, child stored target32: both invoke actual ordinary TT owners.
++// The prepared values deliberately supply the first-child result; no callback
++// substitutes for generated placement, ordinary entry/probe, history or completion.
++fn exercise(lower:i32, candidate_score:i32, ends:bool) {
++    let position=Position::from_fen("7k/R7/8/8/8/8/8/K7 w - - 0 1").unwrap();
++    let mut search=Search::<true>::new(&position);
++    search.config.tts_bytes=65536;
++    search.ensure_table().unwrap();
++    let (root,root_influence)=search.prepare_root_with_influence(position);
++    let mut roots=MoveList::new();movegen::generate_legal(&position,&mut roots);
++    let root_move=*roots.as_slice().iter().find(|m|m.to_string()=="a7a8").unwrap();
++    let mut parent=root.child(&search.evaluator.root,root_move);
++    let parent_position=parent.position;
++    assert!(movegen::in_check(&parent_position,parent_position.side));
++    let parent_map=Influence::build(&parent_position);
++    search.evaluator.full(&mut parent,&parent_map,true);
++    let retained_after_full=parent.retained;
++    let mut history=SearchHistory::new(&position);history.push(&parent_position,Some(root_move));
++    search.begin_sequence(Limits{nodes:Some(200000)});
++    let mut legal=MoveList::new();movegen::generate_legal(&parent_position,&mut legal);
++    assert_eq!(legal.len,2,"a real unconsumed suffix must exist");
++    let table=search.remembered.as_mut().unwrap();
++    let group=table.group_for(&parent_position);
++    let parent_identity=parent_position.secondary;
++    table.store(Store{query:Query{group,identity:parent_identity,ply:1,target:6,lower:-3,upper:-2},
++                      score:-2,move_hint:None,quiet_mate_checked:true,mark_depth:true});
++    for &movement in legal.as_slice() {
++        let child=parent.child(&search.evaluator.root,movement);
++        assert_ne!(child.position.secondary,parent_identity);
++        table.store(Store{query:Query{group:table.group_for(&child.position),identity:child.position.secondary,
++                                    ply:2,target:32,lower:-2,upper:2},
++                          score:-candidate_score,move_hint:None,quiet_mate_checked:true,mark_depth:true});
++    }
++    let observed=table.probe(Query{group,identity:parent_identity,ply:1,target:6,lower,upper:0});
++    assert_eq!((observed.score,observed.bound,observed.marked_depth,observed.move_hint),
++               (None,Bound::Lower,Some(5),None));
++    let result=search.visit_ordinary_impl::<false>(&mut parent,&mut history,
++        Request{ply:1,depth:5,lower,upper:0,previous_extension:0,iteration:6,checked:Some(true)},
++        Predecessor{position:&position,influence:&root_influence,checked:false,movement:Some(root_move)});
++    if ends {
++        assert_eq!(result,Ok(0),"first-main equality must finish before the disabled-IIO tail sentinel");
++    } else {
++        assert_eq!(result,Err(Stopped::InternalIterativeOrdering),"a first result below U must reach its eligible tail");
++    }
++    assert_eq!(history.search_ply(),1);
++    history.pop();assert_eq!(history.search_ply(),0);
++    assert_eq!(parent.position,parent_position);
++    assert_eq!(parent.retained,retained_after_full,"child state must not replace the post-FULL parent");
++    assert_eq!(search.pv_len[1],0,"no PV adoption at or above U");
++    assert_eq!((search.stats.ordinary_nodes,search.stats.table_probes,search.stats.table_hits),(2,2,1));
++    assert_eq!((search.stats.examined,search.stats.children),(1,1));
++    assert_eq!(search.stats.iio_initial_phases,0);
++    assert_eq!((search.stats.iio_passes,search.stats.iio_children),(0,0));
++    assert_eq!(search.stats.iio_tail_phases,u64::from(!ends));
++    assert_eq!(search.stats.cutoffs,u64::from(ends));
++    assert_eq!(search.stats.table_stores,u64::from(ends));
++    let records=search.remembered.as_ref().unwrap().test_matching_records(group,parent_identity);
++    assert_eq!(records.len(),1,"inspect actual parent storage, not a duplicate-sensitive probe");
++    let (score,depth,hint,bound,quiet,marked)=records[0];
++    assert_eq!((depth,quiet,marked),(5,true,true));
++    if !ends {
++        assert_eq!((score,hint,bound),(-2,None,Bound::Lower));
++        assert_eq!(search.learning.total,0);
++    } else if lower==0 {
++        assert_eq!((score,hint,bound),(0,None,Bound::None));
++        assert_eq!(search.learning.total,0,"equality must not invoke parent completion learning");
++        assert_eq!(search.learning.killers[1],[Move::NONE;2]);
++    } else {
++        let movement=hint.expect("strict improvement retains the original preference update");
++        assert!(legal.as_slice().contains(&movement));
++        assert_eq!((score,bound),(0,Bound::Lower));
++        assert_eq!(search.learning.total,48);
++        assert!(search.learning.killers[1].contains(&movement));
++    }
++}
++
++#[test]
++fn first_main_equal_score_stops_before_eligible_tail() {exercise(0,0,true);}
++#[test]
++fn first_main_below_equal_window_still_enters_tail() {exercise(0,-1,false);}
++#[test]
++fn first_main_strict_window_upper_hit_preserves_cutoff() {exercise(-1,0,true);}
