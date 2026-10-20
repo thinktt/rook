@@ -26,20 +26,25 @@ engine and never use expected answers as a runtime answer database.
 
 ## Ownership and collaboration
 
-Imp2 owns architecture and engineering decisions. `imp2-lead` is an independent
-architectural advisor. Obtain its critique of the initial design before
-substantial implementation. Later consultations should be infrequent and bounded,
-for consequential decisions, significant uncertainty or measured evidence that
-challenges the fundamental direction. Supply a focused question, evidence,
-alternatives and a preliminary judgment. Approval is not required.
+The owner-approved [last-mile working agreement](docs/leadership-working-agreement-last-mile.md)
+governs the current phase. `imp2-lead` owns technical strategy and architecture,
+including deep investigation and original design work. Imp2 owns implementation
+and experimental execution within that agenda and makes routine engineering
+decisions independently. Challenge proposed directions and raise significant
+architectural tradeoffs, unexpected evidence and scope changes. Keep
+coordination lightweight; routine execution does not require approval.
 
-The top-level agent uses Herdr native prompts to other Herdr agents with the
-sender header `[imp2]:`. Follow the standard local AGENTS.md memo-size rule.
+Top-level agents use Herdr native prompts to other Herdr agents with their
+centrally assigned sender identity. Follow the standard local AGENTS.md
+identity and memo-size rules; do not infer a name from a role or tab label.
 Subagents must use their supplied collaboration tools and must not use Herdr
 for identity or communication.
 
-The lead uses GPT-6.1 Sol xhigh at normal speed. Implementation subagents use
-GPT-6.1 Sol at an appropriate reasoning level and normal speed. The owner's
+Imp2 uses GPT-6.1 Sol xhigh at normal speed. Implementation subagents use
+GPT-6.1 Sol at an appropriate reasoning level and normal speed. Imp2-lead may
+use at most one Astra subagent at a time for difficult analysis, independent
+challenge, or demanding implementation when useful; Imp2's team remains the
+default. The owner's
 latest `/fast off` supersedes the temporary fast-subagent request. The current
 collaboration controls expose model/effort but no speed setting: do not claim
 that updating this policy switches or verifies a live runtime.

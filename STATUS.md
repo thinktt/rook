@@ -1,7 +1,13 @@
 # Current implementation status
 
-**Retained candidate62; optimization goal paused.** Updated2026-10-20.
+**Retained candidate62; last-mile goal active.** Updated2026-10-20.
 Candidate numbers identify artifacts/ideas, not a count of completed trials.
+The [working agreement](docs/leadership-working-agreement-last-mile.md) assigns
+strategy and architecture to imp2-lead and implementation/execution to Imp2.
+The initial investigation is a selective functional-cost comparison and
+complete-search architecture review; see the [current strategy](docs/last-mile-strategy.md).
+No new candidate or timing result follows
+from resuming this work.
 
 Candidate62 keeps candidate57's native engine and diagnostic source. Its only
 promotion delta was `tools/build.py`: explicit profile-covered ExtTSP placement
@@ -59,8 +65,8 @@ Remaining obligations:
 
 The authoritative detailed scopes remain in the
 [production map](docs/production-map.md), [qualification gaps](docs/qualification-gaps.md)
-and [Vic gate scope](docs/qualification-scope.md). The implementation goal remains
-paused; this update performs no engine work or new measurements.
+and [Vic gate scope](docs/qualification-scope.md). The last-mile goal is active;
+this orientation update performs no engine work or new measurements.
 
 Historical checkpoints and raw records:
 

@@ -2,7 +2,9 @@
 
 Short catalog through 2026-10-20. **Retained production: candidate62; whole54
 67.640360 CPU seconds; regular12 games675.156653 CPU seconds on Vic.** Final
-performance qualification remains open. The broader implementation goal is paused.
+performance qualification remains open. The last-mile goal is active under the
+[working agreement](leadership-working-agreement-last-mile.md); candidate62
+remains the initial control.
 
 The [independent repository survey](reviews/2026-10-20-architecture-performance-survey.md)
 assesses the architecture, completed experiments, measurement limits and ranked
