@@ -56,6 +56,18 @@ gate. It is [parked without retry or own-PGO](decisions/0040-small-ordering-entr
 Production51 already directly sorts small lists; no helper-frame saving against
 51 is claimed. Candidate51's source and whole54/12 costs remain current.
 
+Experiment56 shares the two uncapped Activity source support counts through
+independent16-bit integer lanes. All65536 byte pairs are covered by an independent
+digit oracle; ten focused controls pass after a spec-verified test-only curve
+anchor correction. Original failure and both source snapshots remain preserved;
+the corrected production ELF is byte-identical to the first56 build. Actual
+generic Activity is192B smaller with unchanged frame. All70 original live/offline
+replays pass; the fixed generic screen improves0.7328199%,6of7lower,
+worst1.000082735. [Decision0041](decisions/0041-paired-activity-support.md)
+advances only to separate fresh own-source PGO admission. Production51 and its
+completed whole54/12 costs remain current; PGO transfer and broad qualification
+are still unproven.
+
 ## Previous43 checkpoint and parked44–50 history
 
 The following historical evidence predates51. Its original document is preserved

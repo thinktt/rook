@@ -1,0 +1,161 @@
+--- a/src/activity/paired_support_tests.rs
++++ /dev/null
+@@ -1,158 +0,0 @@
+-//! Independent normalized-digit and composed Activity controls for paired sums.
+-use super::{compute, piece_score, profile_sums_pair, Mobility};
+-use crate::influence::Influence;
+-use crate::position::Position;
+-use crate::types::{Color, PieceKind, Square};
+-
+-// Literal normalization digits by sequential division/remainder, independent
+-// of masks, lane packing, carries and the production profile_sum implementation.
+-fn digits(mut byte: u8) -> [u8; 5] {
+-    let weak = byte % 2; byte /= 2;
+-    let queen = byte % 2; byte /= 2;
+-    let rook = byte % 4; byte /= 4;
+-    let minor = byte % 4; byte /= 4;
+-    let pawn = byte % 4; byte /= 4;
+-    assert_eq!(byte, 0);
+-    [weak, queen, rook, minor, pawn]
+-}
+-
+-fn count(byte: u8) -> u8 { digits(byte).into_iter().sum() }
+-
+-#[test]
+-fn experiment56_all_byte_pairs_match_literal_uncapped_digits() {
+-    let mut maximum = 0;
+-    for own in 0u16..=255 {
+-        for opponent in 0u16..=255 {
+-            let expected = (count(own as u8), count(opponent as u8));
+-            let actual = profile_sums_pair(own as u8, opponent as u8);
+-            assert_eq!(actual, expected, "own={own} opponent={opponent}");
+-            maximum = maximum.max(actual.0).max(actual.1);
+-        }
+-    }
+-    assert_eq!(maximum, 11); // Count maximum;57 is the maximum5*A+2 penalty.
+-    assert_eq!(profile_sums_pair(255, 0), (11, 0));
+-    assert_eq!(profile_sums_pair(0, 255), (0, 11));
+-    assert_eq!(profile_sums_pair(120, 104), (6, 5)); // No multiplicity cap4.
+-}
+-
+-fn tier(counts: [u8; 5]) -> u8 {
+-    for (index, value) in [(4, 1), (3, 3), (2, 5), (1, 9), (0, 99)] {
+-        if counts[index] != 0 { return value; }
+-    }
+-    0
+-}
+-
+-fn unfavorable(own: u8, opponent: u8, kind: PieceKind) -> bool {
+-    let own_digits = digits(own);
+-    let enemy_digits = digits(opponent);
+-    let d = count(own).min(4);
+-    let a = count(opponent).min(4);
+-    let v = tier(enemy_digits);
+-    let u = tier(own_digits);
+-    let tested = match kind {
+-        PieceKind::Knight | PieceKind::Bishop => 3,
+-        PieceKind::Rook => 5, PieceKind::Queen => 9, _ => unreachable!(),
+-    };
+-    if a == 0 { false }
+-    else if d == 0 || v < tested { true }
+-    else if v == tested { a > d }
+-    else { !(a <= d || v > tested + u) }
+-}
+-
+-// Only independently transcribed released curve entries reached by the fixed
+-// mobility/phase strata below. Unexpected indices fail rather than borrowing
+-// the production curve or silently extending this oracle.
+-fn curve_anchor(index: usize) -> i64 {
+-    match index {
+-        0 | 1 => 0, 2 | 3 => 1, 4 | 5 => 2, 6 => 3,
+-        8 => 4, 12 => 6, 80 => 31, 119 => 36,
+-        _ => panic!("unexpected sparse curve index {index}"),
+-    }
+-}
+-
+-fn expected_piece(own: u8, opponent: u8, kind: PieceKind,
+-    mobility: Mobility, endgame: u16, square_penalty: i64, exempt_region: bool) -> (i64, u64) {
+-    let raw = match kind {
+-        PieceKind::Knight => 3 * mobility.total / 4,
+-        PieceKind::Bishop => mobility.total / 2,
+-        PieceKind::Rook | PieceKind::Queen => 5 * mobility.total / 16,
+-        _ => unreachable!(),
+-    };
+-    let index = ((((512 - i64::from(endgame)) / 2) * raw + 128) / 256).min(119) as usize;
+-    let mut score = curve_anchor(index);
+-    let own_count = i64::from(count(own));
+-    let enemy_count = i64::from(count(opponent));
+-    if own_count <= enemy_count { score -= 5 * enemy_count + 2; }
+-    let exempt = kind == PieceKind::Knight && digits(own)[4] != 0 && exempt_region;
+-    let mut queries = mobility.queries;
+-    if mobility.categories < 3 && !exempt {
+-        score -= square_penalty * (3 - mobility.categories);
+-        if mobility.categories < 2 {
+-            queries += 1;
+-            if unfavorable(own, opponent, kind) {
+-                score -= 6 + if mobility.categories == 0 { 15 } else { 0 };
+-            }
+-        }
+-    }
+-    (score, queries)
+-}
+-
+-fn supplied(color: Color, source: Square, own: u8, opponent: u8) -> Influence {
+-    let mut map = Influence { profiles: [[0; 64]; 2] };
+-    map.profiles[color.index()][source.0 as usize] = own;
+-    map.profiles[color.opponent().index()][source.0 as usize] = opponent;
+-    map
+-}
+-
+-#[test]
+-fn experiment56_piece_scores_keep_comparison_penalty_and_live_custom_map_effects() {
+-    let pairs = [(0,0), (1,0), (0,1), (2,0), (0,2), (3,3), (4,4), (16,16),
+-        (64,64), (65,3), (120,104), (104,120), (255,255), (255,0), (0,255),
+-        (64,255), (255,64), (170,85), (85,170), (252,3)];
+-    for color in [Color::White, Color::Black] {
+-        // Literal relative-square penalties and knight exemption regions.
+-        for (white, black, penalty, region) in [
+-            ("c4", "c5", 5, true), ("c7", "c2", 10, false),
+-            ("d7", "d2", 9, true), ("a1", "a8", 2, false),
+-        ] {
+-            let source = Square::parse(if color == Color::White { white } else { black }).unwrap();
+-            for kind in [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
+-                for (own, opponent) in pairs {
+-                    // Arbitrary supplied source bytes, never reconstructed from
+-                    // placement or certified by a coherent-geometry permission.
+-                    let map = supplied(color, source, own, opponent);
+-                    for (categories, total, queries) in [(0,0,0), (1,8,17), (2,16,9),
+-                        (3,0,5), (3,16,7), (24,512,11)] {
+-                        let mobility = Mobility { categories, total, queries };
+-                        for endgame in [0, 256] {
+-                            let expected = expected_piece(own, opponent, kind, mobility, endgame, penalty, region);
+-                            let actual = piece_score(&map, color, kind, source, mobility, endgame);
+-                            assert_eq!(actual, expected,
+-                                "kind={kind:?} color={color:?} source={source} own={own} opponent={opponent} C={categories} T={total} E={endgame}");
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-    }
+-
+-    // Actual public compute/custom-map boundary: one knight has all eight
+-    // destinations blocked by friendly pawns. No marks/destination queries;
+-    // source support and pawn-bit exemption remain observable without rebuilding
+-    // the deliberately supplied Influence.
+-    let position = Position::from_fen(
+-        "7k/8/1P1P4/P3P3/2N5/P3P3/1P1P4/K7 w - - 0 1").unwrap();
+-    let source = Square::parse("c4").unwrap();
+-    let phase = position.phase();
+-    for (own, opponent) in [(0,0), (1,0), (64,0), (0,255), (120,104), (104,120)] {
+-        let map = supplied(Color::White, source, own, opponent);
+-        let expected = expected_piece(own, opponent, PieceKind::Knight,
+-            Mobility::default(), phase.endgame, 5, true);
+-        let activity = compute(&position, &map, 0, [0,0]);
+-        assert_eq!(activity.pieces,
+-            [((276 * expected.0 + 128).div_euclid(256)) as i32, 0]);
+-        assert_eq!(activity.pressure, [0,0]);
+-        assert_eq!(activity.relation_queries, expected.1);
+-        assert_eq!(activity.weighted, 0);
+-    }
+-}

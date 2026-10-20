@@ -1,0 +1,9 @@
+# Experiment56 independent paired-support tests
+
+Exactly two tests are source-frozen; kernel owner registers paired_support_tests and owns activity.rs. The first checks all65536 bytepairs plus three named asymmetry/uncapped anchors directly through profile_sums_pair. Its literal sequential radix divisions decode the five normalized counts without production masks, packing or profile_sum. Maximum count is11;57 refers only to the maximum support penalty5*11+2.
+
+The second uses the existing test-only piece_score wrapper for a finite7680-case crossproduct:20profile pairs, four kinds, both colors, four relative source-square strata, six mobility strata and two phase endpoints. The expected source relation uses the released mathematical definition; support count is uncapped, relation multiplicity capped4. Sparse literal curve anchors cover selected phase/rounding/clamp cases without copying the whole curve/Activity implementation. Exact score and query counts include the normalized-pawn knight exemption and unfavorable low-C extras. These synthetic component strata are not claimed as generated-position coverage.
+
+Six actual public compute calls inside the second test use one coherent blocked-knight FEN and deliberately supplied custom maps. Full pieces/pressure/query/weighted checks show that the public consumer retains supplied-byte effects without any coherence permission on Influence. Algebra, finite component tests and this public boundary remain separate evidence scopes.
+
+Baseline193 names/containing-file hashes match selection's exact51map and are copied separately; two new declarations imply195=193lib+2dev pending parent combined freeze. No old test/other source or module file was written by this owner. All test calls are prospective/unrun. No Rust parser/formatter/compiler/test/native/binutils/profiler/Git/archive action occurred.

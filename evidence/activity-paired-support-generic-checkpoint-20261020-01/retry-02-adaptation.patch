@@ -1,0 +1,17 @@
+--- archive_checkpoint.py
++++ archive_checkpoint-02.py
+@@ -87,7 +87,7 @@
+  first=proof[0]['members'];second=proof[1]['members']
+  changed=[k for k in first if first[k]['sha256']!=second[k]['sha256']]
+  assert changed==['src/activity/paired_support_tests.rs'],changed
+- assert first[changed[0]]['sha256'].startswith('bf0e') and second[changed[0]]['sha256'].startswith('97606956')
++ assert first[changed[0]]['sha256']=='bf0e5c4e02f9f88e8ba2508a707e74b5736043e9ccda5f99f1f4796267063583' and second[changed[0]]['sha256']=='9760690569fc77a0cd93ea443f40e5fbf1333d2210b0febfa123d31577781dcf'
+  write('test-only-source-difference.json',dict(changed_files=changed,before=first[changed[0]],after=second[changed[0]],note='Original failed composed oracle and corrected released29 test are both preserved. ELF identity equal; no runtime source change.'))
+  assert len(excluded)==152 and excluded<=original_before.keys()
+  before={k:v for k,v in original_before.items() if k not in excluded}
+@@ -129,4 +129,4 @@
+  print((HERE/'verification.json').read_text())
+ if __name__=='__main__':
+  try:main()
+- except BaseException as error:write('failure.json',dict(error=repr(error),archive_attempt_preserved=True));raise
++ except BaseException as error:write('failure-02.json',dict(error=repr(error),archive_attempt_preserved=True));raise

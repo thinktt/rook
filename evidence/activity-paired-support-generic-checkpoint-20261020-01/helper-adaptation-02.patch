@@ -1,0 +1,96 @@
+--- /home/legolas/rook2/evidence/ordering-small-entry-generic-checkpoint-20261020-01/archive_checkpoint.py
++++ archive_checkpoint-02.py
+@@ -1,13 +1,17 @@
+ #!/usr/bin/env python3
+-"""Closed55 generic evidence only; stream/reopen all bytes and independently justify source duplicates."""
++"""Closed56 generic evidence only; stream/reopen all bytes and independently justify source duplicates."""
+ from pathlib import Path, PurePosixPath
+ import hashlib,json,os,stat,sys,tarfile,gzip
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+-PREFIX='ordering-small-entry-'
++PREFIX='activity-paired-support-'
+ DATE='-20261020-01'
+ TREES=[PREFIX+s+DATE for s in ['parent-selection','kernel-preparation','test-preparation','parent-review','generic-build','backend-preparation','backend-review','focused-preparation','focused-native-check','generic-screen-preparation','generic-screen','generic-decision']]
+-BUILD=ROOT/(PREFIX+'generic-build'+DATE)
++TREES += [PREFIX+s+'-20261020-02' for s in ['parent-review','generic-build','focused-preparation','focused-native-check']]
++TREES += [PREFIX+'test-repair'+DATE]
++assert len(TREES)==17 and len(set(TREES))==17
++BUILDS=[ROOT/(PREFIX+'generic-build-20261020-'+suffix) for suffix in ['01','02']]
++ARCHIVE_HASHES=['47abaaf5851d7572434511f7088cd8746e055d436bb6ea2791daca5ecdda2a83','186676876164a6dbd0ac1b346ccd1418d0227e46afb1f87f34af27be2fd2d5bc']
+ def digest(f):
+  h=hashlib.sha256();n=0
+  for b in iter(lambda:f.read(1048576),b''):h.update(b);n+=len(b)
+@@ -39,7 +43,7 @@
+  def read(self,n=-1):
+   b=self.f.read(n);self.h.update(b);self.n+=len(b);return b
+ 
+-def source_archive_proof(originals):
++def source_archive_proof(originals,BUILD,archive_hash):
+  receipt=json.loads((BUILD/'receipt.json').read_text())
+  archived=json.loads((BUILD/'archive-receipt.json').read_text())
+  frozen=json.loads((BUILD/'frozen-image.json').read_text())
+@@ -49,7 +53,7 @@
+  expected=receipt['source_sha256_before']|receipt['tool_sha256_before']
+  assert len(receipt['source_sha256_before'])==52 and len(receipt['tool_sha256_before'])==23 and len(expected)==75
+  source_archive=BUILD/'verified-source-before.tar.gz'
+- assert sha(source_archive)==archived['sha256']=='d583a81b5fcd014ea32af0ebd4fc2e3518c74118db9c907dffcc480af77e7585'
++ assert sha(source_archive)==archived['sha256']==archive_hash
+  assert archived['files']==75
+  actual={}
+  with tarfile.open(source_archive,'r:gz') as t:
+@@ -68,8 +72,8 @@
+  assert {name for name in originals if name.startswith(prefix)}=={prefix+name for name in expected}
+  image_name=(BUILD/'rook2-exact').relative_to(ROOT).as_posix()
+  image=originals[image_name]
+- assert image['sha256']==frozen['sha256']==receipt['binary_output']['sha256']==archived['binary_sha256']=='fb8f7b779c118bb98515c874017710c6c511a31e8fbe666612fdb60fe3122dc0'
+- assert image['bytes']==frozen['bytes']==7077296 and image['mode']==frozen['mode']==0o555
++ assert image['sha256']==frozen['sha256']==receipt['binary_output']['sha256']==archived['binary_sha256']=='789943ce61d1d74cd859239c9053852cd01c8c79f687741ac7a8138ab8abd691'
++ assert image['bytes']==frozen['bytes']==7066480 and image['mode']==int(str(frozen['mode']),8)==0o555
+  proof=dict(complete=True,source_archive=str(source_archive),source_archive_sha256=sha(source_archive),source_archive_bytes=source_archive.stat().st_size,member_count=75,all_regular=True,no_extra_or_duplicate_members=True,all_member_bytes_hashes_equal_current_source_before=True,archive_and_current_source_modes_recorded_separately=True,all_source_hashes_equal_build_before_after=True,members=actual,excluded_image=dict(path=str(BUILD/'rook2-exact'),**image),limit='Exact ELF retained externally and excluded by assignment. Source-before files are byte-exact duplicates of the included verified75-source archive; historical source archive headers normalize modes0644 while current snapshot modes are recorded separately per member. Reconstruct payload from source archive then chmod to current_source_mode. Source archive independently reopened, not receipt-only.')
+  return proof,{prefix+name for name in expected}|{image_name}
+ 
+@@ -77,8 +81,15 @@
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  original_before=inventory()
+- proof,excluded=source_archive_proof(original_before)
+- assert len(excluded)==76 and excluded<=original_before.keys()
++ proofs_and_exclusions=[source_archive_proof(original_before,b,h) for b,h in zip(BUILDS,ARCHIVE_HASHES)]
++ proof=[x[0] for x in proofs_and_exclusions]
++ excluded=set().union(*(x[1] for x in proofs_and_exclusions))
++ first=proof[0]['members'];second=proof[1]['members']
++ changed=[k for k in first if first[k]['sha256']!=second[k]['sha256']]
++ assert changed==['src/activity/paired_support_tests.rs'],changed
++ assert first[changed[0]]['sha256']=='bf0e5c4e02f9f88e8ba2508a707e74b5736043e9ccda5f99f1f4796267063583' and second[changed[0]]['sha256']=='9760690569fc77a0cd93ea443f40e5fbf1333d2210b0febfa123d31577781dcf'
++ write('test-only-source-difference.json',dict(changed_files=changed,before=first[changed[0]],after=second[changed[0]],note='Original failed composed oracle and corrected released29 test are both preserved. ELF identity equal; no runtime source change.'))
++ assert len(excluded)==152 and excluded<=original_before.keys()
+  before={k:v for k,v in original_before.items() if k not in excluded}
+  write('original-scope-manifest.json',original_before)
+  write('source-archive-duplicate-proof.json',proof)
+@@ -86,8 +97,8 @@
+  write('member-manifest.json',before)
+  decision_terminal=(ROOT/(PREFIX+'generic-decision'+DATE)/'tool-terminal.json').relative_to(ROOT).as_posix()
+  assert decision_terminal in before
+- write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_selected_regular_files_captured_except_exact76=True,files=len(before),captured_original_bytes=sum(x['bytes'] for x in before.values()),original_scope_files=len(original_before),excluded_files=76,duplicate_source_files=75,source_archive_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),decision_tool_terminal_included=decision_terminal,scope='Closed55 generic source/backend/focused native/fixed70 PARK evidence only; no ownPGO/full native/broad-suite/promotion. Referenced external runtime payloads are not expanded.'))
+- archive=HERE/'closed-ordering-small-entry-generic.tar.gz'
++ write('scope.json',dict(complete_closed_trees=TREES,external_payload_expansion=False,own_checkpoint_excluded=True,all_selected_regular_files_captured_except_exact152=True,files=len(before),captured_original_bytes=sum(x['bytes'] for x in before.values()),original_scope_files=len(original_before),excluded_files=152,duplicate_source_files=150,source_archive_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),decision_tool_terminal_included=decision_terminal,scope='Closed56 generic source/backend/focused native/fixed70 PARK evidence only; no ownPGO/full native/broad-suite/promotion. Referenced external runtime payloads are not expanded.'))
++ archive=HERE/'closed-activity-paired-support-generic.tar.gz'
+  with archive.open('xb') as raw:
+   with gzip.GzipFile(filename='',mode='wb',fileobj=raw,mtime=0) as compressed:
+    with tarfile.open(fileobj=compressed,mode='w',format=tarfile.PAX_FORMAT) as t:
+@@ -112,10 +123,10 @@
+    reopened[member.name]=dict(bytes=n,sha256=h,mode=stat.S_IMODE(member.mode))
+  assert reopened==before
+  assert inventory()==original_before,'original closed inputs or exclusions changed'
+- proof_after,excluded_after=source_archive_proof(original_before)
+- assert proof_after==proof and excluded_after==excluded
+- write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),original_scope_manifest_sha256=sha(HERE/'original-scope-manifest.json'),excluded_manifest_sha256=sha(HERE/'excluded-manifest.json'),scope_sha256=sha(HERE/'scope.json'),source_archive_duplicate_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),all_members_reopened_and_hashed=True,all_member_headers_modes_sizes_hashes_exact=True,gzip_mtime_zero=True,deterministic_sorted_tar_headers=True,member_manifest_exact=True,originals_and_exclusions_rechecked_unchanged=True,source75_archive_independently_reopened_twice=True,all_selected_regular_files_captured_except_exact76=True,no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
++ after=[source_archive_proof(original_before,b,h) for b,h in zip(BUILDS,ARCHIVE_HASHES)]
++ assert [x[0] for x in after]==proof and set().union(*(x[1] for x in after))==excluded
++ write('verification.json',dict(complete=True,archive=archive.name,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,file_count=len(before),original_bytes=sum(x['bytes'] for x in before.values()),member_manifest_sha256=sha(HERE/'member-manifest.json'),original_scope_manifest_sha256=sha(HERE/'original-scope-manifest.json'),excluded_manifest_sha256=sha(HERE/'excluded-manifest.json'),scope_sha256=sha(HERE/'scope.json'),source_archive_duplicate_proof_sha256=sha(HERE/'source-archive-duplicate-proof.json'),all_members_reopened_and_hashed=True,all_member_headers_modes_sizes_hashes_exact=True,gzip_mtime_zero=True,deterministic_sorted_tar_headers=True,member_manifest_exact=True,originals_and_exclusions_rechecked_unchanged=True,both_source75_archives_independently_reopened_twice=True,all_selected_regular_files_captured_except_exact152=True,no_external_expansion=True,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR']))
+  print((HERE/'verification.json').read_text())
+ if __name__=='__main__':
+  try:main()
+- except BaseException as error:write('failure.json',dict(error=repr(error),archive_attempt_preserved=True));raise
++ except BaseException as error:write('failure-02.json',dict(error=repr(error),archive_attempt_preserved=True));raise
