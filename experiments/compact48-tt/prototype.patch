@@ -1,0 +1,631 @@
+--- a/src/remembered.rs
++++ b/src/remembered.rs
+@@ -59,8 +59,7 @@
+ 
+ #[derive(Clone, Copy, Default)]
+ #[repr(C)]
+-struct Record {
+-    identity: u32,
++struct Payload {
+     score: i16,
+     depth: i16,
+     endpoints: u16,
+@@ -68,7 +67,7 @@
+     generation: u8,
+ }
+ 
+-impl Record {
++impl Payload {
+     fn from_store(store: Store, generation: u8) -> Self {
+         let score = store.score as i64;
+         let normalized = if score >= 9000 { score + store.query.ply as i64 }
+@@ -80,18 +79,12 @@
+         if store.quiet_mate_checked { flags |= QUIET_CHECKED; }
+         if store.mark_depth { flags |= MARKED_DEPTH; }
+         Self {
+-            identity: store.query.identity,
+             score: i16::try_from(normalized).expect("remembered score exceeds native representation"),
+             depth: store.query.remaining_depth(),
+             endpoints: store.move_hint.map_or(0, |mv| mv.0 & 0x0fff),
+             flags,
+             generation,
+         }
+-    }
+-
+-    #[inline]
+-    fn matches(self, generation: u8, identity: u32) -> bool {
+-        self.generation == generation && self.identity == identity
+     }
+ 
+     #[inline]
+@@ -137,12 +130,14 @@
+ }
+ 
+ #[derive(Clone, Copy, Default)]
+-#[repr(C)]
++#[repr(C, align(16))]
+ struct Group {
+-    records: [Record; 4],
+-}
+-
+-const _: () = assert!(std::mem::size_of::<Record>() == 12);
++    identities: [u32; 4],
++    payloads: [Payload; 4],
++}
++
++const _: () = assert!(std::mem::size_of::<Payload>() == 8);
++const _: () = assert!(std::mem::align_of::<Group>() == 16);
+ const _: () = assert!(std::mem::size_of::<Group>() == 48);
+ 
+ pub struct RememberedTable {
+@@ -190,40 +185,49 @@
+     }
+ 
+     pub fn store(&mut self, store: Store) {
+-        let record = Record::from_store(store, self.generation);
++        let record = Payload::from_store(store, self.generation);
++        let identity = store.query.identity;
+         let group = &mut self.groups[store.query.group];
+ 
+-        // Only retained slots participate in the identity match. Recent may
+-        // duplicate an identity and is deliberately ignored during storage.
+-        if let Some(index) = group.records[..RECENT].iter()
+-            .position(|r| r.matches(self.generation, record.identity))
++        // Full identity is tested before accessing payload generation.
++        // Recent remains excluded from retained identity matching.
++        if let Some(index) = (0..RECENT).find(|&index|
++            group.identities[index] == identity
++                && group.payloads[index].generation == self.generation)
+         {
+-            if record.depth < group.records[index].depth {
+-                group.records[RECENT] = record;
++            if record.depth < group.payloads[index].depth {
++                group.identities[RECENT] = identity;
++                group.payloads[RECENT] = record;
+             } else {
+-                group.records[index] = record;
++                group.identities[index] = identity;
++                group.payloads[index] = record;
+             }
+             return;
+         }
+ 
+-        // An empty priority is less valuable than every valid signed depth.
+-        if let Some(index) = group.records[..RECENT].iter()
++        // Empty selection intentionally reads generation, not identity.
++        if let Some(index) = group.payloads[..RECENT].iter()
+             .position(|r| r.generation != self.generation)
+         {
+-            group.records[index] = record;
+-            group.records[RECENT] = Record::default();
++            group.identities[index] = identity;
++            group.payloads[index] = record;
++            group.identities[RECENT] = 0;
++            group.payloads[RECENT] = Payload::default();
+             return;
+         }
+ 
+         let mut least = 0;
+         for index in 1..RECENT {
+-            if group.records[index].depth < group.records[least].depth { least = index; }
+-        }
+-        if record.depth >= group.records[least].depth {
+-            group.records[RECENT] = group.records[least];
+-            group.records[least] = record;
++            if group.payloads[index].depth < group.payloads[least].depth { least = index; }
++        }
++        if record.depth >= group.payloads[least].depth {
++            group.identities[RECENT] = group.identities[least];
++            group.payloads[RECENT] = group.payloads[least];
++            group.identities[least] = identity;
++            group.payloads[least] = record;
+         } else {
+-            group.records[RECENT] = record;
++            group.identities[RECENT] = identity;
++            group.payloads[RECENT] = record;
+         }
+     }
+ 
+@@ -231,15 +235,16 @@
+         let required = query.remaining_depth();
+         let group = &mut self.groups[query.group];
+         let mut result = ProbeResult::default();
+-        let recent = &mut group.records[RECENT];
+-        if recent.matches(self.generation, query.identity)
+-            && recent.consider(query, required, &mut result)
++        if group.identities[RECENT] == query.identity
++            && group.payloads[RECENT].generation == self.generation
++            && group.payloads[RECENT].consider(query, required, &mut result)
+         {
+             return result;
+         }
+-        for record in &mut group.records[..RECENT] {
+-            if record.matches(self.generation, query.identity) {
+-                record.consider(query, required, &mut result);
++        for index in 0..RECENT {
++            if group.identities[index] == query.identity
++                && group.payloads[index].generation == self.generation {
++                group.payloads[index].consider(query, required, &mut result);
+                 break;
+             }
+         }
+@@ -478,7 +483,7 @@
+         table.clear();
+         assert_eq!(table.probe(query(0, 1, -1, 0)), ProbeResult::default());
+         // The normal clear changed validity, not the record's bytes.
+-        assert_eq!(table.groups[0].records[0].generation, 1);
++        assert_eq!(table.groups[0].payloads[0].generation, 1);
+         for _ in 1..255 { table.clear(); }
+         assert_eq!(table.generation, 1);
+         assert_eq!(table.probe(query(0, 1, -1, 0)), ProbeResult::default());
+@@ -511,14 +516,20 @@
+         assert!(RememberedTable::from_tts(95).is_err());
+         assert_eq!(RememberedTable::from_tts(96).unwrap().group_count(), 2);
+         assert_eq!(RememberedTable::from_tts(48 * 100).unwrap().group_count(), 97);
+-        assert_eq!(std::mem::size_of::<Record>(), 12);
+-        assert_eq!(std::mem::align_of::<Record>(), 4);
+-        assert_eq!(std::mem::offset_of!(Record, identity), 0);
+-        assert_eq!(std::mem::offset_of!(Record, score), 4);
+-        assert_eq!(std::mem::offset_of!(Record, depth), 6);
+-        assert_eq!(std::mem::offset_of!(Record, endpoints), 8);
+-        assert_eq!(std::mem::offset_of!(Record, flags), 10);
+-        assert_eq!(std::mem::offset_of!(Record, generation), 11);
++        assert_eq!(std::mem::size_of::<Payload>(), 8);
++        assert_eq!(std::mem::align_of::<Payload>(), 2);
++        assert_eq!(std::mem::offset_of!(Payload, score), 0);
++        assert_eq!(std::mem::offset_of!(Payload, depth), 2);
++        assert_eq!(std::mem::offset_of!(Payload, endpoints), 4);
++        assert_eq!(std::mem::offset_of!(Payload, flags), 6);
++        assert_eq!(std::mem::offset_of!(Payload, generation), 7);
++        assert_eq!(std::mem::offset_of!(Group, identities), 0);
++        assert_eq!(std::mem::offset_of!(Group, payloads), 16);
++        assert_eq!(std::mem::align_of::<Group>(), 16);
+         assert_eq!(std::mem::size_of::<Group>(), 48);
+     }
+ }
++
++#[cfg(test)]
++#[path = "remembered/compact_tests.rs"]
++mod compact_tests;
+--- /dev/null
++++ b/src/remembered/compact_old.rs
+@@ -0,0 +1,284 @@
++//! Search-shared remembered results: three depth priorities plus recent.
++//!
++//! These operations add no semantic search/relation charge. Query is mutable:
++//! a usable mate bound can raise its record's depth after reporting metadata.
++
++use crate::position::Position;
++use crate::types::{Color, Move};
++
++const LOWER: u8 = 1;
++const UPPER: u8 = 2;
++const QUIET_CHECKED: u8 = 4;
++const MARKED_DEPTH: u8 = 8;
++const RECENT: usize = 3;
++
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub enum Bound {
++    #[default]
++    None,
++    Upper,
++    Exact,
++    Lower,
++}
++
++#[derive(Clone, Copy, Debug)]
++pub struct Query {
++    pub group: usize,
++    pub identity: u32,
++    pub ply: i32,
++    pub target: i32,
++    pub lower: i32,
++    pub upper: i32,
++}
++
++impl Query {
++    #[inline]
++    fn remaining_depth(self) -> i16 {
++        i16::try_from(self.target as i64 - self.ply as i64)
++            .expect("remembered remaining depth exceeds native representation")
++    }
++}
++
++#[derive(Clone, Copy, Debug)]
++pub struct Store {
++    pub query: Query,
++    pub score: i32,
++    pub move_hint: Option<Move>,
++    pub quiet_mate_checked: bool,
++    pub mark_depth: bool,
++}
++
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub struct ProbeResult {
++    pub score: Option<i32>,
++    pub bound: Bound,
++    pub move_hint: Option<Move>,
++    pub marked_depth: Option<i32>,
++    pub quiet_mate_checked: bool,
++}
++
++#[derive(Clone, Copy, Default)]
++#[repr(C)]
++struct Record {
++    identity: u32,
++    score: i16,
++    depth: i16,
++    endpoints: u16,
++    flags: u8,
++    generation: u8,
++}
++
++impl Record {
++    fn from_store(store: Store, generation: u8) -> Self {
++        let score = store.score as i64;
++        let normalized = if score >= 9000 { score + store.query.ply as i64 }
++                         else if score <= -9000 { score - store.query.ply as i64 }
++                         else { score };
++        let mut flags = 0;
++        if store.score > store.query.lower { flags |= LOWER; }
++        if store.score < store.query.upper { flags |= UPPER; }
++        if store.quiet_mate_checked { flags |= QUIET_CHECKED; }
++        if store.mark_depth { flags |= MARKED_DEPTH; }
++        Self {
++            identity: store.query.identity,
++            score: i16::try_from(normalized).expect("remembered score exceeds native representation"),
++            depth: store.query.remaining_depth(),
++            endpoints: store.move_hint.map_or(0, |mv| mv.0 & 0x0fff),
++            flags,
++            generation,
++        }
++    }
++
++    #[inline]
++    fn matches(self, generation: u8, identity: u32) -> bool {
++        self.generation == generation && self.identity == identity
++    }
++
++    #[inline]
++    fn bound(self) -> Bound {
++        match self.flags & (LOWER | UPPER) {
++            LOWER => Bound::Lower,
++            UPPER => Bound::Upper,
++            3 => Bound::Exact,
++            _ => Bound::None,
++        }
++    }
++
++    /// Metadata observes the depth before a successful mate query raises it.
++    #[inline]
++    fn consider(&mut self, query: Query, required: i16, result: &mut ProbeResult) -> bool {
++        result.bound = self.bound();
++        if self.endpoints != 0 { result.move_hint = Some(Move(self.endpoints)); }
++        result.quiet_mate_checked |= self.flags & QUIET_CHECKED != 0;
++        if self.flags & MARKED_DEPTH != 0 {
++            let depth = self.depth as i32;
++            result.marked_depth = Some(result.marked_depth.map_or(depth, |old| old.max(depth)));
++        }
++
++        let normalized = self.score as i32;
++        let score = if normalized >= 9000 { normalized - query.ply }
++                    else if normalized <= -9000 { normalized + query.ply }
++                    else { normalized };
++        let lower_cutoff = self.flags & LOWER != 0 && score >= query.upper;
++        let upper_cutoff = self.flags & UPPER != 0 && score <= query.lower;
++        let mate_cutoff = (normalized >= 9000 && lower_cutoff)
++                       || (normalized <= -9000 && upper_cutoff);
++        if mate_cutoff {
++            self.depth = self.depth.max(required);
++            result.score = Some(score);
++            return true;
++        }
++        if self.depth >= required && (lower_cutoff || upper_cutoff) {
++            result.score = Some(score);
++            return true;
++        }
++        false
++    }
++}
++
++#[derive(Clone, Copy, Default)]
++#[repr(C)]
++struct Group {
++    records: [Record; 4],
++}
++
++const _: () = assert!(std::mem::size_of::<Record>() == 12);
++const _: () = assert!(std::mem::size_of::<Group>() == 48);
++
++pub struct RememberedTable {
++    groups: Vec<Group>,
++    // Zero always denotes an invalid record. Reuse of a live byte value is
++    // preceded by a physical clear so old identities cannot become valid.
++    generation: u8,
++}
++
++impl RememberedTable {
++    pub fn with_groups(count: usize) -> Self {
++        assert!(count >= 1, "remembered table needs at least one group");
++        Self { groups: vec![Group::default(); count], generation: 1 }
++    }
++
++    pub fn from_tts(tts: usize) -> Result<Self, String> {
++        let count = largest_prime(tts / 48).ok_or("tts is too small for a prime group count")?;
++        let mut groups = Vec::new();
++        groups.try_reserve_exact(count).map_err(|e| format!("cannot allocate remembered groups: {e}"))?;
++        groups.resize(count, Group::default());
++        Ok(Self { groups, generation: 1 })
++    }
++
++    #[inline]
++    pub fn group_count(&self) -> usize { self.groups.len() }
++
++    pub fn clear(&mut self) {
++        if self.generation == u8::MAX {
++            self.groups.fill(Group::default());
++            self.generation = 1;
++        } else {
++            self.generation += 1;
++        }
++    }
++
++    #[inline]
++    pub fn group_for(&self, position: &Position) -> usize {
++        let ep = if position.ep < 64 {
++            10 * (position.ep as u32 / 8) + position.ep as u32 % 8 + 1
++        } else { 0 };
++        let flags = position.rights as u32
++            | if position.side == Color::White { 16 } else { 0 };
++        let key = position.primary ^ ((ep * 256) | (flags * 65536));
++        key as usize % self.groups.len()
++    }
++
++    pub fn store(&mut self, store: Store) {
++        let record = Record::from_store(store, self.generation);
++        let group = &mut self.groups[store.query.group];
++
++        // Only retained slots participate in the identity match. Recent may
++        // duplicate an identity and is deliberately ignored during storage.
++        if let Some(index) = group.records[..RECENT].iter()
++            .position(|r| r.matches(self.generation, record.identity))
++        {
++            if record.depth < group.records[index].depth {
++                group.records[RECENT] = record;
++            } else {
++                group.records[index] = record;
++            }
++            return;
++        }
++
++        // An empty priority is less valuable than every valid signed depth.
++        if let Some(index) = group.records[..RECENT].iter()
++            .position(|r| r.generation != self.generation)
++        {
++            group.records[index] = record;
++            group.records[RECENT] = Record::default();
++            return;
++        }
++
++        let mut least = 0;
++        for index in 1..RECENT {
++            if group.records[index].depth < group.records[least].depth { least = index; }
++        }
++        if record.depth >= group.records[least].depth {
++            group.records[RECENT] = group.records[least];
++            group.records[least] = record;
++        } else {
++            group.records[RECENT] = record;
++        }
++    }
++
++    pub fn probe(&mut self, query: Query) -> ProbeResult {
++        let required = query.remaining_depth();
++        let group = &mut self.groups[query.group];
++        let mut result = ProbeResult::default();
++        let recent = &mut group.records[RECENT];
++        if recent.matches(self.generation, query.identity)
++            && recent.consider(query, required, &mut result)
++        {
++            return result;
++        }
++        for record in &mut group.records[..RECENT] {
++            if record.matches(self.generation, query.identity) {
++                record.consider(query, required, &mut result);
++                break;
++            }
++        }
++        result
++    }
++}
++
++fn largest_prime(limit: usize) -> Option<usize> {
++    if limit < 2 { return None; }
++    if limit == 2 { return Some(2); }
++    let mut candidate = if limit & 1 == 0 { limit - 1 } else { limit };
++    while candidate >= 3 {
++        if is_prime(candidate) { return Some(candidate); }
++        candidate -= 2;
++    }
++    Some(2)
++}
++
++fn is_prime(value: usize) -> bool {
++    if value % 3 == 0 { return value == 3; }
++    let mut divisor = 5;
++    while divisor <= value / divisor {
++        if value % divisor == 0 || value % (divisor + 2) == 0 { return false; }
++        divisor += 6;
++    }
++    true
++}
++
++
++// Test-only state inspection, outside the frozen production-prefix oracle.
++impl RememberedTable {
++    pub(super) fn snapshot(&self) -> (u8, Vec<[(u32, i16, i16, u16, u8, u8); 4]>) {
++        (self.generation, self.groups.iter().map(|group| std::array::from_fn(|i| {
++            let r = group.records[i];
++            (r.identity, r.score, r.depth, r.endpoints, r.flags, r.generation)
++        })).collect())
++    }
++}
++
++impl RememberedTable {
++    pub(super) fn capacity(&self) -> usize { self.groups.capacity() }
++}
+--- /dev/null
++++ b/src/remembered/compact_tests.rs
+@@ -0,0 +1,152 @@
++//! Independent old-table differential controls. No compact layout helper is an oracle.
++use super::*;
++use crate::types::{MoveKind, Square};
++#[path = "compact_old.rs"]
++mod old;
++
++type Slot = (u32, i16, i16, u16, u8, u8);
++fn old_query(q: Query) -> old::Query {
++    old::Query { group: q.group, identity: q.identity, ply: q.ply,
++        target: q.target, lower: q.lower, upper: q.upper }
++}
++fn result(value: ProbeResult) -> (Option<i32>, u8, Option<Move>, Option<i32>, bool) {
++    let bound = match value.bound { Bound::None => 0, Bound::Upper => 1,
++        Bound::Exact => 2, Bound::Lower => 3 };
++    (value.score, bound, value.move_hint, value.marked_depth, value.quiet_mate_checked)
++}
++fn old_result(value: old::ProbeResult) -> (Option<i32>, u8, Option<Move>, Option<i32>, bool) {
++    let bound = match value.bound { old::Bound::None => 0, old::Bound::Upper => 1,
++        old::Bound::Exact => 2, old::Bound::Lower => 3 };
++    (value.score, bound, value.move_hint, value.marked_depth, value.quiet_mate_checked)
++}
++struct Pair { native: RememberedTable, old: old::RememberedTable }
++impl Pair {
++    fn new(groups: usize) -> Self {
++        Self { native: RememberedTable::with_groups(groups), old: old::RememberedTable::with_groups(groups) }
++    }
++    fn same(&self) {
++        let slots: Vec<[Slot;4]> = self.native.groups.iter().map(|g|
++            std::array::from_fn(|i| {
++                let r = g.payloads[i];
++                (g.identities[i],r.score,r.depth,r.endpoints,r.flags,r.generation)
++            })).collect();
++        assert_eq!((self.native.generation, slots), self.old.snapshot());
++        assert_eq!(self.native.group_count(), self.old.group_count());
++    }
++    fn store(&mut self, s: Store) {
++        self.native.store(s);
++        self.old.store(old::Store { query: old_query(s.query), score: s.score,
++            move_hint: s.move_hint, quiet_mate_checked: s.quiet_mate_checked, mark_depth: s.mark_depth });
++        self.same();
++    }
++    fn probe(&mut self, q: Query) -> ProbeResult {
++        let actual = self.native.probe(q);
++        assert_eq!(result(actual), old_result(self.old.probe(old_query(q))));
++        self.same(); // Includes pre-observation vs post-query mate-depth mutation.
++        actual
++    }
++    fn clear(&mut self) { self.native.clear(); self.old.clear(); self.same(); }
++}
++fn entry(identity: u32, depth: i32, score: i32) -> Store {
++    Store { query: Query { group: 0, identity, ply: 0, target: depth, lower: -200, upper: 200 },
++        score, move_hint: None, quiet_mate_checked: false, mark_depth: true }
++}
++fn query(identity: u32, depth: i32, lower: i32, upper: i32) -> Query {
++    Query { group: 0, identity, ply: 0, target: depth, lower, upper }
++}
++
++#[test]
++fn compact48_old_table_collisions_all_branches_and_metadata_precedence() {
++    let mut p = Pair::new(2);
++    // Fill all retained priorities; same-identity shallow/equal writes; full
++    // equal-depth displacement and strictly shallower recent-only insertion.
++    for (id,depth) in [(1,10),(2,20),(3,30),(1,9),(1,10),(4,10),(5,-1)] {
++        p.store(entry(id,depth,42));
++    }
++    assert_eq!(p.native.groups[0].identities, [4,2,3,5]);
++    for id in 0..=6 { p.probe(query(id,11,-100,0)); }
++    // Recent identity is not a retained match: it displaces by priority.
++    p.store(entry(5,11,43));
++    assert_eq!(p.native.groups[0].identities, [5,2,3,4]);
++    let mut retained = entry(5,40,-100);
++    retained.query.lower = -50; retained.query.upper = 50;
++    p.store(retained);
++    let mut recent = entry(5,2,100);
++    recent.query.lower = -50; recent.query.upper = 50;
++    recent.move_hint = Some(Move::new(Square::parse("e1").unwrap(), Square::parse("g1").unwrap(), MoveKind::Castle));
++    recent.quiet_mate_checked = true; recent.mark_depth = false;
++    p.store(recent);
++    let metadata = p.probe(query(5,41,-200,200));
++    assert_eq!((metadata.score,metadata.bound,metadata.marked_depth), (None,Bound::Upper,Some(40)));
++    assert!(metadata.quiet_mate_checked && metadata.move_hint.is_some());
++    assert_eq!(p.probe(query(5,2,-100,100)).score,Some(100));
++    // Numeric secondary identity zero is ordinary; group selection is separate.
++    let mut zero = entry(0,-63,17); zero.query.group = 1;
++    p.store(zero);
++    assert_eq!(p.probe(Query { group:1,..query(0,-63,-100,0) }).score,Some(17));
++    p.probe(query(0,-63,-100,0));
++    p.clear();
++    assert_eq!(p.probe(Query { group:1,..query(0,-63,-100,0) }).score,None);
++}
++
++#[test]
++fn compact48_old_table_signed_scores_mates_windows_and_depth_mutations() {
++    for score in [-10063,-9001,-9000,-8999,-1,0,1,8999,9000,9001,10063] {
++        for depth in [-63,0,1,10,366] {
++            for ply in [0,1,62] {
++                let mut p = Pair::new(1);
++                let mut s = entry(0,depth,score);
++                s.query.ply=ply; s.query.target=ply+depth;
++                s.query.lower=-10000; s.query.upper=10000;
++                s.quiet_mate_checked=true;
++                s.move_hint=Some(Move(0xffff));
++                p.store(s);
++                for (lower,upper) in [(-10000,10000),(-50,50),(0,0),(50,-50),(-10000,-9000),(9000,10000)] {
++                    for required in [-63,0,1,11,428] {
++                        for current_ply in [0,62] {
++                            let q = Query { group:0,identity:0,ply:current_ply,target:current_ply+required,lower,upper };
++                            p.probe(q); p.probe(q); // Second metadata sees any actual mate-depth upgrade.
++                        }
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[test]
++fn compact48_old_table_deterministic_sequences_stale_zero_wrap_and_capacity() {
++    for groups in [1,2,17] {
++        let mut p = Pair::new(groups);
++        let mut state = 0x4a6f_696e_6564_5454u64;
++        for step in 0..4096 {
++            state=state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
++            let group=(state as usize)%groups;
++            let identity=match step%4 { 0=>0,1=>u32::MAX,_=>(state>>32) as u32%7 };
++            let ply=((state>>8)%63) as i32;
++            let depth=[-63,-1,0,1,2,5,62,366][((state>>16)&7) as usize];
++            let score=[-10063,-9000,-8999,-50,0,50,8999,9000][((state>>24)&7) as usize];
++            let q=Query { group,identity,ply,target:ply+depth,lower:-50,upper:50 };
++            if step%11==0 { p.clear(); }
++            else if step%3!=0 {
++                p.store(Store { query:q,score,move_hint:Some(Move(state as u16)),
++                    quiet_mate_checked:state&1!=0,mark_depth:state&2!=0 });
++            } else { p.probe(q); }
++        }
++        // Force a complete byte-generation cycle with occupied and zero-ID data.
++        p.store(entry(0,1,17));
++        for _ in 0..255 { p.clear(); }
++        assert_eq!(p.probe(query(0,1,-100,0)).score,None);
++        p.store(entry(0,1,18));
++        assert_eq!(p.probe(query(0,1,-100,0)).score,Some(18));
++    }
++    for tts in [95,96,97,48*100,48*101] {
++        let native=RememberedTable::from_tts(tts);
++        let old=old::RememberedTable::from_tts(tts);
++        assert_eq!(native.is_ok(),old.is_ok());
++        if let (Ok(native),Ok(old))=(native,old) {
++            let p=Pair {native,old}; p.same();
++            assert_eq!(p.native.groups.capacity(),p.old.capacity());
++        }
++    }
++}

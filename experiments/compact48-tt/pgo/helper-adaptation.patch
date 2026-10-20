@@ -1,0 +1,45 @@
+--- method/guard.py
++++ compact48/guard.py
+@@ -2,7 +2,7 @@
+ import hashlib,json,os,sys,subprocess,shlex,tomllib
+ from pathlib import Path
+ HERE=Path(__file__).resolve().parent
+-ROOT=HERE.parents[1]
++ROOT=Path('/home/legolas/rook2')
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ load=lambda p:json.loads(Path(p).read_text())
+ PLAN=load(HERE/'plan.json')
+@@ -50,7 +50,10 @@
+  assert PLAN['expected_source_total']==PLAN['expected_source_files']+PLAN['expected_tool_files']
+  assert source_snapshot(SOURCE)==PLAN['engine_source_sha256']
+  assert tool_snapshot(SOURCE)==PLAN['tool_source_sha256']
+- assert tool_snapshot(ROOT)==PLAN['tool_source_sha256']
++ canonical=tool_snapshot(ROOT)
++ assert canonical==PLAN['canonical_tool_source_sha256']
++ assert set(canonical)-set(PLAN['tool_source_sha256'])=={'tools/restore_experiment_snapshot.py'}
++ assert all(canonical[name]==digest for name,digest in PLAN['tool_source_sha256'].items())
+  assert cargo_configs(SOURCE)==PLAN['cargo_config_sha256']
+  manifest=tomllib.loads((SOURCE/'Cargo.toml').read_text())
+  assert manifest['profile']['release']==PLAN['manifest_release_profile']
+--- method/train.py
++++ compact48/train.py
+@@ -9,7 +9,7 @@
+ import sys
+ 
+ HERE = Path(__file__).resolve().parent
+-ROOT = HERE.parents[1]
++ROOT = Path('/home/legolas/rook2')
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ sys.dont_write_bytecode=True
+ sys.path.insert(0, str(HERE))
+--- method/verify.py
++++ compact48/verify.py
+@@ -8,7 +8,7 @@
+ import subprocess
+ 
+ HERE = Path(__file__).resolve().parent
+-ROOT = HERE.parents[1]
++ROOT = Path('/home/legolas/rook2')
+ sys.dont_write_bytecode=True
+ sys.path.insert(0,str(HERE))
+ from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_thin_build,run,PLAN,SOURCE
