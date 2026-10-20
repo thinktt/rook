@@ -1,0 +1,20 @@
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -1303,13 +1303,12 @@
+                         for blocked in [false, true] {
+                             let from = Square::parse("d4").unwrap();
+                             let target = from.offset(2 * df, 2 * dr).unwrap();
+-                            let mut perpendicular = (-dr, df);
+-                            if target.offset(2 * perpendicular.0, 2 * perpendicular.1).is_none() {
+-                                perpendicular = (dr, -df);
+-                            }
++                            // One square beyond the target gives a real
++                            // interposition and stays on board for all8 rays.
++                            let perpendicular = (-dr, df);
+                             let king = target.offset(-perpendicular.0, -perpendicular.1).unwrap();
+                             let checker = if capture { target } else {
+-                                target.offset(2 * perpendicular.0, 2 * perpendicular.1).unwrap()
++                                target.offset(perpendicular.0, perpendicular.1).unwrap()
+                             };
+                             let checker_kind = if perpendicular.0 != 0 && perpendicular.1 != 0 {
+                                 PieceKind::Bishop

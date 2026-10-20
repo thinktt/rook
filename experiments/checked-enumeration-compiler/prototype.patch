@@ -1,0 +1,231 @@
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -542,6 +542,15 @@
+     safety: &GenerationSafety,
+     kind: PieceKind,
+ ) {
++    let checked_slider = safety.checked
++        && matches!(kind, PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen);
++    // The independent old test route must enumerate every old direction too.
++    #[cfg(test)]
++    let checked_slider = checked_slider && !FORCE_PROJECTION.with(|forced| forced.get());
++    if checked_slider {
++        checked_sliders::<LIMIT>(position, list, safety, kind);
++        return;
++    }
+     let directions: &[(i8, i8)] = match kind {
+         PieceKind::Knight => &KNIGHT,
+         PieceKind::Bishop => &DIRECTIONS[..4],
+@@ -552,6 +561,54 @@
+     let sliding = matches!(kind, PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen);
+     for &from in position.piece_squares(position.side, kind) {
+         for &(df, dr) in directions {
++            let mut next = from.offset(df, dr);
++            while let Some(to) = next {
++                let victim = position.board[to.0 as usize];
++                if !victim.is_empty()
++                    && (victim.color() == position.side || victim.kind() == PieceKind::King)
++                {
++                    break;
++                }
++                add_if_safe(
++                    position,
++                    list,
++                    safety,
++                    Move::new(from, to, MoveKind::Ordinary),
++                );
++                if list.len >= LIMIT {
++                    return;
++                }
++                if !sliding || !victim.is_empty() {
++                    break;
++                }
++                next = to.offset(df, dr);
++            }
++        }
++    }
++}
++
++// Checked sliders alone pay the immutable ray-mask load and intersection.
++// Every skipped destination already fails GenerationSafety's destination test.
++fn checked_sliders<const LIMIT: usize>(
++    position: &Position,
++    list: &mut MoveList,
++    safety: &GenerationSafety,
++    kind: PieceKind,
++) {
++    let (start, end) = match kind {
++        PieceKind::Bishop => (0, 4),
++        PieceKind::Rook => (4, 8),
++        PieceKind::Queen => (0, 8),
++        _ => unreachable!(),
++    };
++    let sliding = true;
++    for &from in position.piece_squares(position.side, kind) {
++        let (rays, _) = crate::attacks::influence_rays(from);
++        for direction in start..end {
++            if rays[direction] & safety.evasion_destinations == 0 {
++                continue;
++            }
++            let (df, dr) = DIRECTIONS[direction];
+             let mut next = from.offset(df, dr);
+             while let Some(to) = next {
+                 let victim = position.board[to.0 as usize];
+@@ -1174,3 +1231,157 @@
+         }
+     }
+ }
++
++
++#[cfg(test)]
++mod checked_enumeration_tests {
++    use super::*;
++
++    struct OldEnumeration;
++    impl OldEnumeration {
++        fn enter() -> Self {
++            FORCE_PROJECTION.with(|forced| assert!(!forced.replace(true)));
++            Self
++        }
++    }
++    impl Drop for OldEnumeration {
++        fn drop(&mut self) {
++            FORCE_PROJECTION.with(|forced| forced.set(false));
++        }
++    }
++
++    fn compare(position: &Position) -> usize {
++        let mut actual = MoveList::new();
++        let mut bounded = MoveList::new();
++        generate_legal(position, &mut actual);
++        legal_replies_up_to_two(position, &mut bounded);
++        let mut old = MoveList::new();
++        let mut old_bounded = MoveList::new();
++        {
++            // This route uses the literal unpruned pieces walk, not the
++            // checked_sliders walk, AND the old mailbox safety projection.
++            let _old = OldEnumeration::enter();
++            generate_legal(position, &mut old);
++            legal_replies_up_to_two(position, &mut old_bounded);
++        }
++        assert_eq!(actual.as_slice(), old.as_slice(), "full ordered inventory");
++        assert_eq!(bounded.as_slice(), old_bounded.as_slice(), "bounded witnesses");
++        assert_eq!(bounded.len, old.len.min(2));
++        if old.len < 2 {
++            assert_eq!(bounded.as_slice(), old.as_slice(), "complete reusable prefix");
++        }
++        old.len
++    }
++
++    fn placement(board: &[Piece; 64], side: Color) -> Position {
++        // Reuse the existing FEN ingress, rather than manufacture derived state.
++        let mut fen = String::new();
++        for rank in (0..8).rev() {
++            if rank != 7 { fen.push('/'); }
++            let mut empty = 0u8;
++            for file in 0..8 {
++                let piece = board[rank * 8 + file];
++                if piece.is_empty() {
++                    empty += 1;
++                } else {
++                    if empty != 0 { fen.push((b'0' + empty) as char); empty = 0; }
++                    fen.push(piece.fen_char());
++                }
++            }
++            if empty != 0 { fen.push((b'0' + empty) as char); }
++        }
++        fen.push_str(if side == Color::White { " w - - 0 1" } else { " b - - 0 1" });
++        Position::from_fen(&fen).unwrap()
++    }
++
++    #[test]
++    fn checked_enumeration_all_ray_signs_capture_interposition_and_prior_blocker() {
++        for side in [Color::White, Color::Black] {
++            for (direction, &(df, dr)) in DIRECTIONS.iter().enumerate() {
++                for kind in [if direction < 4 { PieceKind::Bishop } else { PieceKind::Rook }, PieceKind::Queen] {
++                    for capture in [false, true] {
++                        for blocked in [false, true] {
++                            let from = Square::parse("d4").unwrap();
++                            let target = from.offset(2 * df, 2 * dr).unwrap();
++                            let mut perpendicular = (-dr, df);
++                            if target.offset(2 * perpendicular.0, 2 * perpendicular.1).is_none() {
++                                perpendicular = (dr, -df);
++                            }
++                            let king = target.offset(-perpendicular.0, -perpendicular.1).unwrap();
++                            let checker = if capture { target } else {
++                                target.offset(2 * perpendicular.0, 2 * perpendicular.1).unwrap()
++                            };
++                            let checker_kind = if perpendicular.0 != 0 && perpendicular.1 != 0 {
++                                PieceKind::Bishop
++                            } else { PieceKind::Rook };
++                            let mut board = [Piece::EMPTY; 64];
++                            board[from.0 as usize] = Piece::new(side, kind);
++                            board[king.0 as usize] = Piece::new(side, PieceKind::King);
++                            board[checker.0 as usize] = Piece::new(side.opponent(), checker_kind);
++                            if blocked {
++                                board[from.offset(df, dr).unwrap().0 as usize] = Piece::new(side, PieceKind::Pawn);
++                            }
++                            let remote = (0u8..64).rev().map(Square).find(|square| {
++                                board[square.0 as usize].is_empty()
++                                    && (square.file() as i8 - king.file() as i8).abs() > 1
++                                    && (square.rank() as i8 - king.rank() as i8).abs() > 1
++                            }).unwrap();
++                            board[remote.0 as usize] = Piece::new(side.opponent(), PieceKind::King);
++                            let position = placement(&board, side);
++                            assert!(in_check(&position, side));
++                            let mut generated = MoveList::new();
++                            generate_legal(&position, &mut generated);
++                            let witness = Move::new(from, target, MoveKind::Ordinary);
++                            assert_eq!(generated.as_slice().contains(&witness), !blocked,
++                                "direction={direction}, kind={kind:?}, capture={capture}, blocked={blocked}");
++                            compare(&position);
++                        }
++                    }
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn checked_enumeration_keeps_edges_promoted_order_and_joined_ep_prefixes() {
++        for fen in [
++            "k3r3/8/8/8/8/8/QRRB1QQB/4K3 w - - 0 1",
++            "4k3/qrrb1qqb/8/8/8/8/8/K3R3 b - - 0 1",
++            "7k/8/8/8/2b5/2p5/2R4r/K6r w - - 0 1",
++            "1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1",
++            "k7/8/8/4KPnr/8/8/8/8 w - g6 0 1",
++            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
++            "1b5k/P7/8/8/8/8/7K/8 w - - 0 1",
++        ] {
++            let mut position = Position::from_fen(fen).unwrap();
++            compare(&position);
++            // Keep the same placement/planes but make grouped source chronology
++            // noncanonical. Generation must retain this supplied list order.
++            for kind in [PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++                let count = position.counts[position.side.index()][kind.index()] as usize;
++                let start: usize = position.counts[position.side.index()][..kind.index()]
++                    .iter().map(|&count| count as usize).sum();
++                position.squares[position.side.index()][start..start + count].reverse();
++            }
++            compare(&position);
++        }
++    }
++
++    #[test]
++    fn checked_enumeration_bounded_zero_one_two_and_zero_evasion_mask() {
++        for (fen, count) in [
++            ("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1", 0),
++            ("7k/7R/6K1/8/8/8/8/8 b - - 0 1", 1),
++            ("5n1k/8/8/5b2/8/8/8/K6R b - - 0 1", 5),
++            ("7k/8/8/8/2b5/2p5/2R4r/K6r w - - 0 1", 1),
++        ] {
++            assert_eq!(compare(&Position::from_fen(fen).unwrap()), count);
++        }
++        let position = Position::from_fen("4r1k1/8/8/8/1b6/8/8/R3K2Q w - - 0 1").unwrap();
++        let king = position.piece_squares(position.side, PieceKind::King)[0];
++        let checkers = find_attackers::<2>(&position.board, king, position.side.opponent());
++        assert_eq!(checkers.len, 2);
++        assert_eq!(GenerationSafety::new(&position, king, checkers).evasion_destinations, 0);
++        compare(&position);
++    }
++}
