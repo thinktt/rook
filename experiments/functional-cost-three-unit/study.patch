@@ -1,0 +1,317 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -20,3 +20,4 @@
+ inherits = "release"
+ 
+ [dependencies]
++serde_json = "=1.0.154"
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3,5 +3,103 @@
+ version = 4
+ 
+ [[package]]
++name = "itoa"
++version = "1.0.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
++
++[[package]]
++name = "memchr"
++version = "2.8.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
++
++[[package]]
++name = "proc-macro2"
++version = "1.0.107"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
++dependencies = [
++ "unicode-ident",
++]
++
++[[package]]
++name = "quote"
++version = "1.0.47"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
++dependencies = [
++ "proc-macro2",
++]
++
++[[package]]
+ name = "rook2"
+ version = "0.1.0"
++dependencies = [
++ "serde_json",
++]
++
++[[package]]
++name = "serde"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
++dependencies = [
++ "serde_core",
++]
++
++[[package]]
++name = "serde_core"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48"
++dependencies = [
++ "serde_derive",
++]
++
++[[package]]
++name = "serde_derive"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "serde_json"
++version = "1.0.154"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
++dependencies = [
++ "itoa",
++ "memchr",
++ "serde",
++ "serde_core",
++ "zmij",
++]
++
++[[package]]
++name = "syn"
++version = "3.0.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "unicode-ident",
++]
++
++[[package]]
++name = "unicode-ident"
++version = "1.0.27"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
++
++[[package]]
++name = "zmij"
++version = "1.0.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -1020,3 +1020,6 @@
+         verify::<true>();
+     }
+ }
++
++// Optional isolated measurement entry; never invoked by ordinary CLI.
++pub mod functional_cost;
+--- a/src/evaluator/functional_cost.rs
++++ b/src/evaluator/functional_cost.rs
+@@ -0,0 +1,188 @@
++//! Isolated three-unit driver. No expected answers or fixture IDs enter runtime.
++//! JSON/schema/descriptor preparation precedes the clock. Typed observations and
++//! real logical reset/transition/evaluation/consumption happen in every repetition.
++use super::{Evaluator, Parameters, Node, Retained, FullDetails, FastDetails};
++use crate::{engine::Search, endgame::Finished, history::SearchHistory, influence::Influence,
++    movegen::{self, MoveList}, parameters::{self, Parameters as SearchParameters},
++    position::{Position, NO_SQUARE}, quiescence::{Limits, Work},
++    types::{Color, Move, MoveKind, Piece, PieceKind, Square}};
++use serde_json::{json, Value, Map};
++use std::{hint::black_box, process::ExitCode, time::Instant};
++type Result<T> = std::result::Result<T,String>;
++const COLORS:[&str;2]=["white","black"];
++const KINDS:[&str;6]=["pawn","knight","bishop","rook","queen","king"];
++const COEFF:[&str;11]=["pawn","knight","bishop","rook","queen","king","centralInfluence","mobility","kingSafety","pawnProgress","pawnStructure"];
++fn object<'a>(v:&'a Value,keys:&[&str])->Result<&'a Map<String,Value>>{
++    let o=v.as_object().ok_or("expected object")?;
++    if o.len()!=keys.len() || keys.iter().any(|k|!o.contains_key(*k)){return Err("unexpected or missing field".into())} Ok(o)
++}
++fn text(v:&Value)->Result<&str>{v.as_str().ok_or_else(||"expected string".into())}
++fn integer(v:&Value,lo:i64,hi:i64)->Result<i32>{let n=v.as_i64().ok_or("expected integer")?;if n<lo||n>hi{return Err("integer out of range".into())}Ok(n as i32)}
++fn array(v:&Value,lo:usize,hi:usize)->Result<&Vec<Value>>{let a=v.as_array().ok_or("expected array")?;if !(lo..=hi).contains(&a.len()){return Err("array length out of range".into())}Ok(a)}
++fn bounded(p:&Position)->Result<()>{if p.counts.iter().any(|c|c[1..4].iter().any(|&n|n>10)||c[4]>9){return Err("bounded diagnostic material exceeded".into())}Ok(())}
++fn coordinate(s:&str)->Result<()>{if !s.is_ascii()||!matches!(s.len(),4|5)||Square::parse(&s[..2]).is_none()||Square::parse(&s[2..4]).is_none()||(s.len()==5&&!matches!(s.as_bytes()[4],b'n'|b'b'|b'r'|b'q')){return Err("malformed coordinate".into())}Ok(())}
++// Same native legal resolution/portable EP gate as diagnostic positions.rs;
++// called only during descriptor preparation, not per timed transition.
++fn legal(p:&Position,s:&str)->Result<Move>{
++    coordinate(s)?;let mut list=MoveList::new();movegen::generate_legal(p,&mut list);
++    let m=list.as_slice().iter().copied().find(|m|m.to_string()==s).ok_or_else(||format!("illegal move: {s}"))?;
++    if m.kind()==MoveKind::EnPassant{let rank=if p.side==Color::White{5}else{2};let b=if p.side==Color::White{m.to().0-8}else{m.to().0+8};
++        if m.to().rank()!=rank||p.board[b as usize]!=Piece::new(p.side.opponent(),PieceKind::Pawn){return Err("ordinary EP rank/pawn victim required".into())}}
++    Ok(m)
++}
++fn eval_parameters(v:&Value)->Result<Parameters>{
++    object(v,&["fen","percentages","averageDepth","cfd","sop","steps"])?;
++    object(&v["percentages"],&["own","opponent"])?;let mut p=Parameters::default();
++    for (owner,target) in [("own",&mut p.own),("opponent",&mut p.opponent)]{
++        let a=object(&v["percentages"][owner],&COEFF)?;for (i,k) in COEFF.iter().enumerate(){target[i]=integer(&a[*k],0,1000)?;}}
++    p.average_depth=integer(&v["averageDepth"],-100,100)?;p.draw=integer(&v["cfd"],-10000,10000)?;p.opponent_selectivity=integer(&v["sop"],0,100)?;Ok(p)
++}
++#[derive(Default)] struct Sink(u64);
++impl Sink{
++    fn word(&mut self,x:u64){self.0=self.0.rotate_left(7).wrapping_add(x)^0x9e3779b97f4a7c15;}
++    fn signed(&mut self,x:i32){self.word(x as i64 as u64)}
++    fn retained(&mut self,r:Retained){self.signed(r.positional);self.signed(r.pawn_progress);self.word(r.age as u64)}
++    fn movement(&mut self,m:Move){self.word(m.0 as u64)}
++    fn state(&mut self,p:&Position,initial:Option<&str>){
++        // Canonical piece bytes injectively encode normalized placement. Initial
++        // notation retains the input's original placement boundary instead.
++        if let Some(t)=initial{self.word(t.len() as u64);for b in t.bytes(){self.word(b as u64)}}else{for x in p.board{self.word(x.0 as u64)}}
++        for x in [p.side as u8,p.rights,p.ep,p.halfmove]{self.word(x as u64)}
++        for c in [Color::White,Color::Black]{for k in PieceKind::ALL{let a=p.piece_squares(c,k);self.word(a.len() as u64);for q in a{self.word(q.0 as u64)}}}
++        for x in [p.primary,p.secondary,p.pawn,p.pawn%128]{self.word(x as u64)}
++        let a=p.phase();for x in [a.opening,a.middlegame,a.endgame]{self.word(x as u64)}
++    }
++}
++fn retained_json(r:Retained)->Value{json!({"positionalSubtotal":r.positional,"pawnProgress":r.pawn_progress,"evaluationAge":r.age})}
++fn state_json(p:&Position,initial:Option<&str>)->Value{
++    let mut rights=String::new();for (c,b) in [('K',2),('Q',1),('k',8),('q',4)]{if p.rights&b!=0{rights.push(c)}}if rights.is_empty(){rights.push('-')}
++    let mut order=Map::new();for c in [Color::White,Color::Black]{let mut a=Map::new();for (k,n) in PieceKind::ALL.into_iter().zip(KINDS){a.insert(n.into(),json!(p.piece_squares(c,k).iter().map(ToString::to_string).collect::<Vec<_>>()));}order.insert(COLORS[c.index()].into(),Value::Object(a));}
++    let a=p.phase();json!({"placement":initial.map(str::to_owned).unwrap_or_else(||p.placement()),"sideToMove":COLORS[p.side.index()],"castling":rights,
++        "enPassant":if p.ep==NO_SQUARE{"-".to_owned()}else{Square(p.ep).to_string()},"halfmoveClock":p.halfmove,"pieceOrder":order,
++        "identity":{"primary":p.primary,"secondary":p.secondary,"pawn":p.pawn,"pawnGroup":p.pawn%128},"phase":{"opening":a.opening,"middlegame":a.middlegame,"endgame":a.endgame}})
++}
++fn descriptor(m:Move)->Value{if m==Move::NONE{Value::Null}else{json!({"move":m.to_string(),"kind":match m.kind(){MoveKind::EnPassant=>"enPassant",MoveKind::Castle=>"castle",_=>"ordinary"}})}}
++#[derive(Clone,Copy)] struct Step{movement:Option<Move>,full:bool}
++#[derive(Clone,Copy)] struct EvalRecord{position:Position,full:bool,checked:bool,inherited:Option<Retained>,retained:Retained,reused:Option<bool>,queries:u64,finished:Finished}
++impl EvalRecord{
++    fn consume(&self,s:&mut Sink,initial:Option<&str>){s.state(&self.position,initial);s.word(self.full as u64);s.word(self.checked as u64);s.word(self.inherited.is_some() as u64);if let Some(r)=self.inherited{s.retained(r)}s.retained(self.retained);s.word(match self.reused{None=>0,Some(false)=>1,Some(true)=>2});s.word(self.queries);
++        for x in [self.finished.adjusted_base,self.finished.late_score,self.finished.scaled_score,self.finished.score,self.finished.lower,self.finished.upper]{s.signed(x)}}
++    fn json(&self,initial:Option<&str>)->Value{json!({"kind":if self.full{"full"}else{"fast"},"inCheck":self.checked,"inherited":self.inherited.map(retained_json),"retained":retained_json(self.retained),"pawnEntryReused":self.reused,"relationQueries":self.queries,
++        "adjustedBase":self.finished.adjusted_base,"lateEndgame":self.finished.late_score,"scaledScore":self.finished.scaled_score,"score":self.finished.score,"lowerBound":self.finished.lower,"upperBound":self.finished.upper,"state":state_json(&self.position,initial)})}
++}
++struct EvalUnit{initial:Position,notation:String,steps:Vec<Step>,evaluator:Evaluator<false>,coherent:bool,records:Vec<EvalRecord>}
++impl EvalUnit{
++    fn prepare(v:&Value,coherent:bool)->Result<Self>{
++        let parameters=eval_parameters(v)?;let fen=text(&v["fen"])?;let initial=Position::from_fen(fen)?;bounded(&initial)?;initial.validate()?;
++        let raw=array(&v["steps"],1,256)?;let mut syntax=Vec::with_capacity(raw.len());
++        for s in raw{object(s,&["move","kind"])?;let full=match text(&s["kind"])?{"full"=>true,"fast"=>false,_=>return Err("kind must be full or fast".into())};let t=if s["move"].is_null(){None}else{let t=text(&s["move"])?;coordinate(t)?;Some(t)};syntax.push((t,full));}
++        let mut at=initial;let mut steps=Vec::with_capacity(syntax.len());
++        for (t,full) in syntax{let movement=if let Some(t)=t{Some(legal(&at,t)?)}else{if [Color::White,Color::Black].into_iter().any(|c|movegen::in_check(&at,c)){return Err("null requires both kings safe".into())}None};at=movement.map_or_else(||at.null_child(),|m|at.played_unchecked(m));bounded(&at)?;at.validate()?;steps.push(Step{movement,full});}
++        let mut evaluator=Evaluator::<false>::new(&initial);evaluator.parameters=parameters;evaluator.begin_search(&initial);
++        Ok(Self{initial,notation:fen.split(' ').next().unwrap().to_owned(),records:Vec::with_capacity(steps.len()+1),steps,evaluator,coherent})
++    }
++    fn stage(&mut self,node:&mut Node,full:bool,inherited:Option<Retained>){
++        let checked=movegen::in_check(&node.position,node.position.side);
++        let (evaluation,finished,reused)=if full{let map=if self.coherent{Influence::build_coherent(&node.position)}else{Influence::build(&node.position)};let mut d=None;let e=self.evaluator.full_detailed_observed(node,&map,checked,|v|d=Some(v));let FullDetails{finished,pawn_entry_reused,..}=d.expect("one full result");(e,finished,Some(pawn_entry_reused))}
++        else{let mut d=None;let e=self.evaluator.fast_detailed_observed(node,checked,|v|d=Some(v));let FastDetails{finished,..}=d.expect("one fast result");(e,finished,None)};
++        self.records.push(EvalRecord{position:node.position,full,checked,inherited,retained:node.retained,reused,queries:evaluation.relation_queries,finished});
++    }
++    fn invoke(&mut self,s:&mut Sink)->Result<(u64,u64)>{
++        // Fixed root context is cold. The actual pawn cache and root Node reset
++        // inside every sequence; retained/cache state persists only within it.
++        self.evaluator.pawns.clear();self.evaluator.stats=super::EvalStats::default();self.records.clear();
++        let mut node=Node::root(black_box(self.initial),&self.evaluator.root);self.stage(&mut node,true,None);
++        for i in 0..self.steps.len(){let a=black_box(self.steps[i]);node=a.movement.map_or_else(||node.null_child(),|m|node.child(&self.evaluator.root,m));let inherited=node.retained;self.stage(&mut node,a.full,Some(inherited));}
++        let mut q=0u64;for (i,r) in self.records.iter().enumerate(){r.consume(s,if i==0{Some(&self.notation)}else{None});q=q.checked_add(r.queries).ok_or("relation overflow")?;}black_box(s.0);Ok((0,q))
++    }
++    fn projection(&self)->Value{json!({"results":self.records.iter().enumerate().map(|(i,r)|r.json(if i==0{Some(&self.notation)}else{None})).collect::<Vec<_>>()})}
++}
++struct PositionUnit{initial:Position,notation:String,moves:Vec<Move>,states:Vec<Position>}
++impl PositionUnit{
++    fn prepare(v:&Value)->Result<Self>{object(v,&["fen","moves"])?;let fen=text(&v["fen"])?;let initial=Position::from_fen(fen)?;bounded(&initial)?;
++        let syntax=array(&v["moves"],1,256)?.iter().map(|v|{let t=text(v)?;coordinate(t)?;Ok(t)}).collect::<Result<Vec<_>>>()?;
++        let mut at=initial;let mut moves=Vec::with_capacity(syntax.len());for t in syntax{let m=legal(&at,t)?;at=at.played_unchecked(m);bounded(&at)?;moves.push(m);}
++        Ok(Self{initial,notation:fen.split(' ').next().unwrap().to_owned(),states:Vec::with_capacity(moves.len()+1),moves})}
++    fn invoke(&mut self,s:&mut Sink)->Result<(u64,u64)>{self.states.clear();let mut at=black_box(self.initial);self.states.push(at);for &m in &self.moves{at=at.played_unchecked(black_box(m));self.states.push(at);}for (i,p) in self.states.iter().enumerate(){s.state(p,if i==0{Some(&self.notation)}else{None});}black_box(s.0);Ok((0,0))}
++    fn projection(&self)->Value{json!({"results":self.states.iter().enumerate().map(|(i,p)|state_json(p,if i==0{Some(&self.notation)}else{None})).collect::<Vec<_>>()})}
++}
++
++struct SearchRecord{initial:Vec<Move>,depth:u8,score:i32,pv:Vec<Move>,work:Work,roots:Vec<(Move,i32)>}
++impl SearchRecord{
++    fn consume(&self,s:&mut Sink){s.word(self.initial.len() as u64);for &m in &self.initial{s.movement(m)}s.word(self.depth as u64);s.signed(self.score);s.word(self.pv.len() as u64);for &m in &self.pv{s.movement(m)}
++        for n in [self.work.effective_search_count(),self.work.charged_search_units,self.work.charged_relation_queries]{s.word(n)}s.word(self.roots.len() as u64);for &(m,v) in &self.roots{s.movement(m);s.signed(v)}}
++    fn json(&self)->Value{json!({"initialCandidates":self.initial.iter().copied().map(descriptor).collect::<Vec<_>>(),"depth":self.depth,"score":self.score,"principalVariation":self.pv.iter().copied().map(descriptor).collect::<Vec<_>>(),
++        "work":{"searchCounterDelta":self.work.effective_search_count(),"chargedSearchUnits":self.work.charged_search_units,"chargedRelationQueries":self.work.charged_relation_queries},
++        "rootResults":self.roots.iter().map(|&(m,s)|json!({"move":descriptor(m),"score":s})).collect::<Vec<_>>()})}
++}
++struct SearchUnit{root:Position,history:SearchHistory,search:Search<false>,completed:u8,raw:Vec<i32>,last:Option<SearchRecord>}
++impl SearchUnit{
++    fn prepare(v:&Value)->Result<Self>{
++        object(v,&["fen","moves","personalityParameters","completedIterations","controls"])?;
++        let pp=object(&v["personalityParameters"],&parameters::NAMES)?;let mut values=[0i32;30];
++        for (i,n) in parameters::NAMES.iter().enumerate(){values[i]=integer(&pp[*n],i32::MIN as i64,i32::MAX as i64)?;}
++        if values[24]!=0{return Err("functional search requires rnd=0".into())}
++        let completed=integer(&v["completedIterations"],2,2)? as u8;
++        let c=object(&v["controls"],&["completion","learnedState","pondering","workOrigin"])?;
++        if c["completion"]!="fixed-iterations"||c["learnedState"]!="fresh-ordinary-search"||c["pondering"]!=false||c["workOrigin"]!="after-root-preparation"{return Err("unsupported fixed-completion controls".into())}
++        let syntax=array(&v["moves"],0,255)?.iter().map(|v|{let t=text(v)?;coordinate(t)?;Ok(t)}).collect::<Result<Vec<_>>>()?;
++        let mut root=Position::from_fen(text(&v["fen"])?)?;
++        if movegen::in_check(&root,root.side.opponent()){return Err("initial nonmoving king is in check".into())}
++        if root.ep!=NO_SQUARE{let rank=if root.side==Color::White{5}else{2};let b=if root.side==Color::White{root.ep-8}else{root.ep+8};
++            if root.ep/8!=rank||root.board[b as usize]!=Piece::new(root.side.opponent(),PieceKind::Pawn){return Err("retained EP requires ordinary rank and opposing pawn victim".into())}}
++        let mut history=SearchHistory::new(&root);for t in syntax{let m=legal(&root,t)?;root=root.played_unchecked(m);history.push(&root,Some(m));}history.mark_root();root.validate()?;
++        let mut search=Search::<false>::new(&root);SearchParameters{values}.bind(&mut search).map_err(|e|format!("parameter binding: {e:?}"))?;
++        search.ensure_table()?; // cold physical storage; native logical clear remains timed
++        let mut roots=MoveList::new();movegen::generate_legal(&root,&mut roots);if roots.len==0{return Err("no legal roots".into())}
++        Ok(Self{root,history,search,completed,raw:Vec::with_capacity(roots.len*usize::from(completed)),last:None})
++    }
++    fn invoke(&mut self,s:&mut Sink)->Result<(u64,u64)>{
++        self.last=None;self.raw.clear();self.history.reset_search();
++        let raw=&mut self.raw;
++        let outcome=self.search.run_seeded_iterations(black_box(self.root),&mut self.history,self.completed,
++            Limits{nodes:Some(4095)},0,0,|v|raw.push(v)).map_err(|e|format!("fixed search: {e:?}"))?;
++        if self.history.search_ply()!=0{return Err("unrestored history".into())}
++        let last=outcome.iterations.last().ok_or("missing final iteration")?;
++        let count:usize=outcome.iterations.iter().map(|i|i.candidates.len()).sum();
++        if self.raw.len()!=count||self.raw.len()<last.candidates.len(){return Err("raw-return/candidate mismatch".into())}
++        let offset=count-last.candidates.len();let roots=last.candidates.iter().copied().zip(self.raw[offset..].iter().copied()).collect();
++        let record=SearchRecord{initial:outcome.initial_candidates,depth:last.depth,score:outcome.score,pv:outcome.pv,work:outcome.work,roots};
++        let work=(record.work.charged_search_units,record.work.charged_relation_queries);record.consume(s);black_box(s.0);self.last=Some(record);Ok(work)
++    }
++    fn projection(&self)->Value{self.last.as_ref().expect("completed search").json()}
++}
++enum Unit{Eval(EvalUnit),Position(PositionUnit),Search(SearchUnit)}
++impl Unit{
++    fn prepare(row:&str,v:&Value)->Result<Self>{match row{"eval-scalar"=>Ok(Self::Eval(EvalUnit::prepare(v,false)?)),"eval-coherent"=>Ok(Self::Eval(EvalUnit::prepare(v,true)?)),"position"=>Ok(Self::Position(PositionUnit::prepare(v)?)),"search"=>Ok(Self::Search(SearchUnit::prepare(v)?)),_=>Err("unknown row".into())}}
++    fn invoke(&mut self,s:&mut Sink)->Result<(u64,u64)>{match self{Self::Eval(x)=>x.invoke(s),Self::Position(x)=>x.invoke(s),Self::Search(x)=>x.invoke(s)}}
++    fn projection(&self)->Value{match self{Self::Eval(x)=>x.projection(),Self::Position(x)=>x.projection(),Self::Search(x)=>x.projection()}}
++}
++// Audited Linux64 POSIX timespec ABI. Only two process-clock reads per batch.
++#[repr(C)]struct Timespec{seconds:std::os::raw::c_long,nanoseconds:std::os::raw::c_long}
++extern "C"{fn clock_gettime(id:std::os::raw::c_int,out:*mut Timespec)->std::os::raw::c_int;}
++fn cpu_ns()->Result<u64>{
++    if !cfg!(all(target_os="linux",target_pointer_width="64")){return Err("unsupported process-clock ABI".into())}
++    let mut t=Timespec{seconds:0,nanoseconds:0};
++    // SAFETY: valid writable aligned repr(C) timespec; Linux process CPU clock ID2.
++    if unsafe{clock_gettime(2,&mut t)}!=0{return Err(format!("process clock: {}",std::io::Error::last_os_error()))}
++    if t.seconds<0||!(0..1_000_000_000).contains(&t.nanoseconds){return Err("invalid process-clock result".into())}
++    (t.seconds as u64).checked_mul(1_000_000_000).and_then(|n|n.checked_add(t.nanoseconds as u64)).ok_or_else(||"clock overflow".into())
++}
++fn execute()->Result<Value>{
++    let(mut mode,mut row,mut path,mut iterations)=(None,None,None,None);
++    let mut args=std::env::args().skip(1);while let Some(k)=args.next(){let v=args.next().ok_or("missing argument value")?;
++        match k.as_str(){"--mode" if mode.is_none()=>mode=Some(v),"--row" if row.is_none()=>row=Some(v),"--input" if path.is_none()=>path=Some(v),"--iterations" if iterations.is_none()=>iterations=Some(v.parse::<u64>().map_err(|_|"invalid iterations")?),_=>return Err("unknown/duplicate argument".into())}}
++    let mode=mode.ok_or("missing mode")?;let row=row.ok_or("missing row")?;let path=path.ok_or("missing input")?;let n=iterations.ok_or("missing iterations")?;
++    if !(1..=1_000_000_000).contains(&n){return Err("iterations outside bounded range".into())}
++    if mode!="verify"&&mode!="measure"{return Err("unknown mode".into())}if mode=="verify"&&n!=1{return Err("verify needs exactly one sequence".into())}
++    if std::fs::metadata(&path).map_err(|e|e.to_string())?.len()>16*1024*1024{return Err("input exceeds16MiB".into())}
++    let bytes=std::fs::read(path).map_err(|e|e.to_string())?;if bytes.len()>16*1024*1024{return Err("input exceeds16MiB".into())}
++    let input:Value=serde_json::from_slice(&bytes).map_err(|e|e.to_string())?;let mut unit=Unit::prepare(&row,black_box(&input))?;let mut sink=Sink::default();
++    if mode=="verify"{let(a,b)=unit.invoke(&mut sink)?;return Ok(json!({"row":row,"completed":1,"projection":unit.projection(),"sink":sink.0,"work":{"chargedSearchUnits":a,"chargedRelationQueries":b}}))}
++    let(mut nodes,mut queries)=(0u64,0u64);let wall=Instant::now();let start=cpu_ns()?;
++    for _ in 0..n{let(a,b)=unit.invoke(black_box(&mut sink))?;nodes=nodes.checked_add(a).ok_or("search sum overflow")?;queries=queries.checked_add(b).ok_or("relation sum overflow")?;}
++    let end=cpu_ns()?;let elapsed=wall.elapsed().as_nanos();let cpu=end.checked_sub(start).filter(|&n|n>0).ok_or("unresolved/nonmonotonic CPU clock")?;
++    let elapsed=u64::try_from(elapsed).ok().filter(|&n|n>0).ok_or("unresolved wall clock")?;
++    Ok(json!({"row":row,"completed":n,"local_cpu_ns":cpu,"local_wall_ns":elapsed,"sink":black_box(sink.0),"work":{"chargedSearchUnits":nodes,"chargedRelationQueries":queries}}))
++}
++pub fn main()->ExitCode{match execute(){Ok(v)=>{println!("{v}");ExitCode::SUCCESS},Err(e)=>{eprintln!("functional-cost: {e}");ExitCode::FAILURE}}}
+--- a/src/bin/rook2-functional-cost.rs
++++ b/src/bin/rook2-functional-cost.rs
+@@ -0,0 +1 @@
++fn main() -> std::process::ExitCode { rook2::evaluator::functional_cost::main() }
