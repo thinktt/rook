@@ -4,6 +4,10 @@ Short catalog through 2026-10-20. **Retained production: candidate62; whole54
 67.640360 CPU seconds; regular12 games675.156653 CPU seconds on Vic.** Final
 performance qualification remains open. The broader implementation goal is paused.
 
+The [independent repository survey](reviews/2026-10-20-architecture-performance-survey.md)
+assesses the architecture, completed experiments, measurement limits and ranked
+untried directions. It adds no engine measurements or selected optimization.
+
 R1–R25 preserve the original research-list IDs, which include diagnostics,
 unimplemented ideas and overlaps. E26–E67 are explicit experiment IDs; neither
 sequence is the numbering of [decision records](decisions/). Thus67 is the latest
