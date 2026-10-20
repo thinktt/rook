@@ -127,9 +127,23 @@ The candidate DIAG is `68a1c304`; 1,007/1,008 post-exec observations exist, with
 one unavailable short-lived observation preserved explicitly. All 1,008 audited
 exec/wait/exit0 chains remain. No repairs, timing or production promotion occurred.
 
-The same-image remaining mandatory coverage and existing diagnostic/development
-tests are selected next, reusing the passing work. Production build, artifact
-receipts and specification-owner acceptance remain separate. Tail execution in
+The [same-image mandatory completion](../../experiments/first-main-cutoff-correction/mandatory-completion/README.md),
+committed at `4978efc0`, now passes: 93 additional files/6,665 cases combine with
+the preserved first report to cover all 115 mandatory files/7,673 unique cases/
+117 operations. All 209 diagnostic and two development tests pass; the 196
+library tests are reused. The lead accepts this finite union on unchanged
+DIAG68a1c304 and corrected source. Check `50d630/0` verifies 141 frozen pins,
+canonical/candidate source maps, both report hashes, exact disjoint coverage, and the actual
+contents of the two excluded optional-operation files. Independent closure
+SHA256 is `1cdedcbf2b6c867880e88d197670391519c8ec9b686fc102324755324d0c0b86`.
+All 7,673 exec/wait/exit0 chains reconcile; two post-exec point observations are
+unavailable and remain disclosed. No runtime repairs or diagnostic rebuild occurred.
+
+One fresh own-source PGO production build and paired full54 comparison against
+retained62 are selected next. This measures the correction's complete-search
+cost without an optimization gain threshold; it does not promote the candidate.
+Production gameplay receipts and specification-owner acceptance remain separate.
+Tail execution in
 the old implementation additionally needs an unconsumed suffix, D>=5 and entry
 bound exactly Lower; endpoint clamping alone remains no witness. Existing
 target, extension, metadata and stable-permutation proofs are unchanged.

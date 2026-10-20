@@ -10,12 +10,14 @@ excludes inverted native windows under the prepared-search premises.
 An isolated [first-main correction](../experiments/first-main-cutoff-correction/README.md)
 now addresses that conditional cutoff rule: the old-logic equality regression
 fails for the expected tail-entry reason; both controls and all 196 corrected
-library tests pass, together with 1,008 mandatory cases in 22 complete files.
-The lead accepts this bounded discriminator. The candidate DIAG `68a1c304` and
-source remain isolated; retained62 is unchanged. Complete same-image mandatory
-coverage and existing diagnostic/development tests are selected next. No public
-equality witness, changed production artifact, timing result or owner acceptance
-is claimed. See [Q2 disposition](reviews/retained62-owner-review.md#q2-first-main-cutoff-at-an-equal-window).
+library tests pass. The [same-image completion](../experiments/first-main-cutoff-correction/mandatory-completion/README.md)
+adds passing 209 diagnostic and two development tests and closes all 7,673
+mandatory cases/115 files/117 operations across two preserved reports.
+The lead accepts the finite union. Candidate DIAG `68a1c304` and source remain
+isolated; retained62 is unchanged. Fresh own-source PGO and one paired full54
+comparison are selected next. No public equality witness, production promotion,
+timing result or owner acceptance is claimed. See
+[Q2 disposition](reviews/retained62-owner-review.md#q2-first-main-cutoff-at-an-equal-window).
 
 Candidate62 is the retained production build, 2026-10-20. It adds an explicit
 `--ext-tsp-profiled` profile-use-only option in `tools/build.py`. Native engine

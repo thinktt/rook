@@ -306,13 +306,20 @@ tail while both controls pass; corrected source passes 196 library tests and
 finite result. No public equality witness is asserted, and retained62 remains
 unchanged. An exclusion proof is not a prerequisite to this clause-based fix.
 
-Finish the same candidate's mandatory adapter coverage next: reuse those 22 files
-and the 196 library tests, run the 93-file complement plus existing diagnostic and
-development tests, and bind the union to exact DIAG `68a1c304`. This is correctness
-qualification work, with no optimization gain gate or performance claim.
-Production promotion, own-source PGO and changed-artifact native receipts remain
-separate decisions. The empty-source hint consultation is already recorded and
-has not been reopened without new evidence.
+The [mandatory completion](../experiments/first-main-cutoff-correction/mandatory-completion/README.md)
+now closes all 7,673 cases/115 files/117 operations on exact DIAG `68a1c304`,
+joining the preserved 22-file report and 93-file complement. All 209 diagnostic
+and two development tests pass, alongside the reused 196 library tests.
+
+The selected [production step](/home/legolas/agent-memos/rook2-lead-to-imp2-first-main-production-comparison-20261020-01.md)
+uses fresh own-source PGO training on the original54 once, then one production
+build with retained ExtTSP settings and one paired full54 comparison to exact62.
+One warmup and three measured fresh lifetimes per image/case give 432 lifetimes,
+with case/repetition-balanced image order frozen before collection. This measures
+complete-search cost for the correction; there is no optimization gain gate,
+automatic promotion or KingRE parity claim. Regular12/focused/wire receipts and
+source promotion remain later decisions. The empty-source hint consultation is
+already recorded and has not been reopened without new evidence.
 
 The [qualification gaps](qualification-gaps.md) and
 [Vic scope](qualification-scope.md) remain obligations. Parity is the

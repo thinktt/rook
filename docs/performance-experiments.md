@@ -116,7 +116,7 @@ Additional work and diagnostics:
 | Candidate25 external Bee benchmark and functional probes | External reference point, not proof of later gains or final qualification. |
 | Last-mile three-unit functional study | [Four-route study closed](../experiments/functional-cost-three-unit/report.md): opening position/evaluation observations below reference, enclosing light search above; observer/build/host boundaries prevent a production cost partition. Retained62 unchanged. |
 | Native/diagnostic conformance, wire, seeds and regular12 pre-gates | Finite correctness/regression coverage; full external game gate remains separate. |
-| First-main equality cutoff correction | [Isolated correctness discriminator passes](../experiments/first-main-cutoff-correction/README.md): expected old equality failure, two passing controls, 196 corrected library tests and 1,008 mandatory cases/22 files. Remaining same-image mandatory coverage selected; no public equality witness, promotion or timing claim. |
+| First-main equality cutoff correction | [Discriminator](../experiments/first-main-cutoff-correction/README.md) and [mandatory completion](../experiments/first-main-cutoff-correction/mandatory-completion/README.md) pass: expected old equality failure, 196 library + 209 diagnostic + two development tests, all 7,673 mandatory cases/115 files. Fresh own-PGO/full54 comparison selected; no public equality witness, promotion or timing result. |
 
 Current proposals and source trials:
 
