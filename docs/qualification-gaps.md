@@ -38,10 +38,28 @@ See [source promotion](../evidence/exttsp-profiled-integration-20261020-01/sourc
 The [learned-state source acceptance](../evidence/current62-learned-remembered-parent-acceptance-20261020-01/acceptance.json)
 accepts remembered numeric/metadata ownership, direct diagnostic transport,
 direct cutoff history bounds10504/5636, and normal evaluating-lifetime retention
-under stated premises. It does not close collision meaning, uncertified-hint
-completion, full TT/window/IIO joins or general lexical/framing behavior.
+under stated premises. The later acceptance below closes prescribed numeric
+TT collision/table association; uncertified-hint completion, full TT/window/IIO
+joins and general lexical/framing behavior remain open.
 Existing detailed ownership obligations below remain applicable where not
 superseded by this explicitly scoped evidence.
+
+The [remembered-collision acceptance](../evidence/current62-remembered-collision-parent-review-20261020-01/acceptance.json)
+closes the prescribed numeric `(group, secondary)` identity, retained/recent
+collision handling and saved-query association with the four syntactic store
+sites. The released contract intentionally permits placement collisions; no board
+equality or hash-injectivity premise is required. This does not certify the
+admission or correctness of every stored score/hint/window, full TT/IIO/stop
+composition, or uncertified/empty-source hint completion. No new runtime evidence
+or source change supports this scoped closure.
+
+The [local store-clause acceptance](../evidence/current62-remembered-store-parent-review-20261020-01/acceptance.json)
+adds the four sites' operational gates, payloads and order under their imported
+entry/producer/capacity premises: fast/shallow cutoff storage and return,
+checking-mate update/storage followed by continued search, and clipping before
+normal completion storage. Early returns/stops skip later completion without
+rolling back prior or descendant effects. This does not prove full producer,
+window, TT/IIO or uncertified-hint admission, and adds no runtime evidence.
 
 ## Preserved ownership obligations and historical checkpoints
 
@@ -106,7 +124,7 @@ and cumulative counters remain separate. Normal Result restoration is not genera
   must be resolved as prescribed; raw ratios are reported only. PMU is unavailable
   on Vic. No privileged deployment or new external run is authorized here.
 - Finish individual normative production obligations in the ownership map:
-  remaining evaluator/endpoints/intermediate arithmetic and admitted caller premises; TT collision, score,
+  remaining evaluator/endpoints/intermediate arithmetic and admitted caller premises; composed TT score,
   depth, age and lifecycle semantics; remembered-hint composition; natural IIO
   tail/multipass/extension/interruption; command/framing/poll/publication behavior;
   and all admitted diagnostic/schema combinations beyond finite fixtures.

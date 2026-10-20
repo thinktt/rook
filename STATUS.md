@@ -53,6 +53,16 @@ indirect jumps, but the fixed generic screen is0.204978955% slower,1/7lower.
 Ten focused Activity tests and70 original live/offline replays pass. No PGO,
 retry or promotion follows. See the [decision](evidence/capture-tag-ranges-decision-20261020-01/README.md).
 
+The fixed two-case Activity repeat census is closed: exact repeats are0.110763%
+and0.043442%, below the prospectively fixed5% design threshold. Node-local
+Activity caching is declined; no speed claim follows. Both original replays and
+independent offline checks pass. See [census](evidence/current62-activity-repeat-census-results-20261020-01/README.md).
+
+Source review closes prescribed numeric TT association/table behavior and four
+local remembered-store clauses under their stated premises. Composed hint,
+window, score and IIO correctness remain open; these are conditional source
+lemmas, not new universal qualification. See docs/production-map.md.
+
 ## Historical checkpoint record — preceding57 state
 
 Statements below describe their original checkpoints; current adoption is62 above.

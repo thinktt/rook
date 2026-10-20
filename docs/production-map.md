@@ -38,8 +38,9 @@ See [source promotion](../evidence/exttsp-profiled-integration-20261020-01/sourc
 The [learned-state source acceptance](../evidence/current62-learned-remembered-parent-acceptance-20261020-01/acceptance.json)
 accepts remembered numeric/metadata ownership, direct diagnostic transport,
 direct cutoff history bounds10504/5636, and normal evaluating-lifetime retention
-under stated premises. It does not close collision meaning, uncertified-hint
-completion, full TT/window/IIO joins or general lexical/framing behavior.
+under stated premises. The later acceptance below closes prescribed numeric
+TT collision/table association; uncertified-hint completion, full TT/window/IIO
+joins and general lexical/framing behavior remain open.
 Existing detailed ownership obligations below remain applicable where not
 superseded by this explicitly scoped evidence.
 
@@ -234,7 +235,7 @@ records whole12 closure. Final performance qualification remains open.
 | Attack geometry, ordinary candidates and quiescence routes | `attacks`, `movegen`, `tactical`, `quiescence` | Persistent planes and finite generation checks are integrated.51 consumes existing coherent-placement permission for invocation-local reverse check masks; public/false routes remain scalar. Candidate capacity, ordered checker identities and pseudo-candidate completeness retain their individual proof scopes. |
 | Influence profiles, relations and semantic charges | `influence`, `relation_table`, evaluators |43 uses local bit-sliced wrapping accumulation with fixed transpose when sliders exist; the scalar no-slider branch remains. Arithmetic review covers the changed producer. Consumer charge/demand and complete geometric-domain obligations remain distinct. |
 | Root context, full/fast retained evaluation, pawn reuse and endgame bounds | `evaluation`, `evaluator`, pawn/activity/shelter/positional/endgame modules | Complete finite component transport now passes. Source review of all formula ranges, cache collisions, ages and lifecycle composition is not inferred from those fixtures. |
-| History, repetition, learned ordering and remembered results | `history`, `remembered`, `ordinary_policy` | Finite policy and collision checks pass. The conditional uncertified-hint completion gap remains unresolved; no source type, skip or fallback is invented. |
+| History, repetition, learned ordering and remembered results | `history`, `remembered`, `ordinary_policy` | Current62 numeric `(group, secondary)` collision/table handling and saved-query association are source-reviewed. Full TT/window/IIO/store-result semantics and the conditional uncertified-hint completion gap remain open; no source type, skip or fallback is invented. |
 | Ordinary recursion, extensions, null/scout retries and IIO | `ordinary`, `ordinary_policy`, `engine` | Bounded IIO lifecycle and numeric reviews exist alongside current fixtures. Full admission, extension/TT/age/stop composition and natural reachability beyond controlled witnesses remain open. |
 | Quiescence evaluation, pruning, reply probes and interruption | `quiescence`, `quiescence_policy`, `tactical` | Current mandatory traces pass. Full admitted-state and interrupted ownership review remains separate from finite traces. |
 | Root iterations, aspiration/randomization and work scheduling | `first_iteration`, `engine`, `timed`, `timing`, `work_clock` | Current replay, root and timing fixtures pass. All production poll/capture/publication boundaries require source review at their actual owners. |
@@ -401,3 +402,23 @@ parks61 despite198 library and70 original replay passes. The intended native
 work removal exists, but aggregate CPU improves0.259022%, below the frozen0.5%
 gate (6/7lower,worst1.006301). No retry, PGO or source adoption follows.
 Production57 and both completed whole-corpus bests remain current.
+
+## Current62 numeric remembered identity and store association
+
+The [remembered-collision acceptance](../evidence/current62-remembered-collision-parent-review-20261020-01/acceptance.json)
+closes the prescribed numeric `(group, secondary)` identity, retained/recent
+collision handling and saved-query association with the four syntactic store
+sites. The released contract intentionally permits placement collisions; no board
+equality or hash-injectivity premise is required. This does not certify the
+admission or correctness of every stored score/hint/window, full TT/IIO/stop
+composition, or uncertified/empty-source hint completion. No new runtime evidence
+or source change supports this scoped closure.
+
+The [local store-clause acceptance](../evidence/current62-remembered-store-parent-review-20261020-01/acceptance.json)
+adds the four sites' operational gates, payloads and order under their imported
+entry/producer/capacity premises: fast/shallow cutoff storage and return,
+checking-mate update/storage followed by continued search, and clipping before
+normal completion storage. Early returns/stops skip later completion without
+rolling back prior or descendant effects. This does not prove full producer,
+window, TT/IIO or uncertified-hint admission, and adds no runtime evidence.
+

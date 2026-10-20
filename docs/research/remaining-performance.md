@@ -38,9 +38,12 @@ unchanged. The generic body loses all five indirect classifier jumps, but grows
 Ten focused tests and70 live/offline replays pass. Its fixed generic screen is
 0.204978955% slower,1/7lower: [park without PGO or retry](../../evidence/capture-tag-ranges-decision-20261020-01/README.md).
 
-A new source-only inquiry will check whether complete Activity evaluations repeat
-on unchanged node inputs and whether reuse can preserve permissions and logical
-charges. No memoization implementation, frequency claim or new candidate is selected.
+The source-only Activity repeat review identifies conditional same-child scout
+and root aspiration retries. IIO recreates children; TT/FAST/Q can prevent FULL.
+A two-case diagnostic census is selected to compare complete inputs and actual
+outputs while keeping all computations and logical charges live. No cache,
+occurrence estimate, speed claim or optimization candidate is selected. See the
+[prospective census scope](../../evidence/current62-activity-repeat-census-parent-selection-20261020-01/selection.json).
 
 ## Preserved chronological checkpoints —43 and earlier
 
@@ -707,3 +710,13 @@ requirements alongside optimization; mandatory117 fixture coverage is now comple
     no canonical-path rebuild or full54/12 performance acceptance is claimed.
     The outside-repo candidate25 engine/diagnostic package preserves those exact
     executable bytes for original-hardware measurement. No candidate26 selected.
+
+
+## Current62 Activity repetition census closure
+
+The fixed profile01/profile35 diagnostic census finds303/273557 and684/1574502
+exact FULL repetitions (0.110763%/0.043442%). Neither meets the prospective5%
+design-consideration threshold. Decline node-local Activity caching without
+prototype, broader sampling or retry. All original live/offline checks pass;
+these copied-lineage counts are not CPU savings or whole54 frequencies.
+See [closed census](../../evidence/current62-activity-repeat-census-results-20261020-01/README.md).

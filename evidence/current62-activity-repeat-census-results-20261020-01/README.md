@@ -1,0 +1,7 @@
+# Decline node-local Activity caching after the fixed census
+
+Two preselected diagnostic lifetimes and independent original replay checks completed. Profile01 has303 exact repeats among273557 FULL calls (0.110763%); profile35 has684 among1574502 (0.043442%). Both fall below the prospective5% design-consideration threshold. No cache prototype, broader census, retry, PGO or optimization candidate is selected from this experiment. Production62 is unchanged.
+
+Both cases have zero changed-input and equal-input/different-output events. Exact-repeat Activity logical R is1273/984648 and3882/7870950 respectively; these are logical charges, not saved instructions or CPU. Each has epoch_allocations2; this is not a go-count claim. The original2 live checks and2 independent offline checks pass. Native collector ab63f6/session88604 terminated4887b9/0; independent verifier68c0f8/0 launches no engine. CPU15 interval ticks show556 idle and0 nonidle/iowait; continuous host/guest exclusivity is not established.
+
+The instrumentation counts copied Node lineage and epoch, not unique physical address, and does not dynamically attribute repetitions to ordinary/root/quiescence callers. It preserves all computations. Larger diagnostic state and bookkeeping invalidate production timing interpretation. These two observations establish neither whole54 frequency nor a CPU savings bound. See report.json and the exact execution directory for identities, raw replies, census bodies and accounting. No source adoption or performance qualification follows.
