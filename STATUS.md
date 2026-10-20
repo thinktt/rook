@@ -39,9 +39,11 @@ See [source promotion](evidence/exttsp-profiled-integration-20261020-01/source-p
 
 The [current62 modeled diagnostic](evidence/current62-branch-cache-results-20261020-01/README.md)
 retains a completed original target/output check but an incomplete strict counter
-study:2 simulated Ir are unattributed. A separately labeled partial postmortem
-reconciles every other event and keeps that gap unknown. It supplies hypothesis
-context, with no new native timing, candidate63 or qualification claim.
+study: header summary exceeds SELF/footer/log Collected by2Ir. The
+[bounded accounting review](evidence/current62-model-ir-gap-parent-review-20261020-01/acceptance.json)
+localizes that residual without identifying its producer cause or instruction
+owner. Original strict failure remains; the separately labelled partial facts
+supply hypothesis context, with no hardware-counter or qualification claim.
 
 Experiment63 is parked after a real same-profile build/backend review and fixed70
 comparison:0.468239353% slower overall, only1/7 cases lower. All70 original live
