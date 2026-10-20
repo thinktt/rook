@@ -720,3 +720,15 @@ design-consideration threshold. Decline node-local Activity caching without
 prototype, broader sampling or retry. All original live/offline checks pass;
 these copied-lineage counts are not CPU savings or whole54 frequencies.
 See [closed census](../../evidence/current62-activity-repeat-census-results-20261020-01/README.md).
+
+
+## Experiment65 global-row relations — parked
+
+The distinct7936B typed layout passes exhaustive data/source parity, focused8,
+fresh own-source PGO54/remerge/use and complete consumed-owner backend review.
+The fixed70 comparison gives only0.101365% lower summed case medians,5/7lower
+and worst1.006151267. All seven observed ranges overlap. Aggregate fails the
+frozen<=.995 criterion; no retry, source retuning, full54/12 or adoption follows.
+Real extra metadata/GOT reads and material-threat spills remain possible costs;
+no causal attribution or universal inability of smaller layouts is established.
+[Closed decision](../../evidence/one-sided-relations-decision-20261020-01/README.md).
