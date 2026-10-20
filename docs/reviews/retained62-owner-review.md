@@ -1,4 +1,4 @@
-# Retained62 specification-owner review map
+# First-main corrected build: specification-owner review map
 
 Prepared by imp2-lead, 2026-10-20. **Specification-owner decision: pending.**
 This is the current entry point for production review; the
@@ -16,17 +16,24 @@ state/reset lifetimes, numerical rules, production producers, stopping and outpu
 It expressly does not demand an exhaustive equivalence theorem. Any actual
 discrepancy needs correction or a versioned specification amendment.
 
-The [retained62 handoff](../../experiments/retained62-game-handoff/README.md)
-and its [manifest](../../experiments/retained62-game-handoff/manifest.json)
-bind source, build, executables and existing receipts. The ordinary SHA256 is
-`01237e6dfe89822e540d0f07c7b70f7227537a846ce8c69ea9e91167b759e98d`;
+The [current local handoff](../../experiments/first-main-cutoff-adoption/README.md)
+and its [manifest](../../experiments/first-main-cutoff-adoption/manifest.json)
+bind source, build, executables and existing receipts. The first-main corrected
+build is locally adopted at `8cf224f2`. Its ordinary SHA256 is
+`5cf0120892065f80bbf4a22297596358bfc28c4945c86c0bf3f65d38b8bff82a`;
 the separate diagnostic SHA256 is
-`eda652abd182cb536736dd758d330f779e94b1e7ad0e779ff7792c2235fffde2`.
-The 117-file source graph is
-`32f3da5d7713aa588b170322a9bea828975c07a79804764b0e919f08e18ebdb7`.
-Native/diagnostic source is unchanged from57;62 changes only the build helper
-to select profiled ExtTSP at profile use. It explicitly reuses own57 profile
-`b4806420…`. See the [exact recipe](../production-build.md).
+`68a1c304f76435e4c100086d1a303b8dc94d8b5ecd63d26be834e3737bca2dda`.
+The 118-file source map has sorted compact-JSON SHA256
+`3b634ab05e063825ccf6c70a890b0c581d496051625bdb0199f92054913272c1`.
+Canonical bytes equal the tested isolated snapshot. The ordinary image uses its
+own fresh profile `fda4b7fd…` and retained profiled-only ExtTSP settings; no
+canonical-path rebuild is claimed. See the [exact recipe](../production-build.md).
+
+Retained62 and its [frozen handoff](../../experiments/retained62-game-handoff/README.md)
+remain preserved as the initial control. Earlier scoped source reviews below
+support unchanged owners within their stated premises. The first-main guard
+and its test support have separate corrected-source evidence; historical62
+timings and gameplay are not relabeled as corrected-image observations.
 
 Scope is the released ordinary, nonpondering native profile and the mandatory
 external diagnostic adapter. Diagnostic supplied state does not replace native
@@ -41,9 +48,10 @@ not an extra personality limit.
 
 All rows await the specification owner's disposition. The linked acceptances
 preserve their named premises and finite evidence; none certifies all inputs.
-The mandatory fixture bundle supplies component coverage throughout the table:
-7,673 cases,117 operations,115 files, with195 native and209 diagnostic tests.
-Those are inherited unchanged-source/exact-DIAG results, not fresh62 executions.
+The corrected source and DIAG have passing coverage of 7,673 mandatory cases,
+117 operations and 115 files, with 196 library, 209 diagnostic and two development
+tests. Two preserved mandatory reports form the complete disjoint union.
+These completed results were reused during local adoption without rerunning them.
 
 | Normative family and admitted domain | Actual producer → consumer / test surface | Current support and premises |
 | --- | --- | --- |
@@ -57,7 +65,7 @@ Those are inherited unchanged-source/exact-DIAG results, not fresh62 executions.
 | [Ordinary wire](/home/legolas/king-spec/spec/ordinary-xboard-wire.md), [interruption](/home/legolas/king-spec/spec/interrupted-sessions.md), [post lifecycle](/home/legolas/king-spec/spec/post-lifecycle.md), PV/status/fatal output and opt-in work formatter | Single [CLI Input](../../src/bin/rook2.rs)/[wire](../../src/wire.rs) → [Host](../../src/host.rs)/timed poll → [capture lifecycle](../../src/post_lifecycle.rs)/[output](../../src/output.rs)/Session; wire controls and output adapters | [Framing/FIFO source disposition](../../evidence/production-wire-framing-parent-review-20261019-01/decision.json), [four directed43 CLI witnesses](../../evidence/production-wire-directed-parent-review-20261019-01/acceptance.json), fresh [62 wire8/24](../../evidence/exttsp-profiled-wire-parent-review-20261020-01/acceptance.json). The directed runtime work is already accepted; its earlier future-work wording is superseded. Record/token, search-time command and ordinary stderr exclusions remain exactly those in the wire profile. |
 | [Diagnostic transport and admission](/home/legolas/king-spec/spec/diagnostic-interface.md), mandatory fixture surface and independence | Separate [diagnostic dispatcher](../../diagnostic/src/main.rs) and admission modules → native owners; immutable external fixture inputs/comparators | All mandatory operations are covered; the two analysis operations are optional. Source/build maps bind the ordinary and adapter partition. Review must confirm native producers and the absence of fixture-answer substitution; component-supplied inputs are not evidence that production generated them. Exact fixture success is necessary and finite. |
 
-## Two explicit source questions
+## Remaining Q1 and corrected Q2 for owner disposition
 
 ### Q1: second-half inherited hint at normal learning
 
@@ -87,12 +95,13 @@ conditional arithmetic and enumeration results should be reused.
 ### Q2: first-main cutoff at an equal window
 
 The [IIO contract](/home/legolas/king-spec/spec/ordinary-iterations.md#internal-iterative-ordering)
-says a first main result reaching U ends candidate processing. The later main
-rule and [actual code](../../src/ordinary.rs#L1069) nest cutoff inside strict
-best and running-lower improvement. The accepted local IIO proof used L<U.
+says a first main result reaching U ends candidate processing. Retained62 nests
+cutoff inside strict best and running-lower improvement; the
+[current code](../../src/ordinary.rs) adds the first-main guard described below.
+The earlier accepted local IIO proof used L<U.
 The new [native ordering proof](../research/permission-sensitive-search-bounds.md#native-weak-window-ordering-and-the-remaining-cutoff-question)
-establishes L<=U for actual root descendants. On surviving FULL bounds, a first
-main result s>=U skips that cutoff **exactly when s=L=U**. Inverted windows
+establishes L<=U for actual root descendants. In retained62, on surviving FULL
+bounds, a first main result s>=U skips that cutoff **exactly when s=L=U**. Inverted windows
 are excluded under those premises; universal strictness is neither assumed
 nor required as a separate release rule.
 
@@ -102,11 +111,12 @@ joint state is admitted. It does not permit preference/PV changes at equality,
 establish reachability or issue a specification amendment. No explicit numerical
 composed L<U admission/rejection rule was identified in that bounded reading.
 
-**Needed disposition:** exclude this joint equality event at the relevant
-consumer, or establish that the implementation follows the prescribed composed
-behavior. The isolated [first-main correction](../../experiments/first-main-cutoff-correction/README.md),
-committed at `42d98f71`, now implements the latter condition and passes its bounded
-correctness discriminator. Retained62 itself remains unchanged. The additive
+**Implementation disposition:** the locally adopted build follows the
+prescribed conditional behavior; specification-owner acceptance remains pending.
+The [first-main correction](../../experiments/first-main-cutoff-correction/README.md),
+first tested at `42d98f71`, passed its bounded correctness discriminator before
+the complete diagnostic, production and gameplay steps below. Retained62 itself
+remains unchanged as a control. The additive
 guard runs after existing updates and before index advancement/tail dispatch;
 strict cutoffs already leave through the old branch. At the new equality edge,
 best becomes U without changing preference/PV or invoking parent normal learning;
@@ -150,9 +160,9 @@ case once and independent byte-identical remerge pass. All 432 comparison
 lifetimes, 4,992 semantic posts and 864 offline checks pass. Summed native CPU
 medians are 68.569086 s corrected versus 68.446861 s retained62: +0.122225 s,
 or +0.178569%. Thirteen case medians are lower; the worst ratio is 1.011773436.
-All samples remain. This small observed cost supports continuing the conformance
-correction through gameplay qualification; it is not a performance gain or
-formal noninferiority/parity finding.
+All samples remain. This small observed cost, together with the completed
+gameplay checks, supports local adoption of the correction; it is not a
+performance gain or formal noninferiority/parity finding.
 
 The lead accepts the finite production comparison. Check `cf6a89/0` verifies
 137 plan pins, candidate/canonical source maps, 25 result path/hash/size bindings,
@@ -165,11 +175,38 @@ Both pre-native setup failures are preserved; there were no native request
 retries. The original 1,800-second clock closed at 866.65 seconds. Guest
 observations do not establish exclusive-host, private-memory or no-swap qualification.
 
-One [same-image behavioral lane](/home/legolas/agent-memos/rook2-lead-to-imp2-corrected-gameplay-closure-20261020-01.md)
-is selected next: regular12/632, continuity8, seed11, persistence3 and wire8/24,
-without warmups, repetitions or a new timing claim. Canonical source and
-retained62 remain unchanged. Production promotion, specification-owner acceptance,
-full-game and compatible performance qualification remain separate.
+The [same-image behavioral lane](../../experiments/first-main-cutoff-gameplay/README.md),
+committed at `7ee9015b`, passes regular12/632/5,801 posts, continuity8/90 posts,
+seed11, persistence3 and wire8/24. All 33 native lifetimes pass their prescribed
+exits: 25 exit0 and eight required fatal seed exits1. Every post-exec point
+observation is available. Independent reconciliation consumes all 99 raw
+streams/791,104 bytes and verifies original commands, semantic records and
+native identity. The unchanged released collector directly reports
+`completeFocusedReplay=true` and `completeGameplayQualification=false`.
+There were no failures, repairs, retries, rebuilds or new timing comparison.
+
+**Lead gameplay disposition:** accept this finite exact-image closure. Source
+review covered the supervisor, capture, wire binding and independent reconciler.
+Check `47ca16/0` verifies all 281 frozen pins, then-unchanged canonical117 and
+candidate118 maps, all native receipts, raw hashes and absent process IDs/groups.
+Independent SHA256 is
+`51e3fc187c87b6946f99df2a0dcf5c0559f2a9e960d52e64c4f93f8ba63ef380`;
+the original combined report is
+`b6527b6fdab80140d67eafe7822f03fe9eee77d18a5f79a152240afaced3df72`.
+The resource clock closed at 706.42/1,200 seconds; it is not a full12 performance
+observation or formal resource-qualification result.
+
+**Lead local adoption disposition:** accept `8cf224f2`. Check `5c57c7/0`
+verifies the exact nine-file commit, three-path source delta, canonical118 bytes,
+78 path/hash/size bindings across 70 distinct paths, attribution and clean tree.
+The earlier source check `72f550/0` also confirms all 52 native inputs match
+own training. The [manifest](../../experiments/first-main-cutoff-adoption/manifest.json)
+SHA256 is `ab9dca0bb96f9c843803f6a0925433f6e15d9927aa9840f166778f4d9adde2f4`.
+Existing ordinary, DIAG and profile artifacts stay at their tested paths.
+No new binary copy, build, native run or external action accompanies adoption.
+Specification-owner acceptance, the external full-game gate and compatible
+performance qualification remain open. No public joint-equality witness is claimed.
+
 Tail execution in
 the old implementation additionally needs an unconsumed suffix, D>=5 and entry
 bound exactly Lower; endpoint clamping alone remains no witness. Existing
@@ -179,13 +216,13 @@ target, extension, metadata and stable-permutation proofs are unchanged.
 
 | Obligation | Current disposition |
 | --- | --- |
-| Exact mandatory adapter fixtures | Existing exact retained DIAG evidence:7,673 cases/117 operations/115 files. Reuse is labeled; no new run claimed. |
-| Specification-owner production acceptance | **Pending for this map and Q1/Q2.** Internal acceptances and the bounded Q2 consultation are supporting evidence; no specification-owner acceptance is recorded. |
-| Same-artifact focused gameplay | **Local evidence complete via reviewed equivalence**, [de478938](../../experiments/retained62-focused-closure/README.md): deterministic original repeat0 gives12/632/5,801 posts; fresh62 continuity1 process/4 segments/8 searches/90 posts, seed11 children and persistence3 pass. All48 original game lifetimes remain preserved. The custom evidence route is accepted internally below; no released `combine.mjs` pass or final qualification is claimed. |
-| External full3,288-game gate | Local [handoff](../../experiments/retained62-game-handoff/README.md) complete. Full runner/corpus/schedule/checker, operator authority and receipts remain unresolved. Assigned off Vic; focused success cannot substitute. |
-| Performance qualification and parity |62 whole54=67.640360 CPU s; whole12=675.156653 CPU s. Historical reference ratios1.066348/1.048017 span different hosts/windows and are descriptive. Compatible54/12 comparison profiles, uncertainty and resource conditions remain open. Released acceptance1.10 aggregate/1.25 each differs from parity1.00. |
+| Exact mandatory adapter fixtures | **Corrected DIAG evidence complete:**7,673 cases/117 operations/115 files, plus196 library/209 diagnostic/two development tests. Reused for adoption; no integration rerun claimed. |
+| Specification-owner production acceptance | **Pending.** Q1 remains unresolved; Q2 is corrected and locally accepted. Internal acceptances and the bounded Q2 consultation are supporting evidence, not specification-owner acceptance. |
+| Same-artifact focused gameplay | **Complete on corrected image**, [7ee9015b](../../experiments/first-main-cutoff-gameplay/README.md): fresh12/632, continuity8, seed11, persistence3 and wire8/24, all33 lifetimes. Literal released combined focused replay passes; full gameplay qualification remains false. |
+| External full3,288-game gate | Current [local handoff](../../experiments/first-main-cutoff-adoption/README.md) complete. Full runner/corpus/schedule/checker, operator authority and receipts remain unresolved. Assigned off Vic; focused success cannot substitute. |
+| Performance qualification and parity | Corrected paired54=68.569086 CPU s versus exact62=68.446861 s, descriptive+0.178569%. No corrected-image full12 timing exists. Compatible reference54/12 comparisons, uncertainty and resource conditions remain open. Released acceptance1.10 aggregate/1.25 each differs from parity1.00. |
 
-Lead disposition of the focused evidence, 2026-10-20: accept the supplied
+Historical retained62 focused disposition, 2026-10-20: accept the supplied
 native-artifact/configuration equivalence and finite local coverage under the
 released [prior-evidence rule](/home/legolas/king-spec/conformance/gate-replay/README.md#independent-games-and-parallel-collection).
 Original reports identify Python and distinct accounting destinations, so they
@@ -202,7 +239,8 @@ This closes the missing exact62 local receipt work; specification-owner acceptan
 the full gate and performance qualification remain separate.
 
 The [last-mile strategy](../last-mile-strategy.md) ends the current optimization
-batch. The isolated Q2 correction is correctness work and is not promoted.
+batch. The Q2 correction is locally adopted correctness work; retained62 remains
+the initial control. No further local native work is selected.
 This map consolidates evidence for review now. It does not impose another general
 proof campaign or require new runtime evidence merely because a historical note
 says “all compositions.”

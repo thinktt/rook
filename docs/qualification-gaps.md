@@ -1,29 +1,55 @@
 # Remaining qualification work
 
+The **first-main corrected build** is the current local candidate, adopted at
+`8cf224f2`. Its [handoff](../experiments/first-main-cutoff-adoption/README.md)
+binds ordinary `5cf01208`, separate DIAG `68a1c304`, own profile `fda4b7fd`
+and the exact 118-file tested source map. Root check `5c57c7/0` verifies the
+three-path source delta and 78 path/hash/size bindings across 70 distinct paths.
+Adoption copied tested source only; no canonical-path rebuild or new native
+execution is claimed. Retained62 remains the preserved initial control.
+
 The [current specification-owner review map](reviews/retained62-owner-review.md)
-consolidates the production obligations and their supporting evidence. Owner
-acceptance remains pending. Its two explicit source questions are second-half
-inherited-hint learning and first-main cutoff at score=lower=upper; the new
+consolidates the production obligations and their supporting evidence.
+Specification-owner acceptance remains pending. Q2's conditional first-main
+cutoff rule is corrected and locally accepted; second-half inherited-hint
+learning, Q1, remains unresolved. The
 [weak ordering proof](research/permission-sensitive-search-bounds.md#native-weak-window-ordering-and-the-remaining-cutoff-question)
-excludes inverted native windows under the prepared-search premises.
+and earlier scoped reviews retain their premises. No general equivalence
+theorem or additional broad proof campaign is required before owner review.
 
-An isolated [first-main correction](../experiments/first-main-cutoff-correction/README.md)
-now addresses that conditional cutoff rule: the old-logic equality regression
-fails for the expected tail-entry reason; both controls and all 196 corrected
-library tests pass. The [same-image completion](../experiments/first-main-cutoff-correction/mandatory-completion/README.md)
-adds passing 209 diagnostic and two development tests and closes all 7,673
-mandatory cases/115 files/117 operations across two preserved reports.
-The lead accepts the finite union. Candidate DIAG `68a1c304` and source remain
-isolated; retained62 is unchanged. The [fresh own-PGO production comparison](../experiments/first-main-cutoff-production/README.md)
-now passes all 432 lifetimes and 864 offline checks. Corrected ordinary `5cf01208`
-costs 68.569086 CPU s against 68.446861 s for exact62 in the same paired run,
-a descriptive +0.178569%. One same-image regular12/focused/wire behavioral pass
-is selected next. No public equality witness, production promotion, KingRE parity
-or owner acceptance is claimed. See
-[Q2 disposition](reviews/retained62-owner-review.md#q2-first-main-cutoff-at-an-equal-window).
+The corrected build has passing 196 library, 209 diagnostic and two development
+tests, plus all 7,673 mandatory cases/115 files/117 operations across two preserved
+reports. Its [fresh own-PGO production comparison](../experiments/first-main-cutoff-production/README.md)
+passes all 432 lifetimes and 864 offline checks. Summed case medians are 68.569086
+CPU s corrected against 68.446861 s exact62, a descriptive +0.178569%.
+This is a small observed cost for the conformance correction, not a formal
+noninferiority or KingRE parity result.
 
-Candidate62 is the retained production build, 2026-10-20. It adds an explicit
-`--ext-tsp-profiled` profile-use-only option in `tools/build.py`. Native engine
+The [fresh exact-image gameplay lane](../experiments/first-main-cutoff-gameplay/README.md)
+passes regular12/632, continuity8, seed11, persistence3 and wire8/24.
+All 33 native lifetimes, complete raw streams and original semantic comparisons
+reconcile. The unchanged released collector reports complete focused replay,
+not complete gameplay qualification. Root check `47ca16/0` verifies the 281 frozen
+bindings, all 33 post-exec observations and terminal processes. This is behavioral
+coverage with no corrected-image full12 timing claim or public equality witness.
+
+Remaining decisions are specification-owner acceptance including Q1, the external
+3,288-game gate, and compatible performance qualification on both 54 and 12.
+The [current manifest](../experiments/first-main-cutoff-adoption/manifest.json)
+leaves unavailable external tools/authority/receipts and performance-policy fields
+explicitly unresolved. No external contact, transfer, execution or READY signal
+has been selected. Earlier retained62 requests and historical ratios do not
+qualify the corrected image.
+
+## Preserved retained62 evidence
+
+The following artifact-specific observations describe the initial control.
+Shared-source reviews remain supporting evidence within their stated scope;
+the current corrected-build disposition above takes precedence.
+
+Candidate62 was the retained production build before local correction adoption.
+It added an explicit `--ext-tsp-profiled` profile-use-only option in
+`tools/build.py`. Native engine
 and diagnostic source are unchanged from57. The exact ordinary image is
 `01237e6dfe89822e540d0f07c7b70f7227537a846ce8c69ea9e91167b759e98d`;
 the retained diagnostic is `eda652abd182cb536736dd758d330f779e94b1e7ad0e779ff7792c2235fffde2`.

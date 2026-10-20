@@ -1,10 +1,14 @@
 # Performance ideas and results
 
-Short catalog through 2026-10-20. **Retained production: candidate62; whole54
-67.640360 CPU seconds; regular12 games675.156653 CPU seconds on Vic.** Final
-performance qualification remains open. The last-mile goal is active under the
-[working agreement](leadership-working-agreement-last-mile.md); candidate62
-remains the initial control.
+Short catalog through 2026-10-20. **Current local candidate: the first-main
+corrected build**, [adopted at 8cf224f2](../experiments/first-main-cutoff-adoption/README.md).
+Paired full54 costs 68.569086 CPU seconds versus 68.446861 for exact retained62,
+a descriptive +0.178569%. This is a conformance correction; no last-mile
+optimization variant earned adoption. Corrected-image full12 timing and final
+performance qualification remain open. The last-mile goal is active under the
+[working agreement](leadership-working-agreement-last-mile.md); candidate62 remains
+the initial control. Its historical totals were 67.640360 CPU seconds for the
+54 searches and 675.156653 seconds for the 12 games, from their original windows.
 
 The [independent repository survey](reviews/2026-10-20-architecture-performance-survey.md)
 assesses the architecture, completed experiments, measurement limits and ranked
@@ -116,7 +120,7 @@ Additional work and diagnostics:
 | Candidate25 external Bee benchmark and functional probes | External reference point, not proof of later gains or final qualification. |
 | Last-mile three-unit functional study | [Four-route study closed](../experiments/functional-cost-three-unit/report.md): opening position/evaluation observations below reference, enclosing light search above; observer/build/host boundaries prevent a production cost partition. Retained62 unchanged. |
 | Native/diagnostic conformance, wire, seeds and regular12 pre-gates | Finite correctness/regression coverage; full external game gate remains separate. |
-| First-main equality cutoff correction | [Discriminator](../experiments/first-main-cutoff-correction/README.md) and [mandatory completion](../experiments/first-main-cutoff-correction/mandatory-completion/README.md) pass: expected old equality failure, 196 library + 209 diagnostic + two development tests, all 7,673 mandatory cases/115 files. [Fresh own-PGO/full54](../experiments/first-main-cutoff-production/README.md) closes 432 lives/864 offline checks: 68.569086 CPU s corrected versus 68.446861 s retained62, +0.178569%; no optimization gain gate. Gameplay receipts selected next; no public equality witness, promotion or parity claim. |
+| First-main equality cutoff correction | [Discriminator](../experiments/first-main-cutoff-correction/README.md) and [mandatory completion](../experiments/first-main-cutoff-correction/mandatory-completion/README.md) pass: expected old equality failure, 196 library + 209 diagnostic + two development tests, all 7,673 mandatory cases/115 files. [Fresh own-PGO/full54](../experiments/first-main-cutoff-production/README.md) closes 432 lives/864 offline checks: 68.569086 CPU s corrected versus 68.446861 s retained62, +0.178569%; no optimization gain gate. [Gameplay](../experiments/first-main-cutoff-gameplay/README.md) passes all33 lifetimes and literal focused replay. [Locally adopted](../experiments/first-main-cutoff-adoption/README.md); no public equality witness, full-game qualification or parity claim. |
 
 Current proposals and source trials:
 
@@ -134,7 +138,8 @@ Current proposals and source trials:
 | Broader layout/restoration alternatives | Architecture alternatives remain possible; no automatic rewrite or selected trial. |
 
 Already rejected caches, Influence deltas and copy-only changes are not fresh
-ideas simply because they are rediscovered. No last-mile source variant has
-been promoted; retained62 remains the production control.
+ideas simply because they are rediscovered. No last-mile optimization variant
+has been promoted. The first-main correction is locally adopted for conformance;
+retained62 remains the initial production control.
 Bulk records, original history and detailed audit catalogs live in
 `/home/legolas/rook2-experiments`; see [archive layout](evidence-layout.md).

@@ -2,8 +2,10 @@
 
 2026-10-20. Active under the
 [working agreement](leadership-working-agreement-last-mile.md).
-Candidate62 remains the production control. This document records current
-decisions and hypotheses; frozen historical evidence keeps its original scope.
+The [first-main corrected build](../experiments/first-main-cutoff-adoption/README.md)
+is the current local candidate; candidate62 remains the initial production
+control. This document records current decisions and hypotheses; frozen
+historical evidence keeps its original scope.
 
 ## First decision: locate comparative weakness
 
@@ -271,8 +273,8 @@ case for advancing another small-term investigation merely because the game
 coverage is new.
 
 Pressure, checked enumeration and compact48 remain parked. End this optimization
-batch and prioritize retained62's qualification and exact external-game handoff
-preparation, without external contact or execution. This is a decision about
+batch and prioritize the current candidate's qualification and exact external-game
+handoff preparation, without external contact or execution. This is a decision about
 the present evidence, not a claim that the architecture is optimal or parity
 impossible. Reopen performance work for a concrete cost/mechanism case or
 decision-changing compatible reference evidence; do not sum parked gains.
@@ -286,10 +288,12 @@ Do not multiply approval documents or rerun unchanged proof layers.
 
 The [compact specification-owner map](reviews/retained62-owner-review.md) is
 the current review deliverable. Reuse the existing local IIO/store/wire ledgers;
-the specific source questions are second-half inherited-hint learning and the
-first-main equality cutoff. Native weak ordering now confines the latter to
-score=lower=upper without establishing its joint reachability. No broad proof
-campaign is a prerequisite to presenting the map for owner disposition.
+the remaining source question is second-half inherited-hint learning. The
+first-main equality cutoff has a locally accepted correction and awaits the
+specification owner's disposition with the rest of the deliverable. Native weak
+ordering confines the old discrepancy to score=lower=upper without establishing
+its joint reachability. No broad proof campaign is a prerequisite to presenting
+the map for owner disposition.
 
 The [exact62 focused closure](../experiments/retained62-focused-closure/README.md)
 now supplies continuity8 and seed11/persistence3, with independent raw checks,
@@ -319,11 +323,26 @@ paired run, +0.178569%. This is a small observed cost for the conformance fix;
 there is no optimization gain gate, automatic promotion or KingRE parity claim.
 Historical totals from other windows are not substituted for this paired control.
 
-The [next selected lane](/home/legolas/agent-memos/rook2-lead-to-imp2-corrected-gameplay-closure-20261020-01.md)
-closes exact-image regular12/632, continuity8, seed11, persistence3 and wire8/24
-once each. It reuses the completed diagnostic/source evidence, adds no timing
-comparison and preserves retained62. Promotion and full12 performance
-qualification remain later decisions.
+The [exact-image behavioral lane](../experiments/first-main-cutoff-gameplay/README.md)
+is closed at `7ee9015b`: all 12 games/632 searches, continuity8, seed11,
+persistence3 and wire8/24 pass. All 33 native lifetimes and complete raw streams
+reconcile. The unchanged released collector reports complete focused replay;
+full gameplay qualification remains false. This is one behavioral pass, with
+no corrected-image full12 timing claim.
+
+The lead accepts [local adoption](../experiments/first-main-cutoff-adoption/README.md)
+at `8cf224f2`. Canonical mapped source exactly equals the tested 118-file snapshot;
+only the reviewed guard and its test support changed. Existing ordinary
+`5cf01208`, DIAG `68a1c304` and own profile `fda4b7fd` remain at their tested
+paths. No rebuild or new native execution occurred during integration. Retained62
+and its historical evidence remain preserved. Root checks `47ca16/0` and
+`5c57c7/0` verify gameplay closure and the final source/artifact handoff.
+
+No further optimization or local native lane is selected. The next decisions
+are specification-owner review, the external full-game gate and compatible
+reference measurements under an accepted resource/uncertainty policy. The
+existing retained62 reference-pair proposal remains a separate, unexecuted
+proposal for that control; it does not authorize exporting the corrected image.
 The bounded tiny-table domain consultation establishes neither admission nor
 exclusion of the proposed tiny production capacities; it supplies no qualified
 hint witness and selects no broader witness search or new engine rule.
@@ -334,11 +353,12 @@ optimization target; qualification uses the released acceptance policy and
 requires compatible measurements, behavioral evidence and the external game
 gate. No raw ratio, microbenchmark or partial profile closes those obligations.
 
-The [local external-game handoff](../experiments/retained62-game-handoff/README.md)
-is committed atce28c39c. It reuses the prepared exact payload and binds existing
-source/build/conformance/full54/wire/12 evidence. Full-gate tools, corpus,
-schedule, receipts and operator authority remain unresolved; no external
-contact, transfer, execution or READY signal occurred.
+The current [local handoff](../experiments/first-main-cutoff-adoption/manifest.json)
+binds the corrected source, existing artifacts, own profile and completed
+evidence. It makes no payload copy. The earlier
+[retained62 handoff](../experiments/retained62-game-handoff/README.md) remains
+unchanged. Full-gate tools, corpus, schedule, receipts and operator authority
+remain unresolved; no external contact, transfer, execution or READY signal occurred.
 
 The [uncertified-hint note](research/uncertified-hint-completion.md) has a
 smaller conditional completion certificate based on a zero-valued sparse
