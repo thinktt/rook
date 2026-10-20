@@ -281,3 +281,29 @@ cache-origin/coherent-transition/P-G lifetime premises. Tempo is within±68;
 the conservative existing78 allowance remains valid. This closes the arithmetic
 join, not those provenance premises or TT/window/IIO/hint and global-counter
 composition. No engine source changes.
+
+## Scoped native retained-origin closure for57
+
+The [origin review](../evidence/current57-retained-origin-review-20261020-01/review.md),
+[independent critique](../evidence/current57-retained-origin-independent-review-20261020-01/review.md)
+and [parent acceptance](../evidence/current57-retained-origin-review-20261020-01/parent-acceptance.json)
+close the normal native origin induction used by the capacity join: every go
+lifetime reaching evaluation rebinds its root context, clears the private pawn
+cache and prepares zero P/G. FULL replaces retained values; child/null transport
+copies them and FAST reads them. Private cache payloads originate in EMPTY or
+native fresh construction, including identity-zero matches and full-identity
+collisions. This proves payload provenance, not collision semantic correctness.
+An early rejected go need not clear because it does not reach evaluation. Normal
+Result restoration does not establish general panic/unwind recovery. Imported
+producer admission/bounds, complete fixed-root and placement domains, semantic
+full/fast/window/TT/IIO/hint composition and lifetime counters remain open.
+No engine source or measurement changes.
+
+## Parked60: Activity group-return boundary
+
+The [fixed generic decision](../evidence/activity-kind-return-generic-decision-20261020-01/README.md)
+parks60:195 library checks and70 original replay checks pass, but native CPU
+is1.036641% higher,0/7 lower,worst1.023642. The intended register-input/scalar-return
+boundary exists; all calls, spills, code growth and full scoped stack costs
+are priced in its backend review. No PGO, retuning or adoption follows.
+Production57 and best completed whole54/whole12 totals remain unchanged.

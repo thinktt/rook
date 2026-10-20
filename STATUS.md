@@ -45,6 +45,19 @@ generic code skips that setter call, but the fixed screen is0.049125%higher CPU,
 The test-only helper repair, whole-ELF inequality and exact runtime-code bridge
 are preserved; no production source changes.57 remains the whole54/12 best.
 
+Experiment60 outlines typed Activity accumulators with six register inputs and
+scalar score/query returns. All195 library tests and70 original live/offline
+replays pass, but the fixed generic screen is1.036641% higher CPU,0of7lower,
+worst1.023642039. It is [parked without retry or own-PGO](docs/decisions/0046-activity-kind-return.md).
+Eight calls, scalar spills and795B combined code growth remain real costs;
+the smaller caller frame leaves the maximum scoped stack chain unchanged.
+Production57 and both completed whole-corpus best times remain current.
+
+The [native retained-origin acceptance](evidence/current57-retained-origin-review-20261020-01/parent-acceptance.json)
+closes normal evaluating-lifetime P/G and private pawn-payload provenance under
+imported producer premises. It does not close cache semantic matching, all
+placement admission, full/fast window composition or arbitrary panic recovery.
+
 ## Earlier checkpoints and measurements
 
 A diagnostic [category encounter census](evidence/current51-activity-category-census-20261020-01/README.md)
