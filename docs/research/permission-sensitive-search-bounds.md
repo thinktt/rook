@@ -285,8 +285,11 @@ reads the explicit first-main sentence as requiring completion if the joint
 equality state is admitted, without changing preferred/PV at equality. It finds
 no explicit numerical composed L<U admission/rejection clause in its bounded
 reading. This is interpretation support, not a specification amendment or a
-native witness. A source-only correction assessment is separate from this proof;
-the retained implementation and its qualification limits remain unchanged.
+native witness. A subsequent isolated [first-main correction](../../experiments/first-main-cutoff-correction/README.md)
+passes its conditional old/new regression, 196 library tests and 1,008 focused
+mandatory cases. The [lead disposition](../reviews/retained62-owner-review.md#q2-first-main-cutoff-at-an-equal-window)
+accepts that bounded result separately from this retained-source proof.
+Retained62 remains unchanged; no actual equality reachability is inferred.
 
 ## Reviewed source identity
 

@@ -100,13 +100,39 @@ composed L<U admission/rejection rule was identified in that bounded reading.
 
 **Needed disposition:** exclude this joint equality event at the relevant
 consumer, or establish that the implementation follows the prescribed composed
-behavior. A source-only assessment now considers a first-main-only termination
-after the existing updates, preserving strict-window paths and normal completion.
-No implementation, new fixture, run or adoption is selected by that assessment.
-Tail execution additionally needs an unconsumed suffix, D>=5 and entry bound
-exactly Lower. Endpoint clamping alone is not a witness to those joint
-conditions. No extra cutoff or window widening is selected. Existing target,
-extension, metadata and stable-permutation proofs remain intact.
+behavior. The isolated [first-main correction](../../experiments/first-main-cutoff-correction/README.md),
+committed at `42d98f71`, now implements the latter condition and passes its bounded
+correctness discriminator. Retained62 itself remains unchanged. The additive
+guard runs after existing updates and before index advancement/tail dispatch;
+strict cutoffs already leave through the old branch. At the new equality edge,
+best becomes U without changing preference/PV or invoking parent normal learning;
+normal storage retains the original query and grants neither score permission.
+Prior child/quiet-mate effects remain, and child stops still propagate first.
+
+**Lead disposition:** accept the isolated correction's source semantics and
+finite discriminator. Identical actual-owner tests on old logic fail only the
+equality regression, specifically by entering the disabled-IIO tail; the below-U
+and strict-window controls pass. Corrected source passes all 196 library tests and
+1,008 mandatory cases in 22 files/20 operations. These controlled TT/window
+contexts are not admitted public equality witnesses. The accepted strict
+recursion lemma applies to actual ordinary/Q entries; a strict requested root
+window before transformation is a different premise.
+
+Lead source/receipt check `3c9128/0` confirms 39 frozen pins, 117 unchanged canonical
+files, both 118-file isolated snapshots, the exact guard inverse, artifact hashes
+and absence of all 2,016 native/supervisor PIDs. Independent reconciliation binds
+the original negative control and all raw fixture exchanges. Its SHA256 is
+`8418a8e00533cec55ab3fd3261139e281ca7d5a99b6b7d9fd6cc3988ab272d76`.
+The candidate DIAG is `68a1c304`; 1,007/1,008 post-exec observations exist, with the
+one unavailable short-lived observation preserved explicitly. All 1,008 audited
+exec/wait/exit0 chains remain. No repairs, timing or production promotion occurred.
+
+The same-image remaining mandatory coverage and existing diagnostic/development
+tests are selected next, reusing the passing work. Production build, artifact
+receipts and specification-owner acceptance remain separate. Tail execution in
+the old implementation additionally needs an unconsumed suffix, D>=5 and entry
+bound exactly Lower; endpoint clamping alone remains no witness. Existing
+target, extension, metadata and stable-permutation proofs are unchanged.
 
 ## Separate qualification receipts and decisions
 
@@ -135,9 +161,10 @@ This closes the missing exact62 local receipt work; specification-owner acceptan
 the full gate and performance qualification remain separate.
 
 The [last-mile strategy](../last-mile-strategy.md) ends the current optimization
-batch; no new engine variant is selected. This map consolidates evidence for
-review now. It does not impose another general proof campaign or require new
-runtime evidence merely because a historical note says “all compositions.”
+batch. The isolated Q2 correction is correctness work and is not promoted.
+This map consolidates evidence for review now. It does not impose another general
+proof campaign or require new runtime evidence merely because a historical note
+says “all compositions.”
 Any further source concern should name the relevant contract and missing premise.
 
 Prepared from retained source, existing receipts and the

@@ -298,12 +298,21 @@ native-equivalence route; it is not a fabricated released-collector pass.
 No rebuild, repeat12, new timing or external action occurred in that lane.
 
 A released-contract-only consultation reads the first-main reaches-U clause as
-requiring immediate completion if the equality state is admitted. Assess a
-minimal first-main-only correction against that clause and strict-window
-preservation; an exclusion proof or native witness is not automatically a
-prerequisite to a justified correction. This assessment is source-only, with
-no implementation/adoption selected. The empty-source hint consultation is
-already recorded and has not been reopened without a new witness.
+requiring immediate completion if the equality state is admitted. The isolated
+[additive correction](../experiments/first-main-cutoff-correction/README.md)
+now passes a meaningful old/new discriminator: old equality enters the forbidden
+tail while both controls pass; corrected source passes 196 library tests and
+1,008 cases across 22 mandatory files. The lead accepts the source semantics and
+finite result. No public equality witness is asserted, and retained62 remains
+unchanged. An exclusion proof is not a prerequisite to this clause-based fix.
+
+Finish the same candidate's mandatory adapter coverage next: reuse those 22 files
+and the 196 library tests, run the 93-file complement plus existing diagnostic and
+development tests, and bind the union to exact DIAG `68a1c304`. This is correctness
+qualification work, with no optimization gain gate or performance claim.
+Production promotion, own-source PGO and changed-artifact native receipts remain
+separate decisions. The empty-source hint consultation is already recorded and
+has not been reopened without new evidence.
 
 The [qualification gaps](qualification-gaps.md) and
 [Vic scope](qualification-scope.md) remain obligations. Parity is the

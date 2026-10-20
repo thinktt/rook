@@ -7,6 +7,16 @@ inherited-hint learning and first-main cutoff at score=lower=upper; the new
 [weak ordering proof](research/permission-sensitive-search-bounds.md#native-weak-window-ordering-and-the-remaining-cutoff-question)
 excludes inverted native windows under the prepared-search premises.
 
+An isolated [first-main correction](../experiments/first-main-cutoff-correction/README.md)
+now addresses that conditional cutoff rule: the old-logic equality regression
+fails for the expected tail-entry reason; both controls and all 196 corrected
+library tests pass, together with 1,008 mandatory cases in 22 complete files.
+The lead accepts this bounded discriminator. The candidate DIAG `68a1c304` and
+source remain isolated; retained62 is unchanged. Complete same-image mandatory
+coverage and existing diagnostic/development tests are selected next. No public
+equality witness, changed production artifact, timing result or owner acceptance
+is claimed. See [Q2 disposition](reviews/retained62-owner-review.md#q2-first-main-cutoff-at-an-equal-window).
+
 Candidate62 is the retained production build, 2026-10-20. It adds an explicit
 `--ext-tsp-profiled` profile-use-only option in `tools/build.py`. Native engine
 and diagnostic source are unchanged from57. The exact ordinary image is

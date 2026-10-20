@@ -52,6 +52,8 @@ under stated premises. The later acceptance below closes prescribed numeric
 TT collision/table association. The current review map carries the remaining
 second-half hint admission and first-main equal-window cutoff questions, along
 with the existing wire source/finite runtime evidence, for owner disposition.
+An isolated [first-main correction](../experiments/first-main-cutoff-correction/README.md)
+has passed its bounded correctness discriminator; candidate62 remains unchanged.
 Existing detailed ownership obligations below remain applicable where not
 superseded by this explicitly scoped evidence.
 
