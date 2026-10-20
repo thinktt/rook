@@ -31,6 +31,17 @@ prior experiments and is an exact duplicate of parked46. Its historical fixed
 screen improved only0.048659%,3/7lower. [Decline a duplicate trial](../../evidence/current62-capture-override-opportunity-20261020-01/review.md);
 no current occurrence/savings claim follows from that old result.
 
+Experiment64 changes only private Activity capture-priority classification to
+validated raw-tag predicates; global Piece::kind and relation/caller order stay
+unchanged. The generic body loses all five indirect classifier jumps, but grows
+332 bytes with50 extra instruction rows and18 extra static stack references.
+Ten focused tests and70 live/offline replays pass. Its fixed generic screen is
+0.204978955% slower,1/7lower: [park without PGO or retry](../../evidence/capture-tag-ranges-decision-20261020-01/README.md).
+
+A new source-only inquiry will check whether complete Activity evaluations repeat
+on unchanged node inputs and whether reuse can preserve permissions and logical
+charges. No memoization implementation, frequency claim or new candidate is selected.
+
 ## Preserved chronological checkpoints —43 and earlier
 
 Current retained production is43; its exact three-file bit-sliced Influence change passes all fresh local finite gates and source115 equality. Own-PGO70 improves1.160850%/7of7. Full43 standard54 now reconciles69.380search/69.809672whole CPU,1.633122%lower than40's separate full window, all54medians lower. Raw reference ratio1.100547 remains reported-only. Full43 whole12 costs reconcile701.276947s whole-native CPU,1.552144%lower than40 in a separate window; its raw historical reference ratio1.088562 is reported only. Experiments44–50 are parked.47 removes the parent snapshot and passes generic70 at1.117892%lower/7of7, then fails own-PGO70 at0.013752%lower/4of7; all original replays pass. Its evaluator interface changes are not adopted. 48 preserves the evaluator interface while removing the same copy, but its generic70 improves only0.306387%/7of7, failing the fixed aggregate gate;13focused/70exact originals pass, noPGO follows.49 keeps the512-entry workspace/public helper and reduces actual generic bound-check sites11→6 per inlined caller, with unchanged frames and+182B selected code. Six focused controls and all70 generic live/offline original replays pass; generic70 improves0.6650503%,7of7lower. Fresh own54 training/original raw/PID checks, independent byte-identical profile remerge and use build close with zero missing/stale warnings. Its separate own-PGO70 retains all70 exact outputs but improves only0.1820617%,4of7lower,worst1.005536395, failing aggregate<=.995 and minimum5lower. [Park without retry, broad tests or adoption](../../evidence/ordering-equal-length-pgo-decision-20261019-01/decision.json); generic savings do not transfer. Production43 and its whole54/12 evidence remain unchanged. See the [closed generic checkpoint](../../evidence/ordering-equal-length-generic-checkpoint-20261019-01/README.md). See the [current production map](../production-map.md) and [47 selection](../../evidence/ordinary-position-borrow-parent-selection-20261019-01/selection.json). Earlier checkpoint statements below retain their historical scope. See [decision0035](../decisions/0035-bit-sliced-influence-accumulation.md).

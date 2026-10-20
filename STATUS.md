@@ -48,6 +48,11 @@ comparison:0.468239353% slower overall, only1/7 cases lower. All70 original live
 and offline replays pass. No retry, full54/12 or adoption follows;62 stays current.
 See the [decision](evidence/machine-split-profiled-decision-20261020-01/README.md).
 
+Experiment64 is also parked: its Activity classifier removes five generic
+indirect jumps, but the fixed generic screen is0.204978955% slower,1/7lower.
+Ten focused Activity tests and70 original live/offline replays pass. No PGO,
+retry or promotion follows. See the [decision](evidence/capture-tag-ranges-decision-20261020-01/README.md).
+
 ## Historical checkpoint record — preceding57 state
 
 Statements below describe their original checkpoints; current adoption is62 above.
