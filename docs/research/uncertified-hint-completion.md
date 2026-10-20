@@ -113,3 +113,49 @@ one-group table or a record preloaded by a separate search is insufficient.
 This is a local sufficient-condition proof and a shorter search recipe.
 Universal first-half caller-window exclusion remains conditional as above.
 No public witness, newly specified fallback or final production closure follows.
+
+## 2026-10-20: noncapturing sibling route excluded
+
+One bounded, engine-independent enumeration completed for the subroute where
+a, b and c are all ordinary noncaptures. It found **zero secondary-key
+equalities**, across all eight profiles (root color × own N/B × opposing N/B)
+and 1,526,240 index probes. All profiles completed; actual exit0, empty stderr,
+no retry and unchanged helper/README hashes were independently checked by the
+lead. This excludes the represented subroute before primary-group equality,
+legal placement, ordering or hint selection need consideration.
+
+For a/b moving the same piece from r to x/y, cancellation reduces secondary
+equality to `S(own,x) XOR S(own,y) = delta(opponent,u,v)`. Every ordered x/y
+with a common geometric predecessor is represented. For different root pieces,
+enumerate each directed king edge and minor edge and match the XOR of their
+deltas to an opponent king/minor edge; preserve both a/b assignments.
+Both opponent directions and duplicate deltas remain in the index. K/N/B
+directed empty-board edge counts are 420/336/560. Blockers, stationary-piece
+placement and check constraints are relaxed, so a completed zero in this
+superset is a valid exclusion. The implementation translates the published
+key generator directly; no random-key or collision-probability assumption
+is used.
+
+The original recipe did not forbid **a capturing the opposing minor**. That
+branch is outside this enumeration. A source-only algebra/coverage assessment
+of it is selected; no capture-branch execution is selected here. Other
+inventories, earlier-iteration hints and different branch shapes also remain
+outside the exclusion. The conditional score lemma and general composition
+gap remain unchanged.
+
+Exact frozen supports are in
+`/home/legolas/agent-memos/rook2-hint-collision-feasibility-20261020/`:
+
+- `collision_feasibility.py`: SHA256
+  `2ef9e2053e980f77ff6aaf74b81b4d31146063283e7aedc63055ba3dfadc15f6`;
+- `README.md`, the pre-run coverage/resource proof: SHA256
+  `fc35a3c1daaa2d3f2211b0a3ddf6f4a9d5b282627012d27a64737570e7072dfe`;
+- `result.json`: SHA256
+  `75c70eb65e23905ca1f88f4d10ea293d7ebc4f0e58a2fcaac3b06e78a528f4a2`;
+- `exit-code.txt`, `run.stderr` and identical before/after source hashes.
+
+The pre-run source and README retain their original unexecuted wording.
+The result and actual terminal establish execution. The one run used
+housekeeping CPUs after the TT census quiet window closed, with 45-second wall,
+28/30-second CPU, 128MiB address-space and 8,000,000 joined-edge limits.
+It invoked no engine or fixture evaluator and changed no production behavior.

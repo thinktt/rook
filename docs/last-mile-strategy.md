@@ -67,7 +67,7 @@ job or new local engine run was launched for the preparation.
 | Which semantic sequences are comparatively expensive? | Four-row study closed. Preserve the current ownership baseline; no broader functional framework or production cost partition is selected. | Revisit only for a specific decision that these boundaries cannot answer. |
 | Can checked generation avoid traversing irrelevant directions? | Parked. Compiler mechanism and196 tests pass, but the fixed70 generic screen improves only0.27077%, with4/7 cases lower. All70 live/offline replays pass. | No retune, repeat or PGO rescue. The tested traversal reduction did not earn advancement. |
 | Can Activity pressure avoid materializing per-square mark bytes? | Parked. All200 library tests and70 live/offline replays pass, but the fixed generic screen is0.4281% slower, with3/7 cases lower. | No retune, second screen or PGO rescue. Preserve the failed result. |
-| Does the TT access population justify a different layout? | One count-only35→08 census is selected, with preparation and execution owned by Imp2 after the checked timing window. No layout variant is selected. | Recent returns, metadata continuation, retained matches, identity/generation misses, stores and reset costs together. |
+| Does the TT access population justify a different layout? | Census closed. Select one 48-byte identity-header/payload design with 16-byte alignment, unchanged group count and one allocation, with correctness and complete backend gates followed by one own-PGO fixed70 screen. | Probe/store/clear costs in the actual production build and the unchanged whole-engine gate; no speed claim from address coverage. |
 | Can Phase reuse avoid both recomputation and extra call arguments? | Narrow dependency-owned field hypothesis reviewed, unselected. Keep behind current discriminators. | Actual producer/consumer costs and complete mutation ownership without narrowing supplied-count semantics. |
 
 ### Checked generation: narrow the work, preserve the semantics
@@ -159,25 +159,35 @@ then need payload access, and stores can become more expensive. Recent usable
 returns are especially important because today's recent record can already fit
 within one conditional64-byte line.
 
-The [selected census](../experiments/current62-tt-census-design/README.md)
-observes those populations together on original35 then08, once each after the
-checked timing window. Imp2 owns isolated diagnostic preparation, build and
-execution under the fixed replay, count-reconciliation and resource scope.
-Distinguish
-recent metadata-only continuation from a usable recent return, and identity
-misses from generation rejection. Include replacement/displacement and clears,
-not just query counts. A conditional distinct-line ledger is useful but does
-not measure cache misses, residency or CPU cost. These fresh single-search16MiB
-cases cannot price multi-search stale generations, wrap clearing,64MiB tables
-or full-game sequences.
+The [closed census](../experiments/current62-tt-census/report.md) observed
+original35 then08 once each, with 197 library tests, both original live and both
+independent replay checks passing. All counter partitions and lifecycle
+equations reconcile. Full identity misses are 80.85%/31.61%; usable recent
+returns are 0.386%/0.553%. Stores occur 88.87/51.35 times per 100 probes. Both
+fresh 16MiB requests allocate 349,519 groups and increment generation once;
+neither wraps or rejects an equal identity by generation.
 
-Two dense arrays—16 bytes of full identities and32 bytes of payload per semantic
-group—are one possible alternative to per-group headers or64-byte padding.
-They preserve48G payload and need no partial-identity filter. Dense-header
-residency is a separate hypothesis from reducing lines per query. The specified
-group count, collision and priority rules remain unchanged. No layout prototype
-or native layout comparison is selected until the workload mix supports a
-concrete discriminator.
+Select one compact 48-byte group: four full identities followed by the four
+unchanged 8-byte payloads, aligned to 16 bytes, same group count and one allocation. A
+[conservative conditional address calculation](research/tt-layout-population-assessment.md)
+supports this design across both observed populations. Separate dense headers
+and payloads would need their payload region much more often on case08; possible
+dense-header residency benefits remain unmeasured. No dense or 64-byte variant
+is selected.
+
+Imp2 owns isolated implementation, differential correctness, one own-source
+original54 PGO training/independent merge and use-only ExtTSP build, complete
+production backend review, then one unchanged fixed70 screen if earlier gates
+pass. Review all consumed store owners and full initialization/wrap clearing,
+not just filtering. Routine review/binding/stage activation is delegated within
+the fixed scope and fresh 1,800-second native ceiling; material departures stop
+and return. No generic timing prerequisite, retry, retune or second layout is
+included. A miss parks; a pass returns for broad qualification.
+
+The address ledger is not cache misses, residency, traffic or CPU cost.
+These two fresh searches cannot price multi-search stale generations,
+physical-wrap frequency, 64MiB tables or full-game sequences. The trial
+preserves those semantics and supplies no production speed claim in advance.
 
 ### Phase: own only the dependencies that justify reuse
 
@@ -245,7 +255,10 @@ optimization target; qualification uses the released acceptance policy and
 requires compatible measurements, behavioral evidence and the external game
 gate. No raw ratio, microbenchmark or partial profile closes those obligations.
 
-The [uncertified-hint note](research/uncertified-hint-completion.md) now has a
+The [uncertified-hint note](research/uncertified-hint-completion.md) has a
 smaller conditional completion certificate based on a zero-valued sparse
-ending. It supplies no public collision witness or authority for new behavior;
-that qualification question remains open.
+ending. One bounded pure-key enumeration now excludes the proposed
+noncapturing four-piece sibling route; it does not exclude its capture branch
+or the general gap. A source-only assessment of that remaining branch is
+assigned to the single Astra helper. No public collision witness or authority
+for new behavior follows; the qualification question remains open.
