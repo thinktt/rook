@@ -30,6 +30,15 @@ empty-source cutoff-hint composition, final performance qualification and the
 external3288 game gate remain open.
 
 
+
+Experiment62 profile-covered LLVM ExtTSP placement passes its sole fixed70
+PGO-use comparison:1.043875178%lower CPU,7of7lower,worst0.999267347,
+all original live/offline checks exact. It uses unchanged native51 and the same
+immutable own57 training profile, with an explicit tools/build.py-only opt-in.
+Actual hot-body layout changes are verified. [Decision0048](docs/decisions/0048-exttsp-profiled-layout.md)
+advances to complete workload and artifact validation; production57 and best
+completed whole54/12 remain unchanged. No fresh training or qualification claimed.
+
 Experiment58 aggregate pawn Influence seeding passes196 library tests and all70
 original live/offline replays. The actual pawn loop is removed, with104B more
 producer code,16B more common frame and a partly hoisted decode. Its sole fixed
