@@ -1,0 +1,117 @@
+--- /home/legolas/rook2/evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/guard.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-conformance-preparation-20261020-01/guard.py
+@@ -1,4 +1,4 @@
+-"""Influence bitsliced43 complete117 guard; no native launch from this module."""
++"""Influence tactical51 complete117 guard; no native launch from this module."""
+ from pathlib import Path
+ import hashlib,json,os
+ HERE=Path(__file__).resolve().parent
+@@ -13,12 +13,12 @@
+  assert kind in ['freeze','native','build','corpus','reconcile','finalize']
+  c=load(HERE/'execution-clearance.json');plan=load(HERE/'validation-plan.json')
+  assert c['authorized'] is True and c['stages'][kind] is True,'HOLD: explicit parent stage clearance absent'
+- assert c['scope']=='influence-bitsliced-sum-complete117-untimed'
++ assert c['scope']=='tactical-check-mask-complete117-untimed'
+  assert c['source_graph_sha256']==plan['source_graph_sha256'] and c['plan_sha256']==sha(HERE/'validation-plan.json')
+  assert c['conflicting_cpu_windows_closed'] is True and not c.get('timing_pgo_profiler_authorized',False)
+  a=c['parent_final_validation_authorization'];assert a and sha(a['path'])==a['sha256']
+- decision=load(a['path']);assert decision['experiment']==43 and decision['status']=='PASS own-source PGO screen; select fresh broad validation before any source promotion'
+- assert decision['source_graph']==plan['native_reference_graph_sha256']
++ decision=load(a['path']);assert decision['experiment']==51 and decision['decision']=='ADVANCE_TO_FULL_VALIDATION' and decision['allow_full_native_and_mandatory_diagnostic_validation'] is True
++ assert decision['candidate_sha256']==plan['own_pgo_reference']['image_sha256'] and decision['profile_sha256']==plan['own_pgo_reference']['profile_sha256']
+  assert sorted(os.sched_getaffinity(0))==plan['affinity']==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ.get('TMPDIR')==plan['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  for key in os.environ:
+@@ -47,4 +47,4 @@
+  assert receipt['tool_sha256_before']==receipt['tool_sha256_after']==plan['tools_sha256']
+  assert receipt['mode']=='generic' and receipt['rust_flags']==['-C','target-cpu=x86-64'] and receipt['pgo']['mode']=='none'
+  assert sha(ref['image'])==ref['image_sha256']==receipt['binary_output']['sha256']
+- # Fresh189 generic native units are a separate stage from the209 DIAG package units.
++ # Fresh193 generic native units are a separate stage from the209 DIAG package units.
+--- /home/legolas/rook2/evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/stage.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-conformance-preparation-20261020-01/stage.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Future bitsliced43 complete117 freeze/build/corpus; blocked until parent clearance."""
++"""Future tactical51 complete117 freeze/build/corpus; blocked until parent clearance."""
+ import argparse,json,os,re,shutil,subprocess,sys,tarfile
+ from pathlib import Path
+ sys.dont_write_bytecode=True
+@@ -49,7 +49,7 @@
+  if args.stage!='freeze':terminal(paths['freeze']/'tool-terminal.json')
+  if args.stage in ['build','corpus']:terminal(paths['native']/'tool-terminal.json')
+  if args.stage=='corpus':terminal(paths['diagnostic-build-check']/'tool-terminal.json')
+- out.mkdir();stages=[];result=dict(complete=False,stage=args.stage,failure=None,stages=stages,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR'],native189_reused=False,fresh_ordinary_native_runs=0)
++ out.mkdir();stages=[];result=dict(complete=False,stage=args.stage,failure=None,stages=stages,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR'],native193_reused=False,fresh_ordinary_native_runs=0)
+  env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',RUSTC='/usr/bin/rustc',RUSTFLAGS='-C target-cpu=x86-64',CARGO_ENCODED_RUSTFLAGS='-C\x1ftarget-cpu=x86-64',RUSTC_WRAPPER='',RUSTC_WORKSPACE_WRAPPER='',CARGO_NET_OFFLINE='true',CARGO_BUILD_JOBS='4');env.pop('LLVM_PROFILE_FILE',None)
+  try:
+   if args.stage=='freeze':
+@@ -64,12 +64,12 @@
+    with tarfile.open(out/'official-inputs-115.tar.gz','r:gz') as t:
+     assert {m.name:__import__('hashlib').sha256(t.extractfile(m).read()).hexdigest() for m in t}=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
+    result['official_archive_sha256']=sha(out/'official-inputs-115.tar.gz')
+-   write(HERE/'archive-verification.json',dict(source115_sha256=result['source_archive_sha256'],official115_sha256=result['official_archive_sha256'],reopened_members_exact=True))
++   write(HERE/'archive-verification.json',dict(source117_sha256=result['source_archive_sha256'],official115_sha256=result['official_archive_sha256'],reopened_members_exact=True))
+   elif args.stage=='native':
+-   result['units']=units(source,source,{'rook2':187,'rook2-dev':2},source/'target/influence-bitsliced-sum-conformance-native-unit',out,env,stages)
+-   result.update(native_tests=189,library_tests=187,development_tests=2,fresh_ordinary_native_runs=2)
++   result['units']=units(source,source,{'rook2':191,'rook2-dev':2},source/'target/tactical-check-mask-conformance-native-unit',out,env,stages)
++   result.update(native_tests=193,library_tests=191,development_tests=2,fresh_ordinary_native_runs=2)
+   elif args.stage=='build':
+-   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/influence-bitsliced-sum-conformance-diag-unit',out,env,stages)
++   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/tactical-check-mask-conformance-diag-unit',out,env,stages)
+    assert not paths['diagnostic-build'].exists(),'build.py output must be absent'
+    result['artifact_sha256']=build(source,source/'diagnostic','rook2-diag',paths['diagnostic-build'],out,env,stages,{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})
+    br=load(paths['diagnostic-build']/'receipt.json');nr=load(plan['native_reference']['build_receipt'])
+--- /home/legolas/rook2/evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/reconcile.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-conformance-preparation-20261020-01/reconcile.py
+@@ -29,10 +29,10 @@
+  for key in ['freeze','native','diagnostic-build-check','diagnostic']:terminal(paths[key]/'tool-terminal.json')
+  check_sources(plan);check_dependencies(plan)
+  native=paths['native'];nv=load(native/'verification.json')
+- assert nv['complete'] and nv['failure'] is None and nv['stage']=='native' and nv['native_tests']==189 and nv['fresh_ordinary_native_runs']==2
++ assert nv['complete'] and nv['failure'] is None and nv['stage']=='native' and nv['native_tests']==193 and nv['fresh_ordinary_native_runs']==2
+  assert nv['affinity']==plan['affinity'] and nv['TMPDIR']==plan['TMPDIR']
+  assert all(row['exit_code']==0 and row['actual_child_return_observed'] for row in nv['stages'])
+- for name,count in [('rook2',187),('rook2-dev',2)]:
++ for name,count in [('rook2',191),('rook2-dev',2)]:
+   text=(native/(name+'-tests.stdout')).read_text()
+   assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==count and f'test result: ok. {count} passed; 0 failed;' in text
+   frozen=native/'unit-bin'/name/'unit-exact'
+@@ -52,7 +52,7 @@
+  diag=paths['diagnostic-build-check'];vr=load(diag/'verification.json');assert vr['complete'] and vr['failure'] is None and all(s['exit_code']==0 and s['actual_child_return_observed'] for s in vr['stages'])
+  text=(diag/'rook2-diag-tests.stdout').read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==209 and 'test result: ok. 209 passed; 0 failed;' in text
+  assert vr['units']['rook2-diag']['passed']==209 and sha(diag/'unit-bin/rook2-diag/unit-exact')==vr['units']['rook2-diag']['binary_sha256']
+- # Fresh native189 checked above; no ordinary replay or qualification transfer.
++ # Fresh native193 checked above; no ordinary replay or qualification transfer.
+  engine=Path(plan['native_reference']['image'])
+  # All115 original files, each complete and byte-bound; no supplied expected data in runtime.
+  diag=paths['diagnostic'];corpus=load(diag/'verification.json');assert corpus['complete'] and corpus['failure'] is None and corpus['stage']=='corpus' and all(row['actual_child_return_observed'] and row['exit_code']==0 for row in corpus['stages'])
+@@ -75,6 +75,6 @@
+   rows.append(dict(ordinal=ordinal,fixture=name,case_index=index,id=c['id'],operation=c['request']['operation'],raw_output_sha256=sha(stem.with_suffix('.stdout')),actual_child_exit_code=0))
+  check_sources(plan);check_dependencies(plan)
+  write(out/'raw-case-sha256.json',hashes);write(out/'case-reconciliation.json',dict(cases=7673,whole_files=115,partial_files=0,duplicate_ids=0,all_original_expected_raw_and_official_actual_equal=True,rows=rows))
+- result=dict(status='pass',native189_reused=False,fresh_ordinary_native_runs=2,native_units_fresh=True,native_units=189,library_units=187,development_units=2,diagnostic_units=209,standalone_strict54_reused=False,interruption_wire_reused=False,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_generic_reference_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_graph_sha256=plan['source_graph_sha256'],source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Fresh209/full117 DIAG; fresh189 generic native validation bound independently; no ordinary54/wire/game/CPU qualification claim')
++ result=dict(status='pass',native193_reused=False,fresh_ordinary_native_runs=2,native_units_fresh=True,native_units=193,library_units=191,development_units=2,diagnostic_units=209,standalone_strict54_reused=False,interruption_wire_reused=False,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_generic_reference_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_graph_sha256=plan['source_graph_sha256'],source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Fresh209/full117 DIAG; fresh193 generic native validation bound independently; no ordinary54/wire/game/CPU qualification claim')
+  write(out/'independent-verification.json',result);print(json.dumps({k:v for k,v in result.items() if k!='source_sha256'}))
+ if __name__=='__main__':main()
+--- /home/legolas/rook2/evidence/influence-bitsliced-sum-conformance-preparation-20261019-01/finalize.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-conformance-preparation-20261020-01/finalize.py
+@@ -30,7 +30,7 @@
+  ind=load(paths['reconciliation']/'independent-verification.json')
+  assert ind['status']=='pass' and ind['source_stable'] and ind['all_raw_expected_and_actual_equal'] and ind['all_native_child_exits_confirmed']
+  assert tuple(ind[k] for k in ['diagnostic_units','diagnostic_cases','diagnostic_operations','whole_fixture_files'])==(209,7673,117,115)
+- assert ind['native_units_fresh'] is True and (ind['native_units'],ind['library_units'],ind['development_units'])==(189,187,2)
++ assert ind['native_units_fresh'] is True and (ind['native_units'],ind['library_units'],ind['development_units'])==(193,191,2)
+  assert sha(plan['native_reference']['image'])==ind['native_generic_reference_sha256']==plan['native_reference']['image_sha256']
+  assert sha(paths['diagnostic-build']/'rook2-diag-exact')==ind['diagnostic_artifact_sha256']
+  prefixes=[plan['home_source']+'/',str(paths['diagnostic-build']/'rook2-diag-exact'),str(paths['diagnostic-build-check']/'unit-bin')+'/',str(paths['native']/'unit-bin')+'/'];live=[]
+@@ -40,7 +40,7 @@
+   except OSError:continue
+   if any(exe.startswith(x) for x in prefixes) or ('python' in Path(exe).name and len(argv)>1 and argv[1].endswith('.py') and argv[1].startswith(str(HERE)+'/')):live.append({'pid':int(p.name),'exe':exe,'argv':argv})
+  assert not live,live
+- result=dict(status='INFLUENCE_BITSLICED_SUM43_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native189_reused=False,fresh_ordinary_native_runs=2,native_units_fresh=True,native_units=189,library_units=187,development_units=2,diagnostic_units=209,standalone_strict54_reused=False,interruption_wire_reused=False,operations=117,cases=7673,whole_files=115,native_generic_reference_sha256=ind['native_generic_reference_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','native','diagnostic-build-check','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
++ result=dict(status='TACTICAL_CHECK_MASK51_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native193_reused=False,fresh_ordinary_native_runs=2,native_units_fresh=True,native_units=193,library_units=191,development_units=2,diagnostic_units=209,standalone_strict54_reused=False,interruption_wire_reused=False,operations=117,cases=7673,whole_files=115,native_generic_reference_sha256=ind['native_generic_reference_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','native','diagnostic-build-check','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
+  write(HERE/'validation-summary.json',result)
+  entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','source-proof.json','archive-verification.json','validation-summary.json','guard.py','stage.py','record_case.py','reconcile.py','finalize.py']]
+  entries += [paths['native']/name for name in ['verification.json','tool-terminal.json','rook2-tests.stdout','rook2-tests.stderr','rook2-dev-tests.stdout','rook2-dev-tests.stderr']]

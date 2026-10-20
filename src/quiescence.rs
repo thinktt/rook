@@ -302,7 +302,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                     movegen::generate_legal(&position, &mut self.candidates[ply]);
                 }
             } else {
-                tactical::generate(&position, &mut self.candidates[ply]);
+                tactical::generate_for_search(&position, &mut self.candidates[ply], coherent_geometry);
             }
             let count = self.candidates[ply].len;
             if DIAGNOSTICS {

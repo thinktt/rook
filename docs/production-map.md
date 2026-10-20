@@ -1,6 +1,6 @@
 # Production ownership and qualification map
 
-Current retained implementation: candidate43, 2026-10-19. This is an engineering
+Current retained implementation: candidate51, 2026-10-20. This is an engineering
 review map, not a completed clause-by-clause qualification audit. The released
 KingRE v2.5.0 package remains behavioral authority. The [historical map and
 chronological notes](production-map-history-20261019-01.md) preserve the
@@ -8,6 +8,24 @@ previous document exactly; its earlier unsupported-operation and timing counts
 are historical.
 
 ## Current integrated evidence
+
+Candidate51 is retained by [exact117-file source promotion](../evidence/tactical-check-mask-integration-20261020-01/source-promotion.json):
+native/tools graph05a848bb, combined graph3b816cf8, own-PGO48ee57b1/profile1ce0e391
+and diagnostic38c3025d. Fresh193/209 tests, all7673 original mandatory cases across
+117operations/115files, optimized54/eight-wire24 and regular12/632 plus continuity8,
+seed11 and persistence3 independently pass. Generic and own-PGO fixed70 screens
+improve1.510294% and1.573704%, all7 cases lower. Whole51 timing is pending;
+43's whole54/12 remain the latest completed cost windows. Exact isolated images
+are retained, without a canonical rebuild claim. [Decision0036](decisions/0036-tactical-check-masks.md)
+records local check-mask ownership. The bounded [production review](../evidence/tactical-check-mask-production-review-20261020-01/review.md)
+accepts this consumer under inherited coherent-placement premises; existing
+whole-engine qualification obligations below remain open.
+
+## Previous43 checkpoint and parked44–50 history
+
+The following historical evidence predates51. Its original document is preserved
+[byte for byte](production-map-history-20261020-01.md).
+
 
 The [source-promotion checkpoint](../evidence/influence-bitsliced-sum-qualification-20261019-01/final-state.json)
 binds native/tools graph `e89dcb33`, combined native/tools/diagnostic graph
@@ -69,7 +87,7 @@ records whole12 closure. Final performance qualification remains open.
 | Responsibility | Native owner | Evidence and remaining obligation |
 | --- | --- | --- |
 | Placement, chronological lists, tags/planes and transitions | `position`, `types`, `identity`, `session` | Current structural coherence review covers admitted roots and enumerated owned descendants. Broader legality, history and every ordinary-ingress clause remain separate. |
-| Attack geometry, ordinary candidates and quiescence routes | `attacks`, `movegen`, `tactical`, `quiescence` | Persistent planes and finite generation checks are integrated. Candidate capacity, ordered checker identities and pseudo-candidate completeness retain their individual proof scopes. |
+| Attack geometry, ordinary candidates and quiescence routes | `attacks`, `movegen`, `tactical`, `quiescence` | Persistent planes and finite generation checks are integrated.51 consumes existing coherent-placement permission for invocation-local reverse check masks; public/false routes remain scalar. Candidate capacity, ordered checker identities and pseudo-candidate completeness retain their individual proof scopes. |
 | Influence profiles, relations and semantic charges | `influence`, `relation_table`, evaluators |43 uses local bit-sliced wrapping accumulation with fixed transpose when sliders exist; the scalar no-slider branch remains. Arithmetic review covers the changed producer. Consumer charge/demand and complete geometric-domain obligations remain distinct. |
 | Root context, full/fast retained evaluation, pawn reuse and endgame bounds | `evaluation`, `evaluator`, pawn/activity/shelter/positional/endgame modules | Complete finite component transport now passes. Source review of all formula ranges, cache collisions, ages and lifecycle composition is not inferred from those fixtures. |
 | History, repetition, learned ordering and remembered results | `history`, `remembered`, `ordinary_policy` | Finite policy and collision checks pass. The conditional uncertified-hint completion gap remains unresolved; no source type, skip or fallback is invented. |

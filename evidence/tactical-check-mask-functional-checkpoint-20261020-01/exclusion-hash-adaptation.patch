@@ -1,0 +1,11 @@
+--- archive_checkpoint.inert.py.txt
++++ archive_checkpoint.py
+@@ -43,7 +43,7 @@
+    if reason:
+     with p.open('rb') as f:magic=f.read(4)
+     if name in EXACT_EXCLUSIONS:assert magic==b'\x7fELF',name
+-    s=p.stat();excluded[name]=dict(bytes=s.st_size,mode=stat.S_IMODE(s.st_mode),reason=reason)
++    s=p.stat();excluded[name]=dict(bytes=s.st_size,mode=stat.S_IMODE(s.st_mode),sha256=sha(p),reason=reason)
+     continue
+    with p.open('rb') as f:
+     assert f.read(4)!=b'\x7fELF',('unexpected selected ELF',name)

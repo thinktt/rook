@@ -1,0 +1,52 @@
+--- /home/legolas/rook2/evidence/influence-bitsliced-sum-functional-checkpoint-20261019-01/archive_checkpoint.py
++++ /home/legolas/rook2/evidence/tactical-check-mask-functional-checkpoint-20261020-01/archive_checkpoint.py
+@@ -1,25 +1,25 @@
+ #!/usr/bin/env python3
+-"""Closed43 functional trees only; deterministic gzip, full reopen/original recheck."""
++"""Closed51 functional trees only; deterministic gzip, full reopen/original recheck."""
+ from pathlib import Path
+ import gzip,hashlib,json,os,stat,sys,tarfile
+ HERE=Path(__file__).resolve().parent
+ ROOT=HERE.parent
+ TREES=[
+- 'influence-bitsliced-sum-conformance-preparation-20261019-01',
+- 'influence-bitsliced-sum-conformance-20261019-01',
+- 'influence-bitsliced-sum-conformance-build-20261019-01',
+- 'influence-bitsliced-sum-postuse-validation-preparation-20261019-01',
+- 'influence-bitsliced-sum-postuse-validation-20261019-01',
+- 'influence-bitsliced-sum-pregate-preparation-20261019-01',
+- 'influence-bitsliced-sum-pregate-20261019-01',
++ 'tactical-check-mask-conformance-preparation-20261020-01',
++ 'tactical-check-mask-conformance-20261020-01',
++ 'tactical-check-mask-conformance-build-20261020-01',
++ 'tactical-check-mask-postuse-validation-preparation-20261020-01',
++ 'tactical-check-mask-postuse-validation-20261020-01',
++ 'tactical-check-mask-pregate-preparation-20261020-01',
++ 'tactical-check-mask-pregate-20261020-01',
+ ]
+ EXACT_EXCLUSIONS={
+- 'influence-bitsliced-sum-conformance-preparation-20261019-01/full-native189/unit-bin/rook2/unit-exact':'native library unit ELF explicitly excluded',
+- 'influence-bitsliced-sum-conformance-preparation-20261019-01/full-native189/unit-bin/rook2-dev/unit-exact':'native development unit ELF explicitly excluded',
+- 'influence-bitsliced-sum-conformance-preparation-20261019-01/diagnostic-build-check/unit-bin/rook2-diag/unit-exact':'diagnostic unit ELF explicitly excluded',
+- 'influence-bitsliced-sum-conformance-build-20261019-01/rook2-diag-exact':'diagnostic ELF explicitly excluded',
++ 'tactical-check-mask-conformance-preparation-20261020-01/full-native193/unit-bin/rook2/unit-exact':'native library unit ELF explicitly excluded',
++ 'tactical-check-mask-conformance-preparation-20261020-01/full-native193/unit-bin/rook2-dev/unit-exact':'native development unit ELF explicitly excluded',
++ 'tactical-check-mask-conformance-preparation-20261020-01/diagnostic-build-check/unit-bin/rook2-diag/unit-exact':'diagnostic unit ELF explicitly excluded',
++ 'tactical-check-mask-conformance-build-20261020-01/rook2-diag-exact':'diagnostic ELF explicitly excluded',
+ }
+-DUPLICATE_PREFIX='influence-bitsliced-sum-conformance-build-20261019-01/source-before/'
++DUPLICATE_PREFIX='tactical-check-mask-conformance-build-20261020-01/source-before/'
+ def digest(f):
+  h=hashlib.sha256();n=0
+  for b in iter(lambda:f.read(1048576),b''):h.update(b);n+=len(b)
+@@ -62,8 +62,8 @@
+  assert sorted(os.sched_getaffinity(0))==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  before,excluded=inventory();write('member-manifest.json',before);write('excluded-members.json',excluded)
+- write('scope.json',dict(complete_closed_trees=TREES,exact_exclusions=EXACT_EXCLUSIONS,duplicate_prefix=DUPLICATE_PREFIX,external_payload_expansion=False,own_checkpoint_excluded=True,files=len(before),excluded_files=len(excluded),original_bytes=sum(x['bytes'] for x in before.values()),scope='Closed43 functional evidence only; excluded test/adapter ELF and duplicate extracted source; not self-contained deployment or qualification'))
+- archive=HERE/'closed-influence-bitsliced-sum-functional.tar.gz'
++ write('scope.json',dict(complete_closed_trees=TREES,exact_exclusions=EXACT_EXCLUSIONS,duplicate_prefix=DUPLICATE_PREFIX,external_payload_expansion=False,own_checkpoint_excluded=True,files=len(before),excluded_files=len(excluded),original_bytes=sum(x['bytes'] for x in before.values()),scope='Closed51 functional evidence only; excluded test/adapter ELF and duplicate extracted source; not self-contained deployment or qualification'))
++ archive=HERE/'closed-tactical-check-mask-functional.tar.gz'
+  with archive.open('xb') as raw:
+   with gzip.GzipFile(filename='',mode='wb',compresslevel=6,fileobj=raw,mtime=0) as gz:
+    with tarfile.open(fileobj=gz,mode='w|',format=tarfile.PAX_FORMAT) as t:

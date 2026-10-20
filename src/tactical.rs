@@ -4,6 +4,11 @@ use crate::movegen::{MoveList, MOVE_CAPACITY};
 use crate::position::Position;
 use crate::types::{Color, Move, MoveKind, PieceKind, Square};
 
+mod check_masks;
+#[cfg(test)]
+#[path = "tactical/check_mask_tests.rs"]
+mod check_mask_tests;
+
 const KNIGHT: [(i8, i8); 8] = [
     (1, 2),
     (-1, -2),
@@ -30,6 +35,64 @@ pub fn generate(position: &Position, out: &mut MoveList) {
     out.clear();
     let side = position.side;
     let enemy_king = position.piece_squares(side.opponent(), PieceKind::King)[0];
+    pawn_candidates(position, out, side, enemy_king);
+    for kind in [
+        PieceKind::Knight,
+        PieceKind::Bishop,
+        PieceKind::Rook,
+        PieceKind::Queen,
+        PieceKind::King,
+    ] {
+        let directions: &[(i8, i8)] = match kind {
+            PieceKind::Knight => &KNIGHT,
+            PieceKind::Bishop => &DIRECTIONS[..4],
+            PieceKind::Rook => &DIRECTIONS[4..],
+            _ => &DIRECTIONS,
+        };
+        let sliding = matches!(kind, PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen);
+        for &source in position.piece_squares(side, kind) {
+            for &(df, dr) in directions {
+                let mut cursor = source;
+                while let Some(target) = cursor.offset(df, dr) {
+                    let victim = position.board[target.0 as usize];
+                    if !victim.is_empty() {
+                        if victim.color() != side && victim.kind() != PieceKind::King {
+                            out.push(Move::new(source, target, MoveKind::Ordinary));
+                        }
+                        break;
+                    }
+                    if kind != PieceKind::King
+                        && direct_check(position, source, target, kind, enemy_king)
+                    {
+                        out.push(Move::new(source, target, MoveKind::Ordinary));
+                    }
+                    if !sliding {
+                        break;
+                    }
+                    cursor = target;
+                }
+            }
+        }
+    }
+}
+
+/// Private native route: placement planes must describe this exact Position.
+/// Public/custom callers retain the legacy scalar generation above.
+pub(crate) fn generate_for_search(position: &Position, out: &mut MoveList,
+    coherent_geometry: bool) {
+    if !coherent_geometry {
+        generate(position, out);
+        return;
+    }
+    out.clear();
+    let side = position.side;
+    let enemy_king = position.piece_squares(side.opponent(), PieceKind::King)[0];
+    pawn_candidates(position, out, side, enemy_king);
+    check_masks::generate_nonpawns(position, out, side, enemy_king);
+}
+
+// One numerical/order owner for EP, pawn prefixes, captures and queen promotions.
+fn pawn_candidates(position: &Position, out: &mut MoveList, side: Color, enemy_king: Square) {
     let forward = if side == Color::White { 1 } else { -1 };
     let source_rank = -forward;
     let prefix_files = if side == Color::White {
@@ -115,44 +178,6 @@ pub fn generate(position: &Position, out: &mut MoveList) {
                     && direct_check(position, source, target, PieceKind::Pawn, enemy_king)
                 {
                     out.push(movement);
-                }
-            }
-        }
-    }
-    for kind in [
-        PieceKind::Knight,
-        PieceKind::Bishop,
-        PieceKind::Rook,
-        PieceKind::Queen,
-        PieceKind::King,
-    ] {
-        let directions: &[(i8, i8)] = match kind {
-            PieceKind::Knight => &KNIGHT,
-            PieceKind::Bishop => &DIRECTIONS[..4],
-            PieceKind::Rook => &DIRECTIONS[4..],
-            _ => &DIRECTIONS,
-        };
-        let sliding = matches!(kind, PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen);
-        for &source in position.piece_squares(side, kind) {
-            for &(df, dr) in directions {
-                let mut cursor = source;
-                while let Some(target) = cursor.offset(df, dr) {
-                    let victim = position.board[target.0 as usize];
-                    if !victim.is_empty() {
-                        if victim.color() != side && victim.kind() != PieceKind::King {
-                            out.push(Move::new(source, target, MoveKind::Ordinary));
-                        }
-                        break;
-                    }
-                    if kind != PieceKind::King
-                        && direct_check(position, source, target, kind, enemy_king)
-                    {
-                        out.push(Move::new(source, target, MoveKind::Ordinary));
-                    }
-                    if !sliding {
-                        break;
-                    }
-                    cursor = target;
                 }
             }
         }

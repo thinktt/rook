@@ -1,0 +1,25 @@
+# Inert51 exact four-file integration plan
+
+Canonical retained43 source115 graph8a49fa28 is verified against its closed source-promotion.json. Frozen51 native74 graph05a848bb and conformance117 graph3b816cf8 agree. Replace ONLY src/quiescence.rs and src/tactical.rs; add ONLY src/tactical/check_masks.rs and src/tactical/check_mask_tests.rs. All other113 prior members, diagnostic43 and tools23 remain byte-identical. Full expected before/after maps, actions with original hashes/modes/absence, exact endpoint snapshots and promotion.patch/inverse are included. The patch/inverse hashes equal the previously frozen51 source patch/inverse.
+
+Accepted43 integration supplies the metadata/map/exclusive-owner/rollback method. Its actual promote.py assumes equal115 member sets and three replacements; it CANNOT correctly handle these two additions. No misleading verbatim runner was copied. Root may apply the exact patch with its normal reviewed file integration; no new automatic promotion framework or clearance exists here.
+
+The isolated ordinary own-PGO48ee57b1/profile1ce0e391 and generic diagnostic38c3025d retain their existing build identities and paths. Promotion copies source only; it does not rebuild canonical binaries or prove that a hypothetical canonical build is byte-identical. Closed193native/209DIAG-build metadata is bound. Corpus was still live during preparation and was not read/pinned. Full117, independent/final closure, postuse54/wire, independent postuse, regular12/independent, production review and final parent promotion proofs are all NULL until parent explicitly binds them. No future result is inferred from partial successful stages. Production remains43.
+
+Future ROOT-ONLY procedure after all gates close and parent grants an exclusive canonical source write interval:
+
+1. Bind/review every pending gate's exact proof, hash and actual successful terminal; review complete source/backend/domain limitations and retained images. Attest no conflicting owned native/source writers. Recheck expected-before115, both additions absent, frozen native74/staging117 and all final artifact/authority pins before any write.
+2. Create future evidence/tactical-check-mask-integration-20261020-01 (must be absent); preserve the two original files with their modes under source-before and copy actions.json to record the two absent additions. Keep exact patch/inverse/plan/clearance and every raw terminal.
+3. Under that same exclusive interval, from /home/legolas/rook2, the finite patch commands are:
+
+```text
+/usr/bin/patch --batch --forward --no-backup-if-mismatch --dry-run -p1 --input=/home/legolas/rook2/evidence/tactical-check-mask-integration-preparation-20261020-01/promotion.patch
+/usr/bin/patch --batch --forward --no-backup-if-mismatch -p1 --input=/home/legolas/rook2/evidence/tactical-check-mask-integration-preparation-20261020-01/promotion.patch
+```
+
+Root must bind its chosen patch tool/actual return, capture stdout/stderr and stop on any nonzero result; these are future command specifications, not execution authority. No extra source edits or format step. For ordinary manual copying, the exact four source/destination/hash/mode actions are in actions.json.
+
+4. Verify all117 after-map members (and no unexpected new native sources), frozen source/artifact/gate pins unchanged, preserved modes for both replacements and exact added file bytes. Emit source-promotion.json ONLY after that succeeds, naming previous43/new51, native74 and combined117 graphs, exact four paths, retained binaries/profile, all reviewed gates, plan/helper/tool/clearance identities, canonical_rebuild_performed:false and actual outer terminal.
+5. Failure handling is not a multi-file atomic transaction. Inspect all four paths against before/after hashes; restore original snapshots/modes only for exact candidate/current-original bytes, remove additions only when exact candidate bytes, and refuse unrelated concurrent changes. Preserve all failure/partial outputs. For a fully verified after-state only, promotion-inverse.patch specifies the exact reverse transformation (including deleting two additions); partial writes require per-path inspection, not blind inverse application. Preserve any premature success receipt as nonauthoritative history before rollback. Reverify entire before115 and both absent additions; no retry is authorized by this plan.
+
+A minimal map check for either explicit map is: read its files object, hash /home/legolas/rook2/<relative name>, compare every value, recompute SHA256 of compact sorted files JSON and match graph_sha256; for before also assert both additions absent. This exact check was performed read-only during preparation. Root owns future source writes, gate interpretation, promotion and any Git action. No canonical/native/trial/staging mutation, engine/build/test, Git, archive or executable integration helper run occurred here. All flags remain FALSE and only a false clearance template exists. No whole54/12, external3288 or final qualification is claimed.

@@ -1,6 +1,28 @@
 # Implementation status
 
-## Current stage — candidate43 bit-sliced Influence, 2026-10-19
+## Current stage — candidate51 tactical check masks, 2026-10-20
+
+Candidate51 replaces43 by exact equality of all117 tested source files after
+193 native tests,209 diagnostic tests, all7673 mandatory cases/117operations/
+115wholefiles, optimized strict54/eight-wire24, and regular12 pre-gate/632searches
+plus continuity8/seed11/persistence3. Every original/raw output and exit is
+independently reconciled. Only tactical.rs and one Q call change; two tactical
+modules are added. Private coherent generation constructs enemy-king check masks
+and emits selected quiet destinations plus required captures, preserving source
+vacancy, opaque occupancy, chronology and the scalar public fallback. No state,
+permission creator, numerical search policy or semantic charge changes.
+
+Generic fixed70 improves1.510294%; fresh own-source PGO fixed70 improves1.573704%,
+all7 cases lower in each. Ordinary48ee57b1/profile1ce0e391 and diagnostic38c3025d
+are the exact isolated tested artifacts; source promotion claims no canonical
+rebuild. Full51 whole54/12 timing is pending. Best completed whole54 remains
+43's69.809672 CPU seconds; best completed whole12 remains43's701.276947.
+Final performance qualification, inherited production-domain review and external
+3288 gameplay remain open. See [source promotion](evidence/tactical-check-mask-integration-20261020-01/source-promotion.json),
+[own-PGO screen](evidence/tactical-check-mask-pgo-screen-20261020-01/independent-reconciliation.json)
+and [decision0036](docs/decisions/0036-tactical-check-masks.md).
+
+## Previous retained candidate43 bit-sliced Influence, 2026-10-19
 
 Candidate43 replaces40 by exact equality of all115 tested source files after
 fresh189native/209diagnostic tests, all7673 mandatory cases/117operations/
@@ -50,22 +72,6 @@ production43 remains exact and experiments44–50 are parked. Logical cancellati
 counts do not price discovery/scatter, transport or frame costs, and no single
 backend cost is asserted as the cause. See [decision evidence](evidence/influence-mask-cancel-delta-decision-20261019-01/decision.json)
 and the [finite checkpoint](evidence/influence-mask-cancel-delta-checkpoint-20261019-01/README.md).
-
-Experiment51 constructs reverse checking masks in the privately geometry-authorized
-quiescence tactical generator, preserving the public scalar helper and ordered
-pawn/capture behavior. All10 focused tests and70 original live/offline replay
-checks pass. Its fixed generic screen sums13.7175975→13.5104215 CPU seconds in
-case medians:1.510294%lower,7of7lower,worst0.991068483, meeting the declared
-advancement rule. Fresh own-source PGO training passes all54 original outputs
-with54 distinct native profiles; independent verification reproduces the merged
-profile byte for byte. Optimized48ee57b1 builds with zero missing/stale-profile
-warnings. The actual own-PGO backend review closes; its separate fixed70
-screen passes all70 original checks at12.3288455→12.134826 CPU seconds in case
-medians:1.573704%lower,7of7lower,worst0.991026040. Full native/diagnostic,
-optimized54/wire and regular12 validation are next. No51 adoption, whole54/12
-timing result or final qualification is claimed.
-See [generic reconciliation](evidence/tactical-check-mask-generic-screen-20261019-01/independent-reconciliation.json)
-and [parent decision](evidence/tactical-check-mask-parent-review-20261019-01/generic-decision.json).
 
 ## Previous candidate40 static pressure lookup, 2026-10-19
 
