@@ -343,3 +343,11 @@ is preserved and old-root/personality records cannot reappear after wrap.
 Within-search records remain available across roots, retries and iterations.
 This does not close same-search identity collisions, uncertified hints or all
 normalization/depth/window/IIO store semantics. No source or runtime changes.
+
+## Parked61: coherent pressure clipping
+
+The [fixed generic decision](../evidence/pressure-bitclip-generic-decision-20261020-01/README.md)
+parks61 despite198 library and70 original replay passes. The intended native
+work removal exists, but aggregate CPU improves0.259022%, below the frozen0.5%
+gate (6/7lower,worst1.006301). No retry, PGO or source adoption follows.
+Production57 and both completed whole-corpus bests remain current.

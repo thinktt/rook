@@ -58,6 +58,11 @@ closes normal evaluating-lifetime P/G and private pawn-payload provenance under
 imported producer premises. It does not close cache semantic matching, all
 placement admission, full/fast window composition or arbitrary panic recovery.
 
+Experiment61 coherent pressure clipping passes198 library tests and70 original
+replays, but its sole generic screen improves0.259022%, below the frozen0.5%
+aggregate gate (6of7lower,worst1.006301279). It is [parked](docs/decisions/0047-pressure-bitclip.md)
+without retry, PGO or adoption. Production57 and best whole54/12 remain current.
+
 ## Earlier checkpoints and measurements
 
 A diagnostic [category encounter census](evidence/current51-activity-category-census-20261020-01/README.md)
