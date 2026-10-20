@@ -2,6 +2,12 @@
 
 ## Current stage — candidate51 tactical check masks, 2026-10-20
 
+Experiment57 replaces only the unchecked GenerationSafety pin scan with existing
+placement-plane ray queries. All193 library tests pass; the one generic fixed70
+screen passes original live/offline checks at1.0570045%lower summed CPU medians,
+7of7lower. [Advance to fresh own-source PGO](docs/decisions/0043-bitplane-pin-summary.md);
+no production adoption or new whole54/12 result is claimed.
+
 A diagnostic [category encounter census](evidence/current51-activity-category-census-20261020-01/README.md)
 passes11 focused tests and three original live/offline replay pairs. Repeats are
 2.0347%,1.7079% and0.0206% of calls; expensive repeats in hotspot35 are only0.2810%

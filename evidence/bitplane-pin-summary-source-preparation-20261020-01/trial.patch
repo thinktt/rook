@@ -1,0 +1,221 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -153,6 +153,41 @@
+             }
+             tag == piece.0
+         })
++    }
++
++    /// Placement must have coherent canonical tag planes. This does not rely
++    /// on either king being safe or on an unchecked flag as a coherence proof.
++    #[inline]
++    pub(crate) fn absolute_pins(&self, king: Square, side: Color) -> u64 {
++        let [a, b, c, black] = self.planes;
++        let occupied = a | b | c;
++        let enemy = occupied & if side == Color::White { black } else { !black };
++        let own = occupied ^ enemy;
++        let diagonal = a & (b ^ c) & enemy; // Bishop3 or Queen5.
++        let orthogonal = c & !b & enemy; // Rook4 or Queen5.
++        let mut pinned = 0;
++        for direction in 0..8 {
++            let ray = MASKS.rays[king.0 as usize][direction];
++            let matching = if direction < 4 { diagonal } else { orthogonal };
++            if matching & ray == 0 { continue; }
++            let blockers = occupied & ray;
++            if blockers == 0 { continue; }
++            let first = if MASKS.increasing[direction] {
++                blockers & blockers.wrapping_neg()
++            } else {
++                1u64 << (63 - blockers.leading_zeros())
++            };
++            if first & own == 0 { continue; }
++            let remaining = blockers ^ first;
++            if remaining == 0 { continue; }
++            let second = if MASKS.increasing[direction] {
++                remaining & remaining.wrapping_neg()
++            } else {
++                1u64 << (63 - remaining.leading_zeros())
++            };
++            if second & matching != 0 { pinned |= first; }
++        }
++        pinned
+     }
+ 
+     #[inline]
+@@ -596,4 +631,138 @@
+         }
+     }
+ 
+-}
++    // Independent coordinate/mailbox form of the old pin scan; no MASKS,
++    // AttackBits queries, existing ray lists or checked-state admission.
++    fn pin_mailbox_oracle(board: &[Piece; 64], king: Square, side: Color) -> u64 {
++        let mut pins = 0;
++        for (df, dr) in [(1i16,1i16),(-1,-1),(-1,1),(1,-1),(0,1),(0,-1),(1,0),(-1,0)] {
++            let mut file = i16::from(king.0 % 8) + df;
++            let mut rank = i16::from(king.0 / 8) + dr;
++            let mut candidate = None;
++            while (0..8).contains(&file) && (0..8).contains(&rank) {
++                let square = rank as usize * 8 + file as usize;
++                let piece = board[square];
++                if !piece.is_empty() {
++                    if candidate.is_none() && piece.color() == side {
++                        candidate = Some(square);
++                    } else {
++                        if let Some(blocker) = candidate {
++                            let slider = if df != 0 && dr != 0 { PieceKind::Bishop } else { PieceKind::Rook };
++                            if piece == Piece::new(side.opponent(), slider)
++                                || piece == Piece::new(side.opponent(), PieceKind::Queen) {
++                                pins |= 1u64 << blocker;
++                            }
++                        }
++                        break;
++                    }
++                }
++                file += df;
++                rank += dr;
++            }
++        }
++        pins
++    }
++
++    #[test]
++    fn experiment57_pin_summary_all_king_squares_colors_rays_and_blockers() {
++        for king_index in 0u8..64 {
++            let king = Square(king_index);
++            for side in [Color::White, Color::Black] {
++                for (df, dr) in [(1i16,1i16),(-1,-1),(-1,1),(1,-1),(0,1),(0,-1),(1,0),(-1,0)] {
++                    let mut ray = Vec::new();
++                    let mut file = i16::from(king_index % 8) + df;
++                    let mut rank = i16::from(king_index / 8) + dr;
++                    while (0..8).contains(&file) && (0..8).contains(&rank) {
++                        ray.push(rank as usize * 8 + file as usize);
++                        file += df; rank += dr;
++                    }
++                    for first in 0..ray.len() {
++                        for second in first + 1..ray.len() {
++                            for own_kind in [PieceKind::Pawn,PieceKind::Knight,PieceKind::Bishop,PieceKind::Rook,PieceKind::Queen] {
++                                for enemy_kind in PieceKind::ALL {
++                                    let mut board = [Piece::EMPTY;64];
++                                    board[king_index as usize] = Piece::new(side,PieceKind::King);
++                                    board[ray[first]] = Piece::new(side,own_kind);
++                                    board[ray[second]] = Piece::new(side.opponent(),enemy_kind);
++                                    let expected = pin_mailbox_oracle(&board,king,side);
++                                    let matching = enemy_kind == PieceKind::Queen
++                                        || enemy_kind == if df != 0 && dr != 0 { PieceKind::Bishop } else { PieceKind::Rook };
++                                    assert_eq!(expected,if matching {1u64 << ray[first]} else {0});
++                                    assert_eq!(AttackBits::from_board(&board).absolute_pins(king,side),expected);
++                                }
++                            }
++                            for enemy_first in [true,false] {
++                                let mut board = [Piece::EMPTY;64];
++                                board[king_index as usize] = Piece::new(side,PieceKind::King);
++                                board[ray[first]] = Piece::new(if enemy_first {side.opponent()} else {side},PieceKind::Pawn);
++                                board[ray[second]] = Piece::new(side,PieceKind::Queen);
++                                assert_eq!(AttackBits::from_board(&board).absolute_pins(king,side),
++                                    pin_mailbox_oracle(&board,king,side));
++                                assert_eq!(pin_mailbox_oracle(&board,king,side),0);
++                            }
++                        }
++                    }
++                    if ray.len() >= 3 {
++                        let mut board = [Piece::EMPTY;64];
++                        board[king_index as usize] = Piece::new(side,PieceKind::King);
++                        board[ray[0]] = Piece::new(side,PieceKind::Knight);
++                        board[ray[1]] = Piece::new(side.opponent(),PieceKind::Knight);
++                        board[*ray.last().unwrap()] = Piece::new(side.opponent(),PieceKind::Queen);
++                        assert_eq!(AttackBits::from_board(&board).absolute_pins(king,side),0);
++                        assert_eq!(pin_mailbox_oracle(&board,king,side),0);
++                    }
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn experiment57_joined_pin_summary_captures_and_unsafe_nonmoving_king() {
++        let square = |text| Square::parse(text).unwrap();
++        for (fen, white_pins) in [
++            ("k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1",1u64 << square("e2").0),
++            ("7k/8/8/8/3K4/2N5/8/b7 w - - 0 1",1u64 << square("c3").0),
++            ("k3b3/8/8/8/8/8/4R3/4K3 w - - 0 1",0),
++            ("k3r3/8/8/8/8/4N3/4R3/4K3 w - - 0 1",0),
++            ("k3r3/8/8/8/8/8/4p3/4K3 w - - 0 1",0),
++            ("k3r3/8/8/8/8/8/8/4K3 w - - 0 1",0),
++            ("8/8/8/8/8/4k3/4R3/4K3 w - - 0 1",0),
++            ("k7/1b6/8/3N4/4KR1r/8/8/8 w - - 0 1",
++                (1u64 << square("d5").0)|(1u64 << square("f4").0)),
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            for side in [Color::White,Color::Black] {
++                let king = position.piece_squares(side,PieceKind::King)[0];
++                let expected = pin_mailbox_oracle(&position.board,king,side);
++                assert_eq!(position.attack_view().absolute_pins(king,side),expected);
++                if side == Color::White {assert_eq!(expected,white_pins);}
++            }
++        }
++        let unsafe_other = Position::from_fen("8/8/8/8/8/4k3/4R3/4K3 w - - 0 1").unwrap();
++        assert!(movegen::in_check(&unsafe_other,Color::Black));
++        assert!(!movegen::in_check(&unsafe_other,Color::White));
++        for (fen,from,to) in [
++            ("k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1","e2","e8"),
++            ("k3r3/8/8/1B6/8/8/4R3/4K3 w - - 0 1","b5","e8"),
++        ] {
++            let parent = Position::from_fen(fen).unwrap();
++            let movement = Move::new(square(from),square(to),MoveKind::Ordinary);
++            let mut legal = MoveList::new(); movegen::generate_legal(&parent,&mut legal);
++            assert!(legal.as_slice().contains(&movement));
++            let child = parent.played_unchecked(movement);
++            let projected = parent.attack_view().projected(&parent,movement);
++            assert!(projected.matches_board(&child.board));
++            assert_eq!(parent.attack_view().absolute_pins(square("e1"),Color::White),
++                1u64 << square("e2").0);
++            assert_eq!(child.attack_view().absolute_pins(square("e1"),Color::White),0);
++            for side in [Color::White,Color::Black] {
++                let king = child.piece_squares(side,PieceKind::King)[0];
++                assert_eq!(projected.absolute_pins(king,side),
++                    pin_mailbox_oracle(&child.board,king,side));
++                assert_eq!(child.null_child().attack_view().absolute_pins(king,side),
++                    projected.absolute_pins(king,side));
++            }
++        }
++    }
++
++}
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -304,33 +304,7 @@
+                 .iter()
+                 .any(|kind| position.counts[enemy.index()][kind.index()] != 0)
+         {
+-            let queen = Piece::new(enemy, PieceKind::Queen);
+-            for (direction, ray) in ATTACK_RAYS.0[king.0 as usize].iter().enumerate() {
+-                let slider = Piece::new(
+-                    enemy,
+-                    if direction < 4 {
+-                        PieceKind::Bishop
+-                    } else {
+-                        PieceKind::Rook
+-                    },
+-                );
+-                let mut blocker = 0;
+-                for &square in &ray.squares[..ray.len as usize] {
+-                    let piece = position.board[(square & 63) as usize];
+-                    if piece.is_empty() {
+-                        continue;
+-                    }
+-                    if blocker == 0 {
+-                        if piece.color() == position.side {
+-                            blocker = 1u64 << square;
+-                            continue;
+-                        }
+-                    } else if piece == queen || piece == slider {
+-                        pinned |= blocker;
+-                    }
+-                    break;
+-                }
+-            }
++            pinned = position.attack_view().absolute_pins(king, position.side);
+         }
+         Self {
+             king,
