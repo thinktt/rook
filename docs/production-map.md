@@ -63,10 +63,13 @@ anchor correction. Original failure and both source snapshots remain preserved;
 the corrected production ELF is byte-identical to the first56 build. Actual
 generic Activity is192B smaller with unchanged frame. All70 original live/offline
 replays pass; the fixed generic screen improves0.7328199%,6of7lower,
-worst1.000082735. [Decision0041](decisions/0041-paired-activity-support.md)
-advances only to separate fresh own-source PGO admission. Production51 and its
-completed whole54/12 costs remain current; PGO transfer and broad qualification
-are still unproven.
+worst1.000082735. Fresh own-source54 training, original/raw/PID checks,
+independent byte-identical remerge and use build pass. The own-PGO mechanism
+survives with a16B larger Activity frame, but its separate fixed70 improves
+only0.1801525%,3of7lower,worst1.004655277, failing aggregate and minimum-lower
+gates. [Decision0041](decisions/0041-paired-activity-support.md) parks it without
+retry, broad validation or adoption. Production51 and its completed whole54/12
+costs remain current; no isolated causal explanation follows from frame/code facts.
 
 ## Previous43 checkpoint and parked44–50 history
 

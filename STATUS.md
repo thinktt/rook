@@ -70,9 +70,13 @@ independent16-bit lanes. Actual generic arithmetic sharing appears in allfour
 kind paths across both colors, with Activity192B smaller and unchanged frame.
 Ten focused tests and all70 original live/offline replays pass. Its first fixed
 generic screen improves0.7328199%,6of7lower,worst1.000082735, passing allthree
-advancement gates. [Decision0041](docs/decisions/0041-paired-activity-support.md)
-permits separate fresh own-source PGO admission; no PGO result, broad validation
-or adoption follows yet. An initial test-oracle curve80 transcription error was
+advancement gates. Fresh own-source54 training, independent raw/PID/original
+replay checks, byte-identical profile remerge and use build then pass. Actual
+own-PGO code retains sharing with a16B larger Activity frame. Its separate
+own-PGO70 improves only0.1801525%,3of7lower,worst1.004655277; aggregate and
+minimum-lower gates fail. It is
+[parked without retry, broad validation or adoption](docs/decisions/0041-paired-activity-support.md).
+An initial test-oracle curve80 transcription error was
 corrected against the released spec before timing; its failed run is preserved,
 and the corrected-source build produces the exact same engine bytes.
 Candidate51's completed whole54/12 best times remain current.

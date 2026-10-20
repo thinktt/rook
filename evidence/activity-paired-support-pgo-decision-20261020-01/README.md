@@ -1,0 +1,5 @@
+# Park experiment56 after fresh own-PGO screen
+
+Freshcorrected75sourcetrainingpasses54originalreplays/nativePID/rawprofileaudit andbyteidenticalindependentremerge. Profileb7020139 anduseimageca319f4e arefrozen. ActualownPGOcodepreservesfourkind/twocolor packedsharing; Activity328Bsmaller, frame16Blarger. Thesestaticfacts do notidentifywhythegenericgainweakens.
+
+FirstandonlyownPGOfixed70independentlyreconcilesall70original live/offlinereplays andnativewait4receipts: case-medians12.166362→12.144444CPU s, ratio0.9981984754357959,0.1801524564%lower,3of7lower,worst1.004655276894151. Aggregate<=0.995 andminimum5lowerfail; worstcasepasses. Parkwithoutretry,broadvalidation oradoption. No full195/diagnostic/mandatory/use54/wire/12gamecostrunfollows. Production51anditsseparatewhole54/12costsremaincurrent.
