@@ -68,6 +68,17 @@ inequalities. Table mate-depth changes remain separate from Node evaluation age.
 Stored-score origin, global transformed-window induction, collapsed contexts and
 full IIO/hint/stop composition remain open; no runtime evidence is added.
 
+The lead's [direct-root lemma](research/uncertified-hint-completion.md)
+excludes inherited, unreplaced hints at normal ordinary root-child completion:
+actual fixed/seeded/timed ply1 callers preserve lower>=-10000, and a child
+reaching ordinary learning is first-half with effective lower=-10000.
+This does not require strict windows or a genuine-mate interpretation of cached
+scores. Deeper calls and other hint consumers remain open. The same note records
+two completed pure-key enumerations excluding the proposed four-piece sibling
+recipe with a generated H, covering noncapture and capture branches.
+These results supply no public witness and do not close the general composition
+question.
+
 ## Preserved ownership obligations and historical checkpoints
 
 The following text records the preceding57 state. Artifact and timing claims

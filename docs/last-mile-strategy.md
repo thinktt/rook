@@ -67,7 +67,8 @@ job or new local engine run was launched for the preparation.
 | Which semantic sequences are comparatively expensive? | Four-row study closed. Preserve the current ownership baseline; no broader functional framework or production cost partition is selected. | Revisit only for a specific decision that these boundaries cannot answer. |
 | Can checked generation avoid traversing irrelevant directions? | Parked. Compiler mechanism and196 tests pass, but the fixed70 generic screen improves only0.27077%, with4/7 cases lower. All70 live/offline replays pass. | No retune, repeat or PGO rescue. The tested traversal reduction did not earn advancement. |
 | Can Activity pressure avoid materializing per-square mark bytes? | Parked. All200 library tests and70 live/offline replays pass, but the fixed generic screen is0.4281% slower, with3/7 cases lower. | No retune, second screen or PGO rescue. Preserve the failed result. |
-| Does the TT access population justify a different layout? | Census closed. Select one 48-byte identity-header/payload design with 16-byte alignment, unchanged group count and one allocation, with correctness and complete backend gates followed by one own-PGO fixed70 screen. | Probe/store/clear costs in the actual production build and the unchanged whole-engine gate; no speed claim from address coverage. |
+| Does the TT access population justify a different layout? | Compact48 parked. Correctness and the actual backend mechanism pass; its own-PGO fixed70 improves only0.292952%, with6/7 cases lower. All70 live/offline replays pass. | No repeat, retune, alternate layout or rescue selected. Modeled address coverage did not establish sufficient whole-engine benefit. |
+| Which production costs does the familiar screen underrepresent? | One source/existing-evidence recommendation assigned to Imp2, covering at most two workload families or whole-search cost owners. | Actual cost evidence and a distinct work-elimination/sharing mechanism; otherwise one proposed bounded observation, without execution. |
 | Can Phase reuse avoid both recomputation and extra call arguments? | Narrow dependency-owned field hypothesis reviewed, unselected. Keep behind current discriminators. | Actual producer/consumer costs and complete mutation ownership without narrowing supplied-count semantics. |
 
 ### Checked generation: narrow the work, preserve the semantics
@@ -167,7 +168,7 @@ returns are 0.386%/0.553%. Stores occur 88.87/51.35 times per 100 probes. Both
 fresh 16MiB requests allocate 349,519 groups and increment generation once;
 neither wraps or rejects an equal identity by generation.
 
-Select one compact 48-byte group: four full identities followed by the four
+The selected compact 48-byte group places four full identities before the four
 unchanged 8-byte payloads, aligned to 16 bytes, same group count and one allocation. A
 [conservative conditional address calculation](research/tt-layout-population-assessment.md)
 supports this design across both observed populations. Separate dense headers
@@ -175,19 +176,28 @@ and payloads would need their payload region much more often on case08; possible
 dense-header residency benefits remain unmeasured. No dense or 64-byte variant
 is selected.
 
-Imp2 owns isolated implementation, differential correctness, one own-source
-original54 PGO training/independent merge and use-only ExtTSP build, complete
-production backend review, then one unchanged fixed70 screen if earlier gates
-pass. Review all consumed store owners and full initialization/wrap clearing,
-not just filtering. Routine review/binding/stage activation is delegated within
-the fixed scope and fresh 1,800-second native ceiling; material departures stop
-and return. No generic timing prerequisite, retry, retune or second layout is
-included. A miss parks; a pass returns for broad qualification.
+The [closed production trial](../experiments/compact48-tt/report.md), committed
+at5d6a33b3, passed196 library tests including three independent old-table
+differential controls, fresh original54 PGO training/independent replay and
+byte-identical remerge, and the complete actual backend gate. Full identity
+misses have no payload loads. All consumed store owners, initialization,
+generation-wrap clearing and reuse/drop paths were reviewed. Combined
+ordinary/store code grew130 bytes; ordinary's local frame stayed unchanged.
+These establish the mechanism and its costs, without assigning CPU savings
+to particular instructions.
+
+The one own-PGO fixed70 measured summed medians11.8722445s retained62 versus
+11.8374645s compact48, ratio0.9970704781. Six of seven cases were lower;
+worst ratio1.001170805. All70 live and independent replay checks passed,
+with all samples retained. The0.292952% aggregate reduction misses the unchanged
+0.5% gate. The complete native lane closed at795.906/1800 seconds without
+native repair or retry. Park the design; no retune, repeat, alternate layout,
+rescue or adoption is selected. Retained62 remains the production control.
 
 The address ledger is not cache misses, residency, traffic or CPU cost.
 These two fresh searches cannot price multi-search stale generations,
 physical-wrap frequency, 64MiB tables or full-game sequences. The trial
-preserves those semantics and supplies no production speed claim in advance.
+preserves those semantics but supplies no full54 or game speedup claim.
 
 ### Phase: own only the dependencies that justify reuse
 
@@ -242,6 +252,16 @@ mechanism affecting other cases should receive relevant coverage chosen
 before its results. Use actual production PGO/ExtTSP settings for native
 performance decisions; do not revive old failures by changing their gates.
 
+With pressure, checked enumeration and compact48 now parked, the next decision
+is where to investigate, rather than another nearby variant. Imp2 will use
+existing current62 full54/full12 evidence and existing profiles/censuses to
+identify at most two underrepresented workload families or whole-search cost
+owners. A recommendation needs actual cost evidence and a distinct mechanism
+that eliminates or shares work. A large historical raw difference alone is
+insufficient. If existing evidence cannot discriminate, return one bounded
+observation that could change direction; no new native work is selected by
+this assignment.
+
 One bounded experiment record should hold the mechanism, changed semantics,
 artifact/build identity, correctness evidence, timing scope and decision.
 Keep raw outputs outside Git per the [storage guide](evidence-layout.md).
@@ -257,8 +277,10 @@ gate. No raw ratio, microbenchmark or partial profile closes those obligations.
 
 The [uncertified-hint note](research/uncertified-hint-completion.md) has a
 smaller conditional completion certificate based on a zero-valued sparse
-ending. One bounded pure-key enumeration now excludes the proposed
-noncapturing four-piece sibling route; it does not exclude its capture branch
-or the general gap. A source-only assessment of that remaining branch is
-assigned to the single Astra helper. No public collision witness or authority
-for new behavior follows; the qualification question remains open.
+ending. Two completed bounded pure-key enumerations exclude its proposed
+four-piece sibling recipe with H generated at Q, covering both noncapturing
+and capturing first-root branches. Separately, a source proof discharges the
+lower-window premise for normal ordinary direct root-child completions.
+Neither result closes deeper composition or other hint consumers. No public
+collision witness or authority for new behavior follows; the qualification
+question remains open.

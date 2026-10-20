@@ -1,11 +1,17 @@
-# TT layout: a compact header is worth one production trial
+# TT layout: conditional address model and parked production trial
 
 2026-10-20. Lead assessment of the closed
 [current62 census](../../experiments/current62-tt-census/report.md), committed
 at e964dc83. This is a conditional address calculation and a prospective
 experiment selection, not a measured layout improvement.
 
-Select one 48-byte group with four full 32-bit identities at offsets 0..15,
+**Outcome:** the [one own-PGO trial](../../experiments/compact48-tt/report.md)
+closed at5d6a33b3. Its0.292952% lower summed medians miss the unchanged0.5%
+screen gate, despite6/7 cases lower and all correctness/backend gates passing.
+The design is parked without repeat, retune or adoption. The calculation below
+records why it earned that trial; it does not override the measured outcome.
+
+The selected trial used one 48-byte group with four full 32-bit identities at offsets 0..15,
 followed by four 8-byte payloads in retained0/1/2/recent order. Require 16-byte
 alignment, unchanged semantic group count, one allocation and complete
 initialization/wrap clearing. Retained62 remains the control.
@@ -29,8 +35,7 @@ Assume 64-byte lines, the same semantic query sequence/group indices, and emitte
 loads that consult payload only after the associated full identity matches.
 The census observed no generation-rejected identity matches. Its old group
 phases were 0/16/32/48. Changing the allocation base of an array with 16-byte
-alignment and 48-byte stride
-array rotates these phase classes.
+alignment and 48-byte stride rotates these phase classes.
 
 | New group offset within a line | Condition for touching a second line |
 | --- | --- |

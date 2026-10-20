@@ -137,8 +137,8 @@ key generator directly; no random-key or collision-probability assumption
 is used.
 
 The original recipe did not forbid **a capturing the opposing minor**. That
-branch is outside this enumeration. A source-only algebra/coverage assessment
-of it is selected; no capture-branch execution is selected here. Other
+branch is outside this enumeration; the separate completed capture check below
+addresses it. Other
 inventories, earlier-iteration hints and different branch shapes also remain
 outside the exclusion. The conditional score lemma and general composition
 gap remain unchanged.
@@ -159,3 +159,107 @@ The result and actual terminal establish execution. The one run used
 housekeeping CPUs after the TT census quiet window closed, with 45-second wall,
 28/30-second CPU, 128MiB address-space and 8,000,000 joined-edge limits.
 It invoked no engine or fixture evaluator and changed no production behavior.
+
+## 2026-10-20: direct ordinary root children are excluded
+
+The lower-window premise can be discharged for actual direct root children
+without proving a global score range or strict windows. This is a source
+composition result for normal fixed/seeded/timed search, not for arbitrary
+supplied Request values or controlled child-answer providers.
+
+In fixed search, the ply1 request has lower=-10000. Seeded fixed search uses
+`-A(10000,-adjustment)`, also exactly -10000, because ordinary-score addition A
+preserves the mate/sentinel band. See
+[fixed/seeded root execution](../../src/ordinary.rs#L591).
+
+Timed root execution uses `child.lower=-A(requestedUpper,-adjustment)`.
+The unrestricted and retry requested upper is 10000. Restricted aspiration uses
+`A(min(10000,max(best,previous)+1),2)`, which is at most 10000. For any supplied
+value at most 10000, A preserves that upper enclosure: ordinary-band values
+are clamped to 8999 and other values are unchanged. Therefore every actual
+timed root child has lower>=-10000, independently of whether the requested
+window is strict, collapsed or inverted, and without assuming returned scores
+are genuine mates or bounded by 10000. The previously accepted arithmetic
+capacity premises still apply. See [score addition](../../src/timed.rs#L193),
+[root scheduling](../../src/root_schedule.rs#L121) and
+[actual child execution](../../src/timed.rs#L620).
+
+A direct root child has ply1 and target equal to the root iteration. If it
+does not immediately hand off to Q, remaining depth is positive, hence target
+is at least 2 and it is in the first-half region. Its effective lower is thus
+-10000<=incoming L. The earlier strict-improvement lemma excludes inherited,
+unreplaced H at any normal completion that invokes learning. A preceding
+quiet-mate replacement is also a generated move. Root retries preserve these
+facts. This closes the empty-source inherited-hint route at these ply1
+ordinary completions; it does not certify the legality of arbitrary remembered
+hints at other consumers.
+
+The fixed-root request, effective-bound substitution and strict-improvement
+rules also appear directly in SEARCH-ORDINARY-ITERATIONS at lines121–130,
+208–219 and378–429. Timed composition follows SEARCH-ROOT-ASPIRATION and
+SEARCH-ROOT-RANDOMIZATION; no widened-window rule was introduced.
+
+The proof does not propagate merely by negamax. A deeper full child receives
+lower=-parent.upper, and the accepted 10063 capacity enclosure does not impose
+parent.upper<=10000. The post-FULL guard supplies parent.upper>-10000, which
+is the opposite side of the required enclosure. Main/scout/null/IIO joins
+and deeper first-half nodes therefore retain their stated premises. No global
+strict-window, genuine-mate or universal first-half exclusion is claimed.
+No source behavior, test, engine run or helper execution changed.
+
+## 2026-10-20: capturing sibling route also excluded
+
+One separately bounded pure-key calculation completed after the compact48
+native lane closed. It covers a capturing the opposing minor, with b/c
+noncapturing and H generated at Q. All eight color/own-minor/opposing-minor
+profiles completed: **3,031,520 index probes, zero algebraic matches and zero
+candidates**. Actual helper exit0, empty stderr, complete JSON, unchanged
+source hashes and profile/cardinality totals were checked independently by the
+lead. There was one run, with no retry or engine invocation.
+
+After a captures the opposing minor, Q's only moving-side piece is the opposing
+king at u. Generated nonnull H must therefore start at u. Noncapturing b cannot
+move that king; for H.source to be empty in P, c must move it u→v.
+The inventory has no pawn or rook, so promotion, EP and castling add no omitted
+geometry, including admitted joined setups. This inference requires H to be
+generated at Q; merely receiving an inherited H would not suffice.
+
+For a/b moving the same own piece A from r to z/y, the necessary equality is
+`S(A,z) XOR S(A,y) XOR S(opposingMinor,z) = delta(opposingKing,u,v)`.
+The captured-piece term appears once. All common geometric predecessors r
+are represented. For different own movers K/M, enumerate both directed edges
+and both a/b assignments; the removed minor's coefficient is selected at a's
+destination. The opponent index preserves both king directions and duplicate
+deltas. Blockers, king safety, H.destination and search ordering remain relaxed,
+so a completed zero excludes the stricter represented branch.
+
+The calculation visits1,505,280 different-piece edge pairs with two capture
+assignments each, and64,512 same-piece destination pairs. Common-predecessor
+filtering leaves20,960 same-piece index probes, giving3,031,520 total.
+K/N/B geometry counts are420/336/560 directed edges. Published coefficient
+checkpoints0/959/960/1919 are respectively12911fa0/84a7bc59/6e28fa04/06646f9f.
+The frozen helper uses the released generator directly and imports no engine.
+
+Together with the earlier noncapturing result, this excludes the proposed
+four-piece sibling recipe **with a generated H at Q**. In that recipe P retains
+all four pieces, forcing b/c to be noncaptures; a either captures the opposing
+minor or is noncapturing. Other inventories, inherited-H routes and different
+branch shapes remain outside these calculations. The conditional zero-score
+lemma survives, but this particular recipe cannot realize its collision.
+Stop this witness construction; no larger enumeration is selected.
+
+Frozen supports are in
+`/home/legolas/agent-memos/rook2-hint-capture-feasibility-20261020/`:
+
+- `capture_feasibility.py`: SHA256
+  `b3fd5312d6e21b3712cc109204ec904d23771676ab868d13bc5b9e1ada89376c`;
+- `README.md`, the pre-run algebra/coverage/resource proof: SHA256
+  `8f38a4aed56ec7d10eddd5b2e7aa699931d6f6d4d1205eed0d14286a9b758d1c`;
+- `result.json`: SHA256
+  `4ed7f945f927a12e84ed7a716a21d2735b8ea1decd1f77890bd3828f35412d51`;
+- `exit-code.txt`, empty `run.stderr` and identical before/after source hashes.
+
+The source/README preserve their pre-run wording. The actual result and helper
+exit establish execution. The housekeeping-CPU run had45-second wall,
+28/30-second CPU,128MiB address-space,8,000,000 joined-edge and1MiB combined
+output ceilings. No production behavior or behavioral authority changed.
