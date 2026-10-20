@@ -113,13 +113,15 @@ Additional work and diagnostics:
 | TT baseline access/layout review | Actual loads checked; potential layout tradeoff remains unmeasured. |
 | CPU affinity, accounting, PGO and calibration checks | Reproducible local comparisons; no universal Vic-to-Bee conversion or live PMU. |
 | Candidate25 external Bee benchmark and functional probes | External reference point, not proof of later gains or final qualification. |
+| Last-mile three-unit functional study | [Four-route study closed](../experiments/functional-cost-three-unit/report.md): opening position/evaluation observations below reference, enclosing light search above; observer/build/host boundaries prevent a production cost partition. Retained62 unchanged. |
 | Native/diagnostic conformance, wire, seeds and regular12 pre-gates | Finite correctness/regression coverage; full external game gate remains separate. |
 
-Not yet tried / possible next work:
+Current proposals and source trials:
 
 | Idea | Current position |
 |---|---|
-| Enumerate checked destinations through the existing evasion mask | Leading question after the census; preserve ordering, blockers, EP and bounded replies. No implementation yet. |
+| Enumerate checked destinations through the existing evasion mask | Isolated B/R/Q source prototype complete; lead reviewed. Retain original walker on intersecting directions and an unpruned oracle. No build/test/timing yet. |
+| Replace pressure mark bytes with per-kind weak/strong presence sets | Isolated Astra source prototype reviewed; Imp2 selected for generic build/tests/code review. Scalar Activity semantics and visibility remain. No timing or adoption selected. |
 | Replace unchecked pinned-source projections with a pin-ray test | Lower-priority hypothesis; proof and added setup costs unresolved. |
 | Reorganize TT identity headers/payloads, or align groups | Source/access review only; compare miss filtering, hit costs and larger footprint. No variant selected. |
 | Counts-guided mailbox attacks | Earlier R8 hypothesis; never implemented or measured. |
@@ -130,6 +132,7 @@ Not yet tried / possible next work:
 | Broader layout/restoration alternatives | Architecture alternatives remain possible; no automatic rewrite or selected trial. |
 
 Already rejected caches, Influence deltas and copy-only changes are not fresh
-ideas simply because they are rediscovered. No new candidate68 is selected.
+ideas simply because they are rediscovered. No last-mile source variant has
+been promoted; retained62 remains the production control.
 Bulk records, original history and detailed audit catalogs live in
 `/home/legolas/rook2-experiments`; see [archive layout](evidence-layout.md).

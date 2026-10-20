@@ -4,10 +4,10 @@
 Candidate numbers identify artifacts/ideas, not a count of completed trials.
 The [working agreement](docs/leadership-working-agreement-last-mile.md) assigns
 strategy and architecture to imp2-lead and implementation/execution to Imp2.
-The initial investigation is a selective functional-cost comparison and
-complete-search architecture review; see the [current strategy](docs/last-mile-strategy.md).
-No new candidate or timing result follows
-from resuming this work.
+The initial four-route functional study is closed. Imp2 is executing the next
+isolated pressure build/tests/compiler review; a checked-slider source prototype
+remains unbuilt. See the [current strategy](docs/last-mile-strategy.md).
+No last-mile source variant has replaced62.
 
 Candidate62 keeps candidate57's native engine and diagnostic source. Its only
 promotion delta was `tools/build.py`: explicit profile-covered ExtTSP placement
@@ -37,6 +37,11 @@ CPU15 observations and unavailable per-search values retain the reports' limits.
 
 Latest closed work:
 
+- The [three-unit functional study](experiments/functional-cost-three-unit/report.md)
+  matches all four released projections. Opening position/evaluation observations
+  are below the reference; enclosing light search is above it. Observation,
+  setup, build and host differences prevent a pure-component or production cost
+  partition. The study derivative is separately identified;62 is unchanged.
 - Experiments63–67 are parked; none replaced62. See the
   [brief catalog](docs/performance-experiments.md) for ideas and results.
 - Whole-Activity repeats were too low to select caching. The generation-safety
