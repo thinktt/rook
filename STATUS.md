@@ -88,6 +88,14 @@ only0.078037% lower,5/7lower,worst1.004804860,5of7rangesoverlap. It misses the
 frozen0.5% minimum; all70 live/offline replays pass. No retry/full54_12/adoption.
 See [decision](evidence/q-parent-reborrow-decision-20261020-01/README.md).
 
+The fixed generation-safety census is complete:195 native tests and both original
+live/independent offline replays pass, with all six-row counter partitions valid.
+It observes whole-process enumeration and safety routes on profile-04 and35;
+checked off-mask rejections already skip projection. No speed estimate or new
+optimization is selected. Canonical engine source and retained62 stay unchanged.
+See [census](evidence/current62-generation-safety-census-results-20261020-01/README.md).
+The broader goal is paused after completion of this current work.
+
 ## Historical checkpoint record — preceding57 state
 
 Statements below describe their original checkpoints; current adoption is62 above.
