@@ -120,7 +120,7 @@ Current proposals and source trials:
 
 | Idea | Current position |
 |---|---|
-| Enumerate checked destinations through the existing evasion mask | [Compiler/tests closed](../experiments/checked-enumeration-compiler/report.md):196 tests pass after a fixture-only repair; pruning survives, unchecked directions avoid new mask work. Generation code grows2,345B/full frame16B. One generic screen recommended; no timing/PGO/adoption. |
+| Enumerate checked destinations through the existing evasion mask | [Parked after fixed70](../experiments/checked-enumeration-compiler/screen-results.md):generic0.27077% lower,4/7 lower; all70 live/offline checks pass.196 tests/compiler review established pruning with code/frame growth. No retune/repeat/PGO rescue. |
 | Replace pressure mark bytes with per-kind weak/strong presence sets | [Parked after fixed70](../experiments/pressure-presence-compiler/screen-results.md):generic0.4281% slower,3/7 lower; all70 live/offline checks pass. Compiler stage passed200 tests and retired the byte consumer, but smaller frames did not produce a passing CPU screen. No retune/PGO rescue. |
 | Replace unchecked pinned-source projections with a pin-ray test | Lower-priority hypothesis; proof and added setup costs unresolved. |
 | Reorganize TT identity headers/payloads, or align groups | [Source-only census plan](../experiments/current62-tt-census-design/README.md):one proposed35→08 count-only probe/store/reset observation before comparing48B headers versus dense16G/32G slabs. No prototype or run selected. |

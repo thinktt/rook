@@ -20,3 +20,7 @@ Raw evidence, both test attempts, stable pre-build source archive, complete
 disassembly and images are outside the repository at
 `/home/legolas/rook2-experiments/checked-enumeration-compiler-20261020-01`.
 See `closed-summary.json` for the exact images and named supports.
+
+The subsequently selected [fixed70 screen](screen-results.md) missed its unchanged
+gate; the variant is parked without retune, repeat or PGO rescue. The compiler
+report above remains the frozen earlier stage.
