@@ -80,7 +80,12 @@ excludes inherited, unreplaced hints at normal ordinary root-child completion:
 actual fixed/seeded/timed ply1 callers preserve lower>=-10000, and a child
 reaching ordinary learning is first-half with effective lower=-10000.
 This does not require strict windows or a genuine-mate interpretation of cached
-scores. Deeper calls and other hint consumers remain open. The same note records
+scores. Its later caller enclosure also proves incoming lower>=-10000 at all
+ordinary entries with ply>=3 and at ply2 under restricted timed scheduling.
+For the remaining unrestricted first-half ply2 case, the missing root premise
+reduces to whether a first-two-root TT query can export a positive normalized
+record>=10002 with LOWER permission. No reachable violation is established.
+Second-half completion and other hint consumers remain open. The same note records
 two completed pure-key enumerations excluding the proposed four-piece sibling
 recipe with a generated H, covering noncapture and capture branches.
 These results supply no public witness and do not close the general composition

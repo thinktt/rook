@@ -27,6 +27,9 @@ A preceding quiet-mate replacement is also generated. Thus the empty-source
 inherited hint is excluded in that region. In first-half nodes the effective
 lower is -10000, so this exclusion applies conditional on incoming L >= -10000;
 the wider normalized-score bound alone does not prove that caller-window premise.
+The later caller analysis below discharges it at ply1, all ordinary entries at
+ply>=3, and ply2 under restricted timed scheduling. One unrestricted ply2
+root/TT join remains unresolved.
 In second-half nodes the quiet-mate probe is automatically disabled. The open
 branch therefore requires effectiveLower > L and every consumed candidate score
 <= effectiveLower, along with an actually reachable uncertified empty-source
@@ -202,8 +205,9 @@ SEARCH-ROOT-RANDOMIZATION; no widened-window rule was introduced.
 The proof does not propagate merely by negamax. A deeper full child receives
 lower=-parent.upper, and the accepted 10063 capacity enclosure does not impose
 parent.upper<=10000. The post-FULL guard supplies parent.upper>-10000, which
-is the opposite side of the required enclosure. Main/scout/null/IIO joins
-and deeper first-half nodes therefore retain their stated premises. No global
+is the opposite side of the required enclosure. That direct-root argument alone
+leaves main/scout/null/IIO joins and deeper first-half nodes conditional; the
+later caller analysis below separately discharges most of them. No global
 strict-window, genuine-mate or universal first-half exclusion is claimed.
 No source behavior, test, engine run or helper execution changed.
 
@@ -263,3 +267,72 @@ The source/README preserve their pre-run wording. The actual result and helper
 exit establish execution. The housekeeping-CPU run had45-second wall,
 28/30-second CPU,128MiB address-space,8,000,000 joined-edge and1MiB combined
 output ceilings. No production behavior or behavioral authority changed.
+
+## 2026-10-20: deeper first-half caller enclosure
+
+A [bounded source analysis](/home/legolas/agent-memos/rook2-deeper-first-half-window-to-lead-20261020.md),
+independently checked against the actual callers by the lead, proves
+**incoming lower>=-10000 at every native ordinary entry with ply>=3**, and at
+ply2 under restricted timed scheduling. Together with the direct-root lemma,
+this excludes inherited, unreplaced hints at first-half normal learning in
+those regions. Second-half nodes retain their separate effective-lower premise.
+The result imports accepted coherent-production arithmetic, consumed endpoints
+within±10000, finished evaluation magnitude<=7900, Q returns within±10000 and
+the10063 capacity enclosure. It assumes neither strict windows nor genuine-mate
+provenance.
+
+Every ordinary recursive child has upper<=10000:
+
+| Caller | Child upper | Enclosure |
+| --- | --- | --- |
+| Main full | `-max(best,L)` | Best starts at effective lower>=-10000 and only increases. |
+| Main scout/retry | `-best` | Same lower enclosure on best. |
+| Initial/tail IIO | `-max(passBest,L)` | Each pass starts at-10000 and only increases. |
+| Null | `1-U` | Surviving FULL gives integer U>=-9999. |
+
+Frontier estimates cannot decrease best; final clipping happens after child
+construction. Quiet-mate probes enter Q directly, and Q does not call ordinary.
+Thus ordinary entries at ply>=2 have upper<=10000. Their full/retry/IIO
+children have lower=-U>=-10000, and scout lower=-min(best+1,U)>=-U.
+Null additionally requires evaluation.score>=U, so its child lower>=-7900.
+The actual request owners are
+[main/scout/retry](../../src/ordinary.rs#L1013),
+[IIO](../../src/ordinary.rs#L1139) and
+[FULL/null](../../src/ordinary.rs#L816). Extensions and target changes do not
+alter these endpoint formulas.
+
+Restricted timed scheduling closes ply2 because its best starts at-10000 and
+only increases. Its requested lower is A(best,2), or the first root's default
+-10000; retries retain that lower. A preserves the enclosure s>=-10000, so the
+actual ply1 upper=-A(requestedLower,-adjustment)<=10000. See the
+[scheduler](../../src/root_schedule.rs#L82) and
+[actual timed root child](../../src/timed.rs#L619).
+
+Fixed/seeded and unrestricted timed scheduling instead use the completed
+ranking's second score, without that floor. Their first two roots have the
+full requested window[-10000,10000], preserved by random subtraction. If both
+completed ranking scores are>=-10000, descending insertion keeps second>=-10000
+throughout that iteration, whatever later returns do.
+
+Only a TT return can make either of those first two ply1 calls exceed+10000:
+Q has its accepted enclosure; FAST's gate fails at U=10000; shallow/null's
+evaluation.score>=U gate fails; terminal/bound returns are bounded; normal
+completion caps at10000. A checking-Q probe can store but does not return
+directly. Therefore the remaining necessary exception is a reached first-two-root
+TT query exporting a **positive normalized record n>=10002 with LOWER
+permission**, including Exact. At ply1 it decodes to n-1>10000 and receives
+the immediate positive-band cutoff against10000, without a depth requirement.
+See [store permissions](../../src/remembered.rs#L72) and
+[decode/admission](../../src/remembered.rs#L118).
+
+The10063 capacity theorem permits those numbers but does not prove such an
+export reachable. Normalizing a raw score at a larger ply, including values
+whose origins were not genuine mates, prevents dismissing the exception by
+raw completion clipping alone. An exported record also does not by itself
+establish the whole hint event: ranking, a later root's actual first-half ply2
+entry, hint selection and unreplaced learning must still compose.
+
+The next unresolved invariant is this specific producer/permission/root-query
+join, or directly the weaker ranked-second floor. No public violating prefix,
+larger witness search, runtime check, score clamp or changed behavior is supplied
+or selected by this analysis.
