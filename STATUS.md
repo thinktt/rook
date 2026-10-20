@@ -79,6 +79,13 @@ All70 live/offline replays pass. Original backend metadata serialization failure
 and compact offline recovery remain explicit. No retry/full54_12/adoption follows.
 See [decision](evidence/caller-owned-child-decision-20261020-01/README.md).
 
+Experiment67 is isolated: Q borrows the parent placement after evaluation rather
+than copying it at entry. Only quiescence.rs changes; all other73 native/tool files
+match62 and no66 code is carried. All195 native tests, fresh own54 training,
+independent54 replay/raw/PID checks, byte-identical profile remerge and ExtTSP use
+pass (image6b87914c, ownprofile6197280b). Actual compiled-copy removal and timing
+remain pending; no speed or adoption claim.
+
 ## Historical checkpoint record — preceding57 state
 
 Statements below describe their original checkpoints; current adoption is62 above.

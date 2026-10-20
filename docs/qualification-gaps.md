@@ -61,6 +61,13 @@ normal completion storage. Early returns/stops skip later completion without
 rolling back prior or descendant effects. This does not prove full producer,
 window, TT/IIO or uncertified-hint admission, and adds no runtime evidence.
 
+The [TT/window local acceptance](../evidence/current62-tt-window-transform-parent-review-20261020-01/acceptance.json)
+closes original query-window/depth forwarding, unchanged cached-score returns,
+metadata-only continuation without window narrowing, and local child negation
+inequalities. Table mate-depth changes remain separate from Node evaluation age.
+Stored-score origin, global transformed-window induction, collapsed contexts and
+full IIO/hint/stop composition remain open; no runtime evidence is added.
+
 ## Preserved ownership obligations and historical checkpoints
 
 The following text records the preceding57 state. Artifact and timing claims
