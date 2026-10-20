@@ -1,0 +1,39 @@
+--- production57/tools/build.py
++++ production62/tools/build.py
+@@ -116,6 +116,8 @@
+                      help="immutable merged profile; requires --training-record")
+     parser.add_argument("--training-record", type=Path,
+                         help="completed native training provenance for --pgo-use")
++    parser.add_argument("--ext-tsp-profiled", action="store_true",
++                        help="use-only ExtTSP placement for profile-covered functions; requires --pgo-use")
+     parser.add_argument("--dry-run", action="store_true",
+                         help="inspect sources/tools and print plan; do not build or write receipts")
+     args = parser.parse_args()
+@@ -135,6 +137,8 @@
+             raise ValueError("PGO recording currently supports only --bin rook2")
+         if args.training_record and not args.pgo_use:
+             raise ValueError("--training-record requires --pgo-use")
++        if args.ext_tsp_profiled and not args.pgo_use:
++            raise ValueError("--ext-tsp-profiled requires --pgo-use")
+         if args.pgo_generate:
+             args.pgo_generate = args.pgo_generate.absolute()
+             if (args.pgo_generate.exists() or args.pgo_generate.is_symlink()
+@@ -180,8 +184,17 @@
+             pgo_record.update(mode="instrumented", profile_directory=str(args.pgo_generate))
+             build_mode += "-pgo-generate"
+         if args.pgo_use:
++            llvm_args = "-pgo-warn-missing-function"
++            if args.ext_tsp_profiled:
++                llvm_args += (" -enable-ext-tsp-block-placement=true"
++                              " -ext-tsp-apply-without-profile=false")
++                pgo_record["code_layout"] = {
++                    "algorithm": "ext-tsp", "profiled_functions_only": True,
++                    "application": "use-only", "fresh_training": False,
++                    "llvm_args": llvm_args.split(),
++                }
+             flags += ["-C", f"profile-use={args.pgo_use}",
+-                      "-C", "llvm-args=-pgo-warn-missing-function"]
++                      "-C", f"llvm-args={llvm_args}"]
+             pgo_record.update(mode="profile-use", input_sha256_before=pgo_input,
+                               profile=str(args.pgo_use), training_record=str(args.training_record))
+             build_mode += "-pgo-use"

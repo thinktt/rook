@@ -1,0 +1,27 @@
+# Remembered-result direct diagnostic admission and transport
+
+Source-only parent review of search.rememberedResults, complementing the separately pinned retained-result numerical owner review. All six native/adapter files match the exact117-file accepted57 source promotion. Native table/type bytes also match62; the diagnostic remains the existing separate companion, not a newly built62 runtime artifact. No engine/test/build/Git/profiler action or measured input mutation occurred.
+
+## Request and event domain
+
+main::dispatch sends exactly search.rememberedResults to learned::dispatch and remembered_results. object(input,[events]) requires an actual JSON object with exactly that field; array enforces1..256 events. Each TableEvent::parse recognizes only clear/store/probe, and each branch requires its exact keys. A clear has only kind. Store parses group/identity, plies/window, score, optional movement and two independent booleans. Probe parses only its declared query fields. At least one parsed Probe is required. All events are parsed before table allocation/application; no suppressed result bypasses request-wide validation.
+
+The shared helpers require strings/booleans/arrays/objects of the respective JSON types. Bounded integer values must be finite, integral and inside the requested range before i32 conversion; every admitted integer here is exactly representable by f64. Query enforces P0..63, T0..64, endpoints[-10000,10000] and strict lower<upper. Store score is[-10000,10000]. This is a crosswalk for these admitted parsed values, not a proof of arbitrary malformed numeric lexical/JSON framing or every unrelated adapter.
+
+Labels are strings of1..32 bytes, all ASCII alphanumeric, underscore or hyphen. BTreeMap String keys retain exact case-sensitive equality. New group indices use current map length, rejecting the17th distinct group, and existing groups remain usable at16. Thus every admitted group index lies0..15 for the allocated16 groups. Group labels are interned request-wide during parsing; clear neither resets label admission nor permits a17th group.
+
+New identity numbers are map length+1, with exact existing strings reusing their number. At most256 events means at most256 distinct identities, so stored IDs1..256 and even the computed next value<=257 fit u32. No hashing/truncation occurs in this direct diagnostic path. Identity labels reused across groups keep equality but each query selects its own group; distinct labels cannot collide. Renaming labels consistently preserves all equality/group relations and therefore behavior. Mapping indices/IDs by first appearance adds no observable ordering dependency across independent groups.
+
+## Descriptor and table construction boundary
+
+moves::movement accepts null or an exact move/kind object. Coordinate spelling must be ASCII length4/5, both squares are lowercase a1..h8 through Square::parse, and endpoints must differ. kind ordinary with four characters creates Ordinary; ordinary with fifth n/b/r/q creates the respective Promotion tag. Only ordinary permits that suffix. Four-character enPassant/castle create their tags; other kind/suffix combinations reject. This is the released SEARCH-CANDIDATE-ORDER descriptor syntax, including its textual ordinary promotion form.
+
+This path deliberately does not call moves::candidate or inspect a board: remembered-result descriptors need not be legal or fit any position. The distinct-endpoint check establishes the nonzero low12 endpoint premise of the native review. Source/destination-only output therefore cannot conflate an admitted move with the null sentinel, and kind/promotion/EP/castle tags do not survive storage.
+
+After complete parsing, remembered_results creates a fresh RememberedTable::with_groups(16). Its initially invalid records and generation1 provide the component's empty state. TableEvent::apply processes the parsed vector in order; Clear and Store return no observation, Probe returns exactly one. No table or label object survives the call. The native retention/query/clear proof supplies the shared algorithm under these now-established ranges and maps. In particular clear discards native results while the private Labels mapping remains request-wide; these are different required lifetimes.
+
+## Observation boundary and limits
+
+filter_map retains probes in their original sequence order. observation exports Bound::None/Upper/Exact/Lower as the exact required strings; Option score/marked depth produce integer or null, preserving Some(0) as numeric zero. Non-null hints format exactly two Square displays, source then destination: four lowercase coordinate characters with no kind or suffix. Quiet marker is boolean. The response contains observations and literal numeric0 for both semantic charge totals. The native numerical owner performs no search/relation charge calls.
+
+Together with the native owner crosswalk, this establishes the direct admitted remembered-result sequence path at source level. It is not a new exhaustive runtime test, nor a proof of all diagnostic JSON framing/error envelopes or global adapter behavior. Search-native hash/group construction, same-search collision composition, optional invalidation, root/window/TT/IIO joins and all external source-of-truth issues remain separate. Nothing here certifies hint legality or resolves an empty-source cutoff completion. No individual component admission is widened.

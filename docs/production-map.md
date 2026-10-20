@@ -1,5 +1,55 @@
 # Production ownership and qualification map
 
+Candidate62 is the retained production build, 2026-10-20. It adds an explicit
+`--ext-tsp-profiled` profile-use-only option in `tools/build.py`. Native engine
+and diagnostic source are unchanged from57. The exact ordinary image is
+`01237e6dfe89822e540d0f07c7b70f7227537a846ce8c69ea9e91167b759e98d`;
+the retained diagnostic is `eda652abd182cb536736dd758d330f779e94b1e7ad0e779ff7792c2235fffde2`.
+The existing own57 profile `b4806420` is reused explicitly; no fresh training or
+canonical-path rebuild is claimed. Source117 graph is `32f3da5d` and native/tools74
+is `97292303`.
+
+The new ordinary artifact passes the paired fixed70 comparison (1.043875178%
+lower CPU,7/7 cases lower), full54 (216 fresh lifetimes,432 offline checks,
+2496 posts), wire8/24 and regular12 (48 fresh lifetimes,2528 searches,23204 posts).
+Whole54 costs **67.640360 CPU seconds**; whole12 costs **675.156653 CPU seconds**.
+The separate57-window reductions are2.042965% and2.120477%, with54/54 and12/12
+medians lower. These are descriptive comparisons. CPU15 recorded0 nonidle ticks
+in54 and5 nonidle/1iowait ticks in12;294 measured per-search CPU values in12
+remain null, without imputation.
+
+Existing195 native tests,209 diagnostic tests and7673 mandatory cases across
+117 operations/115 files are reused source/artifact evidence for unchanged
+engine/diagnostic source and the same diagnostic companion. They were not
+newly rerun for62. Original57 continuity8/seed11/persistence3 results are also
+inherited evidence. New main-artifact coverage is stated separately above.
+
+Final behavioral/performance qualification remains open. Raw historical-reference
+ratios are1.066348 for54 and1.048017 for12, with maximum individual ratios
+1.167576 and1.123680. Different hardware/windows, uncertainty and resource scope
+prevent treating these as qualified acceptance. The external3288-game gate
+belongs off Vic; no new Bee/export/READY grant follows.
+
+See [source promotion](../evidence/exttsp-profiled-integration-20261020-01/source-promotion.json),
+[whole54](../evidence/exttsp-profiled-standard54-results-20261020-01/README.md),
+[whole12](../evidence/exttsp-profiled-games12-results-20261020-01/README.md),
+[build recipe](production-build.md) and [decision0048](decisions/0048-exttsp-profiled-layout.md).
+
+The [learned-state source acceptance](../evidence/current62-learned-remembered-parent-acceptance-20261020-01/acceptance.json)
+accepts remembered numeric/metadata ownership, direct diagnostic transport,
+direct cutoff history bounds10504/5636, and normal evaluating-lifetime retention
+under stated premises. It does not close collision meaning, uncertified-hint
+completion, full TT/window/IIO joins or general lexical/framing behavior.
+Existing detailed ownership obligations below remain applicable where not
+superseded by this explicitly scoped evidence.
+
+## Preserved ownership obligations and historical checkpoints
+
+The following text records the preceding57 state. Artifact and timing claims
+there are historical; unresolved normative obligations remain open. Exact prior
+bytes are preserved in [production-map-history-20261020-03.md](production-map-history-20261020-03.md).
+
+
 Current retained implementation: candidate57, 2026-10-20. This is an engineering
 review map, not a completed clause-by-clause qualification audit. The released
 KingRE v2.5.0 package remains behavioral authority. The [historical map and

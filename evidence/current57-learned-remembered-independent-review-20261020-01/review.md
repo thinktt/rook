@@ -1,0 +1,31 @@
+# Scoped acceptance of the three parent source reviews
+
+Independent source/spec review finds no substantive correction or admitted-component counterexample in the three frozen memos. Their claims are sound at the stated boundaries; they do not close universal native cutoff/hint/window completion. No tests, engines, builds, profiles or disassembly were run.
+
+## Remembered numerical owner
+
+`src/remembered.rs:72–89,109–135,192–246` matches released `spec/remembered-results.md:26–37,39–116`. Raw permissions precede normalization; remaining depth is signed T−P. With admitted P0..63,T0..64, required depth lies[-63,64]; normalized raw score lies[-10063,10063], safely i16. Query arithmetic widens before ply adjustment. Classification uses the stored normalized +/-9000 thresholds, while cutoff comparisons use the decoded score; these must not be conflated. Neither representation bound proves native producer/lifecycle/semantic score separation.
+
+The first matching retained priority alone participates in same-identity stores, and equal/deeper replacement preserves its priority/recent state. New identities choose first invalid priority or first minimum-depth priority, including depth ties. Generation-valid retained identities remain unique by empty-state/store induction; probe depth mutations preserve uniqueness. Physical clearing before generation1 reuse prevents old epoch resurrection. These are owner invariants, not a proof of native collision meaning.
+
+Probe first considers recent; a usable recent ends observation. Otherwise the retained record replaces bound, replaces only non-null hint, ORs quiet status and max-combines marked depth. Metadata is collected before a successful mate query raises depth. This agrees with clauses76–112 even when the old marked depth is negative or an older recent duplicate survives. No permission union or exact-interior score return was silently substituted. Endpoint masking/nonzero sentinel proof is valid only for admitted distinct-square descriptors; public Move(pub u16) alone supplies no such guarantee.
+
+## Direct diagnostic admission/transport
+
+`diagnostic/src/learned.rs:107–207`, main.rs58–87 and moves.rs21–81 match remembered-results118–152 and candidate-order28–40. The entire event vector is parsed before table application, at least one probe is required, clear does not reset request-wide labels, and exact event key/type/window/descriptor checks precede use. At most16 groups map to0..15; at most256 identities map injectively to nonzero u32 values. The memo's <=257 next-value bound is conservative, harmless and sufficient. Renaming must preserve label equality/distinctness, not merge identities. Board candidate validation is intentionally absent from rememberedResults and present for non-null cutoffMemory events.
+
+Fresh16-group table, ordered probe filtering, last-bound mapping, four-character endpoint output and Option zero/null distinctions match the contract. Literal zero direct charges match this owner; they do not constrain later search work. The memo appropriately excludes malformed lexical/framing envelopes: main::integer's f64 projection establishes checked numeric values for admitted inputs, not an independent proof of rejecting every nonintegral JSON spelling. No wider parser theorem should be inferred.
+
+## Learned update, bounds and actual lifetime
+
+`ordinary_policy.rs:406–438` agrees with cutoff-memory23–63 under the direct candidate/depth premises. Occupied destinations return first; source-empty defense is unreachable only for component-checked events. It remains no normative resolution for an uncertified native hint. M==B before M==A is equivalent even when A==B; otherwise pair order and complete tagged identity match. The original moving piece keys history, including pawn promotions and empty-destination EP/castle.
+
+There are768 history cells. For admitted depth0..62, delta=8(d+1) lies[8,504]. Nonnegative pre-sum<=10000 gives post-increment sum/cell<=10504; `value+1`<=10505. If reduction triggers, let O be the number of odd cells: sum ceil(H/2)=(S+O)/2 <=floor((10504+768)/2)=5636. Every partial recomputed sum has the same nonnegative bound. If reduction does not trigger, sum remains<=10000. This proves the repeated direct-event invariant without overflow or a second halving; it is not a native-depth producer proof. Snapshot order, omission, all65 physical killer clearing and direct repeated/reset semantics match learned.rs11–98 and cutoff-memory65–98.
+
+The normal lifetime route is real source ownership: Session::go502 and go_live566 call run_work_timed; map_host transfers Learning (engine.rs79–108). Timed inner519 prepares once and preparation quiescence.rs142–145 clears learning before evaluating the root. ActualEffects borrows the same Search throughout drive (timed.rs547–552); begin_iteration_records605–608 clears reporting only, begin_candidate609–614 makes a Node, execute619 enters ordinary on that same Search. Non-timed ordinary574 prepares once before loop584. Thus fresh normal evaluating entries clear state while subsequent iterations/retries retain the same owner. `early_draw`21–26 can clear next-ply killers after repetition admission; this is not a fresh-iteration reset. Pre-entry failures, abort/ponder/analysis/hint/solve, panic recovery and complete cutoff eligibility remain outside the theorem, as the memo states.
+
+## Frozen binding and remaining scope
+
+All three memo review hashes/proof input hashes were verified. Every named native/diagnostic file equals the historical accepted57 promotion map; the native subset also equals62's before/after build source map. This is per-file unchanged-owner evidence. A tools/build.py62 promotion changes the source/tool closure identity, so no present global117 graph equality is claimed. The original separate diagnostic companion remains the relevant artifact; there is no newly built62 companion claim.
+
+Accept only these scoped source lemmas. Imported placement admission/native depth/score capacity, hash/group/collision meaning, optional invalidation, complete session reset/stop ordering, root/TT/IIO/window joins, and empty-source remembered completion stay separate. Finite fixtures are neither needed for nor promoted into a universal proof here. No engine or diagnostic source change is recommended by this audit.

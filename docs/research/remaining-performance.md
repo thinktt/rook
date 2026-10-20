@@ -1,4 +1,18 @@
-# Remaining performance investigations
+# Remaining performance work
+
+Production62 now closes the full54 and regular12 runs at67.640360 and675.156653
+whole-native CPU seconds. Both improve on57 in separate windows, by2.042965% and
+2.120477%; final qualification remains open. The native source is unchanged;
+only the explicit profile-use compiler layout recipe changes. See the
+[current production map](../production-map.md) and [decision0048](../decisions/0048-exttsp-profiled-layout.md).
+
+Experiments58–61 remain parked with their original failed advancement gates.
+No63 is selected. A current62 branch/cache simulation feasibility review supports
+one future single-case diagnostic only after a named-vector parser and offline
+canaries. Its cache geometry is illustrative, not VM or hardware geometry; no
+recording has run and it cannot explain a causal57-to62 native speedup.
+
+## Preserved chronological checkpoints —43 and earlier
 
 Current retained production is43; its exact three-file bit-sliced Influence change passes all fresh local finite gates and source115 equality. Own-PGO70 improves1.160850%/7of7. Full43 standard54 now reconciles69.380search/69.809672whole CPU,1.633122%lower than40's separate full window, all54medians lower. Raw reference ratio1.100547 remains reported-only. Full43 whole12 costs reconcile701.276947s whole-native CPU,1.552144%lower than40 in a separate window; its raw historical reference ratio1.088562 is reported only. Experiments44–50 are parked.47 removes the parent snapshot and passes generic70 at1.117892%lower/7of7, then fails own-PGO70 at0.013752%lower/4of7; all original replays pass. Its evaluator interface changes are not adopted. 48 preserves the evaluator interface while removing the same copy, but its generic70 improves only0.306387%/7of7, failing the fixed aggregate gate;13focused/70exact originals pass, noPGO follows.49 keeps the512-entry workspace/public helper and reduces actual generic bound-check sites11→6 per inlined caller, with unchanged frames and+182B selected code. Six focused controls and all70 generic live/offline original replays pass; generic70 improves0.6650503%,7of7lower. Fresh own54 training/original raw/PID checks, independent byte-identical profile remerge and use build close with zero missing/stale warnings. Its separate own-PGO70 retains all70 exact outputs but improves only0.1820617%,4of7lower,worst1.005536395, failing aggregate<=.995 and minimum5lower. [Park without retry, broad tests or adoption](../../evidence/ordering-equal-length-pgo-decision-20261019-01/decision.json); generic savings do not transfer. Production43 and its whole54/12 evidence remain unchanged. See the [closed generic checkpoint](../../evidence/ordering-equal-length-generic-checkpoint-20261019-01/README.md). See the [current production map](../production-map.md) and [47 selection](../../evidence/ordinary-position-borrow-parent-selection-20261019-01/selection.json). Earlier checkpoint statements below retain their historical scope. See [decision0035](../decisions/0035-bit-sliced-influence-accumulation.md).
 
