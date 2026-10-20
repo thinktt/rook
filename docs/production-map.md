@@ -44,6 +44,13 @@ minimum-lower gates. It is [parked without retry or own-PGO](decisions/0044-aggr
 An invalid new FEN fixture was repaired only in test source; both ordinary builds
 are byte-identical. Production57 and its completed whole54/12 totals stay current.
 
+Experiment59 defers ordinary/promotion destination victim clearing to the final
+setter. All196 library tests and70 original live/offline replays pass. Actual
+generic code skips that setter call, but the fixed screen is0.049125%higher CPU,
+2of7lower,worst1.005128740. It is [parked without retry or own-PGO](decisions/0045-deferred-capture-clear.md).
+The test-only helper repair, whole-ELF inequality and exact runtime-code bridge
+are preserved; no production source changes.57 remains the whole54/12 best.
+
 ## Earlier retained51 evidence
 
 Previous candidate51 was retained by [exact117-file source promotion](../evidence/tactical-check-mask-integration-20261020-01/source-promotion.json):
