@@ -16,7 +16,7 @@ Bulk records are outside Git at `/home/legolas/rook2-experiments`.
 The original HEAD was `18ca16d66dde64c13c6161302ccd3bdf54bd568a`.
 All168 original commits remain in the cleaned history; bulk evidence paths were
 removed and therefore commit hashes changed. The
-[commit map](history-migration/commit-map.tsv) connects original and cleaned IDs.
+[commit map](history-migration/commit-map.tsv) connects original IDs to the current rewritten IDs.
 [Verification](history-migration/verification.json) compares every original
 non-evidence root tree, author/committer identity and timestamp, and parent edge.
 Original commit citations in old records refer to the preserved history.
@@ -47,3 +47,13 @@ archive. Keep new reproducible setups under `experiments/`, and short outcomes i
 the catalog/decision records. Do not add raw case streams or packed checkpoints
 to Git. Existing tracked historical `evidence/` summaries remain for navigation;
 new `evidence/` material is ignored by default.
+
+The owner subsequently requested Tobias Toland as the primary author and
+committer throughout the cleaned history. The
+[attribution map](history-migration/attribution-commit-map.tsv) connects the
+169 pre-attribution commits to their rewritten IDs. Its
+[verification](history-migration/attribution-verification.json) confirms identical
+trees, parent relationships and timestamps. Existing Codex trailers were kept;
+57 earlier commits received the required co-author/director trailers. This is
+local history rewriting; no remote push was performed. Repository-local Git
+identity is `Tobias Toland <github@thinktt.e4ward.com>` for future commits.

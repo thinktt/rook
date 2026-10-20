@@ -72,6 +72,11 @@ evidence, and replace failed approaches instead of accumulating patches.
 
 ## Commit attribution
 
+Use `Tobias Toland <github@thinktt.e4ward.com>` as both the primary author and
+committer of commits in this repository. The repository-local `user.name` and
+`user.email` must use that identity; do not override it with an agent identity.
+Keep Codex attribution in the required co-author trailers below.
+
 Every commit created for this repository must end with the following commit
 trailers in this order:
 
