@@ -30,6 +30,13 @@ ratios are1.066348 for54 and1.048017 for12, with maximum individual ratios
 prevent treating these as qualified acceptance. The external3288-game gate
 belongs off Vic; no new Bee/export/READY grant follows.
 
+The [local retained62 game handoff](../experiments/retained62-game-handoff/README.md),
+committed atce28c39c, binds the existing ordinary/diagnostic payload, source and
+finite evidence. It creates no transfer or execution authority. The external
+full3288 runner, corpus, continuous schedule, completion checker and receipts
+remain unresolved. Prior57 continuity is distinguished from exact62 evidence;
+same-artifact focused continuity disposition remains explicit in the manifest.
+
 See [source promotion](../evidence/exttsp-profiled-integration-20261020-01/source-promotion.json),
 [whole54](../evidence/exttsp-profiled-standard54-results-20261020-01/README.md),
 [whole12](../evidence/exttsp-profiled-games12-results-20261020-01/README.md),

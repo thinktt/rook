@@ -290,6 +290,12 @@ optimization target; qualification uses the released acceptance policy and
 requires compatible measurements, behavioral evidence and the external game
 gate. No raw ratio, microbenchmark or partial profile closes those obligations.
 
+The [local external-game handoff](../experiments/retained62-game-handoff/README.md)
+is committed atce28c39c. It reuses the prepared exact payload and binds existing
+source/build/conformance/full54/wire/12 evidence. Full-gate tools, corpus,
+schedule, receipts and operator authority remain unresolved; no external
+contact, transfer, execution or READY signal occurred.
+
 The [uncertified-hint note](research/uncertified-hint-completion.md) has a
 smaller conditional completion certificate based on a zero-valued sparse
 ending. Two completed bounded pure-key enumerations exclude its proposed
