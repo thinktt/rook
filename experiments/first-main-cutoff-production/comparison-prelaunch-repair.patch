@@ -1,0 +1,12 @@
+--- pair/collect.py
++++ pair/collect-path-repair.py
+@@ -3,7 +3,8 @@
+ import datetime,json,os,statistics,subprocess,sys,time
+ from pathlib import Path
+ ROOT=Path('/home/legolas/rook2');sys.dont_write_bytecode=True;sys.path.insert(0,str(ROOT/'tools'))
+-from compare_ordinary import sha,stop_owned,write
++from compare_ordinary import sha as path_sha,stop_owned,write
++def sha(path):return path_sha(Path(path))
+ from measure import cgroup_snapshot
+ HERE=Path(__file__).resolve().parent;B=HERE.parent;SPEC=Path('/home/legolas/king-spec/conformance/profiling')
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]

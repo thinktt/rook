@@ -1,0 +1,18 @@
+--- a/tools/tap_wire.mjs
++++ b/pair/tap_wire.mjs
+@@ -107,6 +107,15 @@
+     capture('stdin',bytes);
+     return Reflect.apply(write,this,[chunk,...rest]);
+   };
++  // Capture the declared cleanup chunk passed through end; retain native pipes.
++  const end = child.stdin.end;
++  child.stdin.end = function(chunk,...rest) {
++    if (typeof chunk === 'string' || Buffer.isBuffer(chunk) || ArrayBuffer.isView(chunk)) {
++      const bytes = typeof chunk === 'string' ? Buffer.from(chunk,typeof rest[0] === 'string' ? rest[0] : 'utf8') : Buffer.from(chunk);
++      capture('stdin',bytes);
++    }
++    return Reflect.apply(end,this,[chunk,...rest]);
++  };
+   // Register before the comparator's data listeners, retaining original bytes
+   // before its assertions. These callbacks do not consume or rewrite its data.
+   child.stdout.on('data',chunk => {
