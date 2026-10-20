@@ -5,7 +5,9 @@
 Experiment57 replaces only the unchecked GenerationSafety pin scan with existing
 placement-plane ray queries. All193 library tests pass; the one generic fixed70
 screen passes original live/offline checks at1.0570045%lower summed CPU medians,
-7of7lower. [Advance to fresh own-source PGO](docs/decisions/0043-bitplane-pin-summary.md);
+7of7lower. Fresh own-source PGO then passes54 original training/raw/profile checks
+and the separate fixed70 at1.1563291%lower,7of7lower.
+[Advance to full validation and the regular12 pregate](docs/decisions/0043-bitplane-pin-summary.md);
 no production adoption or new whole54/12 result is claimed.
 
 A diagnostic [category encounter census](evidence/current51-activity-category-census-20261020-01/README.md)

@@ -21,3 +21,14 @@ maintained transitions supply the imported invariant.
 See the [closed generic report](../../evidence/bitplane-pin-summary-generic-checkpoint-20261020-01/README.md),
 [generic decision](../../evidence/bitplane-pin-summary-generic-decision-20261020-01/decision.json)
 and [PGO selection](../../evidence/bitplane-pin-summary-pgo-selection-20261020-01/selection.json).
+
+Fresh own-source PGO now passes54 training/original raw/profile checks and an
+independent byte-identical remerge. The intended mechanism remains in both real
+optimized consumers. The first own-PGO fixed70 comparison passes original
+live/offline replays at1.1563291%lower CPU medians,7of7lower,worst0.992175033.
+Advance to full functional validation and the regular12 pregate. Production
+remains51 until every required validation gate passes; full54/12 performance
+and final qualification remain separate.
+
+See the [own-PGO checkpoint](../../evidence/bitplane-pin-summary-pgo-checkpoint-20261020-01/README.md)
+and [full-validation admission](../../evidence/bitplane-pin-summary-pgo-decision-20261020-01/decision.json).
