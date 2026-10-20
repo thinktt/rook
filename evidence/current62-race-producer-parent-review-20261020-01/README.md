@@ -1,0 +1,5 @@
+# Accept the existing directional FULL proof and current caller bridge
+
+The review correctly reuses the prior numerical crosswalk rather than discovering a new bound. Current FULL pawn-only race material constrains directional structure/progress even with genuine stale collision payloads. Only the updated winning-race endpoint is bounded by7477; the other can remain10000. Native endpoint consumers use sparse FULL or discard terminal FAST endpoints. This closes the consumed-endpoint premise under existing placement/root/cache-origin lemmas, without asserting every emitted FAST field is within10000 or proving TT/window/IIO/hint semantics.
+
+Root read both complete crosswalks and directly checked current sparse dispatch, ordinary FAST admission and terminal-Q score-only return. All27 input pins and five closure members were reverified before this acceptance. No source or runtime change follows. The preceding coarse unconditional review is preserved, with its overlooked earlier stronger proof explicitly corrected in the follow-up.

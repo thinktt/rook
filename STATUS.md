@@ -63,6 +63,13 @@ local remembered-store clauses under their stated premises. Composed hint,
 window, score and IIO correctness remain open; these are conditional source
 lemmas, not new universal qualification. See docs/production-map.md.
 
+Experiment65 is isolated and not accepted: a global27-row typed relation dictionary
+reduces logical table payload from262144 to7936 bytes, adding a dependent metadata
+lookup. Eight influence tests and all262144 pure-data reconstructions pass.
+Fresh own-source54 training, independent original audit/remerge and ExtTSP use
+build pass. No production timing has run; backend and fixed70 remain pending.
+See [pipeline evidence](evidence/one-sided-relations-pgo-results-20261020-01/README.md).
+
 ## Historical checkpoint record — preceding57 state
 
 Statements below describe their original checkpoints; current adoption is62 above.

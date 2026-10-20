@@ -422,3 +422,18 @@ normal completion storage. Early returns/stops skip later completion without
 rolling back prior or descendant effects. This does not prove full producer,
 window, TT/IIO or uncertified-hint admission, and adds no runtime evidence.
 
+
+
+## Current62 consumed late endpoints — verified reuse
+
+The earlier numerical crosswalk's directional pawn-race FULL proof transfers
+to current62 under the accepted placement, fixed-root and cache-origin premises.
+The updated winning-race endpoint has magnitude at most7477; the opposite
+endpoint may remain10000. This is not an unconditional bound on every emitted
+FAST endpoint: sparse native race positions force FULL before bound consumption,
+and terminal-Q FAST returns score only. Native consumed endpoints remain within
+±10000. This closes that producer/caller premise; composed TT/window/IIO/hint
+semantics remain open. The preceding coarse review is preserved and its overlooked
+stronger existing proof is explicitly corrected by the follow-up.
+See [parent acceptance](../evidence/current62-race-producer-parent-review-20261020-01/README.md)
+and [current-source crosswalk](../evidence/current62-race-producer-correlation-review-20261020-01/review.md).
