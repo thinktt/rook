@@ -17,7 +17,10 @@ seed11 and persistence3 independently pass. Generic and own-PGO fixed70 screens
 improve1.510294% and1.573704%, all7 cases lower. Whole51 standard54 independently closes at69.417194whole CPU seconds,
 0.562211%lower than43's separate69.809672window (39lower/15higher medians).
 CPU15 showed58 nonidle ticks, so no exclusive guest/host condition is claimed.
-Whole51 12 timing is pending;43's701.276947 remains the completed whole12 window. Exact isolated images
+Whole51 12 independently reconciles48lifetimes/2528searches at698.491201whole CPU seconds,
+0.397239%lower than43's separate window (10of12 lower), with501CPU15nonidle
+ticks and293unresolved per-search CPU values retained. The [whole12 report](../evidence/tactical-check-mask-games12-results-20261020-01/README.md)
+keeps the raw1.084238historical-reference ratio reported-only. Exact isolated images
 are retained, without a canonical rebuild claim. [Decision0036](decisions/0036-tactical-check-masks.md)
 records local check-mask ownership. The bounded [production review](../evidence/tactical-check-mask-production-review-20261020-01/review.md)
 accepts this consumer under inherited coherent-placement premises; existing
@@ -123,6 +126,31 @@ completion followed by idle commands. Raw bytes, four normal exits and input
 identities reconcile independently. These finite schedules do not establish
 all protocol clauses, arbitrary interleavings or the unobservable last-poll to
 move-publication arrival interval.
+
+The [current51 capacity disposition](../evidence/current51-capacity-parent-review-20261020-01/README.md)
+accepts narrow source/algebra lemmas for root-produced remaining-depth i16,
+produced-target i32 and learned-history u32 operations, plus Activity intermediates
+and casts for coherent admitted placements/native weights/arbitrary supplied
+u8 Influence profiles. Actual source owners and the imported caller premises
+are bound in that review. It does not close all evaluator arithmetic, semantic
+depth/IIO/hint composition or cumulative lifetime u64 capacity.
+
+The [current51 extension crosswalk](../evidence/current51-extension-semantic-review-20261020-01/review.md)
+has a [bounded parent acceptance](../evidence/current51-extension-parent-review-20261020-01/acceptance.json).
+Local formula precedence, fresh-depth/accumulated-context transport and aligned
+stable permutation agree with the reviewed clauses under their named caller
+premises. Activation, full IIO/TT/stop composition and natural reachability remain
+separate; this is not full production certification.
+
+The [current51 IIO eligibility review](../evidence/current51-iio-eligibility-review-20261020-01/review.md)
+has [bounded acceptance](../evidence/current51-iio-eligibility-parent-review-20261020-01/acceptance.json)
+for saved-entry predicates and local pass sequencing under its caller premises.
+The first-main cutoff argument explicitly assumes an incoming open window;
+global recursive window admission and full stop/TT/hint composition remain open.
+
+Normal production IIO is enabled; the explicitly bounded generic diagnostic
+entry is the false-capability route. The [current entry crosswalk](../evidence/current51-iio-entry-source-review-20261020-01/README.md)
+establishes only that distinction, not every IIO semantic obligation.
 
 Earlier scalar, score-capacity, depth, IIO and ingress reviews remain linked in
 the historical map, with their original source/artifact identities and limits.

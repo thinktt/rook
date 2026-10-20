@@ -17,8 +17,11 @@ all7 cases lower in each. Ordinary48ee57b1/profile1ce0e391 and diagnostic38c3025
 are the exact isolated tested artifacts; source promotion claims no canonical
 rebuild. Full51 whole54 independently reconciles216 lifetimes/432 offline checks at
 69.417194 whole-native CPU seconds (69.050 search),0.562211%lower than43's separate
-window; the latest best whole54 is51's69.417194. Whole51 12 timing remains pending;
-best completed whole12 remains43's701.276947.
+window; the latest best whole54 is51's69.417194. Whole51 12 now independently
+reconciles48lifetimes/2528searches at698.491201whole CPU seconds,
+0.397239%lower than43's separate window (10of12 lower). Both are reported-only;
+CPU15 shows501nonidle ticks in this whole12 window and293 per-search CPU values
+remain null. See [whole12 report](evidence/tactical-check-mask-games12-results-20261020-01/README.md).
 Final performance qualification, inherited production-domain review and external
 3288 gameplay remain open. See [source promotion](evidence/tactical-check-mask-integration-20261020-01/source-promotion.json),
 [own-PGO screen](evidence/tactical-check-mask-pgo-screen-20261020-01/independent-reconciliation.json)
