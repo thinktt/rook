@@ -68,7 +68,7 @@ job or new local engine run was launched for the preparation.
 | Can checked generation avoid traversing irrelevant directions? | Parked. Compiler mechanism and196 tests pass, but the fixed70 generic screen improves only0.27077%, with4/7 cases lower. All70 live/offline replays pass. | No retune, repeat or PGO rescue. The tested traversal reduction did not earn advancement. |
 | Can Activity pressure avoid materializing per-square mark bytes? | Parked. All200 library tests and70 live/offline replays pass, but the fixed generic screen is0.4281% slower, with3/7 cases lower. | No retune, second screen or PGO rescue. Preserve the failed result. |
 | Does the TT access population justify a different layout? | Compact48 parked. Correctness and the actual backend mechanism pass; its own-PGO fixed70 improves only0.292952%, with6/7 cases lower. All70 live/offline replays pass. | No repeat, retune, alternate layout or rescue selected. Modeled address coverage did not establish sufficient whole-engine benefit. |
-| Which production costs does the familiar screen underrepresent? | One source/existing-evidence recommendation assigned to Imp2, covering at most two workload families or whole-search cost owners. | Actual cost evidence and a distinct work-elimination/sharing mechanism; otherwise one proposed bounded observation, without execution. |
+| Which production costs does the familiar screen underrepresent? | Review closed: late-history searches and persistent switching games have weaker coverage, but no priced source trial emerged. The proposed shelter census remains unselected. | New cost evidence sufficient to justify an implementation, rather than coverage or eligibility alone. Current priority is qualification and handoff. |
 | Can Phase reuse avoid both recomputation and extra call arguments? | Narrow dependency-owned field hypothesis reviewed, unselected. Keep behind current discriminators. | Actual producer/consumer costs and complete mutation ownership without narrowing supplied-count semantics. |
 
 ### Checked generation: narrow the work, preserve the semantics
@@ -252,15 +252,30 @@ mechanism affecting other cases should receive relevant coverage chosen
 before its results. Use actual production PGO/ExtTSP settings for native
 performance decisions; do not revive old failures by changing their gates.
 
-With pressure, checked enumeration and compact48 now parked, the next decision
-is where to investigate, rather than another nearby variant. Imp2 will use
-existing current62 full54/full12 evidence and existing profiles/censuses to
-identify at most two underrepresented workload families or whole-search cost
-owners. A recommendation needs actual cost evidence and a distinct mechanism
-that eliminates or shares work. A large historical raw difference alone is
-insufficient. If existing evidence cannot discriminate, return one bounded
-observation that could change direction; no new native work is selected by
-this assignment.
+The bounded [coverage review](/home/legolas/agent-memos/rook2-imp2-to-lead-screen-coverage-20261020T190702Z.md)
+identifies two real omissions. Nineteen searches with supplied histories of
+at least90 plies account for13.849851s,20.48% of full54; their screened subset
+accounts for9.49% of screen time. History length is not current phase.
+Four persistent switching games account for294.971127s,43.69% of full12.
+Switching-000 alone costs120.588647s and contains122 searches with122 distinct
+supplied personalities. These are whole-workload costs, not measured removable
+history, setup or evaluation work. The lead checked the existing report/input
+arithmetic; no new engine observation was used.
+
+The review found no priced implementation opportunity. Its proposed single
+switching-000 zero-factor shelter census remains unselected. Earlier all-phase
+screen plus pattern/exposure source bands were about0.58%/0.62% of simulated
+work on35/08, before restricting to eligible phases. Those older bands are not
+current CPU shares or a bound on game savings, but they also provide no positive
+case for advancing another small-term investigation merely because the game
+coverage is new.
+
+Pressure, checked enumeration and compact48 remain parked. End this optimization
+batch and prioritize retained62's qualification and exact external-game handoff
+preparation, without external contact or execution. This is a decision about
+the present evidence, not a claim that the architecture is optimal or parity
+impossible. Reopen performance work for a concrete cost/mechanism case or
+decision-changing compatible reference evidence; do not sum parked gains.
 
 One bounded experiment record should hold the mechanism, changed semantics,
 artifact/build identity, correctness evidence, timing scope and decision.
