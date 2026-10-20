@@ -7,3 +7,10 @@ Actual internal block/fallthrough changes are present in ordinary, Activity and 
 Advance to complete workload/artifact validation before adopting. Production57 remains current; best whole54/whole12 is69.051049/689.783349s on Vic. No Bee result or final qualification follows. All initial metadata failures and corrections are retained in the evidence.
 
 See [decision](../../evidence/exttsp-profiled-pgo-decision-20261020-01/decision.json) and [backend review](../../evidence/exttsp-profiled-backend-review-20261020-01/review.md).
+
+Actual62 whole54 subsequently closes216fresh/54warm/162measured at67.640360s
+whole-native CPU and67.180000s search CPU. All432 original offline checks and
+2496 posts reconcile;54/54 medians lower than the earlier57 window (2.042965%
+summed decrease), with0 CPU15 nonidle ticks. That separate-window comparison
+is descriptive. Wire8/24 also passes.62regular12 and adoption remain pending;
+this new best measured54 does not change production57 or final qualification.

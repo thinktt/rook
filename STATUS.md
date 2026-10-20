@@ -16,10 +16,10 @@ under the existing canonical-tag/coherent-plane Position invariant.
 Generic and own-source PGO fixed70 comparisons improve1.0570045% and1.1563291%,
 7of7lower each. Full57 whole54 independently closes216 lifetimes/432 original offline checks
 at69.051049whole-native CPU seconds (68.640search),0.527456%lower than51
-in a separate window,48of54lower. This is the new best completed whole54.
+in a separate window,48of54lower. This is57's completed whole54 result.
 CPU15 had53nonidle ticks. Full57 whole12 independently closes48 lifetimes/2528
 searches at689.783349whole-native CPU seconds,1.246666%lower than51
-in a separate window,12of12 game medians lower. These are the new best completed
+in a separate window,12of12 game medians lower. These are57's completed
 whole54 and whole12 totals. Whole12 CPU15 recorded2nonidle/2iowait ticks;285
 measured per-search CPU values remain null. See the
 [whole54 report](evidence/bitplane-pin-summary-standard54-results-20261020-01/README.md)
@@ -36,8 +36,13 @@ PGO-use comparison:1.043875178%lower CPU,7of7lower,worst0.999267347,
 all original live/offline checks exact. It uses unchanged native51 and the same
 immutable own57 training profile, with an explicit tools/build.py-only opt-in.
 Actual hot-body layout changes are verified. [Decision0048](docs/decisions/0048-exttsp-profiled-layout.md)
-advances to complete workload and artifact validation; production57 and best
-completed whole54/12 remain unchanged. No fresh training or qualification claimed.
+advances to complete workload and artifact validation. Actual62 whole54 now
+closes216fresh lifetimes/432offlinechecks/2496posts at67.640360whole-native CPU
+seconds (67.180search),2.042965%lower than57 in a separate window,54/54medians
+lower; CPU15 nonidle ticks0. Wire8/24 also independently passes. This is the
+new best measured whole54, with [report](evidence/exttsp-profiled-standard54-results-20261020-01/README.md).
+Production57 remains current pending62regular12 and adoption. No fresh training
+or qualification claimed.
 
 Experiment58 aggregate pawn Influence seeding passes196 library tests and all70
 original live/offline replays. The actual pawn loop is removed, with104B more
