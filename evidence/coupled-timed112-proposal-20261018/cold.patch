@@ -1,0 +1,166 @@
+--- /dev/null
++++ b/diagnostic/src/controlled_timed.rs
+@@ -0,0 +1,145 @@
++//! Exact supplied schedules; native code owns every root/time/activity recurrence.
++use super::{array,boolean,integer,object,text,unsigned32,Result};
++use rook2::timed_sequence::{self,ControlledStage,ElapsedReply,SuppliedOutcome,WorkReply};
++use serde_json::{json,Value};
++use std::collections::BTreeSet;
++
++enum Replies {Elapsed(Vec<Vec<[ElapsedReply;2]>>),Work(Vec<Vec<[WorkReply;2]>>)}
++struct Query {average:u32,maximum:u32,start:u32,checked:bool,labels:Vec<String>,replies:Replies}
++impl Query {
++    fn parse(value:&Value,work:bool)->Result<Self> {
++        object(value,&["average","maximum","start","inCheck","labels","iterations"])?;
++        let average=integer(&value["average"],0,1000000)? as u32;
++        let maximum=integer(&value["maximum"],average as i32,1000000)? as u32;
++        let start=unsigned32(&value["start"])?;let checked=boolean(&value["inCheck"])?;
++        let labels=array(&value["labels"],1,8)?.iter().map(|v|{
++            let label=text(v)?;
++            if !(1..=24).contains(&label.len())||!label.bytes()
++                .all(|b|b.is_ascii_alphanumeric()||matches!(b,b'_'|b'-')) {
++                return Err("invalid supplied timed candidate identity".into());
++            }
++            Ok(label.to_owned())
++        }).collect::<Result<Vec<_>>>()?;
++        if labels.iter().collect::<BTreeSet<_>>().len()!=labels.len() {
++            return Err("supplied timed candidate identities must be unique".into());
++        }
++        let mut elapsed_rows=Vec::new();let mut work_rows=Vec::new();
++        for row in array(&value["iterations"],1,8)? {
++            let mut elapsed_candidates=Vec::new();let mut work_candidates=Vec::new();
++            for pair in array(row,labels.len(),labels.len())? {
++                let pair=array(pair,2,2)?;
++                let mut elapsed_pair=Vec::new();let mut work_pair=Vec::new();
++                for reply in pair {
++                    object(reply,if work {&["score","work","relations"]} else {&["score","work","elapsed"]})?;
++                    let score=integer(&reply["score"],-2000,2000)?;
++                    let units=integer(&reply["work"],0,50000)? as u64;
++                    if work {work_pair.push(WorkReply{score,work:units,
++                        relations:integer(&reply["relations"],0,50000)? as u64});}
++                    else {elapsed_pair.push(ElapsedReply{score,work:units,
++                        elapsed:integer(&reply["elapsed"],0,1000000)? as u32});}
++                }
++                if work {work_candidates.push([work_pair[0],work_pair[1]]);}
++                else {elapsed_candidates.push([elapsed_pair[0],elapsed_pair[1]]);}
++            }
++            if work {work_rows.push(work_candidates);} else {elapsed_rows.push(elapsed_candidates);}
++        }
++        Ok(Self{average,maximum,start,checked,labels,replies:if work {Replies::Work(work_rows)}
++            else {Replies::Elapsed(elapsed_rows)}})
++    }
++    fn observe(self)->Result<Value> {
++        let (out,work)=match self.replies {
++            Replies::Elapsed(rows)=>(timed_sequence::run_supplied_elapsed(self.average,self.maximum,
++                self.start,self.checked,&rows),false),
++            Replies::Work(rows)=>(timed_sequence::run_supplied_work(self.average,self.maximum,
++                self.start,self.checked,&rows),true),
++        };
++        project(&self.labels,out,work)
++    }
++}
++fn stage(stage:ControlledStage)->&'static str {match stage {
++    ControlledStage::Initialization=>"initialization",ControlledStage::Adjustment=>"adjustment",
++    ControlledStage::RootCompletion=>"root-completion",ControlledStage::IterationCompletion=>"iteration-completion",
++    ControlledStage::Poll=>"poll",
++}}
++fn project(labels:&[String],out:SuppliedOutcome,work:bool)->Result<Value> {
++    if !work&&out.selected.is_none() {return Err("completed elapsed source produced no capture".into());}
++    let selected=out.selected.as_ref();
++    let passes=out.passes.iter().map(|p|{
++        let mut row=json!({"depth":p.depth,"candidate":labels[usize::from(p.attempt.id)],
++            "attempt":if p.attempt.retry {"retry"} else {"initial"},
++            "lowerBound":p.attempt.window[0],"upperBound":p.attempt.window[1],"score":p.score,
++            "searchId":p.work.charged_search_units,"elapsed":p.elapsed});
++        if work {row["completed"]=json!(p.completed);}row
++    }).collect::<Vec<_>>();
++    let posts=out.posts.iter().map(|c|json!({"depth":c.depth,"candidate":labels[usize::from(c.id)],
++        "score":c.score,"searchId":c.search_id,"elapsed":c.elapsed})).collect::<Vec<_>>();
++    let checks=out.clock_checks.iter().map(|c|{
++        let mut row=json!({"stage":stage(c.stage),"depth":c.depth,"index":c.index,"elapsed":c.elapsed});
++        if work {row["searchId"]=json!(c.work.charged_search_units);
++            row["relationQueries"]=json!(c.work.charged_relation_queries);}row
++    }).collect::<Vec<_>>();
++    let mut output=json!({"limits":out.limits,"changes":out.changes,
++        "depth":if work {selected.map_or(0,|c|c.depth)} else {out.depth},"stopped":out.stopped,
++        "selected":selected.map(|c|labels[usize::from(c.id)].as_str()),"score":selected.map(|c|c.score),
++        "searchId":out.work.charged_search_units,"selectedSearchId":selected.map_or(0,|c|c.search_id),
++        "selectedElapsed":selected.map_or(0,|c|c.elapsed),"passes":passes,"posts":posts,"clockChecks":checks});
++    if work {output["relationQueries"]=json!(out.work.charged_relation_queries);
++        output["lastElapsed"]=json!(out.last_elapsed);}Ok(output)
++}
++pub(super) fn dispatch(operation:&str,input:&Value)->Result<Value> {
++    let work=match operation {"search.timedRootSequence"=>false,"search.workTimedRootSequence"=>true,
++        _=>return Err("unknown controlled timed operation".into())};
++    object(input,&["queries"])?;
++    let queries=array(&input["queries"],1,if work {4} else {16})?.iter()
++        .map(|v|Query::parse(v,work)).collect::<Result<Vec<_>>>()?;
++    Ok(json!({"sequences":queries.into_iter().map(Query::observe).collect::<Result<Vec<_>>>()?}))
++}
++
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn query(work:bool)->Value {
++        let reply=if work {json!({"score":10,"work":0,"relations":0})}
++            else {json!({"score":10,"work":0,"elapsed":0})};
++        json!({"average":0,"maximum":1,"start":4294967295u32,"inCheck":false,
++            "labels":["0-root"],"iterations":[[[reply.clone(),reply]]]})
++    }
++    #[test]
++    fn exact_all_query_suffixes_pairs_and_operation_specific_domains_are_eager() {
++        for work in [false,true] {
++            let good=query(work);assert!(Query::parse(&good,work).is_ok());
++            let mut bad=good.clone();bad["iterations"][0][0][1][if work {"relations"} else {"elapsed"}]=json!(-1);
++            let operation=if work {"search.workTimedRootSequence"} else {"search.timedRootSequence"};
++            assert!(dispatch(operation,&json!({"queries":[good.clone(),bad]})).is_err());
++            let mut bad=good.clone();bad["labels"]=json!(["same","same"]);
++            assert!(Query::parse(&bad,work).is_err());
++            bad=good.clone();bad["iterations"][0][0].as_array_mut().unwrap().pop();
++            assert!(Query::parse(&bad,work).is_err());
++            bad=good.clone();bad["iterations"][0][0][1]["ignored"]=json!(0);
++            assert!(Query::parse(&bad,work).is_err());
++            let maximum=if work {4} else {16};
++            assert!(dispatch(operation,&json!({"queries":vec![good.clone();maximum]})).is_ok());
++            assert!(dispatch(operation,&json!({"queries":vec![good;maximum+1]})).is_err());
++        }
++    }
++    #[test]
++    fn cold_projection_keeps_interrupted_null_capture_and_native_label_clock_invariance() {
++        let mut input=query(true);input["iterations"][0][0][0]=json!({"score":2000,"work":4096,"relations":50000});
++        let output=dispatch("search.workTimedRootSequence",&json!({"queries":[input.clone()]})).unwrap();
++        let result=&output["sequences"][0];
++        assert_eq!(result["depth"],json!(0));assert!(result["selected"].is_null());assert!(result["score"].is_null());
++        assert_eq!(result["passes"][0]["completed"],json!(false));assert!(result["passes"][0]["score"].is_null());
++        assert!(result["posts"].as_array().unwrap().is_empty());
++        let mut shifted=input.clone();shifted["start"]=json!(17);
++        assert_eq!(dispatch("search.workTimedRootSequence",&json!({"queries":[shifted]})).unwrap(),output);
++        input["labels"]=json!(["renamed"]);
++        let renamed=dispatch("search.workTimedRootSequence",&json!({"queries":[input]})).unwrap();
++        assert_eq!(renamed["sequences"][0]["passes"][0]["candidate"],json!("renamed"));
++        let elapsed=dispatch("search.timedRootSequence",&json!({"queries":[query(false)]})).unwrap();
++        assert!(!elapsed["sequences"][0]["stopped"].as_bool().unwrap());
++        assert_eq!(elapsed["sequences"][0]["depth"],json!(1));
++        assert!(elapsed["sequences"][0]["passes"][0].get("completed").is_none());
++        assert!(elapsed["sequences"][0].get("lastElapsed").is_none());
++    }
++}
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -19,6 +19,7 @@
+ mod candidate_order;
+ mod cached_entry;
+ mod controlled_root;
++mod controlled_timed;
+ mod clock_boundaries;
+ mod endgame_bounds;
+ mod endings;
+@@ -128,6 +129,7 @@
+         "search.rootWorkSchedule" | "search.unrestrictedRootSequence" | "search.restrictedRootSequence" => controlled_root::dispatch(operation,input),
+         "search.seededTimedSearch" | "session.goOutcome" => actual_timed::dispatch(operation, input),
+         "search.genericTimedSearch" => generic_timed::dispatch(input),
++        "search.timedRootSequence" | "search.workTimedRootSequence" => controlled_timed::dispatch(operation,input),
+         "time.adaptiveSequence" | "search.iterationTerminalStop" | "session.timeSetup" => clock_boundaries::dispatch(operation,input),
+         "evaluation.kingShelter" => king_shelter::run(input),
+         "evaluation.materialValues"

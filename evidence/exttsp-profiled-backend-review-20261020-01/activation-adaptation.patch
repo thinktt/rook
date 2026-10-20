@@ -1,0 +1,40 @@
+--- /home/legolas/rook2/evidence/exttsp-profiled-backend-preparation-20261020-01/capture.py
++++ /home/legolas/rook2/evidence/exttsp-profiled-backend-review-20261020-01/capture.py
+@@ -40,11 +40,11 @@
+  assert plan['expected_source_counts'] and plan['candidate_source_freeze']['sha256'] and plan['runtime_sha256']
+  assert plan['parent_build_acceptance'] and plan['parent_build_acceptance']['sha256']
+  acceptance=load(plan['parent_build_acceptance']['path']);assert sha(plan['parent_build_acceptance']['path'])==plan['parent_build_acceptance']['sha256']
+- assert acceptance['profile_inputs_valid'] is True and acceptance['zero_missing_or_stale_profile_warnings'] is True and acceptance['effective_exttsp_arguments_verified'] is True
++ assert acceptance['complete'] is True and acceptance['profile_inputs_unchanged'] is True and acceptance['zero_missing_stale_profile_warnings'] is True and acceptance['source51_exact57'] is True
+  assert all(sha(p)==h for p,h in plan['input_sha256'].items())
+  assert all(sha(p)==h for p,h in plan['runtime_sha256'].items())
+  terminal=plan['candidate_build_terminal'];assert sha(terminal['path'])==terminal['sha256']
+- t=load(terminal['path']);assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['terminal_chunk_id']
++ t=load(terminal['path']);assert t['exit_code']==0 and t['cargo_exit']==0 and t['no_rebuild'] is True and t['existing_image_finish_tool_call']=='1ecf95' and t['actual_build_terminal_tool_call']=='c42652'
+  return plan
+ 
+ def run(argv,stem,raw_cap=2097152):
+@@ -69,7 +69,7 @@
+ def discover():
+  plan=setup('discover');pins={str(P/n):sha(P/n) for n in ['capture.py','analyze.py','plan.json']};pins.update(plan['input_sha256']);pins.update(plan['runtime_sha256']);commands=[];receipts={}
+  freeze=load(plan['candidate_source_freeze']['path']);assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+- assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
++ assert freeze['changed_existing_files']==['tools/build.py'] and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
+  pins[plan['candidate_source_freeze']['path']]=plan['candidate_source_freeze']['sha256'];pins[plan['candidate_build_terminal']['path']]=plan['candidate_build_terminal']['sha256'];pins[plan['parent_build_acceptance']['path']]=plan['parent_build_acceptance']['sha256']
+  for side in ['control','candidate']:
+   build=Path(plan[side+'_build']);image=build/'rook2-exact';r=load(build/'receipt.json');receipts[side]=r
+@@ -94,12 +94,12 @@
+  assert len(a['tool_sha256_before'])==len(b['tool_sha256_before'])==23
+  changed_tools=sorted(n for n in a['tool_sha256_before'] if a['tool_sha256_before'][n]!=b['tool_sha256_before'].get(n));assert changed_tools==['tools/build.py']
+  assert set(a['tool_sha256_before'])==set(b['tool_sha256_before'])
+- expected_flags=a['rust_flags']+['-C','llvm-args=-enable-ext-tsp-block-placement=true','-C','llvm-args=-ext-tsp-apply-without-profile=false']
++ expected_flags=a['rust_flags'][:-1]+[a['rust_flags'][-1]+' -enable-ext-tsp-block-placement=true -ext-tsp-apply-without-profile=false']
+  assert b['rust_flags']==expected_flags
+  for key,value in a['build_effective_environment'].items():
+   if key not in ['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS']:assert b['build_effective_environment'][key]==value,key
+  changed=[];added=[]
+- assert b['source_sha256_before']|b['tool_sha256_before']==freeze['files_sha256']
++ assert b['source_sha256_before']|b['tool_sha256_before']==freeze['source_sha256']|freeze['tool_source_sha256']
+  counts=dict(native=len(b['source_sha256_before']),tools=len(b['tool_sha256_before']),total=len(b['source_sha256_before'])+len(b['tool_sha256_before']));assert counts==plan['expected_source_counts']
+  assert len(a['source_sha256_before'])==51 and len(a['tool_sha256_before'])==23
+  assert all(sha(p)==h for p,h in pins.items())

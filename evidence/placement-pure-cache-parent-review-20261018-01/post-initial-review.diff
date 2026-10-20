@@ -1,0 +1,132 @@
+--- initial-parent-read
++++ final-frozen-diff
+@@ -1,5 +1,5 @@
+ --- /home/legolas/rook2/src/evaluator.rs	2026-10-18 09:44:54.239506638 +0000
+-+++ /home/legolas/rook2-work/imp2-placement-pure-cache-20261018-x2gvi1c5/src/evaluator.rs	2026-10-18 19:09:42.681155995 +0000
+++++ /home/legolas/rook2-work/imp2-placement-pure-cache-20261018-x2gvi1c5/src/evaluator.rs	2026-10-18 19:10:51.474719728 +0000
+ @@ -258,6 +258,67 @@
+      pub finished: endgame::Finished,
+  }
+@@ -128,7 +128,7 @@
+      }
+      /// Ordinary full selection, including the actual cache identity-match flag.
+      pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+-@@ -348,9 +412,17 @@
++@@ -348,9 +412,16 @@
+          in_check: bool,
+          observer: F,
+      ) -> Evaluation {
+@@ -144,11 +144,10 @@
+ +        self.full_impl::<false, true, _, _>(node, influence, checked, |_| {}, |_| {})
+ +    }
+ +    fn full_impl<const FRESH: bool, const CACHE: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+-+
+          &mut self,
+          node: &mut Node,
+          influence: &Influence,
+-@@ -370,14 +442,27 @@
++@@ -370,14 +441,27 @@
+              self.pawns.select(position, influence)
+          };
+          let pawn = pawn_terms::compute(position, influence, &selected.structure);
+@@ -184,7 +183,7 @@
+          let structure = pawn_progress::structure_weighted(
+              phase,
+              pawn.structure,
+-@@ -533,7 +618,7 @@
++@@ -533,7 +617,7 @@
+          capture_exception: bool,
+          scratch: &mut Option<Influence>,
+      ) -> Selection {
+@@ -193,7 +192,7 @@
+              node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
+          )
+      }
+-@@ -555,7 +640,7 @@
++@@ -555,7 +639,7 @@
+          F: FnMut(FullDetails),
+          G: FnMut(FastDetails),
+      {
+@@ -202,7 +201,7 @@
+              node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
+          )
+      }
+-@@ -570,11 +655,28 @@
++@@ -570,11 +654,28 @@
+          scratch: &mut Option<Influence>,
+          observer: F,
+      ) -> Selection {
+@@ -232,7 +231,7 @@
+      /// Terminal Q leaves also observe one actual fast call without a refresh.
+      pub fn fast_stage_observed<F: FnOnce(EvaluationStage)>(
+          &mut self, node: &Node, checked: bool, observer: F,
+-@@ -586,11 +688,12 @@
++@@ -586,11 +687,12 @@
+          evaluation
+      }
+  
+@@ -247,7 +246,7 @@
+          observer(EvaluationStage { kind: StageKind::Full, before,
+              after: node.retained, evaluation });
+          evaluation
+-@@ -598,7 +701,7 @@
++@@ -598,7 +700,7 @@
+  
+      // Only stage call wrappers differ. The ordinary instantiation retains its
+      // original full/fast call sites; every selection condition stays shared.
+@@ -256,7 +255,7 @@
+          &mut self,
+          node: &mut Node,
+          lower: i32,
+-@@ -627,9 +730,11 @@
++@@ -627,9 +729,11 @@
+              let influence = self.ensure_influence(&node.position, scratch);
+              return Selection {
+                  evaluation: if STAGES {
+@@ -269,7 +268,7 @@
+                  } else {
+                      self.full(node, influence, false)
+                  },
+-@@ -649,9 +754,11 @@
++@@ -649,9 +753,11 @@
+          let evaluation = if refresh {
+              let influence = self.ensure_influence(&node.position, scratch);
+              if STAGES {
+@@ -282,7 +281,7 @@
+              } else {
+                  self.full(node, influence, false)
+              }
+-@@ -673,6 +780,245 @@
++@@ -673,6 +779,249 @@
+      use crate::movegen::{generate_legal, in_check, MoveList};
+      const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  
+@@ -375,6 +374,7 @@
+ +        let mut b = Node::root(position, &plain.root);
+ +        assert_eq!(cached.full_search(&mut a, &map, false), plain.full(&mut b, &map, false));
+ +        let payload = cached.pure.get(&position).unwrap();
+++        assert!(payload.relation_queries > 0, "constructed activity-R replay witness");
+ +        let mut changed = position;
+ +        for color in [Color::White, Color::Black] {
+ +            let base = color.index();
+@@ -385,7 +385,7 @@
+ +        }
+ +        changed.side = Color::Black;
+ +        changed.rights = 0;
+-+        changed.ep = 64;
+++        changed.ep = 20; // e3: a distinct raw rule state, with an empty target.
+ +        changed.halfmove = 83;
+ +        changed.validate().unwrap();
+ +        assert_eq!(changed.attack_view(), position.attack_view());
+@@ -500,7 +500,10 @@
+ +            for fen in [START, "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+ +                "7k/P7/8/8/8/8/7p/K7 w - - 0 1",
+ +                "7k/8/8/3pP3/8/8/8/K7 w - d6 0 1",
+-+                "7k/8/8/3rP3/8/8/8/K7 w - d6 0 1"] {
+++                "7k/8/8/3rP3/8/8/8/K7 w - d6 0 1",
+++                "7k/P7/8/8/8/8/7p/K7 b - - 0 1",
+++                "7k/8/8/8/3Pp3/8/8/K7 b - d3 0 1",
+++                "7k/8/8/8/3Rp3/8/8/K7 b - d3 0 1"] {
+ +                let position = Position::from_fen(fen).unwrap();
+ +                let mut cached = Evaluator::<D>::new(&position);
+ +                let mut plain = Evaluator::<D>::new(&position);

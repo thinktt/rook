@@ -1,0 +1,13 @@
+# Experiment66 own-PGO fixed70 — inert
+
+pilot.py, reconcile_pilot.py and check_pilot.mjs are byte-identical to the accepted63 method (also used by65); historical experiment43 docstrings remain literal. helper-adaptation.patch is empty; plan-adaptation.patch records all metadata changes from the preserved63 inert plan. That historical plan is method provenance, not candidate evidence or authority. No65 source, clock/status, acceptance, result or clearance is carried into the immutable union.
+
+The candidate a19238fd (7121216B0555) is built from source74graph6a6c4c9d and its own54 training/profile9b921e1f. The current62 control is01237e6d. The immutable union binds actual full-native195 (193library+2dev), source/tool maps, both build stages, original54 training/remerge records and54 raw profile hashes, source-matched use receipt, both profile byte identities, baseline originals/runtime/roottools and the current helpers. No generic timing benefit transfers; no broad use54/117/game qualification or adoption is claimed.
+
+Schedule is unchanged:01/02/04/05/29/35/08,70fresh native lifetimes,14excluded warmups and56measured, original alternating four measured per variant/case. Advance only summed-median ratio<=.995, at least5lower case medians and worst<=1.02; otherwise park, no retry/outlier deletion. Comparator accounting/caps/cleanup and live original replay plus independent original70/raw/receipt/PID/affinity/wait4 CPU reconciliation are unchanged. Direct child accounting remains conditional on the supported known-single-process premise; point observations are not continuous host exclusion or a hardware calibration.
+
+Parent/backend/all-jobs/quiet/launch flags are FALSE. Backend report/actual/acceptance, runtime review, fresh quiet/resources and execution clearance are NULL, not pinned. No expired clock or real clearance is inherited. The unchanged pilot checks parent_review_complete and all_owned_jobs_closed, so this plan is rejected as inert. Root alone supplies a new activation after review.
+
+Prospective output is evidence/caller-owned-child-pgo-pilot-20261020-01 (not created). After separate root authorization, use H CPUs0-5,8-13, designated TMPDIR/PYTHONDONTWRITEBYTECODE; engine14 with no owned sibling15 task. Run pilot.py --plan <root-activated-plan>, record its actual outer terminal, then reconcile_pilot.py --plan <same-plan>. No native/build/runtime imports, runner executions, versions, probes, binutils, models, Git, profiles or archives occurred here; Python AST-only checks read helper text without importing it. Normal speed is policy with no switch/readback claim.
+
+All preparation files are closed; future authority remains pending. No other source or evidence tree was changed.

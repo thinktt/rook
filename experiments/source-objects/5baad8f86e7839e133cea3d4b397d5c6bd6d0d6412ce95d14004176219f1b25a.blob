@@ -1,0 +1,51 @@
+"""Future functional-only metadata finalizer; no engine or compiler invocation."""
+from pathlib import Path
+import json,os,tarfile
+from guard import HERE,clearance,load,sha,write,terminal,check_sources,check_dependencies
+
+EVIDENCE_ROOT=Path('/home/legolas/rook2/evidence')
+def archive_member(path, root=EVIDENCE_ROOT):
+ relative=Path(path).resolve().relative_to(Path(root).resolve())
+ assert relative.parts and not relative.is_absolute() and all(part not in ['.','..'] for part in relative.parts)
+ return relative.as_posix()
+
+def package_metadata(path, entries, root=EVIDENCE_ROOT):
+ members={archive_member(p,root):Path(p) for p in entries}
+ assert len(members)==len(entries) and not path.exists()
+ expected={name:sha(p) for name,p in members.items()}
+ with tarfile.open(path,'w:gz') as t:
+  for name,p in members.items():
+   assert p.is_file() and not p.is_symlink()
+   t.add(p,arcname=name,recursive=False)
+ with tarfile.open(path,'r:gz') as t:
+  rows=t.getmembers();assert len(rows)==len(members) and all(m.isfile() for m in rows)
+  actual={m.name:__import__('hashlib').sha256(t.extractfile(m).read()).hexdigest() for m in rows}
+ assert actual==expected
+ return dict(path=str(path),sha256=sha(path),members=actual,reopened_members_exact=True)
+
+def main():
+ plan=clearance('finalize');paths={k:Path(v) for k,v in plan['output'].items()}
+ for key in ['freeze','diagnostic-build-check','diagnostic','reconciliation']:terminal(paths[key]/'tool-terminal.json')
+ check_sources(plan);check_dependencies(plan)
+ ind=load(paths['reconciliation']/'independent-verification.json')
+ assert ind['status']=='pass' and ind['source_stable'] and ind['all_raw_expected_and_actual_equal'] and ind['all_native_child_exits_confirmed']
+ assert tuple(ind[k] for k in ['diagnostic_units','diagnostic_cases','diagnostic_operations','whole_fixture_files'])==(209,7673,117,115)
+ assert ind['native_units_separately_parent_owned'] is True
+ assert sha(plan['native_reference']['image'])==ind['native_generic_reference_sha256']==plan['native_reference']['image_sha256']
+ assert sha(paths['diagnostic-build']/'rook2-diag-exact')==ind['diagnostic_artifact_sha256']
+ prefixes=[plan['home_source']+'/',str(paths['diagnostic-build']/'rook2-diag-exact'),str(paths['diagnostic-build-check']/'unit-bin')+'/'];live=[]
+ for p in Path('/proc').iterdir():
+  if not p.name.isdigit() or int(p.name) in [os.getpid(),os.getppid()]:continue
+  try:exe=os.readlink(p/'exe');argv=[v.decode(errors='replace') for v in (p/'cmdline').read_bytes().split(b'\0') if v]
+  except OSError:continue
+  if any(exe.startswith(x) for x in prefixes) or ('python' in Path(exe).name and len(argv)>1 and argv[1].endswith('.py') and argv[1].startswith(str(HERE)+'/')):live.append({'pid':int(p.name),'exe':exe,'argv':argv})
+ assert not live,live
+ result=dict(status='PRESSURE_VALUE_STATIC40_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native185_reused=False,fresh_ordinary_native_runs=0,native_units_separately_parent_owned=True,diagnostic_units=209,standalone_strict54_reused=False,interruption_wire_reused=False,operations=117,cases=7673,whole_files=115,native_generic_reference_sha256=ind['native_generic_reference_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic-build-check','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
+ write(HERE/'validation-summary.json',result)
+ entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','source-proof.json','archive-verification.json','validation-summary.json','guard.py','stage.py','record_case.py','reconcile.py','finalize.py']]
+ entries += [paths['reconciliation']/name for name in ['independent-verification.json','case-reconciliation.json','raw-case-sha256.json','tool-terminal.json']]
+ manifest={str(p):sha(p) for p in entries};write(HERE/'final-metadata-manifest.json',manifest)
+ packaged=package_metadata(HERE/'final-metadata.tar.gz',entries)
+ write(HERE/'final-metadata-archive.json',packaged)
+ print(json.dumps(result))
+if __name__=='__main__':main()

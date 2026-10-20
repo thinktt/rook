@@ -1,0 +1,104 @@
+--- accepted-fullbyte117/guard.py
++++ phase-sharing117/guard.py
+@@ -1,4 +1,4 @@
+-"""Full-byte-pair complete117 guard; no native launch from this module."""
++"""Full-evaluation phase-sharing complete117 guard; no native launch from this module."""
+ from pathlib import Path
+ import hashlib,json,os
+ HERE=Path(__file__).resolve().parent
+@@ -13,14 +13,15 @@
+  assert kind in ['freeze','execution']
+  c=load(HERE/'execution-clearance.json');plan=load(HERE/'validation-plan.json')
+  assert c['authorized'] is True,'HOLD: explicit parent execution clearance absent'
+- assert c['scope']=='full-byte-pair-relations-complete117-untimed-diagnostic'
++ assert c['scope']=='full-evaluation-phase-sharing-complete117-untimed-diagnostic'
++ assert plan['fully_resolved_frozen'] is True and plan['source_graph_sha256'] is not None
++ assert len(plan['source_sha256'])==112 and len(plan['native_sha256'])==46 and len(plan['tools_sha256'])==23 and len(plan['diagnostic_sha256'])==43
+  assert c['source_graph_sha256']==plan['source_graph_sha256'] and c['plan_sha256']==sha(HERE/'validation-plan.json')
+  assert c['conflicting_cpu_windows_closed'] is True and not c.get('timing_pgo_profiler_authorized',False)
+- a=c['parent_advancement_acceptance'];assert a and sha(a['path'])==a['sha256']
++ a=c['parent_source_acceptance'];assert a and sha(a['path'])==a['sha256']
+  decision=load(a['path']);assert decision['accepted_for_complete117_diagnostic'] is True
+  assert decision['source_graph_sha256']==plan['source_graph_sha256'] and decision['generic_image_sha256']==plan['native_reference']['image_sha256']
+- assert decision['pgo_pilot_independent_reconciliation_sha256']==plan['pgo_advancement_reference']['independent_sha256']
+- pilot=load(plan['pgo_advancement_reference']['independent']);assert pilot['complete'] and pilot['advance_rule_satisfied']
++ assert sha(plan['native_reference']['independent'])==plan['native_reference']['independent_sha256']
+  assert sorted(os.sched_getaffinity(0))==plan['affinity']==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ.get('TMPDIR')==plan['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  check_dependencies(plan)
+@@ -46,9 +47,9 @@
+  assert receipt['mode']=='generic' and receipt['rust_flags']==['-C','target-cpu=x86-64'] and receipt['pgo']['mode']=='none'
+  assert sha(ref['image'])==ref['image_sha256']==receipt['binary_output']['sha256']
+  result=load(ref['native_result']);assert result['complete'] and result['failure'] is None and result['source_and_tools_unchanged']
+- assert result['total_tests']==178 and result['tests']['lib']['passed']==176 and result['tests']['dev']['passed']==2
++ assert result['total_tests']==plan['expected']['native_tests_reused'] and result['tests']['lib']['passed']==plan['expected']['native_lib_tests_reused'] and result['tests']['dev']['passed']==plan['expected']['native_dev_tests_reused']
+  assert all(row['actual_child_return_observed'] and row['exit_code']==0 for row in result['commands'])
+  for name,row in result['tests'].items():assert sha(ref['frozen_unit_images'][name])==row['sha256']
+- independent=load(ref['independent']);assert independent['complete'] and independent['native_tests']==178 and independent['strict54_original_checkReplay'] and independent['source46_tools23_archive69_equal']
++ independent=load(ref['independent']);assert independent['complete'] and independent['native_tests']==plan['expected']['native_tests_reused'] and independent['strict54_original_checkReplay'] and independent['source46_tools23_archive69_equal']
+  assert independent['engine_sha256']==ref['image_sha256'] and len(independent['wire8_searches24_raw_protocol'])==8
+  for path in ref['actual_terminals']:terminal(path)
+--- accepted-fullbyte117/stage.py
++++ phase-sharing117/stage.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Future full-byte-pair complete117 freeze/DIAG; blocked until parent clearance."""
++"""Future full-evaluation phase-sharing complete117 freeze/DIAG; blocked until parent clearance."""
+ import argparse,json,os,re,shutil,subprocess,sys,tarfile
+ from pathlib import Path
+ sys.dont_write_bytecode=True
+@@ -47,7 +47,7 @@
+  check_sources(plan);check_dependencies(plan)
+  if args.stage=='freeze':assert not source.exists() and not source.is_symlink(),'fresh absent HOME execution copy required'
+  else:terminal(paths['freeze']/'tool-terminal.json');assert source.exists()
+- out.mkdir();stages=[];result=dict(complete=False,stage=args.stage,failure=None,stages=stages,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR'],native178_strict54_wire8_reused=True)
++ out.mkdir();stages=[];result=dict(complete=False,stage=args.stage,failure=None,stages=stages,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR'],separately_qualified_native_strict54_wire8_reference=True)
+  env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',RUSTC='/usr/bin/rustc',RUSTFLAGS='-C target-cpu=x86-64',CARGO_ENCODED_RUSTFLAGS='-C\x1ftarget-cpu=x86-64',RUSTC_WRAPPER='',RUSTC_WORKSPACE_WRAPPER='',CARGO_NET_OFFLINE='true',CARGO_BUILD_JOBS='4');env.pop('LLVM_PROFILE_FILE',None)
+  try:
+   if args.stage=='freeze':
+@@ -60,7 +60,7 @@
+    result['source_archive_sha256']=sha(out/'source-frozen.tar.gz')
+   else:
+    # No generic ordinary build/native tests/strict replay branch exists here.
+-   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/full-byte-pair-relations-complete117-diag-unit',out,env,stages)
++   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/full-evaluation-phase-sharing-diag-unit',out,env,stages)
+    assert not paths['diagnostic-build'].exists(),'build.py output must be absent'
+    result['artifact_sha256']=build(source,source/'diagnostic','rook2-diag',paths['diagnostic-build'],out,env,stages,{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})
+    br=load(paths['diagnostic-build']/'receipt.json');nr=load(plan['native_reference']['build_receipt'])
+--- accepted-fullbyte117/reconcile.py
++++ phase-sharing117/reconcile.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Future independent complete117 original raw/expected/exit reconciliation."""
++"""Future independent phase-sharing complete117 original raw/expected/exit reconciliation."""
+ from pathlib import Path
+ import collections,json,re,tarfile,sys
+ sys.dont_write_bytecode=True
+@@ -29,8 +29,8 @@
+  for key in ['freeze','diagnostic']:terminal(paths[key]/'tool-terminal.json')
+  check_sources(plan);check_dependencies(plan)
+  assert archive(paths['freeze']/'source-frozen.tar.gz')==plan['source_sha256']
+- assert archive(HERE/'source-112.tar.gz')==plan['source_sha256']
+- assert archive(HERE/'official-inputs-115.tar.gz')=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
++ assert archive(plan['fixture_archive']['path'])=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
++ assert sha(plan['fixture_archive']['path'])==plan['fixture_archive']['sha256']
+  br=load(paths['diagnostic-build']/'receipt.json');expected={k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()}
+  assert br['source_sha256_before']==br['source_sha256_after']==expected and br['source_identity_unchanged'] and br['crate']==str(source/'diagnostic')
+  nr=load(plan['native_reference']['build_receipt'])
+@@ -42,7 +42,7 @@
+  text=(diag/'rook2-diag-tests.stdout').read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==209 and 'test result: ok. 209 passed; 0 failed;' in text
+  assert vr['units']['rook2-diag']['passed']==209 and sha(diag/'unit-bin/rook2-diag/unit-exact')==vr['units']['rook2-diag']['binary_sha256']
+  n=Path(plan['native_reference']['native_result']).parent
+- for stem,count in [('lib',176),('dev',2)]:
++ for stem,count in [('lib',plan['expected']['native_lib_tests_reused']),('dev',plan['expected']['native_dev_tests_reused'])]:
+   t=(n/(stem+'-tests.stdout')).read_text();assert len(re.findall(r'^test .* \.\.\. ok$',t,re.M))==count and f'test result: ok. {count} passed; 0 failed;' in t
+  # Strict54 original checker stdout contains the exact retained native streams.
+  strict=paths['strict-check'];report=load(strict/'strict54.stdout');work=load(SPEC/'profiling/workloads.json');oracle=load(SPEC/'profiling/replay-oracle.json');raw=out/'strict-raw'
+@@ -90,6 +90,6 @@
+   rows.append(dict(ordinal=ordinal,fixture=name,case_index=index,id=c['id'],operation=c['request']['operation'],raw_output_sha256=sha(stem.with_suffix('.stdout')),actual_child_exit_code=0))
+  check_sources(plan);check_dependencies(plan)
+  write(out/'raw-case-sha256.json',hashes);write(out/'case-reconciliation.json',dict(cases=7673,whole_files=115,partial_files=0,duplicate_ids=0,all_original_expected_raw_and_official_actual_equal=True,rows=rows))
+- result=dict(status='pass',native_reused=True,fresh_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict_replays_reused=54,interruption_fixtures_reused=8,interruption_searches_reused=24,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_artifact_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_graph_sha256=plan['source_graph_sha256'],source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Fresh complete117 DIAG, exact reused178native/54strict/eightwire; no promotion/full-game/CPU qualification claim')
++ result=dict(status='pass',native_reused=True,fresh_native_runs=0,native_units=plan['expected']['native_tests_reused'],native_lib_units=plan['expected']['native_lib_tests_reused'],native_dev_units=plan['expected']['native_dev_tests_reused'],diagnostic_units=209,strict_replays_reused=54,interruption_fixtures_reused=8,interruption_searches_reused=24,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_artifact_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_graph_sha256=plan['source_graph_sha256'],source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Fresh complete117 DIAG, exact separately-qualified native/54strict/eightwire reference; no promotion/full-game/CPU qualification claim')
+  write(out/'independent-verification.json',result);print(json.dumps({k:v for k,v in result.items() if k!='source_sha256'}))
+ if __name__=='__main__':main()

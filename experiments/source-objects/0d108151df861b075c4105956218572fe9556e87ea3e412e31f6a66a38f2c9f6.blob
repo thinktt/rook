@@ -1,0 +1,581 @@
+//! Pure non-check quiescence screens and ordinary-capture estimate consumption.
+//! These helpers neither apply moves nor perform the final own-king safety test.
+use crate::evaluation::RootContext;
+use crate::influence::{profile_sum, Influence};
+use crate::position::Position;
+use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CaptureContext {
+    pub ply: i32,
+    pub target: i32,
+    /// The enclosing root iteration, preserved through tactical recursion.
+    pub iteration_depth: i32,
+    pub best: i32,
+    pub alpha: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CaptureDecision {
+    pub estimate: i32,
+    /// Optimistic update that must survive a later check/king-safety rejection.
+    pub best: i32,
+    pub force_search: bool,
+    pub defense_queried: bool,
+}
+
+pub fn capture_exception(parent: &Position, movement: &Move) -> bool {
+    if matches!(movement.kind(), MoveKind::Promotion(_)) {
+        return true;
+    }
+    let victim = parent.board[movement.to().0 as usize];
+    if victim.is_empty() {
+        return false;
+    }
+    let counts = parent.counts[victim.color().index()];
+    if counts[PieceKind::Pawn.index()] >= 3 {
+        return false;
+    }
+    if victim.kind() == PieceKind::Pawn {
+        return true;
+    }
+    let knight = counts[PieceKind::Knight.index()] as u16;
+    let bishop = counts[PieceKind::Bishop.index()] as u16;
+    let rook = counts[PieceKind::Rook.index()] as u16;
+    let queen = counts[PieceKind::Queen.index()] as u16;
+    (knight + bishop + rook + queen + (knight + rook) / 16) % 16 <= 2
+}
+
+/// Relative to the capturing side; excludes the current static standing score.
+/// The caller admits ordinary, non-promoting, non-EP captures before this helper.
+pub fn allowance(
+    root: &RootContext,
+    parent: &Position,
+    movement: &Move,
+    retained_positional: i32,
+    pawn_progress: i32,
+) -> i32 {
+    debug_assert_eq!(movement.kind(), MoveKind::Ordinary);
+    let victim = parent.board[movement.to().0 as usize];
+    debug_assert!(!victim.is_empty() && victim.kind() != PieceKind::King);
+    let before = root.material(parent);
+    // Material reads counts only. This is a hypothetical count state, not a child
+    // transition: chronology, mailbox and fingerprints must not be rewritten.
+    let mut after = *parent;
+    after.counts[victim.color().index()][victim.kind().index()] -= 1;
+    let after = root.material(&after);
+    finish_allowance(parent, victim, movement, retained_positional, pawn_progress, before, after)
+}
+
+/// One immutable parent/root within a single Q candidate loop.
+/// Constructed lazily at the first admitted ordinary-capture allowance request.
+pub(crate) struct AllowanceMaterial {
+    before: i16,
+    after: [i16; 10],
+    seen: u16,
+}
+
+impl AllowanceMaterial {
+    pub(crate) fn new(root: &RootContext, parent: &Position) -> Self {
+        Self {
+            // RootContext::material always clamps to -7000..=7000.
+            before: root.material(parent) as i16,
+            after: [0; 10],
+            seen: 0,
+        }
+    }
+
+    pub(crate) fn allowance(
+        &mut self,
+        root: &RootContext,
+        parent: &Position,
+        movement: &Move,
+        retained_positional: i32,
+        pawn_progress: i32,
+    ) -> i32 {
+        debug_assert_eq!(movement.kind(), MoveKind::Ordinary);
+        let victim = parent.board[movement.to().0 as usize];
+        debug_assert!(!victim.is_empty() && victim.kind() != PieceKind::King);
+        let tag = victim.color().index() * 5 + victim.kind().index();
+        let bit = 1u16 << tag;
+        if self.seen & bit == 0 {
+            // Only counts are hypothetical, exactly as in the uncached helper.
+            let mut after = *parent;
+            after.counts[victim.color().index()][victim.kind().index()] -= 1;
+            self.after[tag] = root.material(&after) as i16;
+            self.seen |= bit;
+        }
+        finish_allowance(
+            parent,
+            victim,
+            movement,
+            retained_positional,
+            pawn_progress,
+            self.before as i32,
+            self.after[tag] as i32,
+        )
+    }
+}
+
+/// Shared native finishing rule; material endpoints are complete adjusted scores.
+fn finish_allowance(
+    parent: &Position,
+    victim: Piece,
+    movement: &Move,
+    retained_positional: i32,
+    pawn_progress: i32,
+    before: i32,
+    after: i32,
+) -> i32 {
+    let sign = if victim.color() == Color::White {
+        1
+    } else {
+        -1
+    };
+    let gain = -sign * (after - before);
+    let retained = if victim.kind() == PieceKind::Pawn && sign * pawn_progress > 0 {
+        pawn_progress
+    } else {
+        retained_positional
+    };
+    gain + 50
+        + (sign * retained).max(0)
+        + if capture_exception(parent, movement) {
+            800
+        } else {
+            0
+        }
+}
+
+/// Policy value, distinct from the ordering-only king1500/low-attacker bonus.
+pub fn moving_value(root: &RootContext, parent: &Position, movement: &Move) -> i32 {
+    let piece = parent.board[movement.from().0 as usize];
+    debug_assert!(!piece.is_empty());
+    if piece.kind() == PieceKind::King {
+        50
+    } else {
+        root.values[piece.color().index()][piece.kind().index()]
+    }
+}
+
+/// Both influence profiles remain unchanged. This is occupant-color support,
+/// not an adjusted relation query or a legal-attack test; it charges no work.
+pub fn destination_support(parent: &Position, influence: &Influence, destination: Square) -> bool {
+    let victim = parent.board[destination.0 as usize];
+    if victim.is_empty() {
+        return false;
+    }
+    profile_sum(influence.code(victim.color(), destination)) > 0
+        && profile_sum(influence.code(victim.color().opponent(), destination)) <= 1
+}
+
+/// A lazy native callback makes support consultation explicit without allocation.
+/// The returned optimistic best is applied before later eligibility/king safety.
+pub fn capture_policy<F: FnOnce() -> bool>(
+    initial_estimate: i32,
+    moving_piece_value: i32,
+    context: CaptureContext,
+    defended: F,
+) -> CaptureDecision {
+    debug_assert!(context.iteration_depth >= 1 && moving_piece_value >= 0);
+    let threshold = context.best.max(context.alpha);
+    let boundary = context.target + (context.iteration_depth - 1) / 2;
+    let defense_queried = context.ply >= boundary
+        && initial_estimate > threshold
+        && initial_estimate - moving_piece_value <= threshold;
+    let estimate = if defense_queried && defended() {
+        initial_estimate - moving_piece_value
+    } else {
+        initial_estimate
+    };
+    let force_search = estimate > threshold;
+    CaptureDecision {
+        estimate,
+        best: if force_search {
+            context.best
+        } else {
+            context.best.max(estimate)
+        },
+        force_search,
+        defense_queried,
+    }
+}
+
+pub fn is_recapture(movement: &Move, previous: Option<Move>) -> bool {
+    previous.is_some_and(|earlier| earlier != Move::NONE && earlier.to() == movement.to())
+}
+
+/// Non-check step1, before special admission or ordinary capture estimation.
+/// Checking is supplied by the caller's produced-child check classification.
+pub fn initial_eligibility(
+    parent: &Position,
+    movement: &Move,
+    previous: Option<Move>,
+    checking: bool,
+    ply: i32,
+    target: i32,
+    iteration_depth: i32,
+) -> bool {
+    debug_assert!(iteration_depth >= 1);
+    let material_change = matches!(
+        movement.kind(),
+        MoveKind::Promotion(_) | MoveKind::EnPassant
+    ) || !parent.board[movement.to().0 as usize].is_empty();
+    (material_change || checking)
+        && (ply <= target + iteration_depth || is_recapture(movement, previous))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    fn sq(text: &str) -> Square {
+        Square::parse(text).unwrap()
+    }
+    fn ordinary(from: &str, to: &str) -> Move {
+        Move::new(sq(from), sq(to), MoveKind::Ordinary)
+    }
+    fn pos(fen: &str) -> Position {
+        Position::from_fen(fen).unwrap()
+    }
+
+    #[test]
+    fn capture_exception_uses_promotion_destination_color_and_pre_capture_population() {
+        let mut parent = pos("7k/8/8/8/3r4/8/P7/K7 w - - 0 1");
+        let capture = ordinary("a2", "d4");
+        assert!(capture_exception(&parent, &capture));
+        parent.counts[1][0] = 3;
+        assert!(!capture_exception(&parent, &capture));
+        parent.counts[1] = [2, 15, 0, 1, 0, 1];
+        assert!(capture_exception(&parent, &capture));
+        parent.counts[1][3] = 3;
+        assert!(!capture_exception(&parent, &capture));
+        parent.counts[1] = [2, 15, 3, 0, 0, 1];
+        assert!(capture_exception(&parent, &capture));
+        parent.counts[0] = [8, 10, 10, 10, 9, 1];
+        assert!(capture_exception(&parent, &capture));
+        let promotion = Move::new(sq("a2"), sq("a3"), MoveKind::Promotion(PieceKind::Knight));
+        assert!(capture_exception(&parent, &promotion)); // Predicate does not validate geometry.
+        let ep = pos("7k/8/8/3pP3/8/8/8/K7 w - d6 0 1");
+        assert!(!capture_exception(
+            &ep,
+            &Move::new(sq("e5"), sq("d6"), MoveKind::EnPassant)
+        ));
+        let pawn = pos("7k/8/8/8/3p4/8/Q7/K7 w - - 0 1");
+        assert!(capture_exception(&pawn, &ordinary("a2", "d4")));
+    }
+
+    fn compare_cached_allowances(
+        parent: &Position,
+        root: &RootContext,
+        source: &str,
+        destinations: &[&str],
+    ) {
+        let saved = *parent;
+        let mut material = AllowanceMaterial::new(root, parent);
+        // Repeat in reverse order with different retained terms: only material
+        // endpoints, not whole allowances, may be reused by victim tuple.
+        for reverse in [false, true] {
+            for index in 0..destinations.len() {
+                let index = if reverse {
+                    destinations.len() - 1 - index
+                } else {
+                    index
+                };
+                let capture = ordinary(source, destinations[index]);
+                for (positional, progress) in [(0, 0), (19, 31), (-19, -31), (127, -317)] {
+                    assert_eq!(
+                        material.allowance(root, parent, &capture, positional, progress),
+                        allowance(root, parent, &capture, positional, progress),
+                        "destination {} retained {positional}/{progress}",
+                        destinations[index],
+                    );
+                }
+            }
+        }
+        assert_eq!(*parent, saved);
+    }
+
+    #[test]
+    fn q_material_reuse_matches_uncached_across_victim_types_roots_and_rounding() {
+        for (fen, destinations) in [
+            (
+                "7k/8/8/2npb3/3Q1r2/8/3q4/K7 w - - 0 1",
+                ["c5", "d5", "e5", "f4", "d2"],
+            ),
+            (
+                "7k/8/8/2NPB3/3q1R2/8/3Q4/K7 b - - 0 1",
+                ["c5", "d5", "e5", "f4", "d2"],
+            ),
+        ] {
+            let parent = pos(fen);
+            for root_side in [Color::White, Color::Black] {
+                for average_depth in [-99, -1, 0, 1, 99] {
+                    let mut root_position = pos("7k/8/8/8/8/8/P7/K7 w - - 0 1");
+                    root_position.side = root_side;
+                    let root = RootContext::new(
+                        &root_position,
+                        [[73, 211, 37, 155, 1000], [183, 19, 317, 67, 11]],
+                        average_depth,
+                    );
+                    compare_cached_allowances(&parent, &root, "d4", &destinations);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn q_material_reuse_shares_same_type_destinations_without_caching_retained_terms() {
+        let parent = pos("7k/8/8/2n1n3/2rQ1r2/8/8/K7 w - - 0 1");
+        for root_side in [Color::White, Color::Black] {
+            for queen_value in [49, 50, 51, 99, 100, 101, 151, 152, 153] {
+                let mut root = RootContext::neutral(&parent);
+                root.side = root_side;
+                root.values = [[0; 5]; 2];
+                root.values[0][PieceKind::Queen.index()] = queen_value;
+                root.values[1][PieceKind::Knight.index()] = 0;
+                root.values[1][PieceKind::Rook.index()] = 51;
+                for average_depth in [-1, 0, 1] {
+                    root.average_depth = average_depth;
+                    compare_cached_allowances(&parent, &root, "d4", &["c4", "f4", "c5", "e5"]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn q_material_reuse_keeps_clipped_endpoints_and_zero_value_nonpawn_presence() {
+        for fen in [
+            "7k/8/8/8/2n5/QQQQQQQ1/QQQQQQQQ/K7 w - - 0 1",
+            "7k/8/8/8/2N5/qqqqqqq1/qqqqqqqq/K7 b - - 0 1",
+        ] {
+            let parent = pos(fen);
+            let root = RootContext::neutral(&parent);
+            assert_eq!(root.material(&parent).abs(), 7000);
+            compare_cached_allowances(&parent, &root, "c3", &["c4"]);
+        }
+        let parent = pos("7k/8/8/8/3n4/2P5/8/K7 w - - 0 1");
+        let mut root = RootContext::neutral(&parent);
+        root.values = [[0; 5]; 2];
+        root.values[0][PieceKind::Pawn.index()] = 200;
+        let before = root.material(&parent);
+        let mut removed = parent;
+        removed.counts[1][PieceKind::Knight.index()] -= 1;
+        // Removing a zero-valued last nonpawn still changes the advantage gate.
+        assert_ne!(before, root.material(&removed));
+        compare_cached_allowances(&parent, &root, "c3", &["d4"]);
+    }
+
+    #[test]
+    fn allowance_uses_complete_fixed_root_material_delta_and_no_transition() {
+        let parent = pos("7k/8/8/8/2n5/8/Q7/K7 w - - 0 1");
+        let root = RootContext::neutral(&parent);
+        let capture = ordinary("a2", "c4");
+        let original = parent;
+        let before = root.material(&parent);
+        let mut removed = parent;
+        removed.counts[1][1] -= 1;
+        let gain = root.material(&removed) - before;
+        assert_ne!(gain, root.values[1][1]); // Advantage adjustment changes the material delta.
+        assert_eq!(allowance(&root, &parent, &capture, 0, 0), gain + 850);
+        assert_eq!(parent, original);
+        assert_eq!(root.counts, original.counts);
+        let clipped = pos("7k/8/8/8/2n5/QQQQQQQ1/QQQQQQQQ/K7 w - - 0 1");
+        let root = RootContext::neutral(&clipped);
+        assert_eq!(root.material(&clipped), 7000);
+        assert_eq!(allowance(&root, &clipped, &capture, 0, 0), 850); // Both material endpoints clip identically.
+    }
+
+    #[test]
+    fn retained_selection_is_strict_signed_and_only_pawns_choose_progress() {
+        for (fen, capture, sign) in [
+            ("7k/8/8/8/2p5/8/Q7/K7 w - - 0 1", ordinary("a2", "c4"), -1),
+            ("7k/q7/8/2P5/8/8/8/K7 b - - 0 1", ordinary("a7", "c5"), 1),
+        ] {
+            let parent = pos(fen);
+            let root = RootContext::neutral(&parent);
+            let baseline = allowance(&root, &parent, &capture, 0, 0);
+            assert_eq!(
+                allowance(&root, &parent, &capture, sign * 19, sign * 31),
+                baseline + 31
+            );
+            assert_eq!(
+                allowance(&root, &parent, &capture, sign * 19, 0),
+                baseline + 19
+            );
+            assert_eq!(
+                allowance(&root, &parent, &capture, sign * 19, -sign * 31),
+                baseline + 19
+            );
+            assert_eq!(allowance(&root, &parent, &capture, -sign * 19, 0), baseline);
+        }
+        let parent = pos("7k/8/8/8/2n5/8/Q7/K7 w - - 0 1");
+        let root = RootContext::neutral(&parent);
+        let capture = ordinary("a2", "c4");
+        let baseline = allowance(&root, &parent, &capture, 0, 0);
+        assert_eq!(
+            allowance(&root, &parent, &capture, -17, -500),
+            baseline + 17
+        );
+    }
+
+    #[test]
+    fn policy_queries_only_selected_support_and_keeps_optimistic_best() {
+        let context = CaptureContext {
+            ply: 3,
+            target: 1,
+            iteration_depth: 5,
+            best: 90,
+            alpha: 100,
+        };
+        let queried = Cell::new(0);
+        let result = capture_policy(111, 20, context, || {
+            queried.set(queried.get() + 1);
+            true
+        });
+        assert_eq!(queried.get(), 1);
+        assert_eq!(
+            result,
+            CaptureDecision {
+                estimate: 91,
+                best: 91,
+                force_search: false,
+                defense_queried: true
+            }
+        );
+        let no_support = capture_policy(111, 20, context, || false);
+        assert_eq!(
+            no_support,
+            CaptureDecision {
+                estimate: 111,
+                best: 90,
+                force_search: true,
+                defense_queried: true
+            }
+        );
+        let early = CaptureContext { ply: 2, ..context };
+        assert!(!capture_policy(111, 20, early, || panic!("not selected")).defense_queried);
+        assert!(
+            !capture_policy(100, 20, context, || panic!("estimate equals threshold")).force_search
+        );
+        assert_eq!(capture_policy(120, 20, context, || true).estimate, 100);
+        assert!(!capture_policy(120, 20, context, || true).force_search);
+        assert!(
+            !capture_policy(121, 20, context, || panic!(
+                "deducted estimate remains above threshold"
+            ))
+            .defense_queried
+        );
+        assert!(
+            !capture_policy(111, 0, context, || panic!(
+                "zero attacker cannot straddle threshold"
+            ))
+            .defense_queried
+        );
+        let below_alpha = CaptureContext {
+            best: -200,
+            alpha: -100,
+            ..context
+        };
+        let optimistic = capture_policy(-150, 200, below_alpha, || panic!("below threshold"));
+        assert_eq!((optimistic.best, optimistic.force_search), (-150, false));
+        // The caller must retain this best update even if it later rejects the move.
+    }
+
+    #[test]
+    fn policy_depth_pairs_and_king_value_have_exact_boundaries() {
+        for iteration in 1..=12 {
+            let boundary = 7 + (iteration - 1) / 2;
+            let context = CaptureContext {
+                ply: boundary,
+                target: 7,
+                iteration_depth: iteration,
+                best: 0,
+                alpha: 0,
+            };
+            assert!(capture_policy(1, 1, context, || true).defense_queried);
+            assert!(
+                !capture_policy(
+                    1,
+                    1,
+                    CaptureContext {
+                        ply: boundary - 1,
+                        ..context
+                    },
+                    || panic!("before depth boundary")
+                )
+                .defense_queried
+            );
+        }
+        let king = pos("7k/8/8/8/8/8/1r6/K7 w - - 0 1");
+        let root = RootContext::neutral(&king);
+        assert_eq!(moving_value(&root, &king, &ordinary("a1", "b2")), 50);
+        let pawn = pos("7k/8/8/8/3r4/2P5/8/K7 w - - 0 1");
+        let mut root = RootContext::neutral(&pawn);
+        root.values[0][0] = 99;
+        assert_eq!(moving_value(&root, &pawn, &ordinary("c3", "d4")), 99); // No ordering-only +300.
+    }
+
+    #[test]
+    fn support_counts_both_normalized_profiles_without_moving_piece_exclusion() {
+        let parent = pos("7k/8/8/8/3n4/8/8/K7 w - - 0 1");
+        let target = sq("d4");
+        let mut map = Influence {
+            profiles: [[0; 64]; 2],
+        };
+        let sum = |code: u8| -> u8 {
+            [
+                code & 1,
+                (code / 2) % 2,
+                (code / 4) % 4,
+                (code / 16) % 4,
+                (code / 64) % 4,
+            ]
+            .iter()
+            .sum()
+        };
+        for white in 0..=255u16 {
+            for black in 0..=255u16 {
+                map.profiles[0][target.0 as usize] = white as u8;
+                map.profiles[1][target.0 as usize] = black as u8;
+                assert_eq!(
+                    destination_support(&parent, &map, target),
+                    sum(black as u8) > 0 && sum(white as u8) <= 1
+                );
+            }
+        }
+        map.profiles[0][target.0 as usize] = 8;
+        map.profiles[1][target.0 as usize] = 1;
+        assert!(!destination_support(&parent, &map, target)); // Two opposing normalized contributions, including the mover.
+        map.profiles[0][target.0 as usize] = 4;
+        assert!(destination_support(&parent, &map, target));
+        assert!(!destination_support(&parent, &map, sq("e4"))); // Empty destination is always false.
+        map.profiles[1][sq("h8").0 as usize] = 1;
+        assert!(destination_support(&parent, &map, sq("h8"))); // Predicate also classifies king occupants.
+    }
+
+    #[test]
+    fn late_nonrecapture_screen_precedes_special_force_and_recapture_ignores_kind() {
+        let parent = pos("1r5k/P7/8/8/8/8/8/K7 w - - 0 1");
+        let promotion = Move::new(sq("a7"), sq("b8"), MoveKind::Promotion(PieceKind::Queen));
+        assert!(initial_eligibility(
+            &parent, &promotion, None, false, 4, 2, 2
+        ));
+        assert!(!initial_eligibility(
+            &parent, &promotion, None, true, 5, 2, 2
+        ));
+        let previous = Some(Move::new(sq("c6"), sq("b8"), MoveKind::Ordinary));
+        assert!(initial_eligibility(
+            &parent, &promotion, previous, false, 5, 2, 2
+        ));
+        let quiet = ordinary("a1", "b1");
+        assert!(!initial_eligibility(&parent, &quiet, None, false, 1, 2, 2));
+        assert!(initial_eligibility(&parent, &quiet, None, true, 1, 2, 2));
+        assert!(!is_recapture(&ordinary("b1", "a1"), Some(Move::NONE)));
+        let ep = pos("7k/8/8/3pP3/8/8/8/K7 w - d6 0 1");
+        let movement = Move::new(sq("e5"), sq("d6"), MoveKind::EnPassant);
+        assert!(initial_eligibility(&ep, &movement, None, false, 2, 1, 1));
+        assert!(!initial_eligibility(&ep, &movement, None, false, 3, 1, 1));
+    }
+}

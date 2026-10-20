@@ -1,0 +1,214 @@
+--- a/diagnostic/src/persistent_sessions.rs
++++ b/diagnostic/src/persistent_sessions.rs
+@@ -14,7 +14,7 @@
+ #[derive(Clone)]
+ enum Setup { New, Force, Easy, Post(bool), Undo, Level, Move(String), Setboard(String), Parameters(Vec<String>) }
+ impl Setup {
+-    fn parse(line:&str,mode:Mode,md_cap:i32)->Result<Self> {
++    fn parse(line:&str,mode:Mode)->Result<Self> {
+         if line.len()>2000 || !line.is_ascii() || line.bytes().any(|b|b==0||b==b'\r'||b==b'\n'
+             ||(b.is_ascii_whitespace()&&b!=b' '&&b!=b'\t')) {
+             return Err("setup must be a single ordinary ASCII record of at most2000 characters".into());
+@@ -50,7 +50,7 @@
+                     if *arg=="default" { tokens.push("default".to_owned());continue; }
+                     let (name,value)=arg.split_once('=').ok_or("setup parameters require assignments or default")?;
+                     let v=parameters::integer(value).map_err(|e|format!("setup integer: {e:?}"))?;
+-                    assignment_domain(name,v,mode,md_cap)?;
++                    assignment_token(name,v,mode)?;
+                     tokens.push(format!("{name}={v}"));
+                 }
+                 Ok(Self::Parameters(tokens))
+@@ -63,17 +63,13 @@
+         match self {
+             Self::Setboard(fen)=>state.setboard(fen).map_err(|e|format!("native setboard: {e:?}")),
+             Self::Parameters(tokens)=>{
+-                // The diagnostic record limit is2000, whereas native wire is1022/40.
+-                // Only ordered parameter/default mutations occur between these chunks;
+-                // discarded echoes contain no search/clock observation or control effect.
+-                let mut chunk=String::from("cm_parm");let mut count=0;
+-                for token in tokens {
+-                    if count==39||chunk.len()+1+token.len()>1022 {
+-                        idle(state,&chunk)?;chunk=String::from("cm_parm");count=0;
+-                    }
+-                    chunk.push(' ');chunk.push_str(token);count+=1;
+-                }
+-                idle(state,&chunk)
++                // This is exactly Session.idle's cm_parm state owner, without
++                // its separate ordinary-wire record/token ceilings. The eager
++                // diagnostic schema admits up to2000 characters, including one
++                // unknown assignment token wider than an entire wire record.
++                // No clock/search event exists between ordered parameter tokens.
++                state.parameters.command(&tokens.iter().map(String::as_str).collect::<Vec<_>>())
++                    .map(|_echo|()).map_err(|e|format!("native parameter command: {e:?}"))
+             },
+             Self::New=>idle(state,"new"),Self::Force=>idle(state,"force"),Self::Easy=>idle(state,"easy"),
+             Self::Post(true)=>idle(state,"post"),Self::Post(false)=>idle(state,"nopost"),
+@@ -82,18 +78,36 @@
+         }
+     }
+ }
+-fn assignment_domain(name:&str,v:i32,mode:Mode,md_cap:i32)->Result<()> {
+-    let index=NAMES.iter().position(|n|*n==name);
+-    let valid=match index {
+-        Some(11)=>true, // Inert stored opk retains its entire signed32 domain.
+-        Some(0..=21)=>(0..=1000).contains(&v),
+-        Some(22)=>(-100..=100).contains(&v),Some(23)=>(0..=100).contains(&v),
+-        Some(24)=>(0..=if mode==Mode::Clock{1000}else{0}).contains(&v),
+-        Some(25)=>true,Some(26)=>(-10000..=10000).contains(&v),
+-        Some(27)=>(1..=md_cap).contains(&v),Some(28)=>v>=0,Some(29)=>v>=96,
+-        _=>["cc","mob","ks","pp","pw"].contains(&name)&&(0..=1000).contains(&v),
+-    };
+-    if valid {Ok(())} else {Err("setup assignment outside its native/component and route domains".into())}
++fn assignment_token(name:&str,v:i32,mode:Mode)->Result<()> {
++    let mut bytes=name.bytes();
++    if !bytes.next().is_some_and(|b|b.is_ascii_alphabetic())
++        ||!bytes.all(|b|b.is_ascii_alphanumeric()||b==b'_') {
++        return Err("parameter name must start with an ASCII letter and continue with letters, digits or underscores".into());
++    }
++    // Command storage accepts every signed32 value and lexical unknown name.
++    // Only the clock/interrupted contracts restrict EVERY rnd assignment;
++    // public searches restrict final effective rnd, not overwritten storage.
++    if name=="rnd"&&(match mode {Mode::Public=>false,Mode::Clock=>!(0..=1000).contains(&v),Mode::Interrupted=>v!=0}) {
++        return Err("random-setting assignment outside the route's every-assignment domain".into());
++    }
++    Ok(())
++}
++fn effective_domain(parameters:&Parameters,mode:Mode,md_cap:i32)->Result<()> {
++    // Eager final-vector admission mirrors the native bind domain without
++    // constructing a search or mutating live state. The actual go still binds.
++    for (index,&v) in parameters.values.iter().enumerate() {
++        let valid=match index {
++            11=>true, // Stored opk is unconditionally inert, including admission.
++            0..=21=>(0..=1000).contains(&v),
++            22=>(-100..=100).contains(&v),23=>(0..=100).contains(&v),
++            24=>(0..=if mode==Mode::Clock{1000}else{0}).contains(&v),
++            25=>true,26=>(-10000..=10000).contains(&v),
++            27=>(1..=md_cap).contains(&v),28=>v>=0,29=>v>=96,
++            _=>unreachable!(),
++        };
++        if !valid {return Err(format!("final effective {} outside native/route search domain",NAMES[index]));}
++    }
++    Ok(())
+ }
+ fn idle(state:&mut Session<true>,line:&str)->Result<()> {
+     match state.idle(line).map_err(|e|format!("native idle command: {e:?}"))? {
+@@ -131,8 +145,7 @@
+                     });
+                 }
+             }
+-            let md_cap=if !queued.is_empty(){20}else{4};
+-            let commands=array(&query["commands"],1,256)?.iter().map(|v|Setup::parse(text(v)?,mode,md_cap))
++            let commands=array(&query["commands"],1,256)?.iter().map(|v|Setup::parse(text(v)?,mode))
+                 .collect::<Result<Vec<_>>>()?;
+             if !matches!(commands.first(),Some(Setup::New|Setup::Force))
+                 ||!commands.iter().any(|c|matches!(c,Setup::Force)) {
+@@ -158,10 +171,7 @@
+                 }
+             }
+             let cap=if queued.is_empty(){4}else{20};
+-            if !(1..=cap).contains(&parameters.values[27])
+-                ||!(0..=if mode==Mode::Clock{1000}else{0}).contains(&parameters.values[24]) {
+-                return Err("final effective md/rnd settings outside persistent domain".into());
+-            }
++            effective_domain(&parameters,mode,cap)?;
+             if inherited {
+                 if (index==0&&(!md||!rnd))||parameters.values!=NEUTRAL_MD3||allowance!=18100 {
+                     return Err("inherited topology requires complete neutral md3/rnd0 and18100 allowance".into());
+@@ -464,47 +474,82 @@
+                 "searchState":"fresh-each-go","workOrigin":"after-root-preparation"}})
+     }
+     #[test]
+-    fn diagnostic_record_width_and_parameter_chunks_preserve_native_order_and_reset_exemption() {
++    fn diagnostic_width_and_native_parameter_owner_preserve_unknowns_order_and_reset_exemption() {
+         let line=format!("cm_parm opk={} {}default cc=42 mycc=41 md=3 rnd=0",i32::MIN,"cc=1 ".repeat(220));
+         assert!(line.len()>1022&&line.len()<=2000);
+-        let parsed=Setup::parse(&line,Mode::Public,4).unwrap();
++        let parsed=Setup::parse(&line,Mode::Public).unwrap();
+         let mut state=Session::<true>::default();let before=state.position();let origin=state.ledger.last();
+         parsed.apply(&mut state).unwrap();
+         assert_eq!((state.parameters.values[12],state.parameters.values[13]),(41,42));
+         assert_eq!(state.parameters.values[11],i32::MIN);
+         assert_eq!((state.parameters.values[27],state.parameters.values[24]),(3,0));
+         assert_eq!(state.position(),before);assert!(state.moves.is_empty());assert_eq!(state.ledger.last(),origin);
++        let long_name="Unknown_parameter_".to_owned()+&"x".repeat(1500);
++        let long=format!("cm_parm {long_name}=+0000000001");
++        assert!(long.split_ascii_whitespace().nth(1).unwrap().len()>1022&&long.len()<=2000);
++        let before=state.parameters.clone();
++        assert!(state.idle(&long).is_err()); // Unchanged ordinary-wire boundary.
++        Setup::parse(&long,Mode::Public).unwrap().apply(&mut state).unwrap();
++        assert_eq!(state.parameters,before); // Native unknown assignment has no effect.
+         let boundary=format!("force{}"," ".repeat(1995));
+-        assert!(Setup::parse(&boundary,Mode::Public,4).is_ok());
+-        assert!(Setup::parse(&(boundary+" "),Mode::Public,4).is_err());
+-        assert!(Setup::parse("level +000 0005 -0",Mode::Public,4).is_ok());
+-    }
+-    #[test]
+-    fn all_unused_assignments_and_late_queue_schemas_validate_before_any_search() {
++        assert!(Setup::parse(&boundary,Mode::Public).is_ok());
++        assert!(Setup::parse(&(boundary+" "),Mode::Public).is_err());
++        assert!(Setup::parse("level +000 0005 -0",Mode::Public).is_ok());
++    }
++    #[test]
++    fn eager_storage_final_vectors_every_rnd_and_late_suffixes_have_distinct_boundaries() {
+         let good=explicit(Some(json!([".","post","?"])));
+         assert!(Public::parse(&json!({"searches":[good.clone()]}),Mode::Interrupted).is_ok());
+         for queued in [json!(["?","post"]),json!(["."]),json!([".",".",".",".","?"]),json!([false])] {
+             let mut bad=good.clone();bad["queued"]=queued;
+             assert!(Public::parse(&json!({"searches":[good.clone(),bad]}),Mode::Interrupted).is_err());
+         }
+-        for token in ["rnd=1 default md=3 rnd=0","md=21 default md=3 rnd=0",
+-            "cc=1001 default md=3 rnd=0","sop=-1 default md=3 rnd=0","opk=2147483648 md=3 rnd=0"] {
++        // Arbitrary stored values/unknown names are legal before overwrite or
++        // default. Each final vector is checked before any actual Session/search.
++        for token in ["md=-2147483648 cc=1001 sop=-1 tts=0 default md=3 rnd=0",
++            "md=21 cc=-1 cc=42 sop=101 sop=100 avd=101 avd=0 tts=0 tts=96 md=3 rnd=0",
++            "unknown_name=-2147483648 RND=2147483647 opk=-2147483648 md=3 rnd=0"] {
++            let mut q=good.clone();q["commands"][5]=json!(format!("cm_parm {token}"));
++            assert!(Public::parse(&json!({"searches":[q]}),Mode::Interrupted).is_ok());
++        }
++        for token in ["rnd=1 default md=3 rnd=0","opk=2147483648 md=3 rnd=0",
++            "1invalid=0 md=3 rnd=0","bad-name=0 md=3 rnd=0","unknown=-2147483649 md=3 rnd=0",
++            "md=21 rnd=0","cc=1001 md=3 rnd=0","sop=-1 md=3 rnd=0","tts=95 md=3 rnd=0",
++            "avd=101 md=3 rnd=0","cfd=-10001 md=3 rnd=0","ana=-1 md=3 rnd=0"] {
+             let mut bad=good.clone();bad["commands"][5]=json!(format!("cm_parm {token}"));
+             assert!(Public::parse(&json!({"searches":[good.clone(),bad]}),Mode::Interrupted).is_err());
+         }
++        let mut invalid=good.clone();invalid["commands"][5]=json!("cm_parm cc=1001 md=3 rnd=0");
++        let mut later_reset=good.clone();later_reset["commands"][5]=json!("cm_parm default md=3 rnd=0");
++        assert!(Public::parse(&json!({"searches":[invalid,later_reset]}),Mode::Interrupted).is_err());
++        // Public's final-rnd wording does not impose the other contracts'
++        // every-assignment rule on transient signed32 command storage.
++        for token in ["rnd=2147483647 md=999 rnd=0 md=3","rnd=-2147483648 default md=3 rnd=0"] {
++            let mut q=explicit(None);q["commands"][5]=json!(format!("cm_parm {token}"));
++            assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_ok());
++        }
++        let mut q=explicit(None);q["commands"][5]=json!("cm_parm rnd=1 md=3");
++        assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_err());
++        for token in ["rnd=-1 rnd=0 md=3","rnd=1001 default rnd=0 md=3"] {
++            let mut bad=explicit(None);bad["commands"][5]=json!(format!("cm_parm {token}"));
++            assert!(Public::parse(&json!({"systemSeconds":0,"searches":[explicit(None),bad]}),Mode::Clock).is_err());
++        }
++        let mut q=explicit(None);q["commands"][5]=json!("cm_parm unknown=7 rnd=1000 md=999 md=3");
++        let parsed=Public::parse(&json!({"systemSeconds":0,"searches":[q]}),Mode::Clock).unwrap();
++        assert_eq!((parsed.queries[0].expected.values[24],parsed.queries[0].expected.values[27]),(1000,3));
+         let mut q=explicit(None);q["commands"][5]=json!("cm_parm rnd=0 md=3 default");
+         assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_err());
+-        let mut q=explicit(None);q["commands"][5]=json!("cm_parm md=3");
++        let mut q=explicit(None);q["commands"][5]=json!("cm_parm unknown_md=3 rnd=0");
+         assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_err());
+     }
+     #[test]
+     fn setup_uses_public_fen_width_and_broad_joined_state_without_search_adapter_narrowing() {
+         let broad="7k/8/8/8/8/8/3rP3/K7 w - d3";
+-        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Public,4).is_ok());
+-        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Clock,4).is_ok());
+-        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Interrupted,4).is_err());
++        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Public).is_ok());
++        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Clock).is_ok());
++        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Interrupted).is_err());
+         let record=format!("setboard {broad} 2147483647 2147483647");
+-        let mut state=Session::<true>::default();Setup::parse(&record,Mode::Public,4).unwrap().apply(&mut state).unwrap();
++        let mut state=Session::<true>::default();Setup::parse(&record,Mode::Public).unwrap().apply(&mut state).unwrap();
+         assert_eq!(state.position().halfmove,0);assert!(state.moves.is_empty());
+         assert_eq!(positions::ep(&state.position()),"d3");
+         let mut q=explicit(None);q["commands"]=json!(["force","new","cm_parm md=3 rnd=0"]);

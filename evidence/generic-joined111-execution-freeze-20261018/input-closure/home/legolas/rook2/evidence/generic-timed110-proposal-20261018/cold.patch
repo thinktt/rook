@@ -1,0 +1,253 @@
+--- a/diagnostic/src/actual_timed.rs
++++ b/diagnostic/src/actual_timed.rs
+@@ -55,10 +55,17 @@
+             origin:0,seed:self.seed,randomness:50,maximum_entered_iterations:6},Limits{nodes:Some(8192)})
+             .map_err(|e|format!("seeded timed search did not reach its admitted stop: {e:?}"))?;
+         if history.search_ply()!=0 { return Err("native timed history did not unwind".into()); }
+-        validate_seeded(&outcome)?;
++        validate_natural(&outcome)?;
+         if outcome.seed!=self.seed { return Err("native timed seed changed".into()); }
+-        let events=output::completed_events(root,&outcome,search.evaluator.draw_preference,
+-            search.config.selectivity,true).map_err(|e|format!("native output: {e:?}"))?;
++        project_natural(root, &outcome, search.evaluator.draw_preference, search.config.selectivity)
++    }
++}
++
++/// One projection/render owner for the two distinct natural timed admissions.
++pub(super) fn project_natural(
++    root:Position, outcome:&timed::Outcome, draw:i32, selectivity:i32,
++)->Result<Value> {
++        let events=output::completed_events(root,outcome,draw,selectivity,true).map_err(|e|format!("native output: {e:?}"))?;
+         let iterations=outcome.iterations.iter().map(|i|json!({"depth":i.depth,"complete":i.complete,
+             "steps":i.steps.iter().map(|s|json!({"move":moves::descriptor(s.movement),
+                 "window":{"lower":s.window[0],"upper":s.window[1]},"adjustment":s.adjustment,
+@@ -79,8 +86,8 @@
+             "result":{"depth":captured.depth,"rootIndex":captured.root_index,"score":captured.score,
+                 "principalVariation":variation(&captured.pv),"searchId":captured.search_id,
+                 "elapsedCs":captured.elapsed_cs},"events":events.iter().map(event).collect::<Vec<_>>() }))
+-    }
+-}
++}
++
+ fn point(p:Point) -> &'static str { match p { Point::Root=>"root",Point::Iteration=>"iteration",Point::Poll=>"poll" } }
+ fn variation(pv:&[Move]) -> Vec<Value> { pv.iter().copied().map(moves::descriptor).collect() }
+ fn work(w:Work) -> Value { json!({"chargedSearchUnits":w.charged_search_units,"chargedRelationQueries":w.charged_relation_queries}) }
+@@ -127,7 +134,7 @@
+     }
+     Ok(())
+ }
+-fn validate_seeded(out:&timed::Outcome)->Result<()> {
++pub(super) fn validate_natural(out:&timed::Outcome)->Result<()> {
+     validate_records(out,8192)?;
+     if out.stats.iio_initial_phases!=0 || out.stats.iio_tail_phases!=0 {
+         return Err("seeded timed search entered unsupported internal iterative ordering".into());
+--- /dev/null
++++ b/diagnostic/src/generic_timed.rs
+@@ -0,0 +1,189 @@
++//! Exact generic numeric admission over the immediate native IIO-entry fence.
++use super::{actual_timed, array, boolean, integer, object, positions, text, unsigned32, Result};
++use rook2::{engine::Search, history::SearchHistory, movegen::{self, MoveList},
++    parameters::{Parameters, NAMES}, position::Position, quiescence::Limits,
++    timed::Controls};
++use serde_json::Value;
++
++struct Request { root:Position, history:SearchHistory, parameters:Parameters, seed:u32 }
++impl Request {
++    fn parse(input:&Value)->Result<Self> {
++        object(input,&["fen","moves","personalityParameters","seed","allowance","controls"])?;
++        let fen=text(&input["fen"])?;
++        object(&input["personalityParameters"],&NAMES)?;
++        let mut values=[0;30];
++        for (index,name) in NAMES.iter().enumerate() {
++            let (low,high)=match *name {
++                "myk"|"opk"|"ana"=>(0,0), "avd"=>(-100,100),
++                "cfd"=>(-10000,10000), "sop"=>(0,100), "sel"=>(0,64),
++                "rnd"=>(0,1000), "md"=>(6,99), "tts"=>(4194304,67108864),
++                _=>(0,1000),
++            };
++            values[index]=integer(&input["personalityParameters"][*name],low,high)?;
++        }
++        let seed=unsigned32(&input["seed"])?;
++        object(&input["allowance"],&["averageCs","maximumCs"])?;
++        integer(&input["allowance"]["averageCs"],1,1)?;
++        integer(&input["allowance"]["maximumCs"],1,1)?;
++        let controls=&input["controls"];
++        object(controls,&["completion","learnedState","pondering","analysis","seedSource","workOrigin"])?;
++        for (key,expected) in [("completion","natural-work-clock"),("learnedState","fresh-ordinary-search"),
++            ("seedSource","explicit"),("workOrigin","after-root-preparation")] {
++            if text(&controls[key])?!=expected { return Err(format!("unsupported generic timed {key}")); }
++        }
++        if boolean(&controls["pondering"])?||boolean(&controls["analysis"])? {
++            return Err("generic timed pondering/analysis must both be false".into());
++        }
++        let supplied=array(&input["moves"],0,255)?.iter().map(|value|{
++            let token=text(value)?;positions::coordinate(token)?;Ok(token)
++        }).collect::<Result<Vec<_>>>()?;
++        // Complete transport syntax precedes setup and actual legal replay.
++        // No seeded fixed vector, initial nonmoving-check or orthodox EP guard
++        // is imported: only the released reached-root conditions apply here.
++        let mut root=Position::from_fen(fen)?;
++        let mut history=SearchHistory::new(&root);
++        for token in supplied {
++            let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
++            let movement=legal.as_slice().iter().copied().find(|m|m.to_string()==token)
++                .ok_or_else(||format!("illegal generic timed history move: {token}"))?;
++            root=root.played_unchecked(movement);
++            history.push(&root,Some(movement));
++        }
++        history.mark_root();
++        if movegen::in_check(&root,root.side) { return Err("generic timed reached root is in check".into()); }
++        let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
++        if !(1..=256).contains(&legal.len) { return Err("generic timed root count is outside1..256".into()); }
++        Ok(Self{root,history,parameters:Parameters{values},seed})
++    }
++    fn observe(mut self)->Result<Value> {
++        let mut search=Search::<true>::new(&self.root);
++        self.parameters.bind(&mut search).map_err(|error|format!("parameter binding: {error:?}"))?;
++        let outcome=search.run_work_timed_without_iio(self.root,&mut self.history,
++            Controls{average_cs:1,maximum_cs:1,origin:0,seed:self.seed,
++                randomness:self.parameters.values[24] as u32,maximum_entered_iterations:6},
++            Limits{nodes:Some(8192)})
++            .map_err(|error|format!("generic timed search did not reach its admitted stop: {error:?}"))?;
++        if self.history.search_ply()!=0 { return Err("native generic timed history did not unwind".into()); }
++        // Immediate native rejection is primary; terminal zero-entry admission
++        // remains independent rather than treating any partial Outcome as success.
++        actual_timed::validate_natural(&outcome)?;
++        if outcome.seed!=self.seed||outcome.initial_candidates.len()>256 {
++            return Err("generic timed native seed/root domain changed".into());
++        }
++        actual_timed::project_natural(self.root,&outcome,search.evaluator.draw_preference,
++            search.config.selectivity)
++    }
++}
++pub(super) fn dispatch(input:&Value)->Result<Value> { Request::parse(input)?.observe() }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use serde_json::json;
++    fn request()->Value {
++        let values=[100,100,100,100,100,100,100,100,100,100,0,0,
++            100,100,100,100,100,100,100,100,100,100,0,100,50,14,0,20,0,67108864];
++        let vector=Value::Object(NAMES.iter().zip(values).map(|(n,v)|(n.to_string(),json!(v))).collect());
++        json!({"fen":rook2::session::START,"moves":[],"personalityParameters":vector,"seed":0,
++            "allowance":{"averageCs":1,"maximumCs":1},
++            "controls":{"completion":"natural-work-clock","learnedState":"fresh-ordinary-search",
++                "pondering":false,"analysis":false,"seedSource":"explicit",
++                "workOrigin":"after-root-preparation"}})
++    }
++    #[test]
++    fn full_thirty_numeric_domains_admit_unselected_vectors_and_validate_late_fields() {
++        let valid=request();
++        for name in NAMES {
++            let (low,high)=match name {
++                "myk"|"opk"|"ana"=>(0,0),"avd"=>(-100,100),"cfd"=>(-10000,10000),
++                "sop"=>(0,100),"sel"=>(0,64),"rnd"=>(0,1000),"md"=>(6,99),
++                "tts"=>(4194304,67108864),_=>(0,1000),
++            };
++            for value in [low,high] {
++                let mut q=valid.clone();q["personalityParameters"][name]=json!(value);
++                assert!(Request::parse(&q).is_ok(),"rejected admitted {name}={value}");
++            }
++            for value in [low-1,high+1] {
++                let mut q=valid.clone();q["personalityParameters"][name]=json!(value);
++                assert!(Request::parse(&q).is_err(),"accepted outside {name}={value}");
++            }
++            let mut q=valid.clone();q["personalityParameters"].as_object_mut().unwrap().remove(name);
++            assert!(Request::parse(&q).is_err());
++        }
++        let mut varied=valid.clone();
++        for (index,name) in NAMES.iter().enumerate().filter(|(_,n)|!matches!(**n,
++            "myk"|"opk"|"ana"|"avd"|"cfd"|"sop"|"sel"|"rnd"|"md"|"tts")) {
++            varied["personalityParameters"][*name]=json!(17*index);
++        }
++        assert!(Request::parse(&varied).is_ok());
++        let mut q=valid.clone();q["personalityParameters"]["extra"]=json!(0);
++        assert!(Request::parse(&q).is_err());
++        q=valid;q["moves"]=json!(["a1a8"]);q["personalityParameters"]["tts"]=json!(0);
++        match Request::parse(&q) {
++            Err(error)=>assert!(!error.contains("illegal")),Ok(_)=>panic!("late invalid field admitted"),
++        }
++    }
++    #[test]
++    fn exact_generic_controls_and_explicit_zero_seed_are_separate_from_seeded_binding() {
++        let valid=request();
++        for seed in [0,2147483648,u32::MAX] {
++            let mut q=valid.clone();q["seed"]=json!(seed);assert_eq!(Request::parse(&q).unwrap().seed,seed);
++        }
++        for value in [json!(-1),json!(4294967296u64),json!(0.5),json!(false),json!("0")] {
++            let mut q=valid.clone();q["seed"]=value;assert!(Request::parse(&q).is_err());
++        }
++        for (key,value) in [("completion",json!("work-clock")),("analysis",json!(true)),
++            ("pondering",json!(true)),("seedSource",json!("clock")),
++            ("workOrigin",json!("before-root-preparation")),("workClock",json!("kingwcr-reset-safe"))] {
++            let mut q=valid.clone();q["controls"][key]=value;assert!(Request::parse(&q).is_err());
++        }
++        for name in ["completion","learnedState","pondering","analysis","seedSource","workOrigin"] {
++            let mut q=valid.clone();q["controls"].as_object_mut().unwrap().remove(name);
++            assert!(Request::parse(&q).is_err());
++        }
++        for key in ["averageCs","maximumCs"] {
++            let mut q=valid.clone();q["allowance"][key]=json!(2);assert!(Request::parse(&q).is_err());
++        }
++        let mut q=valid;q["moves"]=json!(["a1a8","e2e4"]);q["controls"]["analysis"]=json!(0);
++        match Request::parse(&q) {
++            Err(error)=>assert_eq!(error,"expected boolean"),Ok(_)=>panic!("invalid analysis admitted"),
++        }
++    }
++    #[test]
++    fn reached_root_history_population_and_joined_legal_ep_are_not_narrowed_to_other_routes() {
++        let mut q=request();
++        q["moves"]=json!((0..255).map(|i|["g1f3","g8f6","f3g1","f6g8"][i%4]).collect::<Vec<_>>());
++        let parsed=Request::parse(&q).unwrap();
++        assert_eq!((parsed.history.pre_root_len(),parsed.history.search_ply()),(255,0));
++        assert_eq!(parsed.root.side,rook2::types::Color::Black);assert_eq!(parsed.root.halfmove,255);
++        q["moves"].as_array_mut().unwrap().push(json!("f6g8"));assert!(Request::parse(&q).is_err());
++        for fen in ["7k/6pp/8/8/8/QQQQQQQQ/QQ6/K7 w - - 0 1",
++            "7k/8/8/8/8/8/7R/K7 w - - 0 1"] {
++            let mut q=request();q["fen"]=json!(fen);assert!(Request::parse(&q).is_ok());
++        }
++        for (fen,movement) in [("7k/8/8/3nP3/8/8/8/K7 w - d6 0 1","e5d6"),
++            ("7k/8/8/8/8/8/3rP3/K7 w - d3 0 1","e2d3")] {
++            let mut q=request();q["fen"]=json!(fen);q["moves"]=json!([movement]);
++            let parsed=Request::parse(&q).unwrap();assert_eq!(parsed.history.pre_root_len(),1);
++            assert_eq!(parsed.root.side,rook2::types::Color::Black);
++        }
++        for fen in ["4k3/8/8/8/1b6/P7/2P4P/4K3 w - - 0 1",
++            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"] {
++            let mut q=request();q["fen"]=json!(fen);assert!(Request::parse(&q).is_err());
++        }
++    }
++    #[test]
++    fn guarded_generic_zero_entry_search_reuses_actual_seeded_projection_and_rendering() {
++        let input=request();let mut seeded=input.clone();
++        seeded["controls"]=json!({"completion":"work-clock","learnedState":"fresh-ordinary-search",
++            "pondering":false,"seedSource":"explicit","workClock":"kingwcr-reset-safe",
++            "workOrigin":"after-root-preparation"});
++        let expected=actual_timed::dispatch("search.seededTimedSearch",&seeded).unwrap();
++        let actual=dispatch(&input).unwrap();assert_eq!(actual,expected);
++        assert_eq!(actual["seed"],json!(0));assert_eq!(actual.as_object().unwrap().len(),7);
++        let steps=actual["iterations"].as_array().unwrap();assert!(!steps.last().unwrap()["complete"].as_bool().unwrap());
++        let events=actual["events"].as_array().unwrap();
++        assert_eq!(events.last().unwrap()["type"],json!("move"));
++        assert!(events[..events.len()-1].iter().all(|e|e["type"]==json!("post")));
++    }
++}
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -13,6 +13,7 @@
+ };
+ 
+ mod actual_timed;
++mod generic_timed;
+ mod admission;
+ mod boundary_admission;
+ mod candidate_order;
+@@ -126,6 +127,7 @@
+         "output.postLifecycle" => post_captures::dispatch(input),
+         "search.rootWorkSchedule" | "search.unrestrictedRootSequence" | "search.restrictedRootSequence" => controlled_root::dispatch(operation,input),
+         "search.seededTimedSearch" | "session.goOutcome" => actual_timed::dispatch(operation, input),
++        "search.genericTimedSearch" => generic_timed::dispatch(input),
+         "time.adaptiveSequence" | "search.iterationTerminalStop" | "session.timeSetup" => clock_boundaries::dispatch(operation,input),
+         "evaluation.kingShelter" => king_shelter::run(input),
+         "evaluation.materialValues"

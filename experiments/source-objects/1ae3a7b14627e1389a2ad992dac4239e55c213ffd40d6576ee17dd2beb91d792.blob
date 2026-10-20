@@ -1,0 +1,51 @@
+--- /home/legolas/rook2/evidence/tactical-check-mask-postuse-validation-preparation-20261020-01/run.py
++++ /home/legolas/rook2/evidence/bitplane-pin-summary-postuse-validation-preparation-20261020-01/run.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Inert experiment51 post-use regression; original strict/wire methods unchanged."""
++"""Inert experiment57 post-use regression; original strict/wire methods unchanged."""
+ import hashlib,json,os,subprocess,sys
+ from pathlib import Path
+ HERE=Path(__file__).resolve().parent
+@@ -11,7 +11,7 @@
+  with Path(p).open('x') as f: json.dump(v,f,indent=2);f.write('\n')
+ def terminal(p):
+  t=load(p)
+- assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['terminal_chunk_id'],p
++ assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and (t.get('terminal_chunk_id') or t.get('terminal_chunk')),p
+ def check_inputs():
+  for p,h in PLAN['input_sha256'].items(): assert sha(p)==h,p
+  for p,h in PLAN['source_and_tool_sha256'].items(): assert sha(p)==h,p
+--- /home/legolas/rook2/evidence/tactical-check-mask-postuse-validation-preparation-20261020-01/recheck.py
++++ /home/legolas/rook2/evidence/bitplane-pin-summary-postuse-validation-preparation-20261020-01/recheck.py
+@@ -34,7 +34,7 @@
+  assert os.sched_getaffinity(0)<=H
+  # Gate precedes every regression raw-file read.
+  terminal=load(R/'tool-terminal.json')
+- assert terminal['actual_tool_terminal_observed'] is True and terminal['exit_code']==0 and terminal['terminal_chunk_id']
++ assert terminal['actual_tool_terminal_observed'] is True and terminal['exit_code']==0 and (terminal.get('terminal_chunk_id') or terminal.get('terminal_chunk'))
+  dependencies={Path(p) for p in PLAN['input_sha256']}
+  dependencies.update(Path(p) for p in PLAN['source_and_tool_sha256'])
+  dependencies.update([Path(PLAN['engine']),Path(PLAN['profile']),P/'plan.json',P/'execution-clearance.json',P/'recheck.py',P/'recheck.mjs'])
+@@ -90,7 +90,7 @@
+  assert code==0 and (P/'recheck-original54.stderr').read_bytes()==b''
+  original=load(P/'recheck-original54-result.json');assert original['complete'] and original['original_checkReplay_calls']==54 and original['engine_runs']==0
+  assert {p:sha(p) for p in before}==before
+- write('recheck-result.json',dict(complete=True,exact_artifact_sha256=EXPECTED,strict54=54,original_checkReplay_calls=54,wire_fixtures=8,wire_searches=24,wire_raw_reconciliation=checked,strict_raw_bytes=sum(x['stdoutBytes']+x['stderrBytes'] for x in original['checked']),wire_raw_bytes=sum((R/'wire'/c['id']/(stream+'.raw')).stat().st_size for c in fixture['cases'] for stream in ['stdin','stdout','stderr']),dependencies_before_after=before,engine_runs=0,native_test_runs=0,limits=['Strict stdin is bound via original runner/workloads; no separate strict stdin file was retained.','All wire stdin/stdout/stderr bytes reconciled to original fixtures; cross-stream timing is not reconstructed.','Wire native exit codes retained; receipt exposes no individual native PIDs.','No duplicate193 execution or new qualification.']))
++ write('recheck-result.json',dict(complete=True,exact_artifact_sha256=EXPECTED,strict54=54,original_checkReplay_calls=54,wire_fixtures=8,wire_searches=24,wire_raw_reconciliation=checked,strict_raw_bytes=sum(x['stdoutBytes']+x['stderrBytes'] for x in original['checked']),wire_raw_bytes=sum((R/'wire'/c['id']/(stream+'.raw')).stat().st_size for c in fixture['cases'] for stream in ['stdin','stdout','stderr']),dependencies_before_after=before,engine_runs=0,native_test_runs=0,limits=['Strict stdin is bound via original runner/workloads; no separate strict stdin file was retained.','All wire stdin/stdout/stderr bytes reconciled to original fixtures; cross-stream timing is not reconstructed.','Wire native exit codes retained; receipt exposes no individual native PIDs.','No native tests executed here; generic193-library proof is not full195; no new qualification.']))
+  print(json.dumps(dict(complete=True,artifact_sha256=EXPECTED,strict54=54,wire8=8,wire_searches24=24,engine_runs=0)))
+ if __name__=='__main__':
+  try:main()
+--- /home/legolas/rook2/evidence/tactical-check-mask-postuse-validation-preparation-20261020-01/recheck.mjs
++++ /home/legolas/rook2/evidence/bitplane-pin-summary-postuse-validation-preparation-20261020-01/recheck.mjs
+@@ -2,8 +2,8 @@
+ import assert from 'node:assert/strict';
+ import {readFileSync,writeFileSync} from 'node:fs';
+ import {checkReplay,workloads,oracle} from '/home/legolas/king-spec/conformance/profiling/replay-check.mjs';
+-const base='/home/legolas/rook2/evidence/tactical-check-mask-postuse-validation-20261020-01';
+-const image='/home/legolas/rook2/evidence/tactical-check-mask-pgo-use-build-20261020-01/rook2-exact';
++const base='/home/legolas/rook2/evidence/bitplane-pin-summary-postuse-validation-20261020-01';
++const image='/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-use-build-20261020-01/rook2-exact';
+ const report=JSON.parse(readFileSync(base+'/profile-all.stdout'));
+ assert.equal(workloads.cases.length,54);assert.equal(oracle.cases.length,54);
+ assert.deepEqual(report.selectedCases,workloads.cases.map(x=>x.id));

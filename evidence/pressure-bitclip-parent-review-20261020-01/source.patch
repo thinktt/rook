@@ -1,0 +1,571 @@
+--- accepted57/src/activity.rs
++++ candidate61/src/activity.rs
+@@ -97,6 +97,18 @@
+     material_score: i32,
+     weights: [i32; 2],
+ ) -> Activity {
++    compute_for_search(position, influence, material_score, weights, false)
++}
++
++/// True is supplied only by the existing coherent Search placement lifetime.
++/// Influence bytes remain authoritative regardless of this geometry permission.
++pub(crate) fn compute_for_search(
++    position: &Position,
++    influence: &Influence,
++    material_score: i32,
++    weights: [i32; 2],
++    coherent_geometry: bool,
++) -> Activity {
+     debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+     let phase = position.phase();
+     let mut marks = [[0u8; 64]; 2];
+@@ -148,10 +160,17 @@
+     let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
+     Activity {
+         pieces,
+-        pressure: [
+-            king_pressure(position, Color::White, &marks),
+-            king_pressure(position, Color::Black, &marks),
+-        ],
++        pressure: if coherent_geometry {
++            [
++                king_pressure_clipped(position, Color::White, &marks),
++                king_pressure_clipped(position, Color::Black, &marks),
++            ]
++        } else {
++            [
++                king_pressure(position, Color::White, &marks),
++                king_pressure(position, Color::Black, &marks),
++            ]
++        },
+         weighted: weighted(pieces, material_score, weights, phase),
+         relation_queries,
+     }
+@@ -508,6 +527,75 @@
+         .div_euclid(4096)) as i32
+ }
+ 
++// The old scalar king_pressure is the public fallback and independent oracle.
++// The permission imports canonical, coherent placement planes, not map validity.
++fn king_pressure_clipped(position: &Position, defender: Color, marks: &Marks) -> i32 {
++    let source = position.piece_squares(defender, PieceKind::King)[0];
++    let attacker = defender.opponent();
++    let counts = position.counts[attacker.index()];
++    let orthogonal = counts[PieceKind::Rook.index()] != 0
++        || counts[PieceKind::Queen.index()] != 0;
++    let diagonal = counts[PieceKind::Bishop.index()] != 0
++        || counts[PieceKind::Queen.index()] != 0;
++    let mut pressure = 0;
++    if orthogonal || diagonal {
++        let planes = position.attack_planes();
++        let occupied = planes[0] | planes[1] | planes[2];
++        let attackers = occupied & if attacker == Color::Black { planes[3] } else { !planes[3] };
++        let (rays, increasing) = crate::attacks::influence_rays(source);
++        if orthogonal {
++            let mut targets = 0u64;
++            for direction in 4..8 {
++                targets |= pressure_ray_prefix(rays[direction], increasing[direction],
++                    occupied, attackers, direction);
++            }
++            while targets != 0 {
++                let target = targets.trailing_zeros() as usize;
++                targets &= targets - 1;
++                pressure += pressure_value(marks[attacker.index()][target] & 0xf0);
++            }
++        }
++        if diagonal {
++            let mut targets = 0u64;
++            for direction in 0..4 {
++                targets |= pressure_ray_prefix(rays[direction], increasing[direction],
++                    occupied, attackers, direction);
++            }
++            while targets != 0 {
++                let target = targets.trailing_zeros() as usize;
++                targets &= targets - 1;
++                pressure += pressure_value(marks[attacker.index()][target] & 0xcc);
++            }
++        }
++    }
++    if counts[PieceKind::Knight.index()] != 0 {
++        for step in KNIGHT {
++            if let Some(target) = source.offset(step.0, step.1) {
++                let piece = position.board[target.0 as usize];
++                if piece.is_empty() || piece.color() == defender {
++                    pressure += pressure_value(marks[attacker.index()][target.0 as usize] & 3);
++                }
++            }
++        }
++    }
++    (pressure - 12).max(0)
++}
++
++#[inline]
++fn pressure_ray_prefix(ray: u64, increasing: bool, occupied: u64,
++                       attackers: u64, direction: usize) -> u64 {
++    let blockers = ray & occupied;
++    if blockers == 0 {
++        return ray;
++    }
++    let index = if increasing { blockers.trailing_zeros() }
++                else { 63 - blockers.leading_zeros() };
++    let blocker = 1u64 << index;
++    let (outward, _) = crate::attacks::influence_rays(Square(index as u8));
++    let prefix = ray & !outward[direction];
++    if attackers & blocker != 0 { prefix & !blocker } else { prefix }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -828,3 +916,229 @@
+         }
+     }
+ }
++
++
++#[cfg(test)]
++mod experiment61_tests {
++    use super::*;
++
++    fn scalar_activity(position: &Position, influence: &Influence,
++                       material_score: i32, weights: [i32; 2]) -> Activity {
++    debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
++    let phase = position.phase();
++    let mut marks = [[0u8; 64]; 2];
++    let mut raw_scores = [0i64; 2];
++    let mut relation_queries = 0;
++    for color in [Color::White, Color::Black] {
++        let values = &DESTINATION_VALUES[color.index()];
++        accumulate_kind::<1>(
++            position,
++            influence,
++            color,
++            values,
++            &mut marks,
++            phase.endgame,
++            &mut raw_scores[color.index()],
++            &mut relation_queries,
++        );
++        accumulate_kind::<2>(
++            position,
++            influence,
++            color,
++            values,
++            &mut marks,
++            phase.endgame,
++            &mut raw_scores[color.index()],
++            &mut relation_queries,
++        );
++        accumulate_kind::<3>(
++            position,
++            influence,
++            color,
++            values,
++            &mut marks,
++            phase.endgame,
++            &mut raw_scores[color.index()],
++            &mut relation_queries,
++        );
++        accumulate_kind::<4>(
++            position,
++            influence,
++            color,
++            values,
++            &mut marks,
++            phase.endgame,
++            &mut raw_scores[color.index()],
++            &mut relation_queries,
++        );
++    }
++    let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
++    Activity {
++        pieces,
++        pressure: [
++            king_pressure(position, Color::White, &marks),
++            king_pressure(position, Color::Black, &marks),
++        ],
++        weighted: weighted(pieces, material_score, weights, phase),
++        relation_queries,
++    }
++}
++
++
++    // Construct canonical coherent tags/lists directly, including geometric
++    // pawn blockers on edge ranks; those cases are not FEN-admission claims.
++    fn from_board(board: [Piece; 64]) -> Position {
++        let mut position = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        position.board = board;
++        position.counts = [[0; 6]; 2];
++        position.squares = [[Square(64); 16]; 2];
++        for color in [Color::White, Color::Black] {
++            let mut index = 0;
++            for kind in PieceKind::ALL {
++                for square in 0..64 {
++                    if board[square] == Piece::new(color, kind) {
++                        position.counts[color.index()][kind.index()] += 1;
++                        position.squares[color.index()][index] = Square(square as u8);
++                        index += 1;
++                    }
++                }
++            }
++        }
++        position.recompute_derived();
++        position
++    }
++
++    fn kings(defender: Color, source: Square) -> [Piece; 64] {
++        let mut board = [Piece::EMPTY; 64];
++        board[source.0 as usize] = Piece::new(defender, PieceKind::King);
++        board[(usize::from(source.0) + 32) % 64] = Piece::new(defender.opponent(), PieceKind::King);
++        board
++    }
++
++    fn admit_queen(board: &mut [Piece; 64], attacker: Color, excluded_ray: u64) {
++        let square = (0..64).find(|&s| board[s].is_empty() && excluded_ray & (1u64 << s) == 0).unwrap();
++        board[square] = Piece::new(attacker, PieceKind::Queen);
++    }
++
++    fn compare_pressure(position: &Position, defender: Color, salt: u8) {
++        let marks = std::array::from_fn(|c| std::array::from_fn(|s|
++            (s as u8).wrapping_mul(37).wrapping_add(salt).rotate_left(c as u32)));
++        assert_eq!(king_pressure_clipped(position, defender, &marks),
++                   king_pressure(position, defender, &marks));
++    }
++
++    #[test]
++    fn experiment61_clipped_pressure_matches_scalar_origins_blockers() {
++        for defender in [Color::White, Color::Black] {
++            for origin in 0..64 {
++                let source = Square(origin);
++                let empty_rays = from_board(kings(defender, source));
++                compare_pressure(&empty_rays, defender, 255);
++                for step in DIRECTIONS {
++                    let mut ray_mask = 0u64;
++                    let mut ray_cursor = source;
++                    while let Some(square) = ray_cursor.offset(step.0, step.1) {
++                        ray_mask |= 1u64 << square.0;
++                        ray_cursor = square;
++                    }
++                    let mut cursor = source;
++                    while let Some(target) = cursor.offset(step.0, step.1) {
++                        for color in [Color::White, Color::Black] {
++                            for kind in PieceKind::ALL {
++                                if kind == PieceKind::King && color == defender { continue; }
++                                let mut board = kings(defender, source);
++                                // Keep the sole opposing king off this ray unless
++                                // it is the tested first blocker itself.
++                                for piece in &mut board {
++                                    if *piece == Piece::new(defender.opponent(), PieceKind::King) {
++                                        *piece = Piece::EMPTY;
++                                    }
++                                }
++                                if kind != PieceKind::King {
++                                    let spare = (0..64).find(|&s| board[s].is_empty()
++                                        && ray_mask & (1u64 << s) == 0).unwrap();
++                                    board[spare] = Piece::new(defender.opponent(), PieceKind::King);
++                                }
++                                board[target.0 as usize] = Piece::new(color, kind);
++                                // A second opaque occupant must not affect the prefix.
++                                if let Some(behind) = target.offset(step.0, step.1) {
++                                    if board[behind.0 as usize].is_empty() {
++                                        board[behind.0 as usize] = Piece::new(color.opponent(), PieceKind::Knight);
++                                    }
++                                }
++                                admit_queen(&mut board, defender.opponent(), ray_mask);
++                                let position = from_board(board);
++                                for salt in [0, 3, 0xcc, 0xf0, 255] {
++                                    compare_pressure(&position, defender, salt);
++                                }
++                            }
++                        }
++                        cursor = target;
++                    }
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn experiment61_clipped_pressure_preserves_family_and_byte_domains() {
++        for defender in [Color::White, Color::Black] {
++            for origin in 0..64 {
++                for inventory in 0..8 {
++                    let mut board = kings(defender, Square(origin));
++                    for (flag, kind) in [(1, PieceKind::Bishop), (2, PieceKind::Rook), (4, PieceKind::Knight)] {
++                        if inventory & flag != 0 {
++                            let square = (0..64).find(|&s| board[s].is_empty()).unwrap();
++                            board[square] = Piece::new(defender.opponent(), kind);
++                        }
++                    }
++                    let position = from_board(board);
++                    // Uniform arbitrary mark bytes include wrong-family marks,
++                    // both strength bits, zero and255, independent of inventory.
++                    for byte in 0..=255u8 {
++                        let marks = [[byte; 64]; 2];
++                        assert_eq!(king_pressure_clipped(&position, defender, &marks),
++                                   king_pressure(&position, defender, &marks));
++                    }
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn experiment61_complete_activity_custom_maps_and_public_stale_fallback() {
++        for fen in [
++            "7k/8/8/8/8/8/8/K7 w - - 0 1",
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
++            "r3k2r/ppp2ppp/2n1bn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2QK2R w KQkq - 0 1",
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            for byte in 0..=255u8 {
++                let influence = Influence { profiles: std::array::from_fn(|c|
++                    std::array::from_fn(|s| byte.wrapping_add((s as u8).wrapping_mul(17)).rotate_left(c as u32))) };
++                for (material, weights) in [(-10000, [0, 10240]), (0, [1024, 1024]), (10000, [10240, 0])] {
++                    let expected = scalar_activity(&position, &influence, material, weights);
++                    assert_eq!(compute_for_search(&position, &influence, material, weights, true), expected);
++                    assert_eq!(compute(&position, &influence, material, weights), expected);
++                }
++            }
++        }
++        let mut stale = Position::from_fen("7k/8/8/8/7R/8/8/K7 w - - 0 1").unwrap();
++        let from = Square::parse("h4").unwrap();
++        let to = Square::parse("g4").unwrap();
++        stale.board[from.0 as usize] = Piece::EMPTY;
++        stale.board[to.0 as usize] = Piece::new(Color::White, PieceKind::Rook);
++        for square in &mut stale.squares[0] { if *square == from { *square = to; } }
++        let mut repaired = stale;
++        repaired.recompute_derived();
++        assert_ne!(stale.attack_planes(), repaired.attack_planes());
++        let marks = [[255; 64]; 2];
++        assert_ne!(king_pressure_clipped(&stale, Color::Black, &marks),
++                   king_pressure(&stale, Color::Black, &marks));
++        let influence = Influence { profiles: [[255; 64]; 2] };
++        assert_eq!(compute(&stale, &influence, 0, [1024; 2]),
++                   scalar_activity(&stale, &influence, 0, [1024; 2]));
++        assert_eq!(compute_for_search(&repaired, &influence, 0, [1024; 2], true),
++                   scalar_activity(&repaired, &influence, 0, [1024; 2]));
++    }
++}
+--- accepted57/src/evaluator.rs
++++ candidate61/src/evaluator.rs
+@@ -336,7 +336,14 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
++        self.full_for_search(node, influence, in_check, false)
++    }
++    /// Existing coherent geometry permission only; supplied maps are untouched.
++    pub(crate) fn full_for_search(
++        &mut self, node: &mut Node, influence: &Influence, in_check: bool,
++        coherent_geometry: bool,
++    ) -> Evaluation {
++        self.full_impl::<false, _, _>(node, influence, in_check, coherent_geometry, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -346,7 +353,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, false, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -355,7 +362,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<true, _, _>(node, influence, in_check, false, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -366,7 +373,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
++        self.full_impl::<true, _, _>(node, influence, in_check, false, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -376,13 +383,14 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
++        self.full_impl::<false, _, _>(node, influence, in_check, false, |_| {}, observer)
+     }
+     fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+         in_check: bool,
++        coherent_geometry: bool,
+         observer: F,
+         details: D,
+     ) -> Evaluation {
+@@ -398,7 +406,9 @@
+             self.pawns.select(position, influence)
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        let activity = activity::compute(position, influence, material, self.weights.mobility);
++        let activity = activity::compute_for_search(
++            position, influence, material, self.weights.mobility, coherent_geometry,
++        );
+         let shelter = shelter::compute(
+             position,
+             influence,
+@@ -675,7 +685,7 @@
+                 } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+                 } else {
+-                    self.full(node, influence, false)
++                    self.full_for_search(node, influence, false, coherent_geometry)
+                 },
+                 initially_full: true,
+                 fast_score: None,
+@@ -697,7 +707,7 @@
+             } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+             } else {
+-                self.full(node, influence, false)
++                self.full_for_search(node, influence, false, coherent_geometry)
+             }
+         } else {
+             fast
+@@ -1020,3 +1030,105 @@
+         verify::<true>();
+     }
+ }
++
++
++#[cfg(test)]
++mod experiment61_tests {
++    use super::*;
++
++    fn stats(evaluator: &Evaluator) -> (u64, u64, u64, u64, u64, u64) {
++        (evaluator.stats.full, evaluator.stats.fast, evaluator.stats.influence_builds,
++         evaluator.stats.pawn_reuses, evaluator.stats.pawn_replacements, evaluator.stats.relation_queries)
++    }
++
++    #[test]
++    fn experiment61_full_private_geometry_preserves_maps_retained_and_observers() {
++        for fen in [
++            "7k/8/8/8/8/8/8/K7 w - - 0 1",
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
++            "r3k2r/ppp2ppp/2n1bn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2QK2R w KQkq - 0 1",
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            for byte in [0u8, 1, 3, 16, 64, 0xcc, 0xf0, 255] {
++                let map = Influence { profiles: std::array::from_fn(|c|
++                    std::array::from_fn(|s| byte.wrapping_add((s as u8).wrapping_mul(29)).rotate_left(c as u32))) };
++                for checked in [false, true] {
++                    let mut scalar = Evaluator::<true>::new(&position);
++                    let mut clipped = Evaluator::<true>::new(&position);
++                    scalar.parameters.own[7] = 1000;
++                    scalar.parameters.opponent[7] = 25;
++                    clipped.parameters = scalar.parameters.clone();
++                    scalar.begin_search(&position);
++                    clipped.begin_search(&position);
++                    let mut a = Node::root(position, &scalar.root);
++                    let mut b = a;
++                    for _ in 0..2 {
++                        let expected = scalar.full(&mut a, &map, checked);
++                        let actual = clipped.full_for_search(&mut b, &map, checked, true);
++                        assert_eq!(actual, expected);
++                        assert_eq!(a.retained, b.retained);
++                        assert_eq!(stats(&scalar), stats(&clipped));
++                    }
++                    let mut seen = None;
++                    let observed = clipped.full_observed(&mut b, &map, checked, |parts| seen = Some(parts));
++                    assert_eq!(observed, scalar.full(&mut a, &map, checked));
++                    assert!(seen.is_some());
++                    assert_eq!(a.retained, b.retained);
++                }
++            }
++        }
++        // Stale public planes never authorize clipping. Repaired fingerprints
++        // are copied over without replacing the deliberately stale planes.
++        let mut stale = Position::from_fen("7k/8/8/8/7R/8/8/K7 w - - 0 1").unwrap();
++        let from = Square::parse("h4").unwrap();
++        let to = Square::parse("g4").unwrap();
++        stale.board[from.0 as usize] = Piece::EMPTY;
++        stale.board[to.0 as usize] = Piece::new(Color::White, PieceKind::Rook);
++        for square in &mut stale.squares[0] { if *square == from { *square = to; } }
++        let mut repaired = stale;
++        repaired.recompute_derived();
++        stale.primary = repaired.primary;
++        stale.secondary = repaired.secondary;
++        stale.pawn = repaired.pawn;
++        stale.starting_units = repaired.starting_units;
++        assert_ne!(stale.attack_planes(), repaired.attack_planes());
++        let map = Influence { profiles: [[255; 64]; 2] };
++        let mut public = Evaluator::<true>::new(&stale);
++        let mut observed = Evaluator::<true>::new(&stale);
++        let mut a = Node::root(stale, &public.root);
++        let mut b = a;
++        assert_eq!(public.full(&mut a, &map, false),
++                   observed.full_observed(&mut b, &map, false, |_| {}));
++        assert_eq!(a.retained, b.retained);
++    }
++
++    #[test]
++    fn experiment61_selection_sparse_refresh_preserves_supplied_some() {
++        for fen in [
++            "7k/8/8/8/8/8/8/K7 w - - 0 1",
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            let map = Influence { profiles: std::array::from_fn(|c|
++                std::array::from_fn(|s| (s as u8).wrapping_mul(37).wrapping_add(c as u8))) };
++            let mut a = Evaluator::<true>::new(&position);
++            let mut b = Evaluator::<true>::new(&position);
++            let mut na = Node::root(position, &a.root);
++            let mut nb = na;
++            let mut sa = Some(map);
++            let mut sb = Some(map);
++            let expected = a.select_noncheck(&mut na, -10000, 10000, true, &mut sa);
++            let actual = b.select_noncheck_for_search(&mut nb, -10000, 10000, true, &mut sb, true);
++            assert_eq!(actual.evaluation, expected.evaluation);
++            assert_eq!((actual.initially_full, actual.fast_score, actual.refreshed),
++                       (expected.initially_full, expected.fast_score, expected.refreshed));
++            assert!(actual.initially_full || actual.refreshed);
++            assert_eq!(na.retained, nb.retained);
++            assert_eq!(sa.unwrap().profiles, map.profiles);
++            assert_eq!(sb.unwrap().profiles, map.profiles);
++            assert_eq!(a.stats.influence_builds, 0);
++            assert_eq!(b.stats.influence_builds, 0);
++            assert_eq!(stats(&a), stats(&b));
++        }
++    }
++}
+--- accepted57/src/ordinary.rs
++++ candidate61/src/ordinary.rs
+@@ -809,7 +809,7 @@
+             }
+         }
+         let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+-        let evaluation = self.evaluator.full(node, map, checked);
++        let evaluation = self.evaluator.full_for_search(node, map, checked, coherent_geometry);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+--- accepted57/src/quiescence.rs
++++ candidate61/src/quiescence.rs
+@@ -150,10 +150,11 @@
+         let influence = self.evaluator.ensure_influence_for_search(
+             &position, &mut scratch, coherent_geometry,
+         );
+-        self.evaluator.full(
++        self.evaluator.full_for_search(
+             &mut root,
+             influence,
+             movegen::in_check(&position, position.side),
++            coherent_geometry,
+         );
+         (root, scratch.unwrap())
+     }

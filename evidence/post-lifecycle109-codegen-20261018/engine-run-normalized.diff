@@ -1,0 +1,6601 @@
+--- control
++++ candidate
+@@ -10,41 +10,41 @@
+ movq $0x0,(%rsp)
+ cmp %r11,%rsp
+ jne LOCAL+0x14
+-sub $0x4b8,%rsp
+-mov %rdi,0xa8(%rsp)
+-lea 0xd080(%rsp),%rdi
++sub $0x498,%rsp
++mov %rdi,0xa0(%rsp)
++lea 0xd060(%rsp),%rdi
+ call TARGET<std::sys::pal::unix::args::args>
+-movq $0x1,0xd0a0(%rsp)
++movq $0x1,0xd080(%rsp)
+ mov $0x1,%esi
+-movl $0x0,0x108(%rsp)
++movl $0x0,0xd8(%rsp)
+ mov RIP<ROLE:free>,%r12
+ movl $0x0,0x168(%rsp)
+ jmp LOCAL+0x88
+ data16 data16 cs nopw 0x0(%rax,%rax,1)
+-mov 0xd0a0(%rsp),%rsi
++mov 0xd080(%rsp),%rsi
+ test %rsi,%rsi
+ jne LOCAL+0x1e3
+-mov 0xd088(%rsp),%r13
+-mov 0xd098(%rsp),%rbp
++mov 0xd068(%rsp),%r13
++mov 0xd078(%rsp),%rbp
+ cmp %rbp,%r13
+ je LOCAL+0x318
+ lea 0x18(%r13),%r15
+-mov %r15,0xd088(%rsp)
++mov %r15,0xd068(%rsp)
+ mov 0x0(%r13),%r14
+ movabs $0x8000000000000000,%rax
+ cmp %rax,%r14
+ je LOCAL+0x315
+ mov 0x8(%r13),%rbx
+ mov 0x10(%r13),%r12
+-lea 0x6b60(%rsp),%rdi
++lea 0x6b40(%rsp),%rdi
+ mov %rbx,%rsi
+ mov %r12,%rdx
+ call *RIP<ROLE:core::str::converts::from_utf8>
+-testb $0x1,0x6b60(%rsp)
+-jne LOCAL+0x622f
+-mov %r14,0xc40(%rsp)
+-mov %rbx,0xc48(%rsp)
+-mov %r12,0xc50(%rsp)
++testb $0x1,0x6b40(%rsp)
++jne LOCAL+0x605a
++mov %r14,0x1930(%rsp)
++mov %rbx,0x1938(%rsp)
++mov %r12,0x1940(%rsp)
+ cmp $0x14,%r12
+ je LOCAL+0x1a0
+ cmp $0x16,%r12
+@@ -70,7 +70,7 @@
+ pand %xmm0,%xmm1
+ pmovmskb %xmm1,%eax
+ mov $0x1,%cl
+-mov %ecx,0x108(%rsp)
++mov %ecx,0xd8(%rsp)
+ cmp $0xffff,%eax
+ je LOCAL+0x1c8
+ jmp LOCAL+0x21a
+@@ -89,32 +89,32 @@
+ mov %rbx,%rdi
+ call *%r12
+ jmp LOCAL+0x80
+-movq $0x0,0xd0a0(%rsp)
+-lea 0xd080(%rsp),%rdi
++movq $0x0,0xd080(%rsp)
++lea 0xd060(%rsp),%rdi
+ call TARGET<core::iter::traits::iterator::Iterator::advance_by>
+-mov 0xd088(%rsp),%r13
+-mov 0xd098(%rsp),%rbp
++mov 0xd068(%rsp),%r13
++mov 0xd078(%rsp),%rbp
+ test %rax,%rax
+ je LOCAL+0xa1
+ jmp LOCAL+0x318
+-lea 0xc40(%rsp),%rax
+-mov %rax,0x3f60(%rsp)
++lea 0x1930(%rsp),%rax
++mov %rax,0x3f40(%rsp)
+ lea RIP<ROLE:<alloc::string::String as core::fmt::Display>::fmt>,%rax
+-mov %rax,0x3f68(%rsp)
+-lea RIP<ROLE:internal-address:0x8b45d>,%rax
+-mov %rax,0x6b60(%rsp)
+-movq $0x2,0x6b68(%rsp)
+-movq $0x0,0x6b80(%rsp)
+-lea 0x3f60(%rsp),%rax
+-mov %rax,0x6b70(%rsp)
+-movq $0x1,0x6b78(%rsp)
+-lea 0x6b60(%rsp),%rsi
+-mov 0xa8(%rsp),%rdi
++mov %rax,0x3f48(%rsp)
++lea RIP<ROLE:internal-address:0x8c4b7>,%rax
++mov %rax,0x6b40(%rsp)
++movq $0x2,0x6b48(%rsp)
++movq $0x0,0x6b60(%rsp)
++lea 0x3f40(%rsp),%rax
++mov %rax,0x6b50(%rsp)
++movq $0x1,0x6b58(%rsp)
++lea 0x6b40(%rsp),%rsi
++mov 0xa0(%rsp),%rdi
+ call *RIP<ROLE:alloc::fmt::format::format_inner>
+-cmpq $0x0,0xc40(%rsp)
++cmpq $0x0,0x1930(%rsp)
+ mov RIP<ROLE:free>,%r14
+ je LOCAL+0x2b2
+-mov 0xc48(%rsp),%rdi
++mov 0x1938(%rsp),%rdi
+ call *RIP<ROLE:free>
+ mov %rbp,%rax
+ sub %r15,%rax
+@@ -135,10 +135,10 @@
+ mov 0x0(%r13),%rdi
+ call *%r14
+ jmp LOCAL+0x2e0
+-cmpq $0x0,0xd090(%rsp)
+-je LOCAL+0x5f58
+-mov 0xd080(%rsp),%rdi
+-jmp LOCAL+0x5f52
++cmpq $0x0,0xd070(%rsp)
++je LOCAL+0x5dab
++mov 0xd060(%rsp),%rdi
++jmp LOCAL+0x5da5
+ mov %r15,%r13
+ mov %rbp,%rax
+ sub %r13,%rax
+@@ -159,9 +159,9 @@
+ mov 0x0(%r13),%rdi
+ call *%r12
+ jmp LOCAL+0x340
+-cmpq $0x0,0xd090(%rsp)
++cmpq $0x0,0xd070(%rsp)
+ je LOCAL+0x372
+-mov 0xd080(%rsp),%rdi
++mov 0xd060(%rsp),%rdi
+ call *RIP<ROLE:free>
+ xor %edi,%edi
+ call *RIP<ROLE:dup>
+@@ -188,14 +188,14 @@
+ mov $0x1000,%edi
+ call *RIP<ROLE:malloc>
+ test %rax,%rax
+-je LOCAL+0x62d2
++je LOCAL+0x60fd
+ pxor %xmm0,%xmm0
+-movdqu %xmm0,0x280(%rsp)
+-mov %ebx,0x290(%rsp)
+-mov %ebp,0x294(%rsp)
+-movb $0x0,0x298(%rsp)
+-movq $0x1000,0x270(%rsp)
+-mov %rax,0x278(%rsp)
++movdqu %xmm0,0x240(%rsp)
++mov %ebx,0x250(%rsp)
++mov %ebp,0x254(%rsp)
++movb $0x0,0x258(%rsp)
++movq $0x1000,0x230(%rsp)
++mov %rax,0x238(%rsp)
+ mov RIP<DATA32:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855>,%eax
+ cmp $0x3,%eax
+ jne LOCAL+0x57e
+@@ -208,11 +208,11 @@
+ jne LOCAL+0x5dd
+ mov RIP<DATA32:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855>,%eax
+ cmp $0xffffffff,%eax
+-je LOCAL+0x61a4
++je LOCAL+0x5fcf
+ inc %eax
+ mov %eax,RIP<DATA32:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855>
+ lea RIP<ROLE:std::io::stdio::STDOUT>,%rax
+-mov %rax,0x100(%rsp)
++mov %rax,0xc0(%rsp)
+ jmp LOCAL+0x64d
+ call *RIP<ROLE:__errno_location>
+ mov (%rax),%r14d
+@@ -223,22 +223,22 @@
+ mov (%rax),%r14d
+ shl $0x20,%r14
+ or $0x2,%r14
+-mov %r14,0x3f60(%rsp)
+-lea 0x3f60(%rsp),%rax
+-mov %rax,0xc40(%rsp)
++mov %r14,0x3f40(%rsp)
++lea 0x3f40(%rsp),%rax
++mov %rax,0x1930(%rsp)
+ lea RIP<ROLE:<std::io::error::Error as core::fmt::Display>::fmt>,%rax
+-mov %rax,0xc48(%rsp)
+-lea RIP<ROLE:internal-address:0x8b41f>,%rax
+-mov %rax,0x6b60(%rsp)
+-movq $0x2,0x6b68(%rsp)
+-movq $0x0,0x6b80(%rsp)
+-lea 0xc40(%rsp),%rax
+-mov %rax,0x6b70(%rsp)
+-movq $0x1,0x6b78(%rsp)
+-lea 0xd080(%rsp),%rdi
+-lea 0x6b60(%rsp),%rsi
++mov %rax,0x1938(%rsp)
++lea RIP<ROLE:internal-address:0x8c479>,%rax
++mov %rax,0x6b40(%rsp)
++movq $0x2,0x6b48(%rsp)
++movq $0x0,0x6b60(%rsp)
++lea 0x1930(%rsp),%rax
++mov %rax,0x6b50(%rsp)
++movq $0x1,0x6b58(%rsp)
++lea 0xd060(%rsp),%rdi
++lea 0x6b40(%rsp),%rsi
+ call *RIP<ROLE:alloc::fmt::format::format_inner>
+-mov 0x3f60(%rsp),%rbx
++mov 0x3f40(%rsp),%rbx
+ mov %ebx,%eax
+ and $0x3,%eax
+ cmp $0x1,%eax
+@@ -257,12 +257,12 @@
+ call *RIP<ROLE:free>
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+-mov 0xd090(%rsp),%rax
+-mov 0xa8(%rsp),%rcx
++mov 0xd070(%rsp),%rax
++mov 0xa0(%rsp),%rcx
+ mov %rax,0x10(%rcx)
+-movdqu 0xd080(%rsp),%xmm0
++movdqu 0xd060(%rsp),%xmm0
+ movdqu %xmm0,(%rcx)
+-jmp LOCAL+0x5f58
++jmp LOCAL+0x5dab
+ lea RIP<ROLE:std::io::stdio::STDOUT>,%rdi
+ call TARGET<std::sync::once_lock::OnceLock<T>::initialize>
+ mov $0xfffffffffffffff8,%r14
+@@ -272,7 +272,7 @@
+ mov RIP<ROLE:std::thread::ThreadId::new::COUNTER>,%rax
+ data16 cs nopw 0x0(%rax,%rax,1)
+ cmp $0xffffffffffffffff,%rax
+-je LOCAL+0x5f6a
++je LOCAL+0x5dbd
+ lea 0x1(%rax),%rbx
+ lock cmpxchg %rbx,RIP<ROLE:std::thread::ThreadId::new::COUNTER>
+ jne LOCAL+0x5b0
+@@ -283,18 +283,18 @@
+ mov $0x1,%ecx
+ xor %eax,%eax
+ lock cmpxchg %ecx,RIP<DATA32:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855>
+-jne LOCAL+0x61bd
++jne LOCAL+0x5fe8
+ mov %rbx,RIP<ROLE:std::io::stdio::STDOUT>
+ lea RIP<ROLE:std::io::stdio::STDOUT>,%rax
+ mov %fs:(%r14),%rbx
+ movl $0x1,RIP<DATA32:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855>
+-mov %rax,0x100(%rsp)
++mov %rax,0xc0(%rsp)
+ test %rbx,%rbx
+ jne LOCAL+0x64d
+ mov RIP<ROLE:std::thread::ThreadId::new::COUNTER>,%rax
+ data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+ cmp $0xffffffffffffffff,%rax
+-je LOCAL+0x5f6a
++je LOCAL+0x5dbd
+ lea 0x1(%rax),%rbx
+ lock cmpxchg %rbx,RIP<ROLE:std::thread::ThreadId::new::COUNTER>
+ jne LOCAL+0x630
+@@ -305,33 +305,33 @@
+ jne LOCAL+0x66d
+ mov 0xc(%r14),%ebp
+ cmp $0xffffffff,%ebp
+-je LOCAL+0x61a4
++je LOCAL+0x5fcf
+ inc %ebp
+ jmp LOCAL+0x683
+ mov $0x1,%ebp
+ xor %eax,%eax
+ lock cmpxchg %ebp,0x8(%r14)
+-jne LOCAL+0x61cf
++jne LOCAL+0x5ffa
+ mov %rbx,(%r14)
+ mov %ebp,0xc(%r14)
+-mov %r14,0x208(%rsp)
++mov %r14,0x190(%rsp)
+ lea RIP<DATA32:8e8210423140450e5e8cc997efd5d4384bbeb4c0604385c752691034f36f1621>,%rsi
+-lea 0xd080(%rsp),%rdi
++lea 0xd060(%rsp),%rdi
+ mov $0x38,%edx
+ call *RIP<ROLE:rook2::position::Position::from_fen>
+-cmpb $0x2,0xd0f8(%rsp)
+-je LOCAL+0x62e2
+-lea 0x5f60(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
++cmpb $0x2,0xd0d8(%rsp)
++je LOCAL+0x610d
++lea 0x5f40(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
+ mov $0xa0,%edx
+ call *RIP<ROLE:memcpy>
+ movzbl 0x0(%r13),%eax
+ mov $0x1f4a0,%edi
+ call *RIP<ROLE:malloc>
+ test %rax,%rax
+-je LOCAL+0x632a
++je LOCAL+0x6155
+ mov %rax,%r15
+-lea 0x5f60(%rsp),%rsi
++lea 0x5f40(%rsp),%rsi
+ mov $0xa0,%edx
+ mov %rax,%rdi
+ call *RIP<ROLE:memcpy>
+@@ -339,7 +339,7 @@
+ mov $0xc,%edi
+ call *RIP<ROLE:malloc>
+ test %rax,%rax
+-je LOCAL+0x633a
++je LOCAL+0x6165
+ mov %rax,%r12
+ movabs $0x12c000003e7,%rax
+ mov %rax,(%r12)
+@@ -348,86 +348,86 @@
+ mov $0x640,%edi
+ call *RIP<ROLE:malloc>
+ test %rax,%rax
+-je LOCAL+0x634a
++je LOCAL+0x6175
+ mov %rax,%r14
+ movaps RIP<DATA32:088b7d541d75402d9dd6832ce35dd063df75d11d0df14686583763117e7a18f8>,%xmm0
++movaps %xmm0,0x730(%rsp)
++movaps %xmm0,0x740(%rsp)
+ movaps %xmm0,0x750(%rsp)
+ movaps %xmm0,0x760(%rsp)
+ movaps %xmm0,0x770(%rsp)
++movsd RIP<DATA32:91db274d78a896fecbde50d9a6db4e28f6ea6cfe66efefd8cb3b75bf03f8bc6b>,%xmm0
+ movaps %xmm0,0x780(%rsp)
+-movaps %xmm0,0x790(%rsp)
+-movsd RIP<DATA32:91db274d78a896fecbde50d9a6db4e28f6ea6cfe66efefd8cb3b75bf03f8bc6b>,%xmm0
+-movaps %xmm0,0x7a0(%rsp)
+-movl $0x64,0x7b0(%rsp)
+-lea 0xd080(%rsp),%rbx
+-lea 0x750(%rsp),%rsi
+-lea 0x5f60(%rsp),%rdx
++movl $0x64,0x790(%rsp)
++lea 0xd060(%rsp),%rbx
++lea 0x730(%rsp),%rsi
++lea 0x5f40(%rsp),%rdx
+ mov %rbx,%rdi
+ call *RIP<ROLE:rook2::evaluator::Parameters::bind>
+-lea 0x3250(%rsp),%rdi
++lea 0xc20(%rsp),%rdi
+ mov $0x540,%edx
+ mov %rbx,%rsi
+ call *RIP<ROLE:memcpy>
+-movups 0xd5c0(%rsp),%xmm0
+-movups 0xd5d0(%rsp),%xmm1
+-movaps %xmm0,0x460(%rsp)
+-movaps %xmm1,0x470(%rsp)
+-mov 0xd5e0(%rsp),%rax
+-mov %rax,0x480(%rsp)
+-movsd 0xd5e8(%rsp),%xmm0
++movups 0xd5a0(%rsp),%xmm0
++movups 0xd5b0(%rsp),%xmm1
+ movaps %xmm0,0x350(%rsp)
++movaps %xmm1,0x360(%rsp)
++mov 0xd5c0(%rsp),%rax
++mov %rax,0x370(%rsp)
++movsd 0xd5c8(%rsp),%xmm0
++movaps %xmm0,0x260(%rsp)
+ mov $0xc0,%eax
+ movups RIP<DATA32:13fed1922f7299fcd0c5e3ee0c2d0ae46f9395fa82a99c01738f57112a74c2c1>,%xmm0
+ movups RIP<DATA32:b0e6fa605c3dd39e17fc455ad23b1f7012beaa7ecc19f1de81cd7b84277e3b71>,%xmm1
+ movups RIP<DATA32:ebbdb94606af6437fa9f86749a34a941fe5bcdd7bf2a77487de0bb64d79cd78c>,%xmm2
+ movups RIP<DATA32:c161823c599d3a3badb3eb30a0901311f27e8baa2fa95b97ede737573878e60a>,%xmm3
+ cs nopw 0x0(%rax,%rax,1)
+-movups %xmm0,0x3ed0(%rsp,%rax,1)
+-movups %xmm1,0x3ec0(%rsp,%rax,1)
+-movups %xmm2,0x3eb0(%rsp,%rax,1)
+-movups %xmm3,0x3ea0(%rsp,%rax,1)
+-movups %xmm3,0x3ee0(%rsp,%rax,1)
+-movups %xmm2,0x3ef0(%rsp,%rax,1)
+-movups %xmm1,0x3f00(%rsp,%rax,1)
+-movups %xmm0,0x3f10(%rsp,%rax,1)
+-movups %xmm3,0x3f20(%rsp,%rax,1)
+-movups %xmm2,0x3f30(%rsp,%rax,1)
+-movups %xmm1,0x3f40(%rsp,%rax,1)
+-movups %xmm0,0x3f50(%rsp,%rax,1)
+-movups %xmm3,0x3f60(%rsp,%rax,1)
+-movups %xmm2,0x3f70(%rsp,%rax,1)
+-movups %xmm1,0x3f80(%rsp,%rax,1)
+-movups %xmm0,0x3f90(%rsp,%rax,1)
++movups %xmm0,0x3eb0(%rsp,%rax,1)
++movups %xmm1,0x3ea0(%rsp,%rax,1)
++movups %xmm2,0x3e90(%rsp,%rax,1)
++movups %xmm3,0x3e80(%rsp,%rax,1)
++movups %xmm3,0x3ec0(%rsp,%rax,1)
++movups %xmm2,0x3ed0(%rsp,%rax,1)
++movups %xmm1,0x3ee0(%rsp,%rax,1)
++movups %xmm0,0x3ef0(%rsp,%rax,1)
++movups %xmm3,0x3f00(%rsp,%rax,1)
++movups %xmm2,0x3f10(%rsp,%rax,1)
++movups %xmm1,0x3f20(%rsp,%rax,1)
++movups %xmm0,0x3f30(%rsp,%rax,1)
++movups %xmm3,0x3f40(%rsp,%rax,1)
++movups %xmm2,0x3f50(%rsp,%rax,1)
++movups %xmm1,0x3f60(%rsp,%rax,1)
++movups %xmm0,0x3f70(%rsp,%rax,1)
+ add $0x100,%rax
+ cmp $0x20c0,%rax
+ jne LOCAL+0x840
+-lea 0x2c40(%rsp),%rdi
+-lea 0x3250(%rsp),%rsi
++lea 0x3930(%rsp),%rdi
++lea 0xc20(%rsp),%rsi
+ mov RIP<ROLE:memcpy>,%rbx
+ mov $0x540,%edx
+ call *%rbx
+-movaps 0x750(%rsp),%xmm0
+-movaps 0x760(%rsp),%xmm1
+-movaps 0x770(%rsp),%xmm2
+-movaps 0x780(%rsp),%xmm3
+-movaps %xmm0,0x5c0(%rsp)
+-movaps %xmm1,0x5d0(%rsp)
+-movaps %xmm2,0x5e0(%rsp)
+-movaps %xmm3,0x5f0(%rsp)
+-movaps 0x790(%rsp),%xmm0
+-movaps %xmm0,0x600(%rsp)
+-movaps 0x7a0(%rsp),%xmm0
+-movaps %xmm0,0x610(%rsp)
+-mov 0x7b0(%rsp),%eax
+-mov %eax,0x620(%rsp)
+-movaps 0x460(%rsp),%xmm0
+-movaps 0x470(%rsp),%xmm1
+-movups %xmm0,0x3180(%rsp)
+-movups %xmm1,0x3190(%rsp)
+-mov 0x480(%rsp),%rax
+-mov %rax,0x31a0(%rsp)
+-lea 0xc40(%rsp),%rdi
+-lea 0x3f60(%rsp),%rsi
++movaps 0x730(%rsp),%xmm0
++movaps 0x740(%rsp),%xmm1
++movaps 0x750(%rsp),%xmm2
++movaps 0x760(%rsp),%xmm3
++movaps %xmm0,0x5a0(%rsp)
++movaps %xmm1,0x5b0(%rsp)
++movaps %xmm2,0x5c0(%rsp)
++movaps %xmm3,0x5d0(%rsp)
++movaps 0x770(%rsp),%xmm0
++movaps %xmm0,0x5e0(%rsp)
++movaps 0x780(%rsp),%xmm0
++movaps %xmm0,0x5f0(%rsp)
++mov 0x790(%rsp),%eax
++mov %eax,0x600(%rsp)
++movaps 0x350(%rsp),%xmm0
++movaps 0x360(%rsp),%xmm1
++movups %xmm0,0x3e70(%rsp)
++movups %xmm1,0x3e80(%rsp)
++mov 0x370(%rsp),%rax
++mov %rax,0x3e90(%rsp)
++lea 0x1930(%rsp),%rdi
++lea 0x3f40(%rsp),%rsi
+ mov $0x2000,%edx
+ call *%rbx
+ movzbl 0x0(%r13),%eax
+@@ -435,55 +435,57 @@
+ mov $0x10200,%esi
+ call *RIP<ROLE:calloc>
+ test %rax,%rax
+-je LOCAL+0x635a
++je LOCAL+0x6185
+ mov %r13,%rcx
+ mov %rax,%r13
+-mov %r14,0x78(%rsp)
++mov %r14,0x188(%rsp)
+ movzbl (%rcx),%eax
+ mov $0x1,%edi
+ mov $0x8000,%esi
+ call *RIP<ROLE:calloc>
+ test %rax,%rax
+-je LOCAL+0x636a
++je LOCAL+0x6195
+ mov %rax,%rbx
+-lea 0x7910(%rsp),%rdi
+-lea 0xd0b0(%rsp),%r14
++lea 0x78f0(%rsp),%rdi
++lea 0xd090(%rsp),%r14
+ mov RIP<ROLE:memset>,%rbp
+ mov $0x2200,%edx
+ xor %esi,%esi
+ call *%rbp
+ mov $0x2568,%edx
+ mov %r14,%rdi
+-lea 0xc40(%rsp),%rsi
++lea 0x1930(%rsp),%rsi
+ mov RIP<ROLE:memcpy>,%r14
+ call *%r14
+ xorps %xmm0,%xmm0
++movaps %xmm0,0xc090(%rsp)
++movaps %xmm0,0xc0a0(%rsp)
+ movaps %xmm0,0xc0b0(%rsp)
++movaps 0x5a0(%rsp),%xmm0
++movaps 0x5b0(%rsp),%xmm1
++movdqa 0x5c0(%rsp),%xmm2
++movdqa 0x5d0(%rsp),%xmm3
+ movaps %xmm0,0xc0c0(%rsp)
+-movaps %xmm0,0xc0d0(%rsp)
+-movaps 0x5c0(%rsp),%xmm0
+-movaps 0x5d0(%rsp),%xmm1
+-movdqa 0x5e0(%rsp),%xmm2
+-movdqa 0x5f0(%rsp),%xmm3
+-movaps %xmm0,0xc0e0(%rsp)
+-movaps %xmm1,0xc0f0(%rsp)
+-movdqa %xmm2,0xc100(%rsp)
+-movdqa %xmm3,0xc110(%rsp)
+-movaps 0x600(%rsp),%xmm0
+-movaps %xmm0,0xc120(%rsp)
+-movaps 0x610(%rsp),%xmm0
+-movaps %xmm0,0xc130(%rsp)
+-mov 0x620(%rsp),%eax
+-mov %eax,0xc140(%rsp)
+-lea 0x6d10(%rsp),%rdi
++movaps %xmm1,0xc0d0(%rsp)
++movdqa %xmm2,0xc0e0(%rsp)
++movdqa %xmm3,0xc0f0(%rsp)
++movaps 0x5e0(%rsp),%xmm0
++movaps %xmm0,0xc100(%rsp)
++movaps 0x5f0(%rsp),%xmm0
++movaps %xmm0,0xc110(%rsp)
++mov 0x600(%rsp),%eax
++mov %eax,0xc120(%rsp)
++lea 0x6cf0(%rsp),%rdi
+ mov $0xc00,%edx
+ xor %esi,%esi
+ call *%rbp
+-lea 0xc168(%rsp),%rdi
++lea 0xc148(%rsp),%rdi
+ mov $0xd08,%edx
+ xor %esi,%esi
+ call *%rbp
+ xorps %xmm0,%xmm0
++movups %xmm0,0xce58(%rsp)
++movups %xmm0,0xce68(%rsp)
+ movups %xmm0,0xce78(%rsp)
+ movups %xmm0,0xce88(%rsp)
+ movups %xmm0,0xce98(%rsp)
+@@ -496,196 +498,196 @@
+ movups %xmm0,0xcf08(%rsp)
+ movups %xmm0,0xcf18(%rsp)
+ movups %xmm0,0xcf28(%rsp)
+-movups %xmm0,0xcf38(%rsp)
+-movups %xmm0,0xcf48(%rsp)
+ pxor %xmm2,%xmm2
+-movq $0x0,0xcf58(%rsp)
++movq $0x0,0xcf38(%rsp)
+ movaps RIP<DATA32:088b7d541d75402d9dd6832ce35dd063df75d11d0df14686583763117e7a18f8>,%xmm0
+-movaps %xmm0,0xcff0(%rsp)
++movaps %xmm0,0xcfd0(%rsp)
++movaps %xmm0,0xcfe0(%rsp)
++movq RIP<DATA32:91db274d78a896fecbde50d9a6db4e28f6ea6cfe66efefd8cb3b75bf03f8bc6b>,%xmm1
++movdqa %xmm1,0xcff0(%rsp)
+ movaps %xmm0,0xd000(%rsp)
+-movq RIP<DATA32:91db274d78a896fecbde50d9a6db4e28f6ea6cfe66efefd8cb3b75bf03f8bc6b>,%xmm1
+-movdqa %xmm1,0xd010(%rsp)
++movaps %xmm0,0xd010(%rsp)
++movaps RIP<DATA32:65140e4fce80de4742371818ef10c8b28cac80f7e9239d75491a316c7bb667cf>,%xmm0
+ movaps %xmm0,0xd020(%rsp)
++movaps RIP<DATA32:dbaa71a20a4a00c3c66f30b6c967d0d2ce4f412046a8fbda9fd659c353a403b4>,%xmm0
+ movaps %xmm0,0xd030(%rsp)
+-movaps RIP<DATA32:65140e4fce80de4742371818ef10c8b28cac80f7e9239d75491a316c7bb667cf>,%xmm0
+-movaps %xmm0,0xd040(%rsp)
+-movaps RIP<DATA32:dbaa71a20a4a00c3c66f30b6c967d0d2ce4f412046a8fbda9fd659c353a403b4>,%xmm0
+-movaps %xmm0,0xd050(%rsp)
+ movabs $0x480000000000000,%rax
+-mov %rax,0xd060(%rsp)
+-movq $0x1,0xcf90(%rsp)
+-mov %r12,0xcf98(%rsp)
+-movq $0x1,0xcfa0(%rsp)
+-movl $0x0,0xcfa8(%rsp)
+-movl $0x0,0xcfb0(%rsp)
+-movdqa %xmm2,0xcf60(%rsp)
+-movq $0x0,0xcf70(%rsp)
+-movq $0x321,0xcfb8(%rsp)
+-mov %r15,0xcfc0(%rsp)
+-movq $0x1,0xcfc8(%rsp)
+-movq $0x320,0xcfd0(%rsp)
+-mov 0x78(%rsp),%rax
+-mov %rax,0xcfd8(%rsp)
+-movq $0x0,0xcfe0(%rsp)
+-movl $0x10101,0xd070(%rsp)
+-movb $0x0,0xd074(%rsp)
+-movq $0x0,0xd068(%rsp)
+-movb $0x7,0xd076(%rsp)
+-movl $0x0,0xcfe8(%rsp)
+-movq $0x0,0x6b60(%rsp)
+-movq $0x3,0x6b70(%rsp)
++mov %rax,0xd040(%rsp)
++movq $0x1,0xcf70(%rsp)
++mov %r12,0xcf78(%rsp)
++movq $0x1,0xcf80(%rsp)
++movl $0x0,0xcf88(%rsp)
++movl $0x0,0xcf90(%rsp)
++movdqa %xmm2,0xcf40(%rsp)
++movq $0x0,0xcf50(%rsp)
++movq $0x321,0xcf98(%rsp)
++mov %r15,0xcfa0(%rsp)
++movq $0x1,0xcfa8(%rsp)
++movq $0x320,0xcfb0(%rsp)
++mov 0x188(%rsp),%rax
++mov %rax,0xcfb8(%rsp)
++movq $0x0,0xcfc0(%rsp)
++movl $0x10101,0xd050(%rsp)
++movb $0x0,0xd054(%rsp)
++movq $0x0,0xd048(%rsp)
++movb $0x7,0xd056(%rsp)
++movl $0x0,0xcfc8(%rsp)
++movq $0x0,0x6b40(%rsp)
++movq $0x3,0x6b50(%rsp)
+ movabs $0x8000000000000000,%rax
+-mov %rax,0x6cd0(%rsp)
+-mov %r13,0x6cf0(%rsp)
+-movq $0x40,0x6cf8(%rsp)
+-mov %rbx,0x6d00(%rsp)
+-movq $0x40,0x6d08(%rsp)
+-mov %rax,0x9b10(%rsp)
+-lea 0x9b18(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
++mov %rax,0x6cb0(%rsp)
++mov %r13,0x6cd0(%rsp)
++movq $0x40,0x6cd8(%rsp)
++mov %rbx,0x6ce0(%rsp)
++movq $0x40,0x6ce8(%rsp)
++mov %rax,0x9af0(%rsp)
++lea 0x9af8(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
+ mov $0x2598,%edx
+ call *%r14
+-movdqa 0x350(%rsp),%xmm0
+-movq %xmm0,0xc144(%rsp)
+-movq $0x63,0xc150(%rsp)
+-movq $0x4000000,0xc158(%rsp)
+-movl $0xe,0xc160(%rsp)
+-movl $0x0,0xc164(%rsp)
+-movq $0x0,0xce70(%rsp)
+-movb $0x0,0xd075(%rsp)
++movdqa 0x260(%rsp),%xmm0
++movq %xmm0,0xc124(%rsp)
++movq $0x63,0xc130(%rsp)
++movq $0x4000000,0xc138(%rsp)
++movl $0xe,0xc140(%rsp)
++movl $0x0,0xc144(%rsp)
++movq $0x0,0xce50(%rsp)
++movb $0x0,0xd055(%rsp)
+ pxor %xmm0,%xmm0
+-movdqa %xmm0,0xcf80(%rsp)
++movdqa %xmm0,0xcf60(%rsp)
+ mov 0x168(%rsp),%ebx
+ mov %ebx,%eax
+ and $0x1,%al
+-mov %al,0x350(%rsp)
+-mov 0x108(%rsp),%eax
++mov %al,0x188(%rsp)
++mov 0xd8(%rsp),%eax
+ and $0x1,%al
+-mov %eax,0x108(%rsp)
+-lea 0x3f60(%rsp),%r14
++mov %eax,0xd8(%rsp)
++lea 0x3f40(%rsp),%r14
++mov %eax,0x260(%rsp)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+ test $0x1,%bl
+-je LOCAL+0xf45
+-lea 0xd080(%rsp),%rdi
+-lea 0x270(%rsp),%rsi
++je LOCAL+0xf55
++nopl (%rax)
++lea 0xd060(%rsp),%rdi
++lea 0x230(%rsp),%rsi
+ call *RIP<ROLE:rook2::wire::Input::line>
+-mov 0xd080(%rsp),%r12
++mov 0xd060(%rsp),%r12
+ mov %r12,%rax
+ neg %rax
+-jo LOCAL+0x5c58
+-mov 0xd088(%rsp),%rbp
++jo LOCAL+0x5aab
++mov 0xd068(%rsp),%rbp
+ movabs $0x8000000000000001,%rax
+ cmp %rax,%r12
+-je LOCAL+0x5c75
+-mov 0xd090(%rsp),%r15
++je LOCAL+0x5ac8
++mov 0xd070(%rsp),%r15
+ mov %rbp,%rdi
+ mov %r15,%rsi
+ call *RIP<ROLE:rook2::wire::seed_assignment>
+ cmp $0x2,%eax
+-je LOCAL+0xf92
++je LOCAL+0xfa2
+ test %eax,%eax
+-jne LOCAL+0x5d56
+-mov %edx,0x5f60(%rsp)
+-movl $0x1,0xcfe8(%rsp)
+-mov %edx,0xcfec(%rsp)
+-lea 0x5f60(%rsp),%rax
+-mov %rax,0x3250(%rsp)
++jne LOCAL+0x5ba9
++mov %edx,0x5f40(%rsp)
++movl $0x1,0xcfc8(%rsp)
++mov %edx,0xcfcc(%rsp)
++lea 0x5f40(%rsp),%rax
++mov %rax,0xc20(%rsp)
+ lea RIP<ROLE:core::fmt::num::imp::<impl core::fmt::Display for u32>::fmt>,%rax
+-mov %rax,0x3258(%rsp)
+-lea RIP<ROLE:internal-address:0x8b453>,%rax
+-mov %rax,0xc40(%rsp)
+-movq $0x2,0xc48(%rsp)
+-movq $0x0,0xc60(%rsp)
+-lea 0x3250(%rsp),%rax
+-mov %rax,0xc50(%rsp)
+-movq $0x1,0xc58(%rsp)
+-lea 0x100(%rsp),%rax
+-mov %rax,0x3f60(%rsp)
+-movq $0x0,0x3f68(%rsp)
++mov %rax,0xc28(%rsp)
++lea RIP<ROLE:internal-address:0x8c4ad>,%rax
++mov %rax,0x1930(%rsp)
++movq $0x2,0x1938(%rsp)
++movq $0x0,0x1950(%rsp)
++lea 0xc20(%rsp),%rax
++mov %rax,0x1940(%rsp)
++movq $0x1,0x1948(%rsp)
++lea 0xc0(%rsp),%rax
++mov %rax,0x3f40(%rsp)
++movq $0x0,0x3f48(%rsp)
+ mov %r14,%rdi
+ lea RIP<ROLE:core::ptr::drop_in_place<std::io::Write::write_fmt::Adapter<std::io::stdio::StderrLock>>>,%rsi
+-lea 0xc40(%rsp),%rdx
++lea 0x1930(%rsp),%rdx
+ call *RIP<ROLE:core::fmt::write>
+-mov 0x3f68(%rsp),%rbx
++mov 0x3f48(%rsp),%rbx
+ test %al,%al
+-jne LOCAL+0x5db5
++jne LOCAL+0x5c08
+ mov %ebx,%eax
+ and $0x3,%eax
+ cmp $0x1,%eax
+-jne LOCAL+0xefd
++jne LOCAL+0xf0d
+ mov -0x1(%rbx),%r15
+ mov 0x7(%rbx),%r14
+ mov (%r14),%rax
+ test %rax,%rax
+-je LOCAL+0xed8
++je LOCAL+0xee8
+ mov %r15,%rdi
+ call *%rax
+ cmpq $0x0,0x8(%r14)
+ mov RIP<ROLE:free>,%r14
+-je LOCAL+0xeec
++je LOCAL+0xefc
+ mov %r15,%rdi
+ call *%r14
+ dec %rbx
+ mov %rbx,%rdi
+ call *%r14
+-lea 0x3f60(%rsp),%r14
+-mov 0x100(%rsp),%rbx
++lea 0x3f40(%rsp),%r14
++mov 0xc0(%rsp),%rbx
+ cmpq $0x0,0x10(%rbx)
+-jne LOCAL+0x62b8
++jne LOCAL+0x60e3
+ movq $0xffffffffffffffff,0x10(%rbx)
+ lea 0x18(%rbx),%rdi
+ call TARGET<std::io::buffered::bufwriter::BufWriter<W>::flush_buf>
+ incq 0x10(%rbx)
+ test %rax,%rax
+-jne LOCAL+0x5dcb
++jne LOCAL+0x5c1e
+ test %r12,%r12
+-je LOCAL+0xd90
++je LOCAL+0xda0
+ mov %rbp,%rdi
+ call *RIP<ROLE:free>
+-jmp LOCAL+0xd90
+-lea 0xd080(%rsp),%rdi
+-lea 0x270(%rsp),%rsi
++jmp LOCAL+0xda0
++lea 0xd060(%rsp),%rdi
++lea 0x230(%rsp),%rsi
+ call *RIP<ROLE:rook2::wire::Input::line>
+-mov 0xd080(%rsp),%r12
++mov 0xd060(%rsp),%r12
+ mov %r12,%rax
+ neg %rax
+-jo LOCAL+0x5c58
+-mov 0xd088(%rsp),%rbp
++jo LOCAL+0x5aab
++mov 0xd068(%rsp),%rbp
+ movabs $0x8000000000000001,%rax
+ cmp %rax,%r12
+-je LOCAL+0x5c75
+-mov 0xd090(%rsp),%r15
++je LOCAL+0x5ac8
++mov 0xd070(%rsp),%r15
+ pcmpeqd %xmm4,%xmm4
+-movzbl 0x16(%rsp),%r8d
++movzbl 0xe(%rsp),%r8d
+ cmp $0x3fe,%r15
+-ja LOCAL+0x5abf
++ja LOCAL+0x590f
+ xor %ecx,%ecx
+ nopl 0x0(%rax,%rax,1)
+ lea 0x20(%rcx),%rax
+ cmp %r15,%rax
+-ja LOCAL+0xfe3
++ja LOCAL+0xff3
+ cmp $0xffffffffffffffe0,%rcx
+-je LOCAL+0x5abf
++je LOCAL+0x590f
+ movdqu 0x0(%rbp,%rcx,1),%xmm0
+ movdqu 0x10(%rbp,%rcx,1),%xmm1
+ por %xmm0,%xmm1
+ pmovmskb %xmm1,%edx
+ mov %rax,%rcx
+ test %edx,%edx
+-je LOCAL+0xfb0
+-jmp LOCAL+0x5abf
++je LOCAL+0xfc0
++jmp LOCAL+0x590f
+ mov %r15,%rax
+ sub %rcx,%rax
+-jbe LOCAL+0x10ec
++jbe LOCAL+0x10fc
+ mov $0x1,%sil
+ cmp $0x8,%rax
+-jae LOCAL+0x1000
++jae LOCAL+0x1010
+ mov %rcx,%rax
+-jmp LOCAL+0x10d0
++jmp LOCAL+0x10e0
+ cmp $0x20,%rax
+-jae LOCAL+0x100a
++jae LOCAL+0x101a
+ xor %edx,%edx
+-jmp LOCAL+0x1072
++jmp LOCAL+0x1082
+ mov %r15d,%edi
+ and $0x1f,%edi
+ mov %r15,%rax
+@@ -703,16 +705,16 @@
+ pand %xmm3,%xmm0
+ add $0x20,%rsi
+ cmp %rsi,%rax
+-jne LOCAL+0x102c
++jne LOCAL+0x103c
+ pand %xmm1,%xmm0
+ psllw $0x7,%xmm0
+ pmovmskb %xmm0,%esi
+ cmp $0xffff,%esi
+ sete %sil
+ test %rdi,%rdi
+-je LOCAL+0x10e3
++je LOCAL+0x10f3
+ cmp $0x8,%edi
+-jb LOCAL+0x10d0
++jb LOCAL+0x10e0
+ mov %r15,%rax
+ and $0xfffffffffffffff8,%rax
+ movzbl %sil,%esi
+@@ -725,88 +727,88 @@
+ pand %xmm1,%xmm0
+ add $0x8,%rdx
+ cmp %rdx,%rax
+-jne LOCAL+0x108d
++jne LOCAL+0x109d
+ psllw $0x7,%xmm0
+ pmovmskb %xmm0,%ecx
+ not %ecx
+ test $0x5555,%ecx
+ sete %sil
+ test $0x7,%r15b
+-je LOCAL+0x10e3
++je LOCAL+0x10f3
+ data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+ cmpb $0x0,0x0(%rbp,%rax,1)
+ setns %cl
+ and %cl,%sil
+ inc %rax
+ cmp %rax,%r15
+-jne LOCAL+0x10d0
++jne LOCAL+0x10e0
+ test %sil,%sil
+-je LOCAL+0x5abf
++je LOCAL+0x590f
+ xor %eax,%eax
+ cmp %rax,%r15
+-je LOCAL+0x110f
++je LOCAL+0x111f
+ movzbl 0x0(%rbp,%rax,1),%ecx
+ inc %rax
+ cmp $0xd,%ecx
+-ja LOCAL+0x10ee
++ja LOCAL+0x10fe
+ mov $0x3401,%edx
+ bt %ecx,%edx
+-jae LOCAL+0x10ee
+-jmp LOCAL+0x5abf
+-mov %rbp,0x5c0(%rsp)
+-mov %r15,0x5c8(%rsp)
+-movb $0x0,0x5d0(%rsp)
+-lea 0x460(%rsp),%rdi
+-lea 0x5c0(%rsp),%rsi
++jae LOCAL+0x10fe
++jmp LOCAL+0x590f
++mov %rbp,0x5a0(%rsp)
++mov %r15,0x5a8(%rsp)
++movb $0x0,0x5b0(%rsp)
++lea 0x350(%rsp),%rdi
++lea 0x5a0(%rsp),%rsi
+ call TARGET<<alloc::vec::Vec<T> as alloc::vec::spec_from_iter::SpecFromIter<T,I>>::from_iter>
+-mov 0x470(%rsp),%r10
++mov 0x360(%rsp),%r10
+ cmp $0x28,%r10
+-jbe LOCAL+0x1152
++jbe LOCAL+0x1162
+ xor %r15d,%r15d
+-jmp LOCAL+0x1e39
++jmp LOCAL+0x1e4f
+ test %r10,%r10
+-je LOCAL+0x11c9
+-mov 0x468(%rsp),%r9
++je LOCAL+0x11d9
++mov 0x358(%rsp),%r9
+ dec %r10
+-movq $0x0,0x750(%rsp)
+-movq $0x8,0x758(%rsp)
+-movq $0x0,0x760(%rsp)
++movq $0x0,0x730(%rsp)
++movq $0x8,0x738(%rsp)
++movq $0x0,0x740(%rsp)
+ mov (%r9),%rdi
+ mov 0x8(%r9),%rsi
+ lea -0x1(%rsi),%rax
+ cmp $0x7,%rax
+-ja LOCAL+0x156f
++ja LOCAL+0x1582
+ lea 0x10(%r9),%rdx
+-lea RIP<DATA32:102fc1cde8aa228c08c57187b00457fcffc9ea49fe78d47dbf92fe8f1c4997ed>,%rcx
++lea RIP<DATA32:6c8c77bcbae93e1ea390117d2122804dc58a1520f85921628349fb5c7ee288f3>,%rcx
+ movslq (%rcx,%rax,4),%rax
+ add %rcx,%rax
+ jmp *%rax
+ movzbl (%rdi),%eax
+ cmp $0x2e,%eax
+-je LOCAL+0x1541
++je LOCAL+0x1554
+ cmp $0x3f,%eax
+-je LOCAL+0x1541
+-jmp LOCAL+0x156f
++je LOCAL+0x1554
++jmp LOCAL+0x1582
+ mov $0xb,%r15b
+ mov $0x8,%ecx
+-movq $0x0,0x148(%rsp)
+-movq $0x0,0x98(%rsp)
+-lea 0xa38(%rsp),%r14
+-jmp LOCAL+0x1e46
++movq $0x0,0x128(%rsp)
++movq $0x0,0x80(%rsp)
++lea 0xa18(%rsp),%r14
++jmp LOCAL+0x1e5f
+ mov (%rdi),%eax
+ mov $0x63726f66,%ecx
+ xor %ecx,%eax
+ movzbl 0x4(%rdi),%ecx
+ xor $0x65,%ecx
+ or %eax,%ecx
+-je LOCAL+0x1730
++je LOCAL+0x1743
+ mov (%rdi),%eax
+ mov $0x74696877,%ecx
+ xor %ecx,%eax
+ movzbl 0x4(%rdi),%ecx
+ xor $0x65,%ecx
+ or %eax,%ecx
+-je LOCAL+0x1b4c
++je LOCAL+0x1b5f
+ mov (%rdi),%ecx
+ mov $0x63616c62,%eax
+ xor %eax,%ecx
+@@ -819,11 +821,11 @@
+ sete %r8b
+ or %cl,%r8b
+ mov $0x1,%r15b
+-je LOCAL+0x1de7
++je LOCAL+0x1dfd
+ mov %r9,%rbx
+ mov %cl,%al
+ test %eax,%eax
+-je LOCAL+0x1d8e
++je LOCAL+0x1da4
+ mov (%rdi),%eax
+ mov $0x6576656c,%ecx
+ xor %ecx,%eax
+@@ -831,36 +833,36 @@
+ xor $0x6c,%ecx
+ or %eax,%ecx
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-lea 0x3f60(%rsp),%r14
++lea 0x3f40(%rsp),%r14
+ mov %rbx,%r9
+-jne LOCAL+0x156f
+-lea 0xd080(%rsp),%rdi
+-lea 0x6b60(%rsp),%rsi
++jne LOCAL+0x1582
++lea 0xd060(%rsp),%rdi
++lea 0x6b40(%rsp),%rsi
+ mov %r10,%rcx
+ call TARGET<rook2::session::Session<_>::level>
+-movzbl 0xd080(%rsp),%r15d
++movzbl 0xd060(%rsp),%r15d
+ cmp $0xb,%r15b
+-je LOCAL+0x2784
+-movzbl 0xd081(%rsp),%eax
+-mov %al,0x16(%rsp)
+-lea 0xd0b0(%rsp),%rcx
++je LOCAL+0x2762
++movzbl 0xd061(%rsp),%eax
++mov %al,0xe(%rsp)
++lea 0xd090(%rsp),%rcx
+ mov -0x2e(%rcx),%eax
+-mov %eax,0x950(%rsp)
++mov %eax,0x458(%rsp)
+ movzwl -0x2a(%rcx),%eax
+-mov %ax,0x954(%rsp)
+-mov 0xd088(%rsp),%rax
++mov %ax,0x45c(%rsp)
++mov 0xd068(%rsp),%rax
++mov %rax,0x80(%rsp)
++mov 0xd070(%rsp),%rax
+ mov %rax,0x98(%rsp)
+-mov 0xd090(%rsp),%rax
+-mov %rax,0x78(%rsp)
+-mov 0xd098(%rsp),%rax
+-mov %rax,0x148(%rsp)
+-jmp LOCAL+0x1de7
++mov 0xd078(%rsp),%rax
++mov %rax,0x128(%rsp)
++jmp LOCAL+0x1dfd
+ movzwl (%rdi),%eax
+ xor $0x656e,%eax
+ movzbl 0x2(%rdi),%ecx
+ xor $0x77,%ecx
+ or %ax,%cx
+-je LOCAL+0x1750
++je LOCAL+0x1763
+ movzwl (%rdi),%ecx
+ xor $0x6f6e,%ecx
+ movzbl 0x2(%rdi),%edx
+@@ -872,92 +874,92 @@
+ sete %dl
+ or %cl,%dl
+ mov $0x1,%r15b
+-je LOCAL+0x1de7
++je LOCAL+0x1dfd
+ mov %cl,%al
+ test %eax,%eax
+-jne LOCAL+0x156f
+-jmp LOCAL+0x278e
++jne LOCAL+0x1582
++jmp LOCAL+0x276c
+ cmpl $0x74697571,(%rdi)
+-je LOCAL+0x17eb
++je LOCAL+0x17fe
+ xor %eax,%eax
+ cmpl $0x6f646e75,(%rdi)
+ setne %cl
+-je LOCAL+0x1b6e
++je LOCAL+0x1b81
+ mov %r9,%rbx
+ cmpl $0x74736f70,(%rdi)
+-je LOCAL+0x1925
++je LOCAL+0x1938
+ cmpl $0x79736165,(%rdi)
+-je LOCAL+0x1925
++je LOCAL+0x1938
+ cmpl $0x64726168,(%rdi)
+-je LOCAL+0x1925
++je LOCAL+0x1938
+ cmpl $0x77617264,(%rdi)
+ setne %dl
+ test %r10,%r10
+ sete %r8b
+ or %dl,%r8b
+ mov $0x1,%r15b
+-jne LOCAL+0x1931
+-jmp LOCAL+0x1de7
++jne LOCAL+0x1944
++jmp LOCAL+0x1dfd
+ movabs $0x6472616f62746573,%rax
+ cmp %rax,(%rdi)
+-jne LOCAL+0x156f
+-mov %r9,0x18(%rsp)
+-lea 0xc40(%rsp),%rdi
++jne LOCAL+0x1582
++mov %r9,0x20(%rsp)
++lea 0x1930(%rsp),%rdi
+ mov %rdx,%rsi
+ mov %r10,%rdx
+ call TARGET<alloc::str::join_generic_copy>
+-mov 0xc40(%rsp),%r14
+-mov 0xc48(%rsp),%rbx
+-mov 0xc50(%rsp),%rcx
+-lea 0xd080(%rsp),%rdi
+-lea 0x6b60(%rsp),%rsi
++mov 0x1930(%rsp),%r14
++mov 0x1938(%rsp),%rbx
++mov 0x1940(%rsp),%rcx
++lea 0xd060(%rsp),%rdi
++lea 0x6b40(%rsp),%rsi
+ mov %rbx,%rdx
+ call TARGET<rook2::session::Session<_>::setboard>
+-movzbl 0xd080(%rsp),%r15d
++movzbl 0xd060(%rsp),%r15d
+ cmp $0xb,%r15b
+-jne LOCAL+0x1bbf
++jne LOCAL+0x1bd2
+ test %r14,%r14
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-mov 0x18(%rsp),%r9
+-je LOCAL+0x278e
++mov 0x20(%rsp),%r9
++je LOCAL+0x276c
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+-mov 0x18(%rsp),%r9
+-jmp LOCAL+0x278e
++mov 0x20(%rsp),%r9
++jmp LOCAL+0x276c
+ movzwl (%rdi),%ecx
+ xor %eax,%eax
+ cmp $0x6f67,%ecx
+ setne %cl
+-je LOCAL+0x1823
++je LOCAL+0x1836
+ cmpw $0x6b62,(%rdi)
+ sete %dl
+ test %r10,%r10
+ setne %r8b
+ mov $0x1,%r15b
+ test %r8b,%dl
+-je LOCAL+0x182f
+-jmp LOCAL+0x1de7
++je LOCAL+0x1842
++jmp LOCAL+0x1dfd
+ mov (%rdi),%eax
+ mov $0x616f6278,%ecx
+ xor %ecx,%eax
+ movzwl 0x4(%rdi),%ecx
+ xor $0x6472,%ecx
+ or %eax,%ecx
+-je LOCAL+0x1541
++je LOCAL+0x1554
+ mov (%rdi),%eax
+ mov $0x6f6d6572,%ecx
+ xor %ecx,%eax
+ movzwl 0x4(%rdi),%ecx
+ xor $0x6576,%ecx
+ or %eax,%ecx
+-je LOCAL+0x1b87
++je LOCAL+0x1b9a
+ mov (%rdi),%eax
+ mov $0x6f706f6e,%ecx
+ xor %ecx,%eax
+ movzwl 0x4(%rdi),%ecx
+ xor $0x7473,%ecx
+ or %eax,%ecx
+-je LOCAL+0x1cd8
++je LOCAL+0x1cee
+ mov (%rdi),%ecx
+ mov $0x646e6172,%eax
+ xor %eax,%ecx
+@@ -970,24 +972,24 @@
+ sete %dl
+ or %cl,%dl
+ mov $0x1,%r15b
+-je LOCAL+0x1de7
++je LOCAL+0x1dfd
+ mov %cl,%al
+ test %eax,%eax
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-lea 0x3f60(%rsp),%r14
+-je LOCAL+0x278e
++lea 0x3f40(%rsp),%r14
++je LOCAL+0x276c
+ mov (%rdi),%eax
+ mov $0x75736572,%ecx
+ xor %ecx,%eax
+ movzwl 0x4(%rdi),%ecx
+ xor $0x746c,%ecx
+ or %eax,%ecx
+-jne LOCAL+0x156f
+-jmp LOCAL+0x278e
++jne LOCAL+0x1582
++jmp LOCAL+0x276c
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
+-jmp LOCAL+0x278e
++jne LOCAL+0x1dfd
++jmp LOCAL+0x276c
+ mov (%rdi),%eax
+ mov $0x705f6d63,%ecx
+ xor %ecx,%eax
+@@ -995,89 +997,89 @@
+ mov $0x6d726170,%r8d
+ xor %r8d,%ecx
+ or %eax,%ecx
+-je LOCAL+0x18da
++je LOCAL+0x18ed
+ mov %r10,%rbx
+-mov %r9,0x18(%rsp)
++mov %r9,0x20(%rsp)
+ call *RIP<ROLE:rook2::session::coordinate_parts>
+ not %eax
+ test $0x70000,%eax
+-jne LOCAL+0x1670
+-mov 0x18(%rsp),%rax
++jne LOCAL+0x1683
++mov 0x20(%rsp),%rax
+ movups (%rax),%xmm0
+-movups %xmm0,0x360(%rsp)
+-lea 0x360(%rsp),%rax
+-mov %rax,0xc40(%rsp)
++movups %xmm0,0x930(%rsp)
++lea 0x930(%rsp),%rax
++mov %rax,0x1930(%rsp)
+ lea RIP<ROLE:<&T as core::fmt::Display>::fmt>,%rax
+-mov %rax,0xc48(%rsp)
+-lea RIP<ROLE:internal-address:0x8b01e>,%rax
+-mov %rax,0xd080(%rsp)
+-movq $0x2,0xd088(%rsp)
+-movq $0x0,0xd0a0(%rsp)
+-lea 0xc40(%rsp),%rax
+-mov %rax,0xd090(%rsp)
+-movq $0x1,0xd098(%rsp)
++mov %rax,0x1938(%rsp)
++lea RIP<ROLE:internal-address:0x8c07b>,%rax
++mov %rax,0xd060(%rsp)
++movq $0x2,0xd068(%rsp)
++movq $0x0,0xd080(%rsp)
++lea 0x1930(%rsp),%rax
++mov %rax,0xd070(%rsp)
++movq $0x1,0xd078(%rsp)
+ mov %r14,%rdi
+-lea 0xd080(%rsp),%rsi
++lea 0xd060(%rsp),%rsi
+ call *RIP<ROLE:alloc::fmt::format::format_inner>
+-mov 0x760(%rsp),%rbx
+-cmp 0x750(%rsp),%rbx
+-jne LOCAL+0x1634
+-lea 0x750(%rsp),%rdi
+-lea RIP<LOCATION:src/session.rs:425:27>,%rsi
++mov 0x740(%rsp),%rbx
++cmp 0x730(%rsp),%rbx
++jne LOCAL+0x1647
++lea 0x730(%rsp),%rdi
++lea RIP<LOCATION:src/session.rs:426:27>,%rsi
+ call *RIP<ROLE:alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0x758(%rsp),%rax
++mov 0x738(%rsp),%rax
+ lea (%rbx,%rbx,2),%rcx
+-mov 0x3f70(%rsp),%rdx
++mov 0x3f50(%rsp),%rdx
+ mov %rdx,0x10(%rax,%rcx,8)
+-movdqu 0x3f60(%rsp),%xmm0
++movdqu 0x3f40(%rsp),%xmm0
+ movdqu %xmm0,(%rax,%rcx,8)
+ inc %rbx
+-mov %rbx,0x760(%rsp)
+-mov 0x18(%rsp),%r9
+-jmp LOCAL+0x278e
+-mov 0x18(%rsp),%rax
++mov %rbx,0x740(%rsp)
++mov 0x20(%rsp),%r9
++jmp LOCAL+0x276c
++mov 0x20(%rsp),%rax
+ mov (%rax),%rsi
+ mov 0x8(%rax),%rdx
+-mov %rsi,0x360(%rsp)
+-mov %rdx,0x368(%rsp)
++mov %rsi,0x930(%rsp)
++mov %rdx,0x938(%rsp)
+ mov $0x1,%r15b
+ test %rbx,%rbx
+-jne LOCAL+0x1de7
+-lea 0x6b60(%rsp),%rdi
++jne LOCAL+0x1dfd
++lea 0x6b40(%rsp),%rdi
+ call TARGET<rook2::session::Session<_>::coordinate>
+ test %al,%al
+-je LOCAL+0x1a48
+-movzbl 0xd076(%rsp),%eax
++je LOCAL+0x1a5b
++movzbl 0xd056(%rsp),%eax
+ cmp $0x7,%al
+-jne LOCAL+0x1d13
+-cmpb $0x0,0xd070(%rsp)
++jne LOCAL+0x1d29
++cmpb $0x0,0xd050(%rsp)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-mov 0x18(%rsp),%r9
+-jne LOCAL+0x278e
+-mov 0xcfc8(%rsp),%rax
++mov 0x20(%rsp),%r9
++jne LOCAL+0x276c
++mov 0xcfa8(%rsp),%rax
+ test %rax,%rax
+-je LOCAL+0x62c5
+-mov 0xcfc0(%rsp),%rcx
++je LOCAL+0x60f0
++mov 0xcfa0(%rsp),%rcx
+ lea (%rax,%rax,4),%rax
+ shl $0x5,%rax
+ movzbl -0x28(%rcx,%rax,1),%eax
+ mov $0xb,%r15b
+ movabs $0x8000000000000000,%rcx
+-mov %rcx,0x98(%rsp)
+-cmp 0xd071(%rsp),%al
++mov %rcx,0x80(%rsp)
++cmp 0xd051(%rsp),%al
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-mov 0x18(%rsp),%r9
+-je LOCAL+0x1de7
+-jmp LOCAL+0x278e
++mov 0x20(%rsp),%r9
++je LOCAL+0x1dfd
++jmp LOCAL+0x276c
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
+-movb $0x1,0xd070(%rsp)
++jne LOCAL+0x1dfd
++movb $0x1,0xd050(%rsp)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-jmp LOCAL+0x278e
++jmp LOCAL+0x276c
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
++jne LOCAL+0x1dfd
+ mov %r9,%r14
+ movzwl (%rdi),%eax
+ xor $0x6f6e,%eax
+@@ -1085,192 +1087,192 @@
+ xor $0x70,%ecx
+ or %ax,%cx
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-je LOCAL+0x278e
++je LOCAL+0x276c
+ mov $0x38,%edx
+-lea 0xd080(%rsp),%rdi
++lea 0xd060(%rsp),%rdi
+ lea RIP<DATA32:8e8210423140450e5e8cc997efd5d4384bbeb4c0604385c752691034f36f1621>,%rsi
+ call *RIP<ROLE:rook2::position::Position::from_fen>
+-cmpb $0x2,0xd0f8(%rsp)
+-je LOCAL+0x6418
++cmpb $0x2,0xd0d8(%rsp)
++je LOCAL+0x6243
+ mov $0xa0,%edx
+-lea 0xc40(%rsp),%rbx
++lea 0x1930(%rsp),%rbx
+ mov %rbx,%rdi
+-lea 0xd080(%rsp),%rsi
++lea 0xd060(%rsp),%rsi
+ call *RIP<ROLE:memcpy>
+-lea 0x6b60(%rsp),%rdi
++lea 0x6b40(%rsp),%rdi
+ mov %rbx,%rsi
+ call TARGET<rook2::session::Session<_>::reset_position>
+-movw $0x100,0xd070(%rsp)
+-movb $0x1,0xd072(%rsp)
+-jmp LOCAL+0x1cc9
++movw $0x100,0xd050(%rsp)
++movb $0x1,0xd052(%rsp)
++jmp LOCAL+0x1cdf
+ movabs $0x8000000000000000,%rax
+ inc %rax
+ test %r10,%r10
+-mov 0x98(%rsp),%rcx
++mov 0x80(%rsp),%rcx
+ cmove %rax,%rcx
+-mov %rcx,0x98(%rsp)
++mov %rcx,0x80(%rsp)
+ mov $0x1,%r15d
+ mov $0xb,%eax
+ cmove %eax,%r15d
+-jmp LOCAL+0x1de7
++jmp LOCAL+0x1dfd
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
++jne LOCAL+0x1dfd
+ mov %r9,%rbx
+ cmpw $0x6473,(%rdi)
+-je LOCAL+0x1b0e
++je LOCAL+0x1b21
+ cmpw $0x7473,(%rdi)
+-je LOCAL+0x1b0e
++je LOCAL+0x1b21
+ mov %cl,%al
+ test %eax,%eax
+-je LOCAL+0x1d9d
++je LOCAL+0x1db3
+ cmpw $0x6b62,(%rdi)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-lea 0x3f60(%rsp),%r14
++lea 0x3f40(%rsp),%r14
+ mov %rbx,%r9
+-jne LOCAL+0x156f
+-lea 0xd080(%rsp),%rdi
++jne LOCAL+0x1582
++lea 0xd060(%rsp),%rdi
+ call TARGET<<T as alloc::slice::hack::ConvertVec>::to_vec>
+-mov 0x760(%rsp),%r14
+-cmp 0x750(%rsp),%r14
+-jne LOCAL+0x18a3
+-lea 0x750(%rsp),%rdi
+-lea RIP<LOCATION:src/session.rs:412:27>,%rsi
++mov 0x740(%rsp),%r14
++cmp 0x730(%rsp),%r14
++jne LOCAL+0x18b6
++lea 0x730(%rsp),%rdi
++lea RIP<LOCATION:src/session.rs:413:27>,%rsi
+ call *RIP<ROLE:alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0x758(%rsp),%rax
++mov 0x738(%rsp),%rax
+ lea (%r14,%r14,2),%rcx
+-mov 0xd090(%rsp),%rdx
++mov 0xd070(%rsp),%rdx
+ mov %rdx,0x10(%rax,%rcx,8)
+-movdqu 0xd080(%rsp),%xmm0
++movdqu 0xd060(%rsp),%xmm0
+ movdqu %xmm0,(%rax,%rcx,8)
+ inc %r14
+-mov %r14,0x760(%rsp)
+-jmp LOCAL+0x2784
++mov %r14,0x740(%rsp)
++jmp LOCAL+0x2762
+ mov %r9,%r14
+-lea 0xd080(%rsp),%rdi
+-lea 0xcff0(%rsp),%rsi
++lea 0xd060(%rsp),%rdi
++lea 0xcfd0(%rsp),%rsi
+ mov %r10,%rcx
+ call *RIP<ROLE:rook2::parameters::Parameters::command>
+-mov 0xd080(%rsp),%rcx
+-movzbl 0xd088(%rsp),%eax
++mov 0xd060(%rsp),%rcx
++movzbl 0xd068(%rsp),%eax
+ movabs $0x8000000000000000,%rdx
+ cmp %rdx,%rcx
+-jne LOCAL+0x1c2d
++jne LOCAL+0x1c43
+ mov $0x3,%r15b
+-mov %al,0x16(%rsp)
+-jmp LOCAL+0x1de7
++mov %al,0xe(%rsp)
++jmp LOCAL+0x1dfd
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
++jne LOCAL+0x1dfd
+ cmpl $0x77617264,(%rdi)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+ mov %rbx,%r9
+-je LOCAL+0x278e
++je LOCAL+0x276c
+ mov %cl,%al
+ test %eax,%eax
+-je LOCAL+0x26b2
++je LOCAL+0x2690
+ cmpl $0x74736f70,(%rdi)
+-je LOCAL+0x2768
++je LOCAL+0x2746
+ cmpl $0x79736165,(%rdi)
+-je LOCAL+0x2772
++je LOCAL+0x2750
+ cmpl $0x64726168,(%rdi)
+-je LOCAL+0x277c
++je LOCAL+0x275a
+ cmpl $0x656d6974,(%rdi)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-lea 0x3f60(%rsp),%r14
+-je LOCAL+0x199b
++lea 0x3f40(%rsp),%r14
++je LOCAL+0x19ae
+ mov %rbx,%r9
+ cmpl $0x6d69746f,(%rdi)
+-jne LOCAL+0x156f
++jne LOCAL+0x1582
+ mov $0x1,%r15b
+ cmp $0x1,%r10
+-jne LOCAL+0x1de7
++jne LOCAL+0x1dfd
+ mov 0x10(%rbx),%rdi
+ mov 0x18(%rbx),%rsi
+ call *RIP<ROLE:rook2::parameters::integer>
+ test $0x1,%al
+-jne LOCAL+0x1b3d
++jne LOCAL+0x1b50
+ mov %rbx,%r9
+ cmpq $0x4,0x8(%rbx)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-jne LOCAL+0x278e
++jne LOCAL+0x276c
+ mov (%r9),%rcx
+ cmpl $0x656d6974,(%rcx)
+-jne LOCAL+0x278e
+-cmpq $0x0,0xcfc8(%rsp)
+-je LOCAL+0x6460
++jne LOCAL+0x276c
++cmpq $0x0,0xcfa8(%rsp)
++je LOCAL+0x628b
+ shr $0x20,%rax
+-mov 0xcfe0(%rsp),%rdx
+-mov 0xcfc0(%rsp),%rcx
++mov 0xcfc0(%rsp),%rdx
++mov 0xcfa0(%rsp),%rcx
+ movzbl 0x78(%rcx),%ecx
+-movzbl 0xd072(%rsp),%r8d
+-mov 0xcf74(%rsp),%r9d
+-lea 0xcf90(%rsp),%rdi
++movzbl 0xd052(%rsp),%r8d
++mov 0xcf54(%rsp),%r9d
++lea 0xcf70(%rsp),%rdi
+ mov %eax,%esi
+ call *RIP<ROLE:rook2::clock::GameClock::synchronize>
+ cmp $0x3,%al
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+ mov %rbx,%r9
+-je LOCAL+0x278e
++je LOCAL+0x276c
+ mov $0x4,%r15b
+-mov %al,0x16(%rsp)
+-jmp LOCAL+0x1de7
+-lea 0x360(%rsp),%rax
+-mov %rax,0xc40(%rsp)
++mov %al,0xe(%rsp)
++jmp LOCAL+0x1dfd
++lea 0x930(%rsp),%rax
++mov %rax,0x1930(%rsp)
+ lea RIP<ROLE:<&T as core::fmt::Display>::fmt>,%rax
+-mov %rax,0xc48(%rsp)
+-lea RIP<ROLE:internal-address:0x8b00f>,%rax
+-mov %rax,0xd080(%rsp)
+-movq $0x2,0xd088(%rsp)
+-movq $0x0,0xd0a0(%rsp)
+-lea 0xc40(%rsp),%rax
+-mov %rax,0xd090(%rsp)
+-movq $0x1,0xd098(%rsp)
+-lea 0x3250(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
++mov %rax,0x1938(%rsp)
++lea RIP<ROLE:internal-address:0x8c06c>,%rax
++mov %rax,0xd060(%rsp)
++movq $0x2,0xd068(%rsp)
++movq $0x0,0xd080(%rsp)
++lea 0x1930(%rsp),%rax
++mov %rax,0xd070(%rsp)
++movq $0x1,0xd078(%rsp)
++lea 0xc20(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
+ call *RIP<ROLE:alloc::fmt::format::format_inner>
+-mov 0x760(%rsp),%rbx
+-cmp 0x750(%rsp),%rbx
+-jne LOCAL+0x1ae7
+-lea 0x750(%rsp),%rdi
+-lea RIP<LOCATION:src/session.rs:418:27>,%rsi
++mov 0x740(%rsp),%rbx
++cmp 0x730(%rsp),%rbx
++jne LOCAL+0x1afa
++lea 0x730(%rsp),%rdi
++lea RIP<LOCATION:src/session.rs:419:27>,%rsi
+ call *RIP<ROLE:alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0x758(%rsp),%rax
++mov 0x738(%rsp),%rax
+ lea (%rbx,%rbx,2),%rcx
+-mov 0x3260(%rsp),%rdx
++mov 0xc30(%rsp),%rdx
+ mov %rdx,0x10(%rax,%rcx,8)
+-movdqu 0x3250(%rsp),%xmm0
+-jmp LOCAL+0x1d6d
++movdqu 0xc20(%rsp),%xmm0
++jmp LOCAL+0x1d83
+ mov $0x1,%r15b
+ cmp $0x1,%r10
+-ja LOCAL+0x1de7
++ja LOCAL+0x1dfd
+ xor %eax,%eax
+ cmp $0x1,%r10
+-jne LOCAL+0x274f
++jne LOCAL+0x272d
+ mov 0x10(%rbx),%rdi
+ mov 0x18(%rbx),%rsi
+ call *RIP<ROLE:rook2::parameters::integer>
+ test $0x1,%al
+-je LOCAL+0x2741
++je LOCAL+0x271f
+ shr $0x8,%eax
+ mov $0x3,%r15b
+-mov %al,0x16(%rsp)
+-jmp LOCAL+0x1de7
++mov %al,0xe(%rsp)
++jmp LOCAL+0x1dfd
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
+-movw $0x101,0xd071(%rsp)
++jne LOCAL+0x1dfd
++movw $0x101,0xd051(%rsp)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-jmp LOCAL+0x278e
++jmp LOCAL+0x276c
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
++jne LOCAL+0x1dfd
+ mov $0x1,%ecx
+ cmpl $0x77617264,(%rdi)
+-jmp LOCAL+0x1bad
++jmp LOCAL+0x1bc0
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
++jne LOCAL+0x1dfd
+ mov (%rdi),%eax
+ mov $0x646e6172,%ecx
+ xor %ecx,%eax
+@@ -1279,57 +1281,57 @@
+ or %eax,%ecx
+ mov $0x2,%ecx
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-jne LOCAL+0x26ba
+-jmp LOCAL+0x278e
+-movzbl 0xd081(%rsp),%eax
+-mov %al,0x16(%rsp)
+-lea 0xd0b0(%rsp),%rcx
++jne LOCAL+0x2698
++jmp LOCAL+0x276c
++movzbl 0xd061(%rsp),%eax
++mov %al,0xe(%rsp)
++lea 0xd090(%rsp),%rcx
+ mov -0x2e(%rcx),%eax
+-mov %eax,0x950(%rsp)
++mov %eax,0x458(%rsp)
+ movzwl -0x2a(%rcx),%eax
+-mov %ax,0x954(%rsp)
+-mov 0xd088(%rsp),%rax
++mov %ax,0x45c(%rsp)
++mov 0xd068(%rsp),%rax
++mov %rax,0x80(%rsp)
++mov 0xd070(%rsp),%rax
+ mov %rax,0x98(%rsp)
+-mov 0xd090(%rsp),%rax
+-mov %rax,0x78(%rsp)
+-mov 0xd098(%rsp),%rax
+-mov %rax,0x148(%rsp)
++mov 0xd078(%rsp),%rax
++mov %rax,0x128(%rsp)
+ test %r14,%r14
+-je LOCAL+0x1de7
++je LOCAL+0x1dfd
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+-jmp LOCAL+0x1de7
+-lea 0xd0b0(%rsp),%rsi
++jmp LOCAL+0x1dfd
++lea 0xd090(%rsp),%rsi
+ mov -0x27(%rsi),%rdx
+ mov -0x20(%rsi),%rsi
+-lea 0x5f69(%rsp),%rdi
++lea 0x5f49(%rsp),%rdi
+ mov %rsi,0x7(%rdi)
+ mov %rdx,(%rdi)
+-mov %rcx,0x5f60(%rsp)
+-mov %al,0x5f68(%rsp)
+-lea 0xc40(%rsp),%rdi
+-lea 0x5f60(%rsp),%rsi
++mov %rcx,0x5f40(%rsp)
++mov %al,0x5f48(%rsp)
++lea 0x1930(%rsp),%rdi
++lea 0x5f40(%rsp),%rsi
+ call TARGET<<alloc::string::String as core::ops::arith::Add<&str>>::add>
+-mov 0x760(%rsp),%rbx
+-cmp 0x750(%rsp),%rbx
+-jne LOCAL+0x1c97
+-lea 0x750(%rsp),%rdi
+-lea RIP<LOCATION:src/session.rs:405:32>,%rsi
++mov 0x740(%rsp),%rbx
++cmp 0x730(%rsp),%rbx
++jne LOCAL+0x1cad
++lea 0x730(%rsp),%rdi
++lea RIP<LOCATION:src/session.rs:406:32>,%rsi
+ call *RIP<ROLE:alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0x758(%rsp),%rax
++mov 0x738(%rsp),%rax
+ lea (%rbx,%rbx,2),%rcx
+-mov 0xc50(%rsp),%rdx
++mov 0x1940(%rsp),%rdx
+ mov %rdx,0x10(%rax,%rcx,8)
+-movdqu 0xc40(%rsp),%xmm0
++movdqu 0x1930(%rsp),%xmm0
+ movdqu %xmm0,(%rax,%rcx,8)
+ inc %rbx
+-mov %rbx,0x760(%rsp)
++mov %rbx,0x740(%rsp)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+ mov %r14,%r9
+-jmp LOCAL+0x278e
++jmp LOCAL+0x276c
+ mov $0x1,%r15b
+ test %r10,%r10
+-jne LOCAL+0x1de7
++jne LOCAL+0x1dfd
+ mov (%rdi),%eax
+ mov $0x646e6172,%ecx
+ xor %ecx,%eax
+@@ -1337,155 +1339,228 @@
+ xor $0x6d6f,%ecx
+ or %eax,%ecx
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-je LOCAL+0x278e
+-movb $0x0,0xd073(%rsp)
+-jmp LOCAL+0x278e
++je LOCAL+0x276c
++movb $0x0,0xd053(%rsp)
++jmp LOCAL+0x276c
+ movzbl %al,%esi
+-lea 0xd080(%rsp),%rdi
++lea 0xd060(%rsp),%rdi
+ call *RIP<ROLE:rook2::session::GameResult::wire>
+-mov 0x760(%rsp),%rbx
+-cmp 0x750(%rsp),%rbx
+-jne LOCAL+0x1d4b
+-lea 0x750(%rsp),%rdi
+-lea RIP<LOCATION:src/session.rs:420:27>,%rsi
++mov 0x740(%rsp),%rbx
++cmp 0x730(%rsp),%rbx
++jne LOCAL+0x1d61
++lea 0x730(%rsp),%rdi
++lea RIP<LOCATION:src/session.rs:421:27>,%rsi
+ call *RIP<ROLE:alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0x758(%rsp),%rax
++mov 0x738(%rsp),%rax
+ lea (%rbx,%rbx,2),%rcx
+-mov 0xd090(%rsp),%rdx
++mov 0xd070(%rsp),%rdx
+ mov %rdx,0x10(%rax,%rcx,8)
+-movdqu 0xd080(%rsp),%xmm0
++movdqu 0xd060(%rsp),%xmm0
+ movdqu %xmm0,(%rax,%rcx,8)
+ inc %rbx
+-mov %rbx,0x760(%rsp)
++mov %rbx,0x740(%rsp)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-mov 0x18(%rsp),%r9
+-jmp LOCAL+0x278e
+-movw $0x0,0xd071(%rsp)
+-jmp LOCAL+0x2784
+-movb $0x0,0xd070(%rsp)
+-mov 0xcfc8(%rsp),%rax
++mov 0x20(%rsp),%r9
++jmp LOCAL+0x276c
++movw $0x0,0xd051(%rsp)
++jmp LOCAL+0x2762
++movb $0x0,0xd050(%rsp)
++mov 0xcfa8(%rsp),%rax
+ test %rax,%rax
+-je LOCAL+0x62c5
+-mov 0xcfc0(%rsp),%rcx
++je LOCAL+0x60f0
++mov 0xcfa0(%rsp),%rcx
+ lea (%rax,%rax,4),%rax
+ shl $0x5,%rax
+ movzbl -0x28(%rcx,%rax,1),%eax
+-mov %al,0xd071(%rsp)
++mov %al,0xd051(%rsp)
+ mov $0xb,%r15b
+ movabs $0x8000000000000000,%rax
+-mov %rax,0x98(%rsp)
+-mov 0x758(%rsp),%rbx
+-mov 0x760(%rsp),%r14
++mov %rax,0x80(%rsp)
++mov 0x738(%rsp),%rbx
++mov 0x740(%rsp),%r14
+ test %r14,%r14
+-je LOCAL+0x1e1e
++je LOCAL+0x1e34
+ lea 0x8(%rbx),%r13
+-jmp LOCAL+0x1e0b
++jmp LOCAL+0x1e21
+ add $0x18,%r13
+ dec %r14
+-je LOCAL+0x1e1e
++je LOCAL+0x1e34
+ cmpq $0x0,-0x8(%r13)
+-je LOCAL+0x1e02
++je LOCAL+0x1e18
+ mov 0x0(%r13),%rdi
+ call *RIP<ROLE:free>
+-jmp LOCAL+0x1e02
+-cmpq $0x0,0x750(%rsp)
+-je LOCAL+0x1e32
++jmp LOCAL+0x1e18
++cmpq $0x0,0x730(%rsp)
++je LOCAL+0x1e48
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-lea 0xa38(%rsp),%r14
+-mov 0x78(%rsp),%rcx
+-cmpq $0x0,0x460(%rsp)
+-je LOCAL+0x1e65
+-mov 0x468(%rsp),%rdi
++lea 0xa18(%rsp),%r14
++mov 0x98(%rsp),%rcx
++cmpq $0x0,0x350(%rsp)
++je LOCAL+0x1e7e
++mov 0x358(%rsp),%rdi
+ mov %rcx,%rbx
+ call *RIP<ROLE:free>
+ mov %rbx,%rcx
+ cmp $0xb,%r15b
+-movzbl 0x16(%rsp),%r8d
+-jne LOCAL+0x5ac7
+-mov %rcx,0x78(%rsp)
+-mov %r8b,0x16(%rsp)
++movzbl 0xe(%rsp),%r8d
++jne LOCAL+0x591a
++mov %rcx,0x98(%rsp)
++mov %r8b,0xe(%rsp)
+ movabs $0x8000000000000000,%rcx
+ lea 0x2(%rcx),%rax
+-mov 0x98(%rsp),%rsi
++mov 0x80(%rsp),%rsi
+ cmp %rax,%rsi
+ lea 0x1(%rcx,%rsi,1),%rax
+ mov $0x0,%ecx
+ cmovge %rcx,%rax
+ test %rax,%rax
+-je LOCAL+0x1ef8
++je LOCAL+0x2101
+ cmp $0x1,%rax
+-mov RIP<ROLE:memcpy>,%rcx
+-mov 0x48(%rsp),%rsi
+-mov 0x40(%rsp),%rdi
+-jne LOCAL+0x610d
+-movsd 0xcfe8(%rsp),%xmm10
+-mov 0x108(%rsp),%eax
+-mov %al,0x33(%rsp)
+-cmpb $0x0,0xd075(%rsp)
+-mov 0x38(%rsp),%rdx
+-je LOCAL+0x1fc3
+-movb $0x8,0x18(%rsp)
+-jmp LOCAL+0x20aa
+-mov 0x78(%rsp),%rcx
+-mov %rcx,%r14
+-mov 0x148(%rsp),%rax
+-test %rax,%rax
+-je LOCAL+0x201b
+-lea 0x0(,%rax,8),%rax
+-mov %rax,0x60(%rsp)
+-lea (%rax,%rax,2),%rax
+-mov %rax,0x18(%rsp)
+-xor %eax,%eax
+-jmp LOCAL+0x1f3a
+-lea 0x18(%r14),%rax
+-cmp %rax,0x18(%rsp)
+-je LOCAL+0x1ffd
+-mov %rax,%r14
+-mov (%rcx,%rax,1),%r13
+-movabs $0x8000000000000000,%rax
+-cmp %rax,%r13
+-je LOCAL+0x1ffd
+-mov 0x100(%rsp),%r15
+-cmpq $0x0,0x10(%r15)
+-jne LOCAL+0x637a
+-mov 0x8(%rcx,%r14,1),%rbx
+-mov 0x10(%rcx,%r14,1),%rdx
+-movq $0xffffffffffffffff,0x10(%r15)
+-lea 0x18(%r15),%rax
+-mov %rax,0xd080(%rsp)
+-lea 0xd080(%rsp),%rdi
+-mov %rbx,%rsi
+-call TARGET<<std::io::buffered::linewritershim::LineWriterShim<W> as std::io::Write>::write_all>
+-incq 0x10(%r15)
+-test %rax,%rax
+-mov 0x78(%rsp),%rcx
+-jne LOCAL+0x5f6f
+-test %r13,%r13
+-je LOCAL+0x1f2b
+-mov %rbx,%rdi
+-call *RIP<ROLE:free>
+-mov 0x78(%rsp),%rcx
+-jmp LOCAL+0x1f2b
+-movzbl 0xd076(%rsp),%eax
++mov RIP<ROLE:memcpy>,%r8
++mov 0x70(%rsp),%rcx
++jne LOCAL+0x5f69
++movsd 0xcfc8(%rsp),%xmm10
++mov 0xd8(%rsp),%eax
++mov %al,0x1b(%rsp)
++mov $0x8,%bl
++cmpb $0x0,0xd055(%rsp)
++mov 0x48(%rsp),%rdx
++jne LOCAL+0x1f3f
++movzbl 0xd056(%rsp),%eax
+ cmp $0x7,%rax
+-je LOCAL+0x2097
++je LOCAL+0x1f2f
+ cmp $0x2,%al
+ setb %cl
+ dec %rax
+ cmp $0x2,%rax
+ setb %al
+ or %cl,%al
+-mov RIP<ROLE:memcpy>,%rcx
+-je LOCAL+0x2097
+-movb $0x7,0x18(%rsp)
+-jmp LOCAL+0x20aa
++mov 0x70(%rsp),%rcx
++mov $0x7,%bl
++jne LOCAL+0x1f3f
++mov $0x9,%bl
++cmpb $0x0,0xd054(%rsp)
++je LOCAL+0x228b
++mov %rcx,0x70(%rsp)
++mov %rcx,%r9
++mov %rdx,0x10(%rsp)
++mov 0x160(%rsp),%rax
++mov %rax,0x30(%rsp)
++mov %r15d,%edi
++mov 0x158(%rsp),%rcx
++mov %rcx,%rsi
++mov %r9,0x50(%rsp)
++mov %rdx,0x48(%rsp)
++mov %rcx,0x158(%rsp)
++mov %rax,0x160(%rsp)
++mov $0x2,%eax
++mov %rax,0x20(%rsp)
++mov %rsi,0x288(%rsp)
++mov %rsi,%rax
++shl $0x10,%rax
++mov %edi,0x260(%rsp)
++movzbl %dil,%ecx
++shl $0x8,%ecx
++or %rax,%rcx
++movzbl %bl,%ebx
++or %rcx,%rbx
++mov $0x208,%edx
++mov %r14,%rdi
++lea 0x1930(%rsp),%rsi
++mov %r14,%r15
++mov %r8,%r14
++call *%r8
++mov 0x5f40(%rsp),%rax
++mov %rax,0x290(%rsp)
++mov 0x5f48(%rsp),%eax
++mov %eax,0x298(%rsp)
++movzwl 0xd060(%rsp),%eax
++mov %ax,0xb4(%rsp)
++movzbl 0xd062(%rsp),%eax
++mov %al,0xb6(%rsp)
++cmpq $0x2,0x20(%rsp)
++je LOCAL+0x5f86
++mov $0x208,%edx
++lea 0xd088(%rsp),%rdi
++mov %r15,%rsi
++call *%r14
++mov 0x298(%rsp),%eax
++lea 0xd090(%rsp),%rcx
++mov %eax,0x228(%rcx)
++mov 0x290(%rsp),%rax
++mov %rax,0x220(%rcx)
++movzbl 0xb6(%rsp),%eax
++mov %al,0x22f(%rcx)
++movzwl 0xb4(%rsp),%eax
++mov %ax,0x22d(%rcx)
++mov 0x20(%rsp),%rax
++mov %rax,0xd060(%rsp)
++mov %rbx,0xd068(%rsp)
++mov 0x30(%rsp),%rax
++mov %rax,0xd070(%rsp)
++mov 0x10(%rsp),%rax
++mov %rax,0xd078(%rsp)
++mov 0x50(%rsp),%rax
++mov %rax,0xd080(%rsp)
++movq $0x0,0xd290(%rsp)
++movq $0x8,0xd298(%rsp)
++movq $0x0,0xd2a0(%rsp)
++mov 0x1a4(%rsp),%eax
++mov %eax,0xd2a8(%rsp)
++mov 0x1a0(%rsp),%eax
++mov %eax,0xd2ac(%rsp)
++movzbl 0x7f(%rsp),%eax
++mov %al,0xd2bc(%rsp)
++lea 0xd060(%rsp),%rdi
++call TARGET<core::ptr::drop_in_place<rook2::timed::Outcome>>
++jmp LOCAL+0x2265
++mov 0x98(%rsp),%rcx
++mov %rcx,%r14
++mov 0x128(%rsp),%rax
++test %rax,%rax
++je LOCAL+0x21eb
++lea 0x0(,%rax,8),%rax
++mov %rax,0x30(%rsp)
++lea (%rax,%rax,2),%rax
++mov %rax,0x20(%rsp)
++xor %eax,%eax
++jmp LOCAL+0x2146
++lea 0x18(%r14),%rax
++cmp %rax,0x20(%rsp)
++je LOCAL+0x21cd
++mov %rax,%r14
++mov (%rcx,%rax,1),%r13
++movabs $0x8000000000000000,%rax
++cmp %rax,%r13
++je LOCAL+0x21cd
++mov 0xc0(%rsp),%r15
++cmpq $0x0,0x10(%r15)
++jne LOCAL+0x61a5
++mov 0x8(%rcx,%r14,1),%rbx
++mov 0x10(%rcx,%r14,1),%rdx
++movq $0xffffffffffffffff,0x10(%r15)
++lea 0x18(%r15),%rax
++mov %rax,0xd060(%rsp)
++lea 0xd060(%rsp),%rdi
++mov %rbx,%rsi
++call TARGET<<std::io::buffered::linewritershim::LineWriterShim<W> as std::io::Write>::write_all>
++incq 0x10(%r15)
++test %rax,%rax
++mov 0x98(%rsp),%rcx
++jne LOCAL+0x5dc2
++test %r13,%r13
++je LOCAL+0x2137
++mov %rbx,%rdi
++call *RIP<ROLE:free>
++mov 0x98(%rsp),%rcx
++jmp LOCAL+0x2137
+ add %rcx,%r14
+ add $0x18,%r14
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-mov 0x98(%rsp),%rsi
+-mov 0x148(%rsp),%rax
++mov 0x80(%rsp),%rsi
++mov 0x128(%rsp),%rax
+ lea (%rax,%rax,2),%rax
+ lea (%rcx,%rax,8),%rcx
+ mov %rcx,%rax
+@@ -1493,128 +1568,52 @@
+ movabs $0xaaaaaaaaaaaaaaab,%rdx
+ mul %rdx
+ cmp %r14,%rcx
+-je LOCAL+0x206b
++je LOCAL+0x223b
+ mov %rdx,%rbx
+ shr $0x4,%rbx
+ add $0x8,%r14
+-jmp LOCAL+0x2051
++jmp LOCAL+0x2221
+ add $0x18,%r14
+ dec %rbx
+-je LOCAL+0x206b
++je LOCAL+0x223b
+ cmpq $0x0,-0x8(%r14)
+-je LOCAL+0x2048
++je LOCAL+0x2218
+ mov (%r14),%rdi
+ call *RIP<ROLE:free>
+-mov 0x98(%rsp),%rsi
+-jmp LOCAL+0x2048
++mov 0x80(%rsp),%rsi
++jmp LOCAL+0x2218
+ test %rsi,%rsi
+-je LOCAL+0x207b
+-mov 0x78(%rsp),%rdi
+-call *RIP<ROLE:free>
+-lea 0x100(%rsp),%rdi
++je LOCAL+0x224e
++mov 0x98(%rsp),%rdi
++call *RIP<ROLE:free>
++lea 0xc0(%rsp),%rdi
+ call *RIP<ROLE:<std::io::stdio::StdoutLock as std::io::Write>::flush>
+ test %rax,%rax
+-je LOCAL+0x2281
+-jmp LOCAL+0x5dcb
+-cmpb $0x0,0xd074(%rsp)
+-je LOCAL+0x22a7
+-movb $0x9,0x18(%rsp)
+-movzwl 0x5f64(%rsp),%eax
+-mov %ax,0x5c4(%rsp)
+-mov 0x5f60(%rsp),%eax
+-mov %eax,0x5c0(%rsp)
+-mov %rdi,%rax
+-mov %rdx,0x60(%rsp)
+-mov %rsi,0x28(%rsp)
+-mov %rax,0x80(%rsp)
+-mov %r15b,0x27(%rsp)
+-mov %rdi,0x40(%rsp)
+-mov %rsi,0x48(%rsp)
+-mov %rdx,0x38(%rsp)
+-mov $0x2,%r15d
+-mov 0x5c0(%rsp),%eax
+-mov %eax,0x118(%rsp)
+-movzwl 0x5c4(%rsp),%eax
+-mov %ax,0x11c(%rsp)
+-mov $0x208,%edx
+-mov %r14,%rdi
+-lea 0xc40(%rsp),%rsi
+-mov %r14,%rbx
+-mov %rcx,%r14
+-call *%rcx
+-mov 0x5f60(%rsp),%rax
+-mov %rax,0x2a0(%rsp)
+-mov 0x5f68(%rsp),%eax
+-mov %eax,0x2a8(%rsp)
+-movzwl 0xd080(%rsp),%eax
+-mov %ax,0xd4(%rsp)
+-movzbl 0xd082(%rsp),%eax
+-mov %al,0xd6(%rsp)
+-cmp $0x2,%r15
+-je LOCAL+0x612a
+-mov $0x208,%edx
+-lea 0xd0a8(%rsp),%rdi
+-mov %rbx,%rsi
+-call *%r14
+-mov 0x2a8(%rsp),%eax
+-lea 0xd0b0(%rsp),%rcx
+-mov %eax,0x228(%rcx)
+-mov 0x2a0(%rsp),%rax
+-mov %rax,0x220(%rcx)
+-movzbl 0xd6(%rsp),%eax
+-mov %al,0x22f(%rcx)
+-movzwl 0xd4(%rsp),%eax
+-mov %ax,0x22d(%rcx)
+-movzwl 0x11c(%rsp),%eax
+-mov %ax,-0x22(%rcx)
+-mov 0x118(%rsp),%eax
+-mov %eax,-0x26(%rcx)
+-mov %r15,0xd080(%rsp)
+-movzbl 0x18(%rsp),%eax
+-mov %al,0xd088(%rsp)
+-movzbl 0x27(%rsp),%eax
+-mov %al,0xd089(%rsp)
+-mov 0x60(%rsp),%rax
+-mov %rax,0xd090(%rsp)
+-mov 0x28(%rsp),%rax
+-mov %rax,0xd098(%rsp)
+-mov 0x80(%rsp),%rax
+-mov %rax,0xd0a0(%rsp)
+-movq $0x0,0xd2b0(%rsp)
+-movq $0x8,0xd2b8(%rsp)
+-movq $0x0,0xd2c0(%rsp)
+-mov 0x21c(%rsp),%eax
+-mov %eax,0xd2c8(%rsp)
+-mov 0x218(%rsp),%eax
+-mov %eax,0xd2cc(%rsp)
+-movzbl 0x5f(%rsp),%eax
+-mov %al,0xd2dc(%rsp)
+-lea 0xd080(%rsp),%rdi
+-call TARGET<core::ptr::drop_in_place<rook2::timed::Outcome>>
++jne LOCAL+0x5c1e
+ test %r12,%r12
+ mov 0x168(%rsp),%ebx
+-lea 0x3f60(%rsp),%r14
+-je LOCAL+0xd87
++lea 0x3f40(%rsp),%r14
++je LOCAL+0xd94
+ mov %rbp,%rdi
+ call *RIP<ROLE:free>
+-jmp LOCAL+0xd87
+-movb $0x0,0xd070(%rsp)
+-mov 0xcfc8(%rsp),%rax
++jmp LOCAL+0xd94
++movb $0x0,0xd050(%rsp)
++mov 0xcfa8(%rsp),%rax
+ test %rax,%rax
+-je LOCAL+0x62c5
+-mov 0xcfc0(%rsp),%rcx
++je LOCAL+0x60f0
++mov 0xcfa0(%rsp),%rcx
+ lea (%rax,%rax,4),%rax
+ shl $0x5,%rax
+ movzbl -0x28(%rcx,%rax,1),%eax
+-mov %al,0xd071(%rsp)
+-cmpl $0x2,0x6b60(%rsp)
+-je LOCAL+0x63b0
+-movdqa 0xcff0(%rsp),%xmm1
+-movdqa 0xd000(%rsp),%xmm2
+-mov 0xd010(%rsp),%edx
+-movq 0xd014(%rsp),%xmm3
+-movapd 0xd020(%rsp),%xmm0
+-mov 0xd030(%rsp),%eax
++mov %al,0xd051(%rsp)
++cmpl $0x2,0x6b40(%rsp)
++je LOCAL+0x61db
++movdqa 0xcfd0(%rsp),%xmm1
++movdqa 0xcfe0(%rsp),%xmm2
++mov 0xcff0(%rsp),%edx
++movq 0xcff4(%rsp),%xmm3
++movapd 0xd000(%rsp),%xmm0
++mov 0xd010(%rsp),%eax
+ movd %edx,%xmm4
+ movdqa %xmm3,%xmm5
+ punpckldq %xmm4,%xmm5
+@@ -1626,19 +1625,19 @@
+ shufps $0xf4,%xmm0,%xmm6
+ movaps %xmm0,%xmm5
+ shufps $0x29,%xmm6,%xmm5
+-mov 0xd034(%rsp),%ecx
++mov 0xd014(%rsp),%ecx
+ cmp $0x3e9,%ecx
+ setae %r11b
+-mov 0xd038(%rsp),%r8d
++mov 0xd018(%rsp),%r8d
+ cmp $0x3e9,%r8d
+ setae %r10b
+-mov 0xd03c(%rsp),%esi
++mov 0xd01c(%rsp),%esi
+ cmp $0x3e9,%esi
+ setae %bl
+-mov 0xd040(%rsp),%r9d
++mov 0xd020(%rsp),%r9d
+ cmp $0x3e9,%r9d
+ setae %r14b
+-mov 0xd044(%rsp),%edi
++mov 0xd024(%rsp),%edi
+ cmp $0x3e9,%edi
+ setae %r15b
+ movdqa %xmm2,%xmm6
+@@ -1665,86 +1664,89 @@
+ or %r15b,%r10b
+ or %r13b,%r10b
+ mov $0x2,%r15b
+-movb $0x3,0x18(%rsp)
+-je LOCAL+0x241d
++mov $0x3,%bl
++je LOCAL+0x23fe
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-jmp LOCAL+0x268f
+-mov 0xd048(%rsp),%r10d
++jmp LOCAL+0x2672
++mov 0xd028(%rsp),%r10d
+ lea 0x64(%r10),%r11d
+ cmp $0xc8,%r11d
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-ja LOCAL+0x268f
+-mov 0xd04c(%rsp),%r11d
+-test %r11d,%r11d
+-js LOCAL+0x268f
+-movaps %xmm10,0x60(%rsp)
+-cmp $0x64,%r11d
+-ja LOCAL+0x2411
+-cmpl $0x0,0xd050(%rsp)
+-js LOCAL+0x2411
+-mov %r11d,%ebx
+-mov 0xd058(%rsp),%r11d
+-lea 0x2710(%r11),%r14d
++ja LOCAL+0x2672
++mov 0xd02c(%rsp),%r14d
++test %r14d,%r14d
++js LOCAL+0x2672
++movaps %xmm10,0x20(%rsp)
++cmp $0x64,%r14d
++ja LOCAL+0x23f2
++cmpl $0x0,0xd030(%rsp)
++js LOCAL+0x23f2
++mov %r14d,%r11d
++mov 0xd038(%rsp),%r14d
++mov %r14,0x30(%rsp)
++add $0x2710,%r14d
+ cmp $0x4e20,%r14d
+-ja LOCAL+0x2411
+-mov 0xd05c(%rsp),%r14d
++ja LOCAL+0x23f2
++mov 0xd03c(%rsp),%r14d
+ lea -0x1(%r14),%r13d
+ cmp $0x3e6,%r13d
+-ja LOCAL+0x2411
+-mov 0xd060(%rsp),%r13d
+-mov %r13d,0x80(%rsp)
++ja LOCAL+0x23f2
++mov 0xd040(%rsp),%r13d
++mov %r13d,0x50(%rsp)
+ test %r13d,%r13d
+-js LOCAL+0x2411
+-movslq 0xd064(%rsp),%r13
+-mov %r13,0x28(%rsp)
++js LOCAL+0x23f2
++movslq 0xd044(%rsp),%r13
++mov %r13,0x10(%rsp)
+ cmp $0x60,%r13
+-jl LOCAL+0x2411
+-mov 0xd01c(%rsp),%r15d
++jl LOCAL+0x23f2
++mov 0xcffc(%rsp),%ebx
+ movdqa %xmm1,%xmm4
+ shufps $0x88,%xmm2,%xmm4
+-movaps %xmm4,0xc0e0(%rsp)
+-mov %edx,0xc0f0(%rsp)
++movaps %xmm4,0xc0c0(%rsp)
++mov %edx,0xc0d0(%rsp)
+ pshufd $0x55,%xmm3,%xmm4
+-movd %xmm4,0xc0f4(%rsp)
+-movd %xmm0,0xc0f8(%rsp)
++movd %xmm4,0xc0d4(%rsp)
++movd %xmm0,0xc0d8(%rsp)
+ pshufd $0xee,%xmm0,%xmm4
+-movd %xmm4,0xc0fc(%rsp)
+-mov %eax,0xc100(%rsp)
+-mov %r8d,0xc104(%rsp)
+-mov %r9d,0xc108(%rsp)
++movd %xmm4,0xc0dc(%rsp)
++mov %eax,0xc0e0(%rsp)
++mov %r8d,0xc0e4(%rsp)
++mov %r9d,0xc0e8(%rsp)
+ shufps $0xdd,%xmm2,%xmm1
+-movups %xmm1,0xc10c(%rsp)
+-movd %xmm3,0xc11c(%rsp)
+-mov %r15d,0xc120(%rsp)
++movups %xmm1,0xc0ec(%rsp)
++movd %xmm3,0xc0fc(%rsp)
++mov %ebx,0xc100(%rsp)
+ pshufd $0x55,%xmm0,%xmm1
+-movd %xmm1,0xc124(%rsp)
++movd %xmm1,0xc104(%rsp)
+ pshufd $0xff,%xmm0,%xmm0
+-movd %xmm0,0xc128(%rsp)
+-mov %ecx,0xc12c(%rsp)
+-mov %esi,0xc130(%rsp)
+-mov %edi,0xc134(%rsp)
+-mov %r10d,0xc138(%rsp)
+-mov %r11d,0xc13c(%rsp)
+-mov %ebx,0xc140(%rsp)
+-mov 0xd054(%rsp),%eax
+-mov %r14,0xc150(%rsp)
+-mov 0x28(%rsp),%rcx
+-mov %rcx,0xc158(%rsp)
+-mov %eax,0xc160(%rsp)
+-mov 0x80(%rsp),%eax
+-mov %eax,0xc164(%rsp)
+-mov 0xcf80(%rsp),%rcx
++movd %xmm0,0xc108(%rsp)
++mov %ecx,0xc10c(%rsp)
++mov %esi,0xc110(%rsp)
++mov %edi,0xc114(%rsp)
++mov %r10d,0xc118(%rsp)
++mov 0x30(%rsp),%rax
++mov %eax,0xc11c(%rsp)
++mov %r11d,%ebx
++mov %r11d,0xc120(%rsp)
++mov 0xd034(%rsp),%eax
++mov %r14,0xc130(%rsp)
++mov 0x10(%rsp),%rcx
++mov %rcx,0xc138(%rsp)
++mov %eax,0xc140(%rsp)
++mov 0x50(%rsp),%eax
++mov %eax,0xc144(%rsp)
++mov 0xcf60(%rsp),%rcx
+ mov $0x80000000,%eax
+ cmp %rax,%rcx
+ cmovae %rax,%rcx
+ mov $0x302,%eax
+-mulq 0xcf88(%rsp)
++mulq 0xcf68(%rsp)
+ mov %rdx,%rsi
+ imul $0xede,%rcx,%rdi
+ add %rax,%rdi
+ adc $0x0,%rsi
+-mov %rdi,0xcf60(%rsp)
+-mov %rsi,0xcf68(%rsp)
++mov %rdi,0xcf40(%rsp)
++mov %rsi,0xcf48(%rsp)
+ mov $0x1c9c380,%edx
+ xor %ecx,%ecx
+ call *RIP<ROLE:__udivti3>
+@@ -1752,132 +1754,131 @@
+ cmp $0x7fffffff,%rax
+ mov $0x7fffffff,%eax
+ cmovae %rax,%rcx
+-add 0xcf70(%rsp),%ecx
+-mov %ecx,0xcf74(%rsp)
+-mov 0xcfe0(%rsp),%edx
+-mov %rcx,0x50(%rsp)
+-sub 0xcfac(%rsp),%ecx
+-cmpb $0x0,0xcfa8(%rsp)
++add 0xcf50(%rsp),%ecx
++mov %ecx,0xcf54(%rsp)
++mov 0xcfc0(%rsp),%edx
++mov %rcx,0x68(%rsp)
++sub 0xcf8c(%rsp),%ecx
++cmpb $0x0,0xcf88(%rsp)
+ mov $0x0,%eax
+ cmove %eax,%ecx
+-add 0xcfb0(%rsp),%ecx
+-lea 0xd080(%rsp),%rdi
+-lea 0xcf90(%rsp),%rsi
++add 0xcf90(%rsp),%ecx
++lea 0xd060(%rsp),%rdi
++lea 0xcf70(%rsp),%rsi
+ mov %ebx,%r8d
+ xor %r9d,%r9d
+ call *RIP<ROLE:rook2::clock::Schedule::allowance>
+-cmpb $0x0,0xd080(%rsp)
+-je LOCAL+0x27e3
+-movzbl 0xd081(%rsp),%r15d
+-movb $0x4,0x18(%rsp)
+-jmp LOCAL+0x2411
+-mov RIP<ROLE:memcpy>,%rcx
+-lea 0xa38(%rsp),%r14
+-mov 0x38(%rsp),%rdx
+-mov 0x48(%rsp),%rsi
+-mov 0x40(%rsp),%rdi
+-jmp LOCAL+0x20aa
++cmpb $0x0,0xd060(%rsp)
++je LOCAL+0x27c1
++movzbl 0xd061(%rsp),%r15d
++mov $0x4,%bl
++jmp LOCAL+0x23f2
++mov RIP<ROLE:memcpy>,%r8
++lea 0xa18(%rsp),%r14
++mov 0x48(%rsp),%rdx
++mov 0x70(%rsp),%rcx
++jmp LOCAL+0x1f3f
+ mov $0x1,%ecx
+ mov %rbx,%r9
+ mov %r9,%rbx
+-mov 0xcfc8(%rsp),%rax
+-mov 0xcfe0(%rsp),%rdx
++mov 0xcfa8(%rsp),%rax
++mov 0xcfc0(%rsp),%rdx
+ sub %rcx,%rdx
+ mov $0x0,%ecx
+ cmovae %rdx,%rcx
+-mov %rcx,0xcfe0(%rsp)
++mov %rcx,0xcfc0(%rsp)
+ cmp %rcx,%rax
+-jbe LOCAL+0x26f6
++jbe LOCAL+0x26d4
+ inc %rcx
+-mov %rcx,0xcfc8(%rsp)
++mov %rcx,0xcfa8(%rsp)
+ mov %rcx,%rax
+-jmp LOCAL+0x26ff
++jmp LOCAL+0x26dd
+ test %rax,%rax
+-je LOCAL+0x62c5
+-mov 0xcfc0(%rsp),%rcx
++je LOCAL+0x60f0
++mov 0xcfa0(%rsp),%rcx
+ lea (%rax,%rax,4),%rax
+ shl $0x5,%rax
+ cmpb $0x0,-0x3b(%rcx,%rax,1)
+-je LOCAL+0x2722
++je LOCAL+0x2700
+ add %rax,%rcx
+ cmpb $0x0,-0x35(%rcx)
+ sete %al
+-jmp LOCAL+0x2724
++jmp LOCAL+0x2702
+ mov $0x1,%al
+-mov %al,0xd075(%rsp)
+-lea 0x6b60(%rsp),%rdi
++mov %al,0xd055(%rsp)
++lea 0x6b40(%rsp),%rdi
+ call TARGET<rook2::session::Session<_>::adjudicate>
+-mov %al,0xd076(%rsp)
+-jmp LOCAL+0x2784
++mov %al,0xd056(%rsp)
++jmp LOCAL+0x2762
+ shr $0x20,%rax
+ cmpq $0x2,0x8(%rbx)
+-jne LOCAL+0x2756
++jne LOCAL+0x2734
+ mov (%rbx),%rdi
+ cmpw $0x6473,(%rdi)
+-je LOCAL+0x275f
+-mov %eax,0xd06c(%rsp)
+-jmp LOCAL+0x2784
+-mov %eax,0xd068(%rsp)
+-jmp LOCAL+0x2784
+-movb $0x1,0xd073(%rsp)
+-jmp LOCAL+0x2784
+-movb $0x0,0xd074(%rsp)
+-jmp LOCAL+0x2784
+-movb $0x1,0xd074(%rsp)
++je LOCAL+0x273d
++mov %eax,0xd04c(%rsp)
++jmp LOCAL+0x2762
++mov %eax,0xd048(%rsp)
++jmp LOCAL+0x2762
++movb $0x1,0xd053(%rsp)
++jmp LOCAL+0x2762
++movb $0x0,0xd054(%rsp)
++jmp LOCAL+0x2762
++movb $0x1,0xd054(%rsp)
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+ mov %rbx,%r9
+-mov 0x750(%rsp),%rax
+-mov %rax,0x98(%rsp)
+-mov 0x758(%rsp),%rcx
+-mov 0x760(%rsp),%rax
+-mov %rax,0x148(%rsp)
+-cmpq $0x0,0x460(%rsp)
+-je LOCAL+0x27d0
++mov 0x730(%rsp),%rax
++mov %rax,0x80(%rsp)
++mov 0x738(%rsp),%rcx
++mov 0x740(%rsp),%rax
++mov %rax,0x128(%rsp)
++cmpq $0x0,0x350(%rsp)
++je LOCAL+0x27ae
+ mov %r9,%rdi
+ mov %rcx,%rbx
+ call *RIP<ROLE:free>
+ mov %rbx,%rcx
+-movzbl 0x16(%rsp),%r8d
+-lea 0xa38(%rsp),%r14
+-jmp LOCAL+0x1e75
+-cmpb $0x0,0xcfe8(%rsp)
+-mov 0x50(%rsp),%rax
+-mov %eax,0x80(%rsp)
+-je LOCAL+0x2807
+-mov 0xcfec(%rsp),%eax
+-mov %eax,0x80(%rsp)
+-cmpl $0x0,0xcfa8(%rsp)
+-jne LOCAL+0x6397
+-mov 0xd084(%rsp),%eax
+-mov %eax,0x28(%rsp)
+-mov 0xd088(%rsp),%eax
+-mov %eax,0x220(%rsp)
+-mov 0xd08c(%rsp),%eax
+-mov %eax,0x1f0(%rsp)
+-movl $0x1,0xcfa8(%rsp)
+-mov 0x50(%rsp),%rax
+-mov %eax,0xcfac(%rsp)
+-mov 0xcf74(%rsp),%eax
+-mov %eax,0xcf70(%rsp)
++movzbl 0xe(%rsp),%r8d
++lea 0xa18(%rsp),%r14
++jmp LOCAL+0x1e8e
++cmpb $0x0,0xcfc8(%rsp)
++mov 0x68(%rsp),%rax
++mov %eax,0x30(%rsp)
++je LOCAL+0x27df
++mov 0xcfcc(%rsp),%eax
++mov %eax,0x30(%rsp)
++cmpl $0x0,0xcf88(%rsp)
++jne LOCAL+0x61c2
++mov 0xd064(%rsp),%eax
++mov %eax,0x50(%rsp)
++mov 0xd068(%rsp),%eax
++mov %eax,0x1e0(%rsp)
++mov 0xd06c(%rsp),%eax
++mov %eax,0xe0(%rsp)
++movl $0x1,0xcf88(%rsp)
++mov 0x68(%rsp),%rax
++mov %eax,0xcf8c(%rsp)
++mov 0xcf54(%rsp),%eax
++mov %eax,0xcf50(%rsp)
+ pxor %xmm0,%xmm0
+-movdqa %xmm0,0xcf60(%rsp)
+-lea 0x7910(%rsp),%rax
++movdqa %xmm0,0xcf40(%rsp)
++lea 0x78f0(%rsp),%rax
+ movdqa %xmm0,0x5670(%rax)
+-mov 0xcfc8(%rsp),%rax
++mov 0xcfa8(%rsp),%rax
+ test %rax,%rax
+-je LOCAL+0x62c5
+-mov 0xcfc0(%rsp),%rbx
++je LOCAL+0x60f0
++mov 0xcfa0(%rsp),%rbx
+ lea (%rax,%rax,4),%r15
+ shl $0x5,%r15
+ lea (%r15,%rbx,1),%rsi
+ add $0xffffffffffffff60,%rsi
+ mov $0xa0,%edx
+-lea 0x3f60(%rsp),%rdi
++lea 0x3f40(%rsp),%rdi
+ call *RIP<ROLE:memcpy>
+-lea 0x3250(%rsp),%rdi
++lea 0xc20(%rsp),%rdi
+ mov %rbx,%rsi
+ call *RIP<ROLE:rook2::history::SearchHistory::new>
+-mov 0xcfe0(%rsp),%rax
++mov 0xcfc0(%rsp),%rax
+ add $0xffffffffffffff60,%r15
+ shr $0x5,%r15
+ movabs $0xcccccccccccccccd,%rcx
+@@ -1885,140 +1886,138 @@
+ cmp %rax,%r15
+ cmovae %rax,%r15
+ test %r15,%r15
+-je LOCAL+0x2938
++je LOCAL+0x2910
+ add $0xa0,%rbx
+-mov 0xcfd8(%rsp),%r13
++mov 0xcfb8(%rsp),%r13
+ xor %r14d,%r14d
+ movzwl 0x0(%r13,%r14,2),%ecx
+ inc %r14
+-lea 0x3250(%rsp),%rdi
++lea 0xc20(%rsp),%rdi
+ mov %rbx,%rsi
+ mov $0x1,%edx
+ call *RIP<ROLE:rook2::history::SearchHistory::push>
+ add $0xa0,%rbx
+ cmp %r14,%r15
+-jne LOCAL+0x290d
+-mov 0x3260(%rsp),%rax
+-mov %rax,0x38(%rsp)
++jne LOCAL+0x28e5
++mov 0xc30(%rsp),%rax
++mov %rax,0x160(%rsp)
+ dec %rax
+-mov %rax,0x3280(%rsp)
+-mov 0x3250(%rsp),%r13
+-movzbl 0x3258(%rsp),%eax
+-mov %al,0x18(%rsp)
+-movzbl 0x3259(%rsp),%r15d
+-lea 0x325a(%rsp),%rcx
+-mov (%rcx),%eax
+-mov %eax,0x5f60(%rsp)
+-movzwl 0x4(%rcx),%eax
+-mov %ax,0x5f64(%rsp)
+-mov 0x3268(%rsp),%rax
++mov %rax,0xc50(%rsp)
++mov 0xc20(%rsp),%r13
++movzbl 0xc28(%rsp),%ebx
++movzbl 0xc29(%rsp),%r15d
++mov 0xc2a(%rsp),%eax
++movzwl 0xc2e(%rsp),%ecx
++shl $0x20,%rcx
++or %rax,%rcx
++mov %rcx,0x158(%rsp)
++mov 0xc38(%rsp),%rax
+ mov %rax,0x48(%rsp)
+-mov 0x3270(%rsp),%rax
+-mov %rax,0x40(%rsp)
+-movdqu 0x1e(%rcx),%xmm0
+-movdqa %xmm0,0xd080(%rsp)
+-mov 0xd050(%rsp),%eax
+-mov %eax,0x140(%rsp)
++mov 0xc40(%rsp),%rax
++mov %rax,0x70(%rsp)
++lea 0xc48(%rsp),%rax
++movdqu (%rax),%xmm0
++movdqa %xmm0,0xd060(%rsp)
++mov 0xd030(%rsp),%eax
++mov %eax,0x120(%rsp)
+ mov $0xa0,%edx
+-lea 0xd090(%rsp),%rdi
+-lea 0x3f60(%rsp),%rsi
++lea 0xd070(%rsp),%rdi
++lea 0x3f40(%rsp),%rsi
+ mov RIP<ROLE:memcpy>,%r14
+ call *%r14
+ mov $0xb0,%edx
+-lea 0xc40(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
++lea 0x1930(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
+ call *%r14
+ movabs $0x8000000000000000,%rax
+ cmp %rax,%r13
+-je LOCAL+0x2411
+-movzwl 0x5f64(%rsp),%eax
+-lea 0x46a(%rsp),%rcx
+-mov %ax,0x4(%rcx)
+-mov 0x5f60(%rsp),%eax
+-mov %eax,(%rcx)
+-mov 0x38(%rsp),%rax
+-mov %rax,0x470(%rsp)
++je LOCAL+0x23f2
++mov 0x158(%rsp),%rax
++mov %eax,0x35a(%rsp)
++shr $0x20,%rax
++mov %ax,0x35e(%rsp)
++mov 0x160(%rsp),%rax
++mov %rax,0x360(%rsp)
+ mov 0x48(%rsp),%rax
+-mov %rax,0x478(%rsp)
+-mov 0x40(%rsp),%rax
+-mov %rax,0x480(%rsp)
++mov %rax,0x368(%rsp)
++mov 0x70(%rsp),%rax
++mov %rax,0x370(%rsp)
+ mov $0xb0,%edx
+-lea 0x488(%rsp),%rdi
+-lea 0xc40(%rsp),%rsi
++lea 0x378(%rsp),%rdi
++lea 0x1930(%rsp),%rsi
+ call *RIP<ROLE:memcpy>
+-mov %r13,0x460(%rsp)
+-movzbl 0x18(%rsp),%eax
+-mov %al,0x468(%rsp)
+-mov %r15b,0x469(%rsp)
+-mov 0x220(%rsp),%eax
+-mov %eax,0x538(%rsp)
+-mov 0x1f0(%rsp),%esi
+-mov %esi,0x53c(%rsp)
+-mov 0x50(%rsp),%rdx
+-mov %edx,0x540(%rsp)
+-mov 0x80(%rsp),%ecx
+-mov %ecx,0x544(%rsp)
+-mov 0x140(%rsp),%ecx
+-mov %ecx,0x548(%rsp)
+-movb $0x3e,0x54c(%rsp)
+-mov 0x28(%rsp),%ecx
+-mov %ecx,0x550(%rsp)
+-mov %eax,0x554(%rsp)
+-mov %esi,0x558(%rsp)
+-mov %edx,0x55c(%rsp)
+-movaps 0x6b60(%rsp),%xmm0
+-movaps %xmm0,0x80(%rsp)
+-mov 0x6b60(%rsp),%rax
+-mov 0x6cf0(%rsp),%rcx
+-mov %rcx,0x28(%rsp)
+-mov 0x6cf8(%rsp),%rcx
+-mov %rcx,0x180(%rsp)
+-mov 0x6d00(%rsp),%r13
+-mov 0x6d08(%rsp),%rcx
+-mov %rcx,0x138(%rsp)
+-mov 0xce70(%rsp),%rcx
+-mov %rcx,0x18(%rsp)
+-movq $0x2,0x6b60(%rsp)
++mov %r13,0x350(%rsp)
++mov %bl,0x358(%rsp)
++mov %r15b,0x359(%rsp)
++mov 0x1e0(%rsp),%eax
++mov %eax,0x428(%rsp)
++mov 0xe0(%rsp),%esi
++mov %esi,0x42c(%rsp)
++mov 0x68(%rsp),%rdx
++mov %edx,0x430(%rsp)
++mov 0x30(%rsp),%ecx
++mov %ecx,0x434(%rsp)
++mov 0x120(%rsp),%ecx
++mov %ecx,0x438(%rsp)
++movb $0x3e,0x43c(%rsp)
++mov 0x50(%rsp),%ecx
++mov %ecx,0x440(%rsp)
++mov %eax,0x444(%rsp)
++mov %esi,0x448(%rsp)
++mov %edx,0x44c(%rsp)
++movaps 0x6b40(%rsp),%xmm0
++movaps %xmm0,0x50(%rsp)
++mov 0x6b40(%rsp),%rax
++mov 0x6cd0(%rsp),%rcx
++mov %rcx,0x10(%rsp)
++mov 0x6cd8(%rsp),%rcx
++mov %rcx,0x170(%rsp)
++mov 0x6ce0(%rsp),%r13
++mov 0x6ce8(%rsp),%rcx
++mov %rcx,0x118(%rsp)
++mov 0xce50(%rsp),%rcx
++mov %rcx,0x30(%rsp)
++movq $0x2,0x6b40(%rsp)
+ cmp $0x2,%rax
+-je LOCAL+0x6471
++je LOCAL+0x629c
+ mov $0x2608,%edx
+-lea 0x10090(%rsp),%rdi
+-lea 0x9b48(%rsp),%rsi
++lea 0x10070(%rsp),%rdi
++lea 0x9b28(%rsp),%rsi
+ mov RIP<ROLE:memcpy>,%rbx
+ call *%rbx
+-lea 0x7910(%rsp),%r14
++lea 0x78f0(%rsp),%r14
+ movups 0x4840(%r14),%xmm0
+-lea 0xd0b0(%rsp),%r15
++lea 0xd090(%rsp),%r15
+ movups %xmm0,0x55e8(%r15)
+ mov 0x4850(%r14),%rax
+ mov %rax,0x55f8(%r15)
+ mov $0xc00,%edx
+-lea 0xd230(%rsp),%rdi
+-lea 0x6d10(%rsp),%rsi
++lea 0xd210(%rsp),%rdi
++lea 0x6cf0(%rsp),%rsi
+ call *%rbx
+ mov $0xd08,%edx
+-lea 0x126b0(%rsp),%rdi
+-lea 0xc168(%rsp),%rsi
++lea 0x12690(%rsp),%rdi
++lea 0xc148(%rsp),%rsi
+ call *%rbx
+ movaps -0xc40(%r14),%xmm0
+ movaps -0xc30(%r14),%xmm1
+ movaps %xmm0,0x140(%r15)
+ movaps %xmm1,0x150(%r15)
+ mov $0x2000,%edx
+-lea 0xde30(%rsp),%rdi
++lea 0xde10(%rsp),%rdi
+ mov %r14,%rsi
+ call *%rbx
+ mov $0x200,%edx
+-lea 0xfe30(%rsp),%rdi
+-lea 0x9910(%rsp),%rsi
++lea 0xfe10(%rsp),%rdi
++lea 0x98f0(%rsp),%rsi
+ call *%rbx
+ mov $0xe8,%edx
+-lea 0x133c0(%rsp),%rdi
+-lea 0xce78(%rsp),%rsi
++lea 0x133a0(%rsp),%rdi
++lea 0xce58(%rsp),%rsi
+ call *%rbx
+ mov $0x160,%edx
+-lea 0xd090(%rsp),%rdi
+-lea 0x6b70(%rsp),%rsi
++lea 0xd070(%rsp),%rdi
++lea 0x6b50(%rsp),%rsi
+ call *%rbx
+ mov 0x2230(%r14),%rax
+ mov %rax,0x2fb0(%r15)
+@@ -2028,227 +2027,229 @@
+ movdqa %xmm2,0x2fa0(%r15)
+ movaps %xmm1,0x2f90(%r15)
+ movaps %xmm0,0x2f80(%r15)
+-movaps 0x80(%rsp),%xmm0
+-movaps %xmm0,0xd080(%rsp)
+-mov 0x28(%rsp),%rax
+-mov %rax,0xd210(%rsp)
+-mov 0x180(%rsp),%rax
+-mov %rax,0xd218(%rsp)
+-mov %r13,0xd220(%rsp)
+-mov 0x138(%rsp),%rax
+-mov %rax,0xd228(%rsp)
+-movaps 0x60(%rsp),%xmm0
+-movlps %xmm0,0x10068(%rsp)
+-lea 0x270(%rsp),%rax
+-mov %rax,0x10070(%rsp)
+-lea 0x100(%rsp),%rax
+-mov %rax,0x10078(%rsp)
+-lea 0x208(%rsp),%rax
+-mov %rax,0x10080(%rsp)
+-movzbl 0x350(%rsp),%eax
+-mov %al,0x10088(%rsp)
+-mov 0x18(%rsp),%rax
+-mov %rax,0x133b8(%rsp)
+-lea 0xcf90(%rsp),%rcx
++movaps 0x50(%rsp),%xmm0
++movaps %xmm0,0xd060(%rsp)
++mov 0x10(%rsp),%rax
++mov %rax,0xd1f0(%rsp)
++mov 0x170(%rsp),%rax
++mov %rax,0xd1f8(%rsp)
++mov %r13,0xd200(%rsp)
++mov 0x118(%rsp),%rax
++mov %rax,0xd208(%rsp)
++movaps 0x20(%rsp),%xmm0
++movlps %xmm0,0x10048(%rsp)
++lea 0x230(%rsp),%rax
++mov %rax,0x10050(%rsp)
++lea 0xc0(%rsp),%rax
++mov %rax,0x10058(%rsp)
++lea 0x190(%rsp),%rax
++mov %rax,0x10060(%rsp)
++movzbl 0x188(%rsp),%eax
++mov %al,0x10068(%rsp)
++mov 0x30(%rsp),%rax
++mov %rax,0x13398(%rsp)
++lea 0xcf70(%rsp),%rcx
+ mov 0x20(%rcx),%rax
+-mov %rax,0xc60(%rsp)
++mov %rax,0x1950(%rsp)
+ movups (%rcx),%xmm0
+ movups 0x10(%rcx),%xmm1
+-movaps %xmm1,0xc50(%rsp)
+-movaps %xmm0,0xc40(%rsp)
+-movq $0x0,0xcf90(%rsp)
+-movq $0x4,0xcf98(%rsp)
+-movq $0x0,0xcfa0(%rsp)
+-movl $0x0,0xcfa8(%rsp)
+-movl $0x0,0xcfb0(%rsp)
+-cmpq $0x0,0xcfc8(%rsp)
+-je LOCAL+0x647e
+-movzbl 0xd073(%rsp),%eax
+-mov %al,0x18(%rsp)
+-movzbl 0xd070(%rsp),%r14d
+-movzbl 0xd074(%rsp),%r15d
+-mov 0xcfe0(%rsp),%rbx
+-mov 0xcfc0(%rsp),%rax
++movaps %xmm1,0x1940(%rsp)
++movaps %xmm0,0x1930(%rsp)
++movq $0x0,0xcf70(%rsp)
++movq $0x4,0xcf78(%rsp)
++movq $0x0,0xcf80(%rsp)
++movl $0x0,0xcf88(%rsp)
++movl $0x0,0xcf90(%rsp)
++cmpq $0x0,0xcfa8(%rsp)
++je LOCAL+0x62a9
++movzbl 0xd053(%rsp),%eax
++mov %al,0x20(%rsp)
++movzbl 0xd050(%rsp),%r14d
++movzbl 0xd054(%rsp),%r15d
++mov 0xcfc0(%rsp),%rbx
++mov 0xcfa0(%rsp),%rax
+ movzbl 0x78(%rax),%r13d
+-movzbl 0xd072(%rsp),%eax
+-mov %al,0x60(%rsp)
+-movaps 0xc40(%rsp),%xmm0
+-movaps 0xc50(%rsp),%xmm1
+-movaps %xmm0,0x3f60(%rsp)
+-movaps %xmm1,0x3f70(%rsp)
+-mov 0xc60(%rsp),%rax
+-mov %rax,0x3f80(%rsp)
++movzbl 0xd052(%rsp),%eax
++mov %al,0x30(%rsp)
++movaps 0x1930(%rsp),%xmm0
++movaps 0x1940(%rsp),%xmm1
++movaps %xmm0,0x3f40(%rsp)
++movaps %xmm1,0x3f50(%rsp)
++mov 0x1950(%rsp),%rax
++mov %rax,0x3f60(%rsp)
+ mov $0x3e,%al
+-mov %rax,0x180(%rsp)
+-mov 0x10030(%rsp),%rax
++mov %rax,0x170(%rsp)
++mov 0x10010(%rsp),%rax
+ shl $1,%rax
+ test %rax,%rax
+-je LOCAL+0x2e81
+-mov 0x10038(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0x538(%rsp),%eax
+-mov %eax,0x220(%rsp)
+-mov 0x53c(%rsp),%eax
+-mov %eax,0x1f0(%rsp)
+-mov 0x540(%rsp),%eax
+-mov %rax,0x50(%rsp)
+-mov 0x548(%rsp),%eax
+-mov %eax,0x140(%rsp)
+-movzbl 0x54c(%rsp),%eax
+-mov %rax,0x180(%rsp)
+-mov 0x3f80(%rsp),%rax
+-lea 0xd0b0(%rsp),%rcx
++je LOCAL+0x2e53
++mov 0x10018(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0x428(%rsp),%eax
++mov %eax,0x1e0(%rsp)
++mov 0x42c(%rsp),%eax
++mov %eax,0xe0(%rsp)
++mov 0x430(%rsp),%eax
++mov %rax,0x68(%rsp)
++mov 0x438(%rsp),%eax
++mov %eax,0x120(%rsp)
++movzbl 0x43c(%rsp),%eax
++mov %rax,0x170(%rsp)
++mov 0x3f60(%rsp),%rax
++lea 0xd090(%rsp),%rcx
+ mov %rax,0x2fa0(%rcx)
+-movdqa 0x3f60(%rsp),%xmm0
+-movapd 0x3f70(%rsp),%xmm1
++movdqa 0x3f40(%rsp),%xmm0
++movapd 0x3f50(%rsp),%xmm1
+ movupd %xmm1,0x2f90(%rcx)
+ movdqu %xmm0,0x2f80(%rcx)
+-mov %ebx,0x10058(%rsp)
+-movzbl 0x18(%rsp),%eax
+-mov %al,0x1005c(%rsp)
+-mov %r14b,0x1005d(%rsp)
+-mov %r15b,0x1005e(%rsp)
+-movb $0x0,0x1005f(%rsp)
+-mov 0x108(%rsp),%eax
+-mov %al,0x10060(%rsp)
+-mov %r13b,0x10061(%rsp)
+-movzbl 0x60(%rsp),%eax
+-mov %al,0x10062(%rsp)
++mov %ebx,0x10038(%rsp)
++movzbl 0x20(%rsp),%eax
++mov %al,0x1003c(%rsp)
++mov %r14b,0x1003d(%rsp)
++mov %r15b,0x1003e(%rsp)
++movb $0x0,0x1003f(%rsp)
++mov 0xd8(%rsp),%eax
++mov %al,0x10040(%rsp)
++mov %r13b,0x10041(%rsp)
++movzbl 0x30(%rsp),%eax
++mov %al,0x10042(%rsp)
+ mov $0xa0,%edx
+-lea 0x5f60(%rsp),%rdi
+-lea 0x498(%rsp),%rsi
++lea 0x5f40(%rsp),%rdi
++lea 0x388(%rsp),%rsi
+ call *RIP<ROLE:memcpy>
+-mov 0x180(%rsp),%rax
++mov 0x170(%rsp),%rax
+ dec %eax
+ cmp $0x3e,%al
+ setb %al
+-cmpl $0x0,0x140(%rsp)
++cmpl $0x0,0x120(%rsp)
+ setns %cl
+ and %al,%cl
+ mov $0x2,%eax
+-mov %rax,0x138(%rsp)
++mov %rax,0x118(%rsp)
+ cmp $0x1,%cl
+-jne LOCAL+0x2f92
+-mov 0x490(%rsp),%rax
++jne LOCAL+0x2f64
++mov 0x380(%rsp),%rax
+ not %rax
+-add 0x470(%rsp),%rax
+-mov %rax,0x3f60(%rsp)
+-jne LOCAL+0x63bd
+-mov 0xd1f0(%rsp),%r14
++add 0x360(%rsp),%rax
++mov %rax,0x3f40(%rsp)
++jne LOCAL+0x61e8
++mov 0xd1d0(%rsp),%r14
+ movabs $0x8000000000000000,%rax
+ cmp %rax,%r14
+-jne LOCAL+0x2fc1
+-mov 0x126a0(%rsp),%rbx
+-jmp LOCAL+0x2fd7
++jne LOCAL+0x2fa1
++mov 0x12680(%rsp),%rbx
++jmp LOCAL+0x2fb7
+ movabs $0x8000000000000000,%rax
+ inc %rax
+-mov %rax,0x60(%rsp)
+-mov %eax,0x34(%rsp)
+-mov %eax,0x50(%rsp)
+-mov %rax,0xa0(%rsp)
+-mov %rax,0xc8(%rsp)
+-jmp LOCAL+0x4b6a
+-mov 0x126a0(%rsp),%rbx
+-cmp %rbx,0x133b8(%rsp)
+-je LOCAL+0x3099
+-lea 0xc40(%rsp),%rdi
++mov %rax,0x30(%rsp)
++mov %eax,0x1c(%rsp)
++mov %eax,0x68(%rsp)
++mov %rax,0x90(%rsp)
++mov %rax,0xa8(%rsp)
++cmpl $0x3,0xd070(%rsp)
++jne LOCAL+0x477e
++jmp LOCAL+0x4797
++mov 0x12680(%rsp),%rbx
++cmp %rbx,0x13398(%rsp)
++je LOCAL+0x3073
++lea 0x1930(%rsp),%rdi
+ mov %rbx,%rsi
+ call *RIP<ROLE:rook2::remembered::RememberedTable::from_tts>
+-mov 0xc40(%rsp),%r15
+-mov 0xc48(%rsp),%rax
+-mov %rax,0x60(%rsp)
+-mov 0xc50(%rsp),%rax
+-mov %rax,0x28(%rsp)
+-mov 0xc58(%rsp),%rax
+-mov %rax,0x80(%rsp)
++mov 0x1930(%rsp),%r15
++mov 0x1938(%rsp),%rax
++mov %rax,0x30(%rsp)
++mov 0x1940(%rsp),%rax
++mov %rax,0x10(%rsp)
++mov 0x1948(%rsp),%rax
++mov %rax,0x50(%rsp)
+ movabs $0x8000000000000000,%rax
+ cmp %rax,%r15
+-jne LOCAL+0x3049
++jne LOCAL+0x3026
+ movabs $0x8000000000000006,%rax
+-cmp %rax,0x60(%rsp)
+-je LOCAL+0x3099
+-mov 0x60(%rsp),%rax
++cmp %rax,0x30(%rsp)
++je LOCAL+0x3073
++mov 0x30(%rsp),%rax
+ neg %rax
+-jo LOCAL+0x3099
+-jmp LOCAL+0x4b52
++jo LOCAL+0x3073
++jmp LOCAL+0x475c
+ shl $1,%r14
+ test %r14,%r14
+-je LOCAL+0x305f
+-mov 0xd1f8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov %r15,0xd1f0(%rsp)
+-mov 0x60(%rsp),%rax
+-mov %rax,0xd1f8(%rsp)
+-mov 0x28(%rsp),%rax
+-mov %rax,0xd200(%rsp)
+-mov 0x80(%rsp),%rax
+-mov %rax,0xd208(%rsp)
+-mov %rbx,0x133b8(%rsp)
+-lea 0xc40(%rsp),%rbx
++je LOCAL+0x303c
++mov 0xd1d8(%rsp),%rdi
++call *RIP<ROLE:free>
++mov %r15,0xd1d0(%rsp)
++mov 0x30(%rsp),%rax
++mov %rax,0xd1d8(%rsp)
++mov 0x10(%rsp),%rax
++mov %rax,0xd1e0(%rsp)
++mov 0x50(%rsp),%rax
++mov %rax,0xd1e8(%rsp)
++mov %rbx,0x13398(%rsp)
++lea 0x1930(%rsp),%rbx
+ mov %rbx,%rdi
+-lea 0x12628(%rsp),%rsi
+-lea 0x5f60(%rsp),%rdx
++lea 0x12608(%rsp),%rsi
++lea 0x5f40(%rsp),%rdx
+ call *RIP<ROLE:rook2::evaluator::Parameters::bind>
+ mov $0x540,%edx
+-lea 0x12090(%rsp),%rdi
++lea 0x12070(%rsp),%rdi
+ mov %rbx,%rsi
+ call *RIP<ROLE:memcpy>
+-lea 0x1180(%rsp),%rdx
++lea 0x1e70(%rsp),%rdx
+ mov 0x20(%rdx),%rax
+-lea 0xd0b0(%rsp),%rcx
++lea 0xd090(%rsp),%rcx
+ mov %rax,0x5540(%rcx)
+ movups (%rdx),%xmm0
+ movups 0x10(%rdx),%xmm1
+ movups %xmm1,0x5530(%rcx)
+ movups %xmm0,0x5520(%rcx)
+-mov 0x11a8(%rsp),%rax
+-mov %rax,0x1268c(%rsp)
++mov 0x1e98(%rsp),%rax
++mov %rax,0x1266c(%rsp)
+ mov $0x30d0,%eax
+ movdqu RIP<DATA32:f044def790a8bf2f4dab32b01d9e02d95e0567442138f54b3833391c77927015>,%xmm0
+-movdqu %xmm0,0xcff0(%rsp,%rax,1)
++movdqu %xmm0,0xcfd0(%rsp,%rax,1)
+ movdqu RIP<DATA32:b0e6fa605c3dd39e17fc455ad23b1f7012beaa7ecc19f1de81cd7b84277e3b71>,%xmm1
+-movdqu %xmm1,0xcfe0(%rsp,%rax,1)
++movdqu %xmm1,0xcfc0(%rsp,%rax,1)
+ movdqu RIP<DATA32:ebbdb94606af6437fa9f86749a34a941fe5bcdd7bf2a77487de0bb64d79cd78c>,%xmm2
+-movdqu %xmm2,0xcfd0(%rsp,%rax,1)
++movdqu %xmm2,0xcfb0(%rsp,%rax,1)
+ movdqu RIP<DATA32:c161823c599d3a3badb3eb30a0901311f27e8baa2fa95b97ede737573878e60a>,%xmm3
+-movdqu %xmm3,0xcfc0(%rsp,%rax,1)
+-movdqu %xmm3,0xd000(%rsp,%rax,1)
+-movdqu %xmm2,0xd010(%rsp,%rax,1)
+-movdqu %xmm1,0xd020(%rsp,%rax,1)
+-movdqu %xmm0,0xd030(%rsp,%rax,1)
+-movdqu %xmm3,0xd040(%rsp,%rax,1)
+-movdqu %xmm2,0xd050(%rsp,%rax,1)
+-movdqu %xmm1,0xd060(%rsp,%rax,1)
+-movdqu %xmm0,0xd070(%rsp,%rax,1)
+-movdqu %xmm3,0xd080(%rsp,%rax,1)
+-movdqu %xmm2,0xd090(%rsp,%rax,1)
+-movdqu %xmm1,0xd0a0(%rsp,%rax,1)
+-movdqu %xmm0,0xd0b0(%rsp,%rax,1)
++movdqu %xmm3,0xcfa0(%rsp,%rax,1)
++movdqu %xmm3,0xcfe0(%rsp,%rax,1)
++movdqu %xmm2,0xcff0(%rsp,%rax,1)
++movdqu %xmm1,0xd000(%rsp,%rax,1)
++movdqu %xmm0,0xd010(%rsp,%rax,1)
++movdqu %xmm3,0xd020(%rsp,%rax,1)
++movdqu %xmm2,0xd030(%rsp,%rax,1)
++movdqu %xmm1,0xd040(%rsp,%rax,1)
++movdqu %xmm0,0xd050(%rsp,%rax,1)
++movdqu %xmm3,0xd060(%rsp,%rax,1)
++movdqu %xmm2,0xd070(%rsp,%rax,1)
++movdqu %xmm1,0xd080(%rsp,%rax,1)
++movdqu %xmm0,0xd090(%rsp,%rax,1)
+ add $0x100,%rax
+ cmp $0x50d0,%rax
+-jne LOCAL+0x3115
+-lea 0xd0b0(%rsp),%rax
++jne LOCAL+0x30ef
++lea 0xd090(%rsp),%rax
+ pxor %xmm0,%xmm0
+ movdqu %xmm0,0x5568(%rax)
+ movdqu %xmm0,0x5558(%rax)
+ movdqu %xmm0,0x5548(%rax)
+ mov $0xd08,%edx
+-lea 0x126b0(%rsp),%rdi
++lea 0x12690(%rsp),%rdi
+ xor %esi,%esi
+ call *RIP<ROLE:memset>
+ movabs $0x8000000000000000,%rax
+-cmp %rax,0xd1f0(%rsp)
+-je LOCAL+0x3284
+-movzbl 0xd208(%rsp),%ebx
++cmp %rax,0xd1d0(%rsp)
++je LOCAL+0x325e
++movzbl 0xd1e8(%rsp),%ebx
+ cmp $0xff,%bl
+-je LOCAL+0x3235
++je LOCAL+0x320f
+ inc %bl
+-jmp LOCAL+0x327d
+-mov 0xd200(%rsp),%rax
++jmp LOCAL+0x3257
++mov 0xd1e0(%rsp),%rax
+ mov $0x1,%bl
+ test %rax,%rax
+-je LOCAL+0x327d
+-mov 0xd1f8(%rsp),%rdi
++je LOCAL+0x3257
++mov 0xd1d8(%rsp),%rdi
+ lea (%rax,%rax,2),%rax
+ shl $0x4,%rax
+ add $0xffffffffffffffd0,%rax
+@@ -2260,27 +2261,27 @@
+ add $0x30,%rdx
+ xor %esi,%esi
+ call *RIP<ROLE:memset>
+-mov %bl,0xd208(%rsp)
+-lea 0x12090(%rsp),%rdi
+-lea 0x5f60(%rsp),%r14
++mov %bl,0xd1e8(%rsp)
++lea 0x12070(%rsp),%rdi
++lea 0x5f40(%rsp),%r14
+ mov %r14,%rsi
+ call *RIP<ROLE:rook2::evaluation::RootContext::nonking_square_balance>
+ mov %eax,%ebx
+ mov $0xa0,%edx
+-lea 0xc50(%rsp),%rdi
++lea 0x1940(%rsp),%rdi
+ mov %r14,%rsi
+ call *RIP<ROLE:memcpy>
+-movq $0x0,0xc40(%rsp)
+-mov %ebx,0xc48(%rsp)
+-movb $0x0,0xc4c(%rsp)
+-movb $0x0,0x3250(%rsp)
+-lea 0x3251(%rsp),%rdi
++movq $0x0,0x1930(%rsp)
++mov %ebx,0x1938(%rsp)
++movb $0x0,0x193c(%rsp)
++movb $0x0,0xc20(%rsp)
++lea 0xc21(%rsp),%rdi
+ mov %r14,%rsi
+ call *RIP<ROLE:rook2::influence::Influence::build>
+-movb $0x1,0x3250(%rsp)
+-movzbl 0x5fd8(%rsp),%eax
++movb $0x1,0xc20(%rsp)
++movzbl 0x5fb8(%rsp),%eax
+ lea (%rax,%rax,2),%rdx
+-lea 0x5f69(%rsp),%rdi
++lea 0x5f49(%rsp),%rdi
+ movd 0x57(%rdi,%rdx,2),%xmm0
+ movzbl 0x5b(%rdi,%rdx,2),%esi
+ punpcklbw RIP<DATA32:d27766fdf4dc6c35cd8d4d9fe138d8918aa0d054473d1ef37e0c5e9586bdbc7d>,%xmm0
+@@ -2294,30 +2295,30 @@
+ movzbl 0x5c(%rdi,%rdx,2),%edx
+ lea (%rcx,%rdx,1),%rdi
+ cmp $0x11,%rdi
+-jae LOCAL+0x63ef
++jae LOCAL+0x621a
+ test %dl,%dl
+-je LOCAL+0x648f
++je LOCAL+0x62ba
+ mov %eax,%edx
+ shl $0x4,%edx
+-lea 0x5fa0(%rsp),%rsi
++lea 0x5f80(%rsp),%rsi
+ add %rsi,%rdx
+ xor $0x1,%al
+ movzbl (%rcx,%rdx,1),%esi
+-mov %esi,0x18(%rsp)
++mov %esi,0x20(%rsp)
+ movzbl %al,%r15d
+-lea 0x5fe0(%rsp),%rdi
++lea 0x5fc0(%rsp),%rdi
+ mov %r15d,%edx
+ call TARGET<rook2::attacks::AttackBits::attacked>
+ movzbl %al,%r8d
+-lea 0x750(%rsp),%rdi
+-lea 0x10090(%rsp),%rsi
+-lea 0xc40(%rsp),%rbx
++lea 0x730(%rsp),%rdi
++lea 0x10070(%rsp),%rsi
++lea 0x1930(%rsp),%rbx
+ mov %rbx,%rdx
+-lea 0x3251(%rsp),%r13
++lea 0xc21(%rsp),%r13
+ mov %r13,%rcx
+ call TARGET<rook2::evaluator::Evaluator<_>::full_impl>
+ mov $0xb0,%edx
+-lea 0x3f60(%rsp),%rdi
++lea 0x3f40(%rsp),%rdi
+ mov %rbx,%rsi
+ mov RIP<ROLE:memcpy>,%r14
+ call *%r14
+@@ -2326,7 +2327,7 @@
+ movups 0x10(%r13),%xmm1
+ movups 0x20(%r13),%xmm2
+ movups 0x30(%r13),%xmm3
+-lea 0x4010(%rsp),%r14
++lea 0x3ff0(%rsp),%r14
+ movups %xmm0,(%r14)
+ movups %xmm1,0x10(%r14)
+ movups %xmm2,0x20(%r14)
+@@ -2340,76 +2341,76 @@
+ movups 0x70(%r13),%xmm0
+ movups %xmm0,0x70(%r14)
+ mov $0xb0,%edx
+-lea 0x3250(%rsp),%rdi
+-lea 0x3f60(%rsp),%rsi
++lea 0xc20(%rsp),%rdi
++lea 0x3f40(%rsp),%rsi
+ call *%rax
+ movups 0x70(%r14),%xmm0
+-movaps %xmm0,0x7c0(%rsp)
++movaps %xmm0,0x7a0(%rsp)
+ movups 0x60(%r14),%xmm0
+-movaps %xmm0,0x7b0(%rsp)
++movaps %xmm0,0x790(%rsp)
+ movups 0x50(%r14),%xmm0
+-movaps %xmm0,0x7a0(%rsp)
++movaps %xmm0,0x780(%rsp)
+ movups 0x40(%r14),%xmm0
+-movaps %xmm0,0x790(%rsp)
++movaps %xmm0,0x770(%rsp)
+ movdqu (%r14),%xmm0
+ movupd 0x10(%r14),%xmm1
+ movdqu 0x20(%r14),%xmm2
+ movdqu 0x30(%r14),%xmm3
+-movdqa %xmm3,0x780(%rsp)
+-movdqa %xmm2,0x770(%rsp)
+-movapd %xmm1,0x760(%rsp)
+-movdqa %xmm0,0x750(%rsp)
+-lea 0x5fe0(%rsp),%rdi
+-mov 0x18(%rsp),%esi
++movdqa %xmm3,0x760(%rsp)
++movdqa %xmm2,0x750(%rsp)
++movapd %xmm1,0x740(%rsp)
++movdqa %xmm0,0x730(%rsp)
++lea 0x5fc0(%rsp),%rdi
++mov 0x20(%rsp),%esi
+ mov %r15d,%edx
+ call TARGET<rook2::attacks::AttackBits::attacked>
+-mov %al,0x34(%rsp)
++mov %al,0x1c(%rsp)
+ mov $0x408,%edx
+ mov %rbx,%rdi
+ xor %esi,%esi
+ call *RIP<ROLE:memset>
+-lea 0x5f60(%rsp),%rdi
++lea 0x5f40(%rsp),%rdi
+ mov %rbx,%rsi
+ call *RIP<ROLE:rook2::movegen::generate_legal>
+-mov 0x1040(%rsp),%rcx
++mov 0x1d30(%rsp),%rcx
+ movabs $0x8000000000000000,%rax
+-mov %rax,0x60(%rsp)
+-mov %rcx,0x18(%rsp)
++mov %rax,0x30(%rsp)
++mov %rcx,0x20(%rsp)
+ test %rcx,%rcx
+-je LOCAL+0x4b52
+-cmpq $0x201,0x18(%rsp)
+-jae LOCAL+0x6401
+-mov 0x18(%rsp),%rax
++je LOCAL+0x475c
++cmpq $0x201,0x20(%rsp)
++jae LOCAL+0x622c
++mov 0x20(%rsp),%rax
+ lea (%rax,%rax,1),%rbx
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%rax
+ movzbl (%rax),%eax
+ mov $0x2,%esi
+ mov %rbx,%rdi
+ call TARGET<__rust_alloc>
+-mov %rax,0x160(%rsp)
++mov %rax,0x110(%rsp)
+ test %rax,%rax
+-je LOCAL+0x64a0
+-mov 0x160(%rsp),%rdi
+-lea 0xc40(%rsp),%rsi
++je LOCAL+0x62cb
++mov 0x110(%rsp),%rdi
++lea 0x1930(%rsp),%rsi
+ mov %rbx,%rdx
+ call *RIP<ROLE:memcpy>
+-mov 0x18(%rsp),%rbx
++mov 0x20(%rsp),%rbx
+ shl $0x4,%rbx
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%rax
+ movzbl (%rax),%eax
+ mov $0x8,%esi
+ mov %rbx,%rdi
+ call TARGET<__rust_alloc>
+-mov %rax,0xa0(%rsp)
++mov %rax,0x90(%rsp)
+ test %rax,%rax
+-je LOCAL+0x64ae
+-cmpq $0x4,0x18(%rsp)
+-jae LOCAL+0x359c
++je LOCAL+0x62d9
++cmpq $0x4,0x20(%rsp)
++jae LOCAL+0x3576
+ xor %eax,%eax
+-jmp LOCAL+0x3616
+-mov 0x18(%rsp),%rcx
++jmp LOCAL+0x35f0
++mov 0x20(%rsp),%rcx
+ and $0x3fc,%ecx
+-mov 0xa0(%rsp),%rax
++mov 0x90(%rsp),%rax
+ lea 0x3c(%rax),%rdx
+ xor %eax,%eax
+ movq $0x0,-0x3c(%rdx)
+@@ -2430,13 +2431,13 @@
+ add $0x4,%rax
+ add $0x40,%rdx
+ cmp %rcx,%rax
+-jne LOCAL+0x35b5
+-mov 0x18(%rsp),%rcx
++jne LOCAL+0x358f
++mov 0x20(%rsp),%rcx
+ and $0x3,%ecx
+-je LOCAL+0x365b
++je LOCAL+0x3635
+ mov %rax,%rdx
+ shl $0x4,%rdx
+-mov 0xa0(%rsp),%rsi
++mov 0x90(%rsp),%rsi
+ add %rsi,%rdx
+ add $0xc,%rdx
+ shl $0x4,%ecx
+@@ -2447,25 +2448,25 @@
+ add $0x10,%rsi
+ inc %eax
+ cmp %rsi,%rcx
+-jne LOCAL+0x363b
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x367e
+-cmpq $0x0,0xd1c0(%rsp)
+-je LOCAL+0x367e
+-mov 0xd1c8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-movq $0x3,0xd090(%rsp)
++jne LOCAL+0x3615
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x3658
++cmpq $0x0,0xd1a0(%rsp)
++je LOCAL+0x3658
++mov 0xd1a8(%rsp),%rdi
++call *RIP<ROLE:free>
++movq $0x3,0xd070(%rsp)
+ mov $0x200,%edx
+-lea 0xfe30(%rsp),%rdi
++lea 0xfe10(%rsp),%rdi
+ xor %esi,%esi
+ call *RIP<ROLE:memset>
+-movq $0x0,0xd080(%rsp)
+-lea 0xd0b0(%rsp),%rax
++movq $0x0,0xd060(%rsp)
++lea 0xd090(%rsp),%rax
+ pxor %xmm0,%xmm0
+ movdqu %xmm0,0x5548(%rax)
+ movdqu %xmm0,0x5558(%rax)
+ movdqu %xmm0,0x5568(%rax)
+-lea 0x133c0(%rsp),%rax
++lea 0x133a0(%rsp),%rax
+ movdqa %xmm0,(%rax)
+ movdqa %xmm0,0x10(%rax)
+ movdqa %xmm0,0x20(%rax)
+@@ -2481,53 +2482,53 @@
+ movdqa %xmm0,0xc0(%rax)
+ movdqa %xmm0,0xd0(%rax)
+ movq $0x0,0xe0(%rax)
+-testb $0x1,0x10068(%rsp)
+-je LOCAL+0x374f
+-mov 0x1006c(%rsp),%eax
+-jmp LOCAL+0x3810
++testb $0x1,0x10048(%rsp)
++je LOCAL+0x3729
++mov 0x1004c(%rsp),%eax
++jmp LOCAL+0x37ea
+ call *RIP<ROLE:std::time::SystemTime::now>
+-mov %rax,0x360(%rsp)
+-mov %edx,0x368(%rsp)
+-movq $0x0,0x5c0(%rsp)
+-movl $0x0,0x5c8(%rsp)
+-lea 0x3f60(%rsp),%rdi
+-lea 0x360(%rsp),%rsi
+-lea 0x5c0(%rsp),%rdx
++mov %rax,0x930(%rsp)
++mov %edx,0x938(%rsp)
++movq $0x0,0x5a0(%rsp)
++movl $0x0,0x5a8(%rsp)
++lea 0x3f40(%rsp),%rdi
++lea 0x930(%rsp),%rsi
++lea 0x5a0(%rsp),%rdx
+ call TARGET<std::sys::pal::unix::time::Timespec::sub_timespec>
+-mov 0x3f68(%rsp),%rax
+-mov %rax,0xc8(%rsp)
+-testb $0x1,0x3f60(%rsp)
+-je LOCAL+0x3804
+-mov 0x3f70(%rsp),%ebx
++mov 0x3f48(%rsp),%rax
++mov %rax,0xa8(%rsp)
++testb $0x1,0x3f40(%rsp)
++je LOCAL+0x37de
++mov 0x3f50(%rsp),%ebx
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%rax
+ movzbl (%rax),%eax
+ mov $0x10,%edi
+ call *RIP<ROLE:malloc>
+ test %rax,%rax
+-je LOCAL+0x64bc
+-mov 0xc8(%rsp),%rcx
++je LOCAL+0x62e7
++mov 0xa8(%rsp),%rcx
+ mov %rcx,(%rax)
+ mov %ebx,0x8(%rax)
+ mov $0x28,%edi
+ mov %rax,%rsi
+-lea RIP<DATA32:735825030e191e8a417c3bc67f08d533fd70a69ded001980f46c0e75736d0a23>,%rdx
++lea RIP<DATA32:0a28648fd7dd05f7272fafdc2e9b3ee29e1637d62e6d090deabe657137b142c8>,%rdx
+ call *RIP<ROLE:std::io::error::Error::_new>
+-mov %rax,0x28(%rsp)
+-jmp LOCAL+0x3ac5
+-mov 0xc8(%rsp),%rax
+-add 0x50(%rsp),%eax
+-mov %rax,0xc8(%rsp)
+-mov 0x220(%rsp),%ecx
++mov %rax,0x10(%rsp)
++jmp LOCAL+0x3a96
++mov 0xa8(%rsp),%rax
++add 0x68(%rsp),%eax
++mov %rax,0xa8(%rsp)
++mov 0x1e0(%rsp),%ecx
+ mov %ecx,%eax
+ xorps %xmm0,%xmm0
+ cvtsi2sd %rax,%xmm0
+ mulsd RIP<DATA32:47f229d937102ed85ab5bb6884219d4c6835843e728dcaa398cc85ec834a8198>,%xmm0
+-movapd %xmm0,0x60(%rsp)
++movapd %xmm0,0x30(%rsp)
+ movapd RIP<DATA32:4e3ad627f96f9a581401ca7bef762cae0568e16d16dabb4cfbf5462b3738134f>,%xmm0
+-movapd %xmm0,0x80(%rsp)
++movapd %xmm0,0x50(%rsp)
+ test %ecx,%ecx
+-je LOCAL+0x3893
+-movzbl 0x34(%rsp),%eax
++je LOCAL+0x3867
++movzbl 0x1c(%rsp),%eax
+ movd %eax,%xmm0
+ pshufd $0x0,%xmm0,%xmm0
+ pslld $0x1f,%xmm0
+@@ -2536,311 +2537,318 @@
+ pandn RIP<DATA32:f47264e715f810273c53d499adec0c79fd54280b0460d0e15b472e9958803d77>,%xmm1
+ pand RIP<DATA32:13f87162aa3639c8a7a8f7606fea2e65c966dc8067b0845f4c26ce7026692ca0>,%xmm0
+ por %xmm1,%xmm0
+-movapd 0x60(%rsp),%xmm1
++movapd 0x30(%rsp),%xmm1
+ unpcklpd %xmm1,%xmm1
+ mulpd %xmm0,%xmm1
+-movapd %xmm1,0x80(%rsp)
+-mov 0x1f0(%rsp),%ecx
++movapd %xmm1,0x50(%rsp)
++mov 0xe0(%rsp),%ecx
+ mov %ecx,%eax
+ xorps %xmm0,%xmm0
+ cvtsi2sd %rax,%xmm0
+ mulsd RIP<DATA32:47f229d937102ed85ab5bb6884219d4c6835843e728dcaa398cc85ec834a8198>,%xmm0
+ movsd RIP<DATA32:95c9c856ca8ed97405fef206df14d9675b16f19a6dc7a9799274c1c7feb4ab2c>,%xmm1
+-movsd %xmm1,0x28(%rsp)
++movsd %xmm1,0x10(%rsp)
+ test %ecx,%ecx
+-je LOCAL+0x38c4
+-movsd %xmm0,0x28(%rsp)
++je LOCAL+0x3898
++movsd %xmm0,0x10(%rsp)
+ mov $0xa0,%edx
+-lea 0x3f63(%rsp),%rdi
+-lea 0x5f60(%rsp),%rsi
++lea 0x3f43(%rsp),%rdi
++lea 0x5f40(%rsp),%rsi
+ call *RIP<ROLE:memcpy>
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x3902
+-cmpq $0x0,0xd1c0(%rsp)
+-je LOCAL+0x3902
+-mov 0xd1c8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-movq $0x2,0xd090(%rsp)
+-movaps 0x80(%rsp),%xmm0
+-movaps %xmm0,0xd0c0(%rsp)
+-movsd 0x28(%rsp),%xmm0
+-movsd %xmm0,0xd0d0(%rsp)
+-movq $0x1,0xd0d8(%rsp)
+-movdqa 0x60(%rsp),%xmm0
+-movq %xmm0,0xd0e0(%rsp)
+-lea 0xd0b0(%rsp),%rbx
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x38d6
++cmpq $0x0,0xd1a0(%rsp)
++je LOCAL+0x38d6
++mov 0xd1a8(%rsp),%rdi
++call *RIP<ROLE:free>
++movq $0x2,0xd070(%rsp)
++movaps 0x50(%rsp),%xmm0
++movaps %xmm0,0xd0a0(%rsp)
++movsd 0x10(%rsp),%xmm0
++movsd %xmm0,0xd0b0(%rsp)
++movq $0x1,0xd0b8(%rsp)
++movdqa 0x30(%rsp),%xmm0
++movq %xmm0,0xd0c0(%rsp)
++lea 0xd090(%rsp),%rbx
+ movl $0x0,0x40(%rbx)
+ movq $0x0,0x38(%rbx)
+-mov 0x50(%rsp),%r14
+-mov %r14d,0xd0f4(%rsp)
+-movl $0x0,0xd0f8(%rsp)
+-movzbl 0x34(%rsp),%eax
+-mov %al,0xd0fc(%rsp)
++mov 0x68(%rsp),%r14
++mov %r14d,0xd0d4(%rsp)
++movl $0x0,0xd0d8(%rsp)
++movzbl 0x1c(%rsp),%eax
++mov %al,0xd0dc(%rsp)
+ mov $0xa3,%edx
+-lea 0xd0fd(%rsp),%rdi
+-lea 0x3f60(%rsp),%rsi
++lea 0xd0dd(%rsp),%rdi
++lea 0x3f40(%rsp),%rsi
+ call *RIP<ROLE:memcpy>
+ pxor %xmm0,%xmm0
+-movdqa %xmm0,0xd1a0(%rsp)
+-mov %r14d,0xd1b0(%rsp)
+-mov %r14d,0xd1b4(%rsp)
+-movq $0x0,0xd1c0(%rsp)
+-movq $0x8,0xd1c8(%rsp)
++movdqa %xmm0,0xd180(%rsp)
++mov %r14d,0xd190(%rsp)
++mov %r14d,0xd194(%rsp)
++movq $0x0,0xd1a0(%rsp)
++movq $0x8,0xd1a8(%rsp)
+ movdqa %xmm0,0x120(%rbx)
+-mov 0x18(%rsp),%rax
+-mov %rax,0xd1e0(%rsp)
+-movb $0x1,0xd1e8(%rsp)
+-mov 0x10080(%rsp),%r14
+-cmpb $0x0,0x10088(%rsp)
+-mov 0xc8(%rsp),%rax
+-mov %eax,0x2e0(%rsp)
+-je LOCAL+0x3b33
+-lea 0x2e0(%rsp),%rax
+-mov %rax,0x950(%rsp)
++mov 0x20(%rsp),%rax
++mov %rax,0xd1c0(%rsp)
++movb $0x1,0xd1c8(%rsp)
++mov 0x10060(%rsp),%r14
++cmpb $0x0,0x10068(%rsp)
++mov 0xa8(%rsp),%rax
++mov %eax,0x310(%rsp)
++je LOCAL+0x3b04
++lea 0x310(%rsp),%rax
++mov %rax,0x458(%rsp)
+ lea RIP<ROLE:core::fmt::num::imp::<impl core::fmt::Display for u32>::fmt>,%rax
+-mov %rax,0x958(%rsp)
+-lea RIP<ROLE:internal-address:0x8b409>,%rax
+-mov %rax,0x5c0(%rsp)
+-movq $0x2,0x5c8(%rsp)
+-movq $0x0,0x5e0(%rsp)
+-lea 0x950(%rsp),%rax
+-mov %rax,0x5d0(%rsp)
+-movq $0x1,0x5d8(%rsp)
+-mov %r14,0x360(%rsp)
+-movq $0x0,0x368(%rsp)
+-lea 0x360(%rsp),%rdi
++mov %rax,0x460(%rsp)
++lea RIP<ROLE:internal-address:0x8c463>,%rax
++mov %rax,0x5a0(%rsp)
++movq $0x2,0x5a8(%rsp)
++movq $0x0,0x5c0(%rsp)
++lea 0x458(%rsp),%rax
++mov %rax,0x5b0(%rsp)
++movq $0x1,0x5b8(%rsp)
++mov %r14,0x930(%rsp)
++movq $0x0,0x938(%rsp)
++lea 0x930(%rsp),%rdi
+ lea RIP<ROLE:core::ptr::drop_in_place<std::io::Write::write_fmt::Adapter<std::io::stdio::StderrLock>>>,%rsi
+-lea 0x5c0(%rsp),%rdx
++lea 0x5a0(%rsp),%rdx
+ call *RIP<ROLE:core::fmt::write>
+-mov 0x368(%rsp),%rcx
+-mov %rcx,0x28(%rsp)
++mov 0x938(%rsp),%rcx
++mov %rcx,0x10(%rsp)
+ test %al,%al
+-je LOCAL+0x3ae0
+-cmpq $0x0,0x28(%rsp)
+-je LOCAL+0x64cc
++je LOCAL+0x3ab1
++cmpq $0x0,0x10(%rsp)
++je LOCAL+0x62f7
+ movabs $0x8000000000000000,%rax
+ add $0x5,%rax
+-mov %rax,0xd8(%rsp)
+-jmp LOCAL+0x4b29
+-mov 0x28(%rsp),%rax
++mov %rax,0xd0(%rsp)
++jmp LOCAL+0x4733
++mov 0x10(%rsp),%rax
+ and $0x3,%eax
+ cmp $0x1,%eax
+-jne LOCAL+0x3b25
+-mov 0x28(%rsp),%rax
++jne LOCAL+0x3af6
++mov 0x10(%rsp),%rax
+ mov -0x1(%rax),%rbx
+ mov 0x7(%rax),%r15
+ mov (%r15),%rax
+ test %rax,%rax
+-je LOCAL+0x3b07
++je LOCAL+0x3ad8
+ mov %rbx,%rdi
+ call *%rax
+ cmpq $0x0,0x8(%r15)
+-je LOCAL+0x3b17
++je LOCAL+0x3ae8
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+-mov 0x28(%rsp),%rdi
++mov 0x10(%rsp),%rdi
+ dec %rdi
+ call *RIP<ROLE:free>
+ mov (%r14),%rax
+ cmpq $0x0,0x10(%rax)
+-jne LOCAL+0x6515
++jne LOCAL+0x6340
++movq $0x0,0x130(%rsp)
++movq $0x8,0x138(%rsp)
++movq $0x0,0x140(%rsp)
++movabs $0x8000000000000000,%rax
++mov %rax,0x948(%rsp)
++movq $0x0,0x930(%rsp)
++movq $0x8,0x938(%rsp)
++movq $0x0,0x940(%rsp)
++add $0x4,%rax
++mov %rax,0xd0(%rsp)
+ movq $0x0,0xe0(%rsp)
+-movq $0x8,0xe8(%rsp)
+-movq $0x0,0xf0(%rsp)
+-movq $0x0,0x1a0(%rsp)
+-movq $0x8,0x1a8(%rsp)
++cmpb $0x0,0x170(%rsp)
++je LOCAL+0x45fa
++movb $0x1,0xf(%rsp)
++mov $0x8,%eax
++mov %rax,0x180(%rsp)
++movq $0x0,0x150(%rsp)
++mov 0x20(%rsp),%r14
++mov %r14,0x108(%rsp)
++movb $0x1,0x8c(%rsp)
++movzbl 0xf(%rsp),%eax
++cmp 0x170(%rsp),%al
++adcb $0x0,0x8c(%rsp)
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x634d
++movzbl 0xf(%rsp),%r15d
++mov %r15b,0xd1c8(%rsp)
++mov 0x108(%rsp),%rax
++mov %rax,0x3f40(%rsp)
++mov 0x90(%rsp),%rax
++mov %rax,0x3f48(%rsp)
++mov %r14,0x3f50(%rsp)
++mov 0x133a0(%rsp),%rdx
++lea 0x5a0(%rsp),%rbx
++mov %rbx,%rdi
++lea 0x3f40(%rsp),%rsi
++mov 0xe0(%rsp),%rcx
++call *RIP<ROLE:rook2::root_schedule::Iteration::new>
++movzbl 0x608(%rsp),%eax
++mov %al,0x1a(%rsp)
+ movq $0x0,0x1b0(%rsp)
+-movabs $0x8000000000000000,%rax
+-add $0x4,%rax
+-mov %rax,0xd8(%rsp)
+-movl $0x0,0xc0(%rsp)
+-cmpb $0x0,0x180(%rsp)
+-je LOCAL+0x473c
+-movb $0x1,0x17(%rsp)
+-mov 0x18(%rsp),%r14
+-mov %r14,0x130(%rsp)
+-movabs $0x8000000000000000,%rax
+-mov %rax,0xb0(%rsp)
+-movb $0x1,0x198(%rsp)
+-movzbl 0x17(%rsp),%eax
+-cmp 0x180(%rsp),%al
+-adcb $0x0,0x198(%rsp)
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x6522
+-movzbl 0x17(%rsp),%r15d
+-mov %r15b,0xd1e8(%rsp)
+-mov 0x130(%rsp),%rax
+-mov %rax,0x3f60(%rsp)
+-mov 0xa0(%rsp),%rax
+-mov %rax,0x3f68(%rsp)
+-mov %r14,0x3f70(%rsp)
+-mov 0x133c0(%rsp),%rdx
+-lea 0x5c0(%rsp),%rbx
+-mov %rbx,%rdi
+-lea 0x3f60(%rsp),%rsi
+-mov 0xc0(%rsp),%ecx
+-call *RIP<ROLE:rook2::root_schedule::Iteration::new>
+-movzbl 0x628(%rsp),%eax
+-mov %al,0x32(%rsp)
++movq $0x2,0x1b8(%rsp)
+ movq $0x0,0x1c0(%rsp)
+-movq $0x2,0x1c8(%rsp)
+-movq $0x0,0x1d0(%rsp)
+-mov %r15b,0x251(%rsp)
+-movb $0x0,0x250(%rsp)
+-movq $0x0,0x238(%rsp)
+-movq $0x8,0x240(%rsp)
+-movq $0x0,0x248(%rsp)
++mov %r15b,0x211(%rsp)
++movb $0x0,0x210(%rsp)
++movq $0x0,0x1f8(%rsp)
++movq $0x8,0x200(%rsp)
++movq $0x0,0x208(%rsp)
+ movzbl %r15b,%eax
+-mov %rax,0x80(%rsp)
+-mov 0x133c0(%rsp),%rdx
+-lea 0x2b0(%rsp),%rdi
++mov %rax,0x50(%rsp)
++mov 0x133a0(%rsp),%rdx
++lea 0x2e0(%rsp),%rdi
+ mov %rbx,%rsi
+ call *RIP<ROLE:rook2::root_schedule::Iteration::next>
+-cmpb $0x2,0x2c2(%rsp)
++mov $0x2,%eax
++mov %rax,0xb8(%rsp)
++cmpb $0x2,0x2f2(%rsp)
+ jne LOCAL+0x3f8d
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x652f
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x635a
+ mov $0xffffd8f0,%r15d
+-cmpq $0x2,0x5e8(%rsp)
+-jb LOCAL+0x3d18
+-mov 0x5e0(%rsp),%rax
++cmpq $0x2,0x5c8(%rsp)
++jb LOCAL+0x3d04
++mov 0x5c0(%rsp),%rax
+ mov 0x18(%rax),%r15d
+-mov 0x624(%rsp),%ebx
+-mov 0x133c0(%rsp),%r8
+-mov 0x12620(%rsp),%r9
++mov 0x604(%rsp),%ebx
++mov 0x133a0(%rsp),%r8
++mov 0x12600(%rsp),%r9
+ cmp $0x61a8,%r8
+ setb %al
+-or 0x32(%rsp),%al
++or 0x1a(%rsp),%al
+ movzbl %al,%eax
+ mov $0x4,%esi
+ sub %eax,%esi
+-lea 0xd090(%rsp),%rdi
++lea 0xd070(%rsp),%rdi
+ mov %ebx,%edx
+ mov %r15d,%ecx
+-mov %r8,0x128(%rsp)
+-mov %r9,0x120(%rsp)
++mov %r8,0xf8(%rsp)
++mov %r9,0x100(%rsp)
+ call TARGET<rook2::timed::Clock::check>
+-mov 0x126a8(%rsp),%rax
+-movzwl 0x125cc(%rsp),%ecx
+-mov 0x12698(%rsp),%rdx
+-mov 0xd0f4(%rsp),%esi
+-mov 0xd1b4(%rsp),%edi
+-movsd 0xd0c0(%rsp),%xmm0
+-mov 0x80(%rsp),%r8
+-mov %r8d,0x370(%rsp)
+-mov %rax,0x374(%rsp)
+-mov %cx,0x394(%rsp)
+-mov %rdx,0x360(%rsp)
+-mov 0x220(%rsp),%eax
+-mov %eax,0x37c(%rsp)
+-mov %ebx,0x380(%rsp)
+-mov %r15d,0x384(%rsp)
+-mov 0xc0(%rsp),%eax
+-mov %eax,0x388(%rsp)
+-mov %esi,0x38c(%rsp)
+-mov %edi,0x390(%rsp)
+-movsd %xmm0,0x368(%rsp)
+-movb $0x1,0x250(%rsp)
+-mov 0xf0(%rsp),%r14
+-cmp 0xe0(%rsp),%r14
+-jne LOCAL+0x3e30
+-lea 0xe0(%rsp),%rdi
+-lea RIP<LOCATION:src/timed.rs:653:28>,%rsi
++mov 0x12688(%rsp),%rax
++movzwl 0x125ac(%rsp),%ecx
++mov 0x12678(%rsp),%rdx
++mov 0xd0d4(%rsp),%esi
++mov 0xd194(%rsp),%edi
++movsd 0xd0a0(%rsp),%xmm0
++mov 0x50(%rsp),%r8
++mov %r8d,0x468(%rsp)
++mov %rax,0x46c(%rsp)
++mov %cx,0x48c(%rsp)
++mov %rdx,0x458(%rsp)
++mov 0x1e0(%rsp),%eax
++mov %eax,0x474(%rsp)
++mov %ebx,0x478(%rsp)
++mov %r15d,0x47c(%rsp)
++mov 0xe0(%rsp),%rax
++mov %eax,0x480(%rsp)
++mov %esi,0x484(%rsp)
++mov %edi,0x488(%rsp)
++movsd %xmm0,0x460(%rsp)
++movb $0x1,0x210(%rsp)
++mov 0x140(%rsp),%rax
++mov %rax,%r14
++cmp 0x130(%rsp),%rax
++jne LOCAL+0x3e1d
++lea 0x130(%rsp),%rdi
++lea RIP<LOCATION:src/timed.rs:652:28>,%rsi
+ call TARGET<alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0xe8(%rsp),%rax
++mov 0x138(%rsp),%rdx
+ mov %r14,%rcx
+-shl $0x5,%rcx
+-movups 0x238(%rsp),%xmm0
+-movups 0x248(%rsp),%xmm1
+-movups %xmm1,0x10(%rax,%rcx,1)
+-movups %xmm0,(%rax,%rcx,1)
+-inc %r14
+-mov %r14,0xf0(%rsp)
+-lea 0x360(%rsp),%rdi
++mov %r14,%rax
++shl $0x5,%rax
++movups 0x1f8(%rsp),%xmm0
++movups 0x208(%rsp),%xmm1
++movups %xmm1,0x10(%rdx,%rax,1)
++mov %rdx,0x180(%rsp)
++movups %xmm0,(%rdx,%rax,1)
++inc %rcx
++mov %rcx,0x150(%rsp)
++mov %rcx,0x140(%rsp)
++lea 0x458(%rsp),%rdi
+ call *RIP<ROLE:rook2::timing::Terminal::reason>
+-mov %rdx,0x80(%rsp)
+-mov %rax,0x28(%rsp)
++mov %rdx,0x50(%rsp)
++mov %rax,0x10(%rsp)
+ test %rax,%rax
+-jne LOCAL+0x4a34
+-movups 0x620(%rsp),%xmm0
+-movaps %xmm0,0x3fc0(%rsp)
+-movups 0x610(%rsp),%xmm0
+-movaps %xmm0,0x3fb0(%rsp)
++jne LOCAL+0x57cd
+ movups 0x600(%rsp),%xmm0
+ movaps %xmm0,0x3fa0(%rsp)
+-movdqu 0x5c0(%rsp),%xmm0
+-movupd 0x5d0(%rsp),%xmm1
+-movdqu 0x5e0(%rsp),%xmm2
+-movdqu 0x5f0(%rsp),%xmm3
+-movdqa %xmm3,0x3f90(%rsp)
+-movdqa %xmm2,0x3f80(%rsp)
+-movapd %xmm1,0x3f70(%rsp)
+-movdqa %xmm0,0x3f60(%rsp)
+-lea 0x950(%rsp),%rdi
+-lea 0x3f60(%rsp),%rsi
++movups 0x5f0(%rsp),%xmm0
++movaps %xmm0,0x3f90(%rsp)
++movups 0x5e0(%rsp),%xmm0
++movaps %xmm0,0x3f80(%rsp)
++movdqu 0x5a0(%rsp),%xmm0
++movupd 0x5b0(%rsp),%xmm1
++movdqu 0x5c0(%rsp),%xmm2
++movdqu 0x5d0(%rsp),%xmm3
++movdqa %xmm3,0x3f70(%rsp)
++movdqa %xmm2,0x3f60(%rsp)
++movapd %xmm1,0x3f50(%rsp)
++movdqa %xmm0,0x3f40(%rsp)
++lea 0x2a0(%rsp),%rdi
++lea 0x3f40(%rsp),%rsi
+ call *RIP<ROLE:rook2::root_schedule::Iteration::into_ranked>
+-mov 0x950(%rsp),%rax
+-mov %rax,0x130(%rsp)
+-mov 0x958(%rsp),%rax
+-mov %rax,0xa0(%rsp)
+-mov 0x960(%rsp),%r14
+-cmpq $0x0,0x1c0(%rsp)
+-je LOCAL+0x3f56
+-mov 0x1c8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-movzbl 0x17(%rsp),%eax
+-cmp 0x180(%rsp),%al
+-jae LOCAL+0x4a7f
+-mov %ebx,0xc0(%rsp)
+-movzbl 0x198(%rsp),%eax
+-mov %al,0x17(%rsp)
+-cmp 0x180(%rsp),%al
+-jbe LOCAL+0x3bd6
+-jmp LOCAL+0x4a7f
+-mov 0x80(%rsp),%rax
++mov 0x2a0(%rsp),%rax
++mov %rax,0x108(%rsp)
++mov 0x2a8(%rsp),%rax
++mov %rax,0x90(%rsp)
++mov 0x2b0(%rsp),%r14
++cmpq $0x0,0x1b0(%rsp)
++je LOCAL+0x3f53
++mov 0xb8(%rsp),%rdi
++call *RIP<ROLE:free>
++movzbl 0xf(%rsp),%eax
++cmp 0x170(%rsp),%al
++jae LOCAL+0x5818
++mov %ebx,%eax
++mov %rax,0xe0(%rsp)
++movzbl 0x8c(%rsp),%eax
++mov %al,0xf(%rsp)
++cmp 0x170(%rsp),%al
++jbe LOCAL+0x3bb7
++jmp LOCAL+0x5818
++mov 0x50(%rsp),%rax
+ dec %eax
+-mov %eax,0x1f0(%rsp)
+-mov 0xb0(%rsp),%rax
+-mov %rax,0x158(%rsp)
+-mov 0xb8(%rsp),%rax
+-mov %rax,0x150(%rsp)
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x653c
+-mov 0x2b0(%rsp),%rax
+-mov 0x2b8(%rsp),%r15d
+-mov 0x2bc(%rsp),%ebx
+-movzwl 0x2c0(%rsp),%edi
+-mov %rax,0x60(%rsp)
+-mov %rax,0xd1d8(%rsp)
+-cmp %rdi,0x18(%rsp)
+-jbe LOCAL+0x6549
+-mov 0x160(%rsp),%rax
++mov %eax,0x10(%rsp)
++mov $0x2,%eax
++mov %rax,0xb8(%rsp)
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x6367
++mov 0x2e0(%rsp),%rax
++mov 0x2e8(%rsp),%r15d
++mov 0x2ec(%rsp),%ebx
++movzwl 0x2f0(%rsp),%edi
++mov %rax,0x30(%rsp)
++mov %rax,0xd1b8(%rsp)
++cmp %rdi,0x20(%rsp)
++jbe LOCAL+0x6374
++mov 0x110(%rsp),%rax
+ movzwl (%rax,%rdi,2),%r14d
+-mov 0xc8(%rsp),%rdi
+-mov 0x140(%rsp),%esi
++mov 0xa8(%rsp),%rdi
++mov 0x120(%rsp),%esi
+ mov %r14d,%edx
+ call *RIP<ROLE:rook2::timed::random_adjustment>
+ mov %eax,%r13d
+-lea 0x3f60(%rsp),%rdi
+-lea 0x3250(%rsp),%rsi
+-lea 0x12090(%rsp),%rdx
+-mov %r14d,0x50(%rsp)
++lea 0x3f40(%rsp),%rdi
++lea 0xc20(%rsp),%rsi
++lea 0x12070(%rsp),%rdx
++mov %r14d,0x68(%rsp)
+ mov %r14d,%ecx
+ call *RIP<ROLE:rook2::evaluator::Node::child>
+ movslq %r13d,%rax
+-mov %rax,0x28(%rsp)
+-mov %r13d,0x214(%rsp)
++mov %rax,0xc8(%rsp)
++mov %r13d,0x19c(%rsp)
+ neg %r13d
+ movslq %r13d,%r14
+-lea 0x460(%rsp),%rdi
+-lea 0x3f70(%rsp),%rsi
++lea 0x350(%rsp),%rdi
++lea 0x3f50(%rsp),%rsi
+ mov $0x1,%edx
+-mov 0x50(%rsp),%ecx
++mov 0x68(%rsp),%ecx
+ call *RIP<ROLE:rook2::history::SearchHistory::push>
+ lea 0x2327(%rbx),%ecx
+ mov %ebx,%eax
+ cmp $0x464e,%ecx
+-ja LOCAL+0x40bc
++ja LOCAL+0x40a6
+ movslq %ebx,%rax
+ add %r14,%rax
+ cmp $0x2327,%rax
+@@ -2852,7 +2860,7 @@
+ lea 0x2327(%r15),%edx
+ mov %r15d,%ecx
+ cmp $0x464e,%edx
+-ja LOCAL+0x40f6
++ja LOCAL+0x40e0
+ movslq %r15d,%rcx
+ add %r14,%rcx
+ cmp $0x2327,%rcx
+@@ -2863,127 +2871,129 @@
+ cmovl %rdx,%rcx
+ neg %eax
+ neg %ecx
+-movq $0x1,0x360(%rsp)
+-mov 0x1f0(%rsp),%edx
+-mov %edx,0x368(%rsp)
+-mov %eax,0x36c(%rsp)
+-mov %ecx,0x370(%rsp)
+-movw $0x200,0x378(%rsp)
+-mov 0x80(%rsp),%rax
+-mov %eax,0x374(%rsp)
+-lea 0x5f60(%rsp),%rax
+-mov %rax,0x950(%rsp)
+-lea 0x750(%rsp),%rax
+-mov %rax,0x958(%rsp)
+-movzbl 0x34(%rsp),%eax
+-mov %al,0x964(%rsp)
+-movw $0x1,0x960(%rsp)
+-mov 0x50(%rsp),%eax
+-mov %ax,0x962(%rsp)
+-lea 0x320(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
+-lea 0x3f60(%rsp),%rdx
+-lea 0x460(%rsp),%r13
++movq $0x1,0x458(%rsp)
++mov 0x10(%rsp),%edx
++mov %edx,0x460(%rsp)
++mov %eax,0x464(%rsp)
++mov %ecx,0x468(%rsp)
++movw $0x200,0x470(%rsp)
++mov 0x50(%rsp),%rax
++mov %eax,0x46c(%rsp)
++lea 0x5f40(%rsp),%rax
++mov %rax,0x2a0(%rsp)
++lea 0x730(%rsp),%rax
++mov %rax,0x2a8(%rsp)
++movzbl 0x1c(%rsp),%eax
++mov %al,0x2b4(%rsp)
++movw $0x1,0x2b0(%rsp)
++mov 0x68(%rsp),%eax
++mov %ax,0x2b2(%rsp)
++lea 0x270(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
++lea 0x3f40(%rsp),%rdx
++lea 0x350(%rsp),%r13
+ mov %r13,%rcx
+-lea 0x360(%rsp),%r8
+-lea 0x950(%rsp),%r9
++lea 0x458(%rsp),%r8
++lea 0x2a0(%rsp),%r9
+ call TARGET<rook2::ordinary::<impl rook2::engine::Search<_,H>>::visit_ordinary>
+ mov %r13,%rdi
+ call *RIP<ROLE:rook2::history::SearchHistory::pop>
+-movzbl 0x320(%rsp),%r13d
++movzbl 0x270(%rsp),%r13d
+ cmp $0x5,%r13d
+-jne LOCAL+0x4682
+-mov 0x324(%rsp),%eax
++jne LOCAL+0x452e
++mov 0x274(%rsp),%eax
+ mov %eax,%edx
+ neg %edx
+ add $0x2327,%eax
+ cmp $0x464e,%eax
+-ja LOCAL+0x4212
++ja LOCAL+0x41f9
+ movslq %edx,%rdx
+-add 0x28(%rsp),%rdx
++add 0xc8(%rsp),%rdx
+ cmp $0x2327,%rdx
+ mov $0x2327,%eax
+ cmovge %rax,%rdx
+ cmp $0xffffffffffffdcda,%rdx
+ mov $0xffffffffffffdcd9,%rax
+ cmovl %rax,%rdx
+-mov 0x133c0(%rsp),%rcx
+-lea 0x360(%rsp),%rdi
+-lea 0x5c0(%rsp),%rsi
++mov 0x133a0(%rsp),%rcx
++lea 0x458(%rsp),%rdi
++lea 0x5a0(%rsp),%rsi
+ call *RIP<ROLE:rook2::root_schedule::Iteration::returned>
+-movzbl 0x382(%rsp),%ebx
+-cmp $0x2,%bl
+-jne LOCAL+0x4251
+-mov 0x368(%rsp),%r15d
+-mov 0x36c(%rsp),%ebx
+-jmp LOCAL+0x4067
+-mov 0x374(%rsp),%r15d
+-mov 0x378(%rsp),%eax
+-mov %eax,0x174(%rsp)
+-mov 0x37c(%rsp),%eax
+-mov %eax,0x114(%rsp)
+-mov 0x133c0(%rsp),%rax
+-mov %rax,0x128(%rsp)
+-mov 0x12620(%rsp),%rax
+-mov %rax,0x120(%rsp)
+-cmpq $0x0,0x60(%rsp)
++movzbl 0x47a(%rsp),%r15d
++cmp $0x2,%r15b
++jne LOCAL+0x423a
++mov 0x460(%rsp),%r15d
++mov 0x464(%rsp),%ebx
++jmp LOCAL+0x4051
++mov 0x46c(%rsp),%eax
++mov %eax,0x198(%rsp)
++mov 0x470(%rsp),%r13d
++mov 0x474(%rsp),%eax
++mov %eax,0xc8(%rsp)
++mov 0x133a0(%rsp),%rax
++mov %rax,0xf8(%rsp)
++mov 0x12600(%rsp),%rax
++mov %rax,0x100(%rsp)
++cmpq $0x0,0x30(%rsp)
+ sete %al
+-test %al,0x32(%rsp)
+-je LOCAL+0x42ef
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x655b
+-mov 0x370(%rsp),%ecx
+-mov 0x120(%rsp),%rax
++test %al,0x1a(%rsp)
++je LOCAL+0x42d9
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x6386
++mov 0x468(%rsp),%ecx
++mov 0x100(%rsp),%rax
+ mov %rax,(%rsp)
+-lea 0xd090(%rsp),%rdi
++lea 0xd070(%rsp),%rdi
+ mov $0x1,%esi
+-mov 0xc0(%rsp),%edx
+-mov 0x114(%rsp),%r8d
+-mov 0x128(%rsp),%r9
++mov 0xe0(%rsp),%rdx
++mov 0xc8(%rsp),%r8d
++mov 0xf8(%rsp),%r9
+ call *RIP<ROLE:rook2::timed::Clock::adjustment>
+-test $0x1,%bl
+-je LOCAL+0x45cb
+-movq $0x0,0x1d0(%rsp)
+-cmpq $0x0,0x1c0(%rsp)
+-jne LOCAL+0x4323
+-lea 0x1c0(%rsp),%rdi
++test $0x1,%r15b
++je LOCAL+0x44bb
++movq $0x0,0x1c0(%rsp)
++cmpq $0x0,0x1b0(%rsp)
++jne LOCAL+0x431e
++lea 0x1b0(%rsp),%rdi
+ lea RIP<LOCATION:src/timed.rs:574:28>,%rsi
+ call TARGET<alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0x1c8(%rsp),%rax
+-mov 0x50(%rsp),%ecx
+-mov %cx,(%rax)
+-movq $0x1,0x1d0(%rsp)
+-mov 0xfe38(%rsp),%rdx
++mov 0x1b8(%rsp),%rax
++mov %rax,0xb8(%rsp)
++mov 0x68(%rsp),%eax
++mov 0xb8(%rsp),%rcx
++mov %ax,(%rcx)
++movq $0x1,0x1c0(%rsp)
++mov 0xfe18(%rsp),%rdx
+ cmp $0x41,%rdx
+-jae LOCAL+0x6568
+-lea 0x1c0(%rsp),%rdi
+-lea 0xdeb0(%rsp),%rsi
++jae LOCAL+0x6393
++lea 0x1b0(%rsp),%rdi
++lea 0xde90(%rsp),%rsi
+ call TARGET<alloc::vec::Vec<T,A>::append_elements>
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x6580
+-mov 0x120(%rsp),%rbx
+-mov %rbx,(%rsp)
+-lea 0xd090(%rsp),%rdi
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x63ab
++mov 0x100(%rsp),%r14
++mov %r14,(%rsp)
++lea 0xd070(%rsp),%rdi
+ xor %esi,%esi
+-mov 0xc0(%rsp),%edx
+-mov 0x174(%rsp),%ecx
+-mov 0x114(%rsp),%r8d
+-mov 0x128(%rsp),%r14
+-mov %r14,%r9
++mov 0xe0(%rsp),%rdx
++mov %r13d,%ecx
++mov 0xc8(%rsp),%r8d
++mov 0xf8(%rsp),%r15
++mov %r15,%r9
+ call *RIP<ROLE:rook2::timed::Clock::adjustment>
+ mov $0x80000000,%eax
+-cmp %rax,%r14
++cmp %rax,%r15
+ mov $0x80000000,%ecx
+-cmovb %r14,%rcx
+-mov %rbx,%rax
++cmovb %r15,%rcx
++mov %r14,%rax
+ mov $0x302,%edx
+ mul %rdx
+ mov %rdx,%rsi
+ imul $0xede,%rcx,%rdi
+ add %rax,%rdi
+ adc $0x0,%rsi
+-mov %rdi,0xd1a0(%rsp)
+-mov %rsi,0xd1a8(%rsp)
++mov %rdi,0xd180(%rsp)
++mov %rsi,0xd188(%rsp)
+ mov $0x1c9c380,%edx
+ xor %ecx,%ecx
+ call *RIP<ROLE:__udivti3>
+@@ -2991,805 +3001,579 @@
+ cmp $0x7fffffff,%rax
+ mov $0x7fffffff,%eax
+ cmovae %rax,%rbx
+-add 0xd1b0(%rsp),%ebx
+-mov %ebx,0xd1b4(%rsp)
+-mov 0x1c8(%rsp),%rsi
+-mov 0x1d0(%rsp),%rdx
+-lea 0x950(%rsp),%rdi
++add 0xd190(%rsp),%ebx
++mov %ebx,0xd194(%rsp)
++mov 0x1b8(%rsp),%rsi
++mov 0x1c0(%rsp),%rdx
++lea 0x310(%rsp),%r14
++mov %r14,%rdi
++mov %rsi,0xb8(%rsp)
+ call TARGET<<alloc::vec::Vec<T,A> as core::clone::Clone>::clone>
+-sub 0xd0f4(%rsp),%ebx
+-movzbl 0x17(%rsp),%ecx
+-mov %cl,0x390(%rsp)
+-mov 0x60(%rsp),%rax
+-mov %rax,0x378(%rsp)
+-mov %r15d,0x388(%rsp)
+-movdqu 0x950(%rsp),%xmm0
+-movdqa %xmm0,0x360(%rsp)
+-mov 0x960(%rsp),%rax
+-mov %rax,0x370(%rsp)
+-mov %r14,0x380(%rsp)
+-mov %ebx,0x38c(%rsp)
+-cmp $0x2,%cl
+-jbe LOCAL+0x455c
+-mov 0x368(%rsp),%rsi
+-mov 0x370(%rsp),%rdx
+-lea 0x950(%rsp),%rdi
+-call TARGET<<alloc::vec::Vec<T,A> as core::clone::Clone>::clone>
+-mov 0x380(%rsp),%r13
+-mov 0x38c(%rsp),%r14d
+-mov 0x1b0(%rsp),%rbx
+-cmp 0x1a0(%rsp),%rbx
+-jne LOCAL+0x44e5
+-lea 0x1a0(%rsp),%rdi
++sub 0xd0d4(%rsp),%ebx
++movzbl 0xf(%rsp),%eax
++mov %al,0x340(%rsp)
++mov 0x30(%rsp),%rax
++mov %rax,0x328(%rsp)
++mov 0x198(%rsp),%eax
++mov %eax,0x338(%rsp)
++mov %r15,0x330(%rsp)
++mov %ebx,0x33c(%rsp)
++lea 0x458(%rsp),%rdi
++lea 0x930(%rsp),%rsi
++mov 0x50(%rsp),%rdx
++mov %r14,%rcx
++lea 0xd060(%rsp),%r8
++call TARGET<rook2::post_lifecycle::CaptureSlot<P>::capture>
++mov 0x458(%rsp),%rax
++movabs $0x8000000000000000,%rcx
++add $0x6,%rcx
++cmp %rcx,%rax
++jne LOCAL+0x58f0
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x63b8
++lea 0xd070(%rsp),%rdi
++mov $0x2,%esi
++mov %r13d,%edx
++mov 0xc8(%rsp),%ecx
++mov 0xf8(%rsp),%r8
++mov 0x100(%rsp),%r9
++call TARGET<rook2::timed::Clock::check>
++test %al,%al
++jne LOCAL+0x5829
++mov 0x133a0(%rsp),%rdx
++lea 0x2e0(%rsp),%rdi
++lea 0x5a0(%rsp),%rsi
++call *RIP<ROLE:rook2::root_schedule::Iteration::next>
++cmpb $0x2,0x2f2(%rsp)
++jne LOCAL+0x3fa5
++jmp LOCAL+0x3cd9
++lea -0x1(%r13),%eax
++cmp $0x3,%eax
++jae LOCAL+0x4609
++mov 0x150(%rsp),%rax
++cmp 0x130(%rsp),%rax
++jne LOCAL+0x4571
++lea 0x130(%rsp),%rdi
++lea RIP<LOCATION:src/timed.rs:524:44>,%rsi
+ call TARGET<alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0x1a8(%rsp),%rax
+-imul $0x38,%rbx,%rcx
+-mov 0x960(%rsp),%rdx
+-mov %rdx,0x10(%rax,%rcx,1)
+-movdqu 0x950(%rsp),%xmm0
+-movdqu %xmm0,(%rax,%rcx,1)
+-mov 0x60(%rsp),%rdx
+-mov %rdx,0x18(%rax,%rcx,1)
+-mov %r13,0x20(%rax,%rcx,1)
+-mov %r15d,0x28(%rax,%rcx,1)
+-mov %r14d,0x2c(%rax,%rcx,1)
+-movzbl 0x17(%rsp),%edx
+-mov %dl,0x30(%rax,%rcx,1)
+-inc %rbx
+-mov %rbx,0x1b0(%rsp)
+-lea 0xd080(%rsp),%rdi
+-lea 0x360(%rsp),%rsi
+-call TARGET<rook2::timed::<impl rook2::engine::Search<_,H>>::publish_capture>
+-mov %rax,0x28(%rsp)
+-test %rax,%rax
+-jne LOCAL+0x5a6f
+-mov 0x360(%rsp),%rax
+-mov %rax,0xb0(%rsp)
+-mov 0x368(%rsp),%rax
+-mov %rax,0xb8(%rsp)
+-lea 0x370(%rsp),%rax
+-movdqu (%rax),%xmm0
+-movupd 0x10(%rax),%xmm1
+-movdqa %xmm0,0x2e0(%rsp)
+-movapd %xmm1,0x2f0(%rsp)
+-mov 0x20(%rax),%rax
+-mov %rax,0x300(%rsp)
+-mov 0x158(%rsp),%rax
++mov 0x138(%rsp),%rax
++mov %rax,0x180(%rsp)
++mov 0x150(%rsp),%rcx
++mov %rcx,%rax
++shl $0x5,%rax
++movups 0x1f8(%rsp),%xmm0
++movups 0x208(%rsp),%xmm1
++mov 0x180(%rsp),%rdx
++movups %xmm1,0x10(%rdx,%rax,1)
++movups %xmm0,(%rdx,%rax,1)
++inc %rcx
++mov %rcx,0x140(%rsp)
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x63c5
++cmp $0x3,%r13d
++je LOCAL+0x55cc
++mov $0x7,%eax
++mov %rax,0x50(%rsp)
++lea RIP<DATA32:9e868af588065b23c38c285c0cc60cc7e4203d667f48d51096def6ac483d0255>,%rax
++mov %rax,0x10(%rsp)
++cmp $0x2,%r13d
++jne LOCAL+0x55e2
++mov $0x4,%eax
++mov %rax,0x50(%rsp)
++lea RIP<DATA32:3bd521c1c2e178425754e0e296504205ab48c38ff9e3ef500fd4adb23ab2a4d9>,%rax
++jmp LOCAL+0x55dd
++mov $0x1,%eax
++mov %rax,0x108(%rsp)
++jmp LOCAL+0x4676
++mov 0x270(%rsp),%rax
++mov %rax,0x10(%rsp)
++mov 0x278(%rsp),%rax
++mov %rax,0x50(%rsp)
++movabs $0x8000000000000000,%rax
++add $0x3,%rax
++mov %rax,0xd0(%rsp)
++lea 0x1f8(%rsp),%rdi
++call TARGET<core::ptr::drop_in_place<rook2::timed::Iteration>>
++cmpq $0x0,0x1b0(%rsp)
++je LOCAL+0x465f
++mov 0xb8(%rsp),%rdi
++call *RIP<ROLE:free>
++lea 0x5a0(%rsp),%rdi
++call TARGET<core::ptr::drop_in_place<rook2::root_schedule::Iteration>>
++mov $0x1,%al
++mov %rax,0xe0(%rsp)
++mov 0x948(%rsp),%rax
+ shl $1,%rax
+ test %rax,%rax
+-je LOCAL+0x45eb
+-mov 0x150(%rsp),%rdi
+-call *RIP<ROLE:free>
+-jmp LOCAL+0x45eb
+-mov 0x150(%rsp),%rax
+-mov %rax,0xb8(%rsp)
+-mov 0x158(%rsp),%rax
+-mov %rax,0xb0(%rsp)
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x658d
+-lea 0xd090(%rsp),%rdi
+-mov $0x2,%esi
+-mov 0x174(%rsp),%edx
+-mov 0x114(%rsp),%ecx
+-mov 0x128(%rsp),%r8
+-mov 0x120(%rsp),%r9
+-call TARGET<rook2::timed::Clock::check>
+-test %al,%al
+-jne LOCAL+0x59a5
+-mov 0x133c0(%rsp),%rdx
+-lea 0x2b0(%rsp),%rdi
+-lea 0x5c0(%rsp),%rsi
+-call *RIP<ROLE:rook2::root_schedule::Iteration::next>
+-cmpb $0x2,0x2c2(%rsp)
+-mov 0xb0(%rsp),%rax
+-mov %rax,0x158(%rsp)
+-mov 0xb8(%rsp),%rax
+-mov %rax,0x150(%rsp)
+-jne LOCAL+0x3fbe
+-jmp LOCAL+0x3ced
+-lea -0x1(%r13),%eax
+-cmp $0x3,%eax
+-jae LOCAL+0x4758
+-mov 0xf0(%rsp),%r14
+-cmp 0xe0(%rsp),%r14
+-jne LOCAL+0x46b5
+-lea 0xe0(%rsp),%rdi
+-lea RIP<LOCATION:src/timed.rs:524:44>,%rsi
+-call TARGET<alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0xe8(%rsp),%rax
+-mov %r14,%rcx
+-shl $0x5,%rcx
+-movups 0x238(%rsp),%xmm0
+-movups 0x248(%rsp),%xmm1
+-movups %xmm1,0x10(%rax,%rcx,1)
+-movups %xmm0,(%rax,%rcx,1)
+-inc %r14
+-mov %r14,0xf0(%rsp)
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x659a
+-cmp $0x3,%r13d
+-je LOCAL+0x4825
+-mov $0x7,%eax
+-mov %rax,0x80(%rsp)
+-lea RIP<DATA32:9e868af588065b23c38c285c0cc60cc7e4203d667f48d51096def6ac483d0255>,%rax
+-mov %rax,0x28(%rsp)
+-cmp $0x2,%r13d
+-jne LOCAL+0x483e
+-mov $0x4,%eax
+-mov %rax,0x80(%rsp)
+-lea RIP<DATA32:3bd521c1c2e178425754e0e296504205ab48c38ff9e3ef500fd4adb23ab2a4d9>,%rax
+-jmp LOCAL+0x4839
+-mov $0x1,%eax
+-mov %rax,0x130(%rsp)
+-movabs $0x8000000000000000,%rax
+-jmp LOCAL+0x47df
+-mov 0x320(%rsp),%rax
+-mov %rax,0x28(%rsp)
+-mov 0x328(%rsp),%rax
+-mov %rax,0x80(%rsp)
+-movabs $0x8000000000000000,%rax
+-add $0x3,%rax
+-mov %rax,0xd8(%rsp)
+-lea 0x238(%rsp),%rdi
+-call TARGET<core::ptr::drop_in_place<rook2::timed::Iteration>>
+-cmpq $0x0,0x1c0(%rsp)
+-je LOCAL+0x47b1
+-mov 0x1c8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-lea 0x5c0(%rsp),%rdi
+-call TARGET<core::ptr::drop_in_place<rook2::root_schedule::Iteration>>
+-mov $0x1,%al
+-mov %eax,0xc0(%rsp)
+-mov 0x150(%rsp),%rax
+-mov %rax,0xb8(%rsp)
+-mov 0x158(%rsp),%rax
+-mov %rax,0xb0(%rsp)
+-mov 0x1a8(%rsp),%rbx
+-mov 0x1b0(%rsp),%r14
++je LOCAL+0x4694
++mov 0x950(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0x938(%rsp),%rbx
++mov 0x940(%rsp),%r14
+ test %r14,%r14
+-je LOCAL+0x4aa3
++je LOCAL+0x46ca
+ lea 0x8(%rbx),%r15
+-jmp LOCAL+0x4813
++jmp LOCAL+0x46b8
+ add $0x38,%r15
+ dec %r14
+-je LOCAL+0x4aa3
++je LOCAL+0x46ca
+ cmpq $0x0,-0x8(%r15)
+-je LOCAL+0x4806
++je LOCAL+0x46af
+ mov (%r15),%rdi
+ call *RIP<ROLE:free>
+-jmp LOCAL+0x4806
+-mov $0x5,%eax
+-mov %rax,0x80(%rsp)
+-lea RIP<DATA32:92053832b34a0d212823a7ded2bf7acfff1a617ffd086da67d0f19c82463581f>,%rax
+-mov %rax,0x28(%rsp)
+-mov 0x133c0(%rsp),%rax
+-mov %rax,0x128(%rsp)
+-mov 0xd1b4(%rsp),%eax
+-sub 0xd0f4(%rsp),%eax
+-mov %eax,0xd8(%rsp)
+-mov 0x12620(%rsp),%rax
+-mov %rax,0x120(%rsp)
+-shl $0x20,%rbx
+-mov %r15d,%eax
+-or %rbx,%rax
+-mov %rax,0x198(%rsp)
+-mov $0x2,%al
+-mov %eax,0x34(%rsp)
+-mov $0x1,%eax
+-mov %rax,0xa0(%rsp)
+-mov 0x150(%rsp),%rax
+-mov %rax,0xb8(%rsp)
+-mov 0x158(%rsp),%rax
+-mov %rax,0xb0(%rsp)
+-mov $0x1,%eax
+-mov %rax,0x138(%rsp)
+-cmpq $0x0,0x1c0(%rsp)
+-je LOCAL+0x48de
+-mov 0x1c8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpq $0x0,0x5c0(%rsp)
+-je LOCAL+0x48f7
+-mov 0x5c8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpq $0x0,0x5d8(%rsp)
+-je LOCAL+0x4910
+-mov 0x5e0(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0xd090(%rsp),%rax
+-movq $0x3,0xd090(%rsp)
+-cmp $0x3,%rax
+-je LOCAL+0x65a7
+-lea 0xd0b0(%rsp),%rbx
+-movups 0xf0(%rbx),%xmm0
+-movups 0x100(%rbx),%xmm1
+-lea 0x730(%rsp),%rax
+-movups %xmm1,0x10(%rax)
+-movups %xmm0,(%rax)
+-mov 0x120(%rbx),%rax
+-mov %rax,0x590(%rsp)
+-movaps 0x110(%rbx),%xmm0
+-movaps %xmm0,0x580(%rsp)
+-movups 0xe0(%rsp),%xmm0
+-movaps %xmm0,0x5a0(%rsp)
+-mov 0xf0(%rsp),%rax
+-mov %rax,0x5b0(%rsp)
+-movaps 0x2e0(%rsp),%xmm0
+-movaps 0x2f0(%rsp),%xmm1
+-movaps %xmm0,0x320(%rsp)
+-movaps %xmm1,0x330(%rsp)
+-mov 0x300(%rsp),%rax
+-mov %rax,0x340(%rsp)
+-movups 0x1a0(%rsp),%xmm0
+-movaps %xmm0,0x560(%rsp)
+-mov 0x1b0(%rsp),%rax
+-mov %rax,0x570(%rsp)
+-mov $0xe8,%edx
+-lea 0x950(%rsp),%rdi
+-lea 0x133c0(%rsp),%rsi
+-call *RIP<ROLE:memcpy>
+-movdqu 0x5548(%rbx),%xmm0
+-movupd 0x5558(%rbx),%xmm1
+-movdqu 0x5568(%rbx),%xmm2
+-movdqa %xmm0,0x2b0(%rsp)
+-movapd %xmm1,0x2c0(%rsp)
+-movdqa %xmm2,0x2d0(%rsp)
+-jmp LOCAL+0x4b6a
+-mov 0xd1b4(%rsp),%eax
+-sub 0xd0f4(%rsp),%eax
+-mov %eax,0xd8(%rsp)
+-mov $0x1,%al
+-mov %eax,0x34(%rsp)
+-movq $0x0,0xa0(%rsp)
+-mov %eax,0x50(%rsp)
+-movq $0x0,0x138(%rsp)
+-cmpq $0x0,0x1c0(%rsp)
+-jne LOCAL+0x48d0
+-jmp LOCAL+0x48de
+-movl $0x0,0xc0(%rsp)
+-mov 0x1a8(%rsp),%rbx
+-mov 0x1b0(%rsp),%r14
++jmp LOCAL+0x46af
++cmpq $0x0,0x930(%rsp)
++je LOCAL+0x46de
++mov %rbx,%rdi
++call *RIP<ROLE:free>
++mov 0x138(%rsp),%rbx
++mov 0x140(%rsp),%r14
+ test %r14,%r14
+-jne LOCAL+0x4800
+-cmpq $0x0,0x1a0(%rsp)
+-je LOCAL+0x4ab7
+-mov %rbx,%rdi
+-call *RIP<ROLE:free>
+-mov 0xb0(%rsp),%rax
+-shl $1,%rax
+-test %rax,%rax
+-je LOCAL+0x4ad5
+-mov 0xb8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0xe8(%rsp),%rbx
+-mov 0xf0(%rsp),%r14
+-test %r14,%r14
+-je LOCAL+0x4afe
++je LOCAL+0x4707
+ mov %rbx,%r15
+ mov %r15,%rdi
+ call TARGET<core::ptr::drop_in_place<rook2::timed::Iteration>>
+ add $0x20,%r15
+ dec %r14
+-jne LOCAL+0x4aed
+-cmpq $0x0,0xe0(%rsp)
+-je LOCAL+0x4b12
++jne LOCAL+0x46f6
++cmpq $0x0,0x130(%rsp)
++je LOCAL+0x471b
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+-cmpq $0x0,0x130(%rsp)
++cmpq $0x0,0x108(%rsp)
+ sete %al
+-mov 0xc0(%rsp),%ecx
++mov 0xe0(%rsp),%rcx
+ or %al,%cl
+-jne LOCAL+0x4b37
+-mov 0xa0(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0x160(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0xd8(%rsp),%rax
+-mov %rax,0x60(%rsp)
+-mov %eax,0x34(%rsp)
+-mov %eax,0x50(%rsp)
+-mov %rax,0xa0(%rsp)
+-mov %rax,0xc8(%rsp)
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x4b8d
+-cmpq $0x0,0xd1c0(%rsp)
+-je LOCAL+0x4b8d
+-mov 0xd1c8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-movq $0x3,0xd090(%rsp)
+-mov 0x133c0(%rsp),%rax
+-mov %rax,0xc0(%rsp)
+-mov 0x12620(%rsp),%rax
+-mov %rax,0x130(%rsp)
+-mov 0x10030(%rsp),%rax
++jne LOCAL+0x4741
++mov 0x90(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0x110(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0xd0(%rsp),%rax
++mov %rax,0x30(%rsp)
++mov %eax,0x1c(%rsp)
++mov %eax,0x68(%rsp)
++mov %rax,0x90(%rsp)
++mov %rax,0xa8(%rsp)
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x4797
++cmpq $0x0,0xd1a0(%rsp)
++je LOCAL+0x4797
++mov 0xd1a8(%rsp),%rdi
++call *RIP<ROLE:free>
++movq $0x3,0xd070(%rsp)
++mov 0x133a0(%rsp),%rax
++mov %rax,0x108(%rsp)
++mov 0x12600(%rsp),%rax
++mov %rax,0xd0(%rsp)
++mov 0x10010(%rsp),%rax
+ movabs $0x8000000000000000,%rcx
+-mov %rcx,0x10030(%rsp)
++mov %rcx,0x10010(%rsp)
+ cmp %rcx,%rax
+-je LOCAL+0x65b4
+-mov %rax,0x238(%rsp)
+-lea 0xd0b0(%rsp),%rbx
++je LOCAL+0x63d2
++mov %rax,0x1f8(%rsp)
++lea 0xd090(%rsp),%rbx
+ movups 0x2f88(%rbx),%xmm0
+ movups 0x2f98(%rbx),%xmm1
+ movups 0x2fa8(%rbx),%xmm2
+-lea 0x240(%rsp),%rax
++lea 0x200(%rsp),%rax
+ movups %xmm2,0x20(%rax)
+ movups %xmm1,0x10(%rax)
+ movups %xmm0,(%rax)
+-mov 0x1268c(%rsp),%eax
+-mov 0x126a8(%rsp),%ecx
+-mov %eax,0x178(%rsp)
+-mov %ecx,0x17c(%rsp)
++mov 0x1266c(%rsp),%eax
++mov 0x12688(%rsp),%ecx
++mov %eax,0xc8(%rsp)
++mov %eax,0x1a8(%rsp)
++mov %ecx,0xb8(%rsp)
++mov %ecx,0x1ac(%rsp)
+ mov $0x2608,%edx
+-lea 0xc40(%rsp),%rdi
+-lea 0x10090(%rsp),%rsi
++lea 0x1930(%rsp),%rdi
++lea 0x10070(%rsp),%rsi
+ mov RIP<ROLE:memcpy>,%r14
+ call *%r14
+ mov 0x55f8(%rbx),%rax
+-mov %rax,0xf0(%rsp)
++mov %rax,0x280(%rsp)
+ movups 0x55e8(%rbx),%xmm0
++movaps %xmm0,0x270(%rsp)
++movaps 0xd1f0(%rsp),%xmm0
++movaps %xmm0,0x1e0(%rsp)
++movaps 0xd200(%rsp),%xmm0
+ movaps %xmm0,0xe0(%rsp)
+-movaps 0xd210(%rsp),%xmm0
+-movaps %xmm0,0x220(%rsp)
+-movaps 0xd220(%rsp),%xmm0
+-movaps %xmm0,0x1f0(%rsp)
+ mov $0xc00,%edx
+-lea 0x5f60(%rsp),%rdi
+-lea 0xd230(%rsp),%rsi
++lea 0x5f40(%rsp),%rdi
++lea 0xd210(%rsp),%rsi
+ call *%r14
+ mov $0xd08,%edx
+-lea 0x3250(%rsp),%rdi
+-lea 0x126b0(%rsp),%rsi
++lea 0xc20(%rsp),%rdi
++lea 0x12690(%rsp),%rsi
+ call *%r14
+ movaps 0x140(%rbx),%xmm0
+ movaps 0x150(%rbx),%xmm1
+-movaps %xmm1,0x1b0(%rsp)
+-movaps %xmm0,0x1a0(%rsp)
+-mov 0x133b8(%rsp),%rax
+-mov %rax,0x140(%rsp)
++movaps %xmm1,0x140(%rsp)
++movaps %xmm0,0x130(%rsp)
++mov 0x13398(%rsp),%rax
++mov %rax,0x120(%rsp)
+ mov $0x2000,%edx
+-lea 0x3f60(%rsp),%rdi
+-lea 0xde30(%rsp),%rsi
++lea 0x3f40(%rsp),%rdi
++lea 0xde10(%rsp),%rsi
+ call *%r14
+ mov $0x200,%edx
+-lea 0x750(%rsp),%r13
++lea 0x730(%rsp),%r13
+ mov %r13,%rdi
+-lea 0xfe30(%rsp),%rsi
++lea 0xfe10(%rsp),%rsi
+ call *%r14
+ mov $0xe8,%edx
+-lea 0x360(%rsp),%rdi
+-lea 0x133c0(%rsp),%rsi
++lea 0x930(%rsp),%rdi
++lea 0x133a0(%rsp),%rsi
+ call *%r14
+ mov $0x160,%edx
+-lea 0x5c0(%rsp),%r15
++lea 0x5a0(%rsp),%r15
+ mov %r15,%rdi
+-lea 0xd090(%rsp),%rsi
++lea 0xd070(%rsp),%rsi
+ call *%r14
+ mov 0x2fd8(%rbx),%rax
+-mov %rax,0x1e0(%rsp)
++mov %rax,0x1d0(%rsp)
+ movups 0x2fb8(%rbx),%xmm0
+ movups 0x2fc8(%rbx),%xmm1
+-movaps %xmm1,0x1d0(%rsp)
+-movaps %xmm0,0x1c0(%rsp)
++movaps %xmm1,0x1c0(%rsp)
++movaps %xmm0,0x1b0(%rsp)
+ mov 0x2fb0(%rbx),%rax
+-mov %rax,0x310(%rsp)
++mov %rax,0x340(%rsp)
+ movaps 0x2f80(%rbx),%xmm0
+ movaps 0x2f90(%rbx),%xmm1
+ movaps 0x2fa0(%rbx),%xmm2
+-movaps %xmm2,0x300(%rsp)
+-movaps %xmm1,0x2f0(%rsp)
+-movaps %xmm0,0x2e0(%rsp)
+-movaps 0xd080(%rsp),%xmm0
+-movaps %xmm0,0x180(%rsp)
+-lea 0x6b60(%rsp),%rdi
++movaps %xmm2,0x330(%rsp)
++movaps %xmm1,0x320(%rsp)
++movaps %xmm0,0x310(%rsp)
++movaps 0xd060(%rsp),%xmm0
++movaps %xmm0,0x170(%rsp)
++lea 0x6b40(%rsp),%rdi
+ call TARGET<core::ptr::drop_in_place<core::option::Option<rook2::engine::Search<_>>>>
+-movaps 0x180(%rsp),%xmm0
+-movaps %xmm0,0x6b60(%rsp)
++movaps 0x170(%rsp),%xmm0
++movaps %xmm0,0x6b40(%rsp)
+ mov $0x160,%edx
+-lea 0x6b70(%rsp),%rdi
++lea 0x6b50(%rsp),%rdi
+ mov %r15,%rsi
+ call *%r14
+-movaps 0x1a0(%rsp),%xmm0
+-movaps 0x1b0(%rsp),%xmm1
+-lea 0x7910(%rsp),%r15
++movaps 0x130(%rsp),%xmm0
++movaps 0x140(%rsp),%xmm1
++lea 0x78f0(%rsp),%r15
+ movaps %xmm0,-0xc40(%r15)
+ movaps %xmm1,-0xc30(%r15)
+-movaps 0x220(%rsp),%xmm0
+-movaps %xmm0,0x6cf0(%rsp)
+-movaps 0x1f0(%rsp),%xmm0
+-movaps %xmm0,0x6d00(%rsp)
++movaps 0x1e0(%rsp),%xmm0
++movaps %xmm0,0x6cd0(%rsp)
++movaps 0xe0(%rsp),%xmm0
++movaps %xmm0,0x6ce0(%rsp)
+ mov $0xc00,%edx
+-lea 0x6d10(%rsp),%rdi
+-lea 0x5f60(%rsp),%rsi
++lea 0x6cf0(%rsp),%rdi
++lea 0x5f40(%rsp),%rsi
+ call *%r14
+ mov $0x2000,%edx
+ mov %r15,%rdi
+-lea 0x3f60(%rsp),%rsi
++lea 0x3f40(%rsp),%rsi
+ call *%r14
+ mov $0x200,%edx
+-lea 0x9910(%rsp),%rdi
++lea 0x98f0(%rsp),%rdi
+ mov %r13,%rsi
+ call *%r14
+-movaps 0x2e0(%rsp),%xmm0
+-movaps 0x2f0(%rsp),%xmm1
+-movaps 0x300(%rsp),%xmm2
++movaps 0x310(%rsp),%xmm0
++movaps 0x320(%rsp),%xmm1
++movdqa 0x330(%rsp),%xmm2
+ movaps %xmm0,0x2200(%r15)
+ movaps %xmm1,0x2210(%r15)
+-movaps %xmm2,0x2220(%r15)
+-mov 0x310(%rsp),%rax
++movdqa %xmm2,0x2220(%r15)
++mov 0x340(%rsp),%rax
+ mov %rax,0x2230(%r15)
+ mov $0x2608,%edx
+-lea 0x9b48(%rsp),%rdi
+-lea 0xc40(%rsp),%rsi
++lea 0x9b28(%rsp),%rdi
++lea 0x1930(%rsp),%rsi
+ call *%r14
+-movaps 0xe0(%rsp),%xmm0
++movaps 0x270(%rsp),%xmm0
+ movaps %xmm0,0x4840(%r15)
+-mov 0xf0(%rsp),%rax
++mov 0x280(%rsp),%rax
+ mov %rax,0x4850(%r15)
+ mov $0xd08,%edx
+-lea 0xc168(%rsp),%rdi
+-lea 0x3250(%rsp),%rsi
++lea 0xc148(%rsp),%rdi
++lea 0xc20(%rsp),%rsi
+ call *%r14
+-mov 0x140(%rsp),%rax
+-mov %rax,0xce70(%rsp)
++mov 0x120(%rsp),%rax
++mov %rax,0xce50(%rsp)
+ mov $0xe8,%edx
+-lea 0xce78(%rsp),%rdi
+-lea 0x360(%rsp),%rsi
++lea 0xce58(%rsp),%rdi
++lea 0x930(%rsp),%rsi
+ call *%r14
+-mov 0x258(%rsp),%rax
+-mov %rax,0xc60(%rsp)
+-movups 0x238(%rsp),%xmm0
+-movups 0x248(%rsp),%xmm1
+-movaps %xmm1,0xc50(%rsp)
+-movaps %xmm0,0xc40(%rsp)
+-cmpq $0x0,0xcf90(%rsp)
+-je LOCAL+0x4f7f
+-mov 0xcf98(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0xc60(%rsp),%rax
+-lea 0xcf90(%rsp),%rcx
++mov 0x218(%rsp),%rax
++mov %rax,0x1950(%rsp)
++movups 0x1f8(%rsp),%xmm0
++movups 0x208(%rsp),%xmm1
++movaps %xmm1,0x1940(%rsp)
++movaps %xmm0,0x1930(%rsp)
++cmpq $0x0,0xcf70(%rsp)
++je LOCAL+0x4b99
++mov 0xcf78(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0x1950(%rsp),%rax
++lea 0xcf70(%rsp),%rcx
+ mov %rax,0x20(%rcx)
+-movaps 0xc40(%rsp),%xmm0
+-movaps 0xc50(%rsp),%xmm1
+-movups %xmm1,0x10(%rcx)
+-movups %xmm0,(%rcx)
+-movzbl 0x264(%rsp),%r15d
+-movzbl 0x265(%rsp),%eax
+-mov %r15b,0xd073(%rsp)
+-mov %al,0xd070(%rsp)
+-movzbl 0x266(%rsp),%eax
+-mov %al,0xd074(%rsp)
+-cmpl $0x2,0x138(%rsp)
+-jne LOCAL+0x5114
+-mov 0xc0(%rsp),%rdi
+-mov %rdi,0xcf80(%rsp)
++movdqa 0x1930(%rsp),%xmm0
++movdqa 0x1940(%rsp),%xmm1
++movdqu %xmm1,0x10(%rcx)
++movdqu %xmm0,(%rcx)
++movzbl 0x224(%rsp),%r15d
++movzbl 0x225(%rsp),%eax
++mov %r15b,0xd053(%rsp)
++mov %al,0xd050(%rsp)
++movzbl 0x226(%rsp),%eax
++mov %al,0xd054(%rsp)
++cmpl $0x2,0x118(%rsp)
++jne LOCAL+0x4d3a
++mov 0x108(%rsp),%rdi
++mov %rdi,0xcf60(%rsp)
+ mov $0x80000000,%eax
+ cmp %rax,%rdi
+ cmovae %rax,%rdi
+-mov 0x130(%rsp),%rax
+-mov %rax,0xcf88(%rsp)
++mov 0xd0(%rsp),%rax
++mov %rax,0xcf68(%rsp)
+ mov $0x302,%ecx
+ mul %rcx
+ mov %rdx,%rsi
+ imul $0xede,%rdi,%rdi
+ add %rax,%rdi
+ adc $0x0,%rsi
+-mov %rdi,0xcf60(%rsp)
+-mov %rsi,0xcf68(%rsp)
++mov %rdi,0xcf40(%rsp)
++mov %rsi,0xcf48(%rsp)
+ mov $0x1c9c380,%edx
+ xor %ecx,%ecx
+ call *RIP<ROLE:__udivti3>
+ cmp $0x7fffffff,%rax
+ mov $0x7fffffff,%ecx
+ cmovae %rcx,%rax
+-add 0xcf70(%rsp),%eax
+-mov %eax,0xcf74(%rsp)
+-sub 0xcfac(%rsp),%eax
+-cmpb $0x0,0xcfa8(%rsp)
++add 0xcf50(%rsp),%eax
++mov %eax,0xcf54(%rsp)
++sub 0xcf8c(%rsp),%eax
++cmpb $0x0,0xcf88(%rsp)
+ mov $0x0,%ecx
+ cmove %ecx,%eax
+-add %eax,0xcfb0(%rsp)
+-movl $0x0,0xcfa8(%rsp)
++add %eax,0xcf90(%rsp)
++movl $0x0,0xcf88(%rsp)
+ movabs $0x8000000000000000,%rax
+-cmp %rax,0x60(%rsp)
++cmp %rax,0x30(%rsp)
+ sete %bl
+-cmpq $0x0,0x460(%rsp)
+-je LOCAL+0x50ba
+-mov 0x468(%rsp),%rdi
++cmpq $0x0,0x350(%rsp)
++je LOCAL+0x4cd8
++mov 0x358(%rsp),%rdi
+ call *RIP<ROLE:free>
+ add %bl,%bl
+ or $0x5,%bl
+-mov %bl,0x18(%rsp)
+-cmpq $0x0,0x478(%rsp)
+-je LOCAL+0x50dc
+-mov 0x480(%rsp),%rdi
++cmpq $0x0,0x368(%rsp)
++je LOCAL+0x4cf6
++mov 0x370(%rsp),%rdi
+ call *RIP<ROLE:free>
+ lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-mov RIP<ROLE:memcpy>,%rcx
+-lea 0xa38(%rsp),%r14
+-mov 0x38(%rsp),%rdx
+-mov 0x48(%rsp),%rsi
+-mov 0x40(%rsp),%rdi
+-movzbl 0x27(%rsp),%r15d
+-mov 0x80(%rsp),%rax
+-jmp LOCAL+0x20d5
+-mov 0x128(%rsp),%r14
+-mov %r14,0xcf80(%rsp)
+-mov 0x120(%rsp),%r13
+-mov %r13,0xcf88(%rsp)
+-lea 0x730(%rsp),%rax
++mov RIP<ROLE:memcpy>,%r8
++lea 0xa18(%rsp),%r14
++mov 0x160(%rsp),%rax
++mov 0x158(%rsp),%rcx
++mov 0x48(%rsp),%rdx
++mov 0x288(%rsp),%rsi
++mov 0x260(%rsp),%edi
++mov 0x50(%rsp),%r9
++jmp LOCAL+0x1f67
++mov 0xf8(%rsp),%r13
++mov %r13,0xcf60(%rsp)
++mov 0x100(%rsp),%r14
++mov %r14,0xcf68(%rsp)
++lea 0x710(%rsp),%rax
+ movups (%rax),%xmm0
+ movups 0x10(%rax),%xmm1
+-lea 0x7910(%rsp),%rax
++lea 0x78f0(%rsp),%rax
+ movups %xmm1,0x5660(%rax)
+ mov $0x80000000,%ecx
+-cmp %rcx,%r14
+-cmovb %r14,%rcx
++cmp %rcx,%r13
++cmovb %r13,%rcx
+ movups %xmm0,0x5650(%rax)
+-mov %r13,%rax
++mov %r14,%rax
+ mov $0x302,%edx
+ mul %rdx
+ mov %rdx,%rsi
+ imul $0xede,%rcx,%rdi
+ add %rax,%rdi
+ adc $0x0,%rsi
+-mov %rdi,0xcf60(%rsp)
+-mov %rsi,0xcf68(%rsp)
++mov %rdi,0xcf40(%rsp)
++mov %rsi,0xcf48(%rsp)
+ mov $0x1c9c380,%edx
+ xor %ecx,%ecx
+ call *RIP<ROLE:__udivti3>
+ cmp $0x7fffffff,%rax
+ mov $0x7fffffff,%ecx
+ cmovae %rcx,%rax
+-add 0xcf70(%rsp),%eax
+-mov %eax,0xcf74(%rsp)
+-sub 0xcfac(%rsp),%eax
+-cmpb $0x0,0xcfa8(%rsp)
++add 0xcf50(%rsp),%eax
++mov %eax,0xcf54(%rsp)
++sub 0xcf8c(%rsp),%eax
++cmpb $0x0,0xcf88(%rsp)
+ mov $0x0,%ecx
+ cmove %ecx,%eax
+-add %eax,0xcfb0(%rsp)
+-mov 0x138(%rsp),%rax
+-mov %rax,0xc40(%rsp)
+-mov 0x60(%rsp),%rax
+-mov %rax,0xc48(%rsp)
+-mov 0x28(%rsp),%rax
+-mov %rax,0xc50(%rsp)
+-mov 0x80(%rsp),%rbx
+-mov %rbx,0xc58(%rsp)
+-mov %r14,0xc60(%rsp)
+-mov %r13,0xc68(%rsp)
+-mov 0xa0(%rsp),%rax
+-mov %eax,0xc70(%rsp)
+-mov 0x198(%rsp),%rax
+-mov %rax,0xc74(%rsp)
+-mov 0x214(%rsp),%eax
+-mov %eax,0xc7c(%rsp)
+-mov 0x50(%rsp),%eax
+-mov %ax,0xc80(%rsp)
+-mov 0xd8(%rsp),%eax
+-mov %eax,0xc84(%rsp)
+-mov 0x34(%rsp),%eax
+-mov %al,0xc88(%rsp)
+-movzbl 0x17(%rsp),%eax
+-mov %al,0xc89(%rsp)
+-mov 0x748(%rsp),%rax
+-lea 0x1180(%rsp),%rcx
++add %eax,0xcf90(%rsp)
++mov 0x118(%rsp),%rax
++mov %rax,0x1930(%rsp)
++mov 0x30(%rsp),%rax
++mov %rax,0x1938(%rsp)
++mov 0x10(%rsp),%rax
++mov %rax,0x1940(%rsp)
++mov 0x50(%rsp),%rbx
++mov %rbx,0x1948(%rsp)
++mov %r13,0x1950(%rsp)
++mov %r14,0x1958(%rsp)
++mov 0x90(%rsp),%rax
++mov %eax,0x1960(%rsp)
++mov 0x150(%rsp),%rax
++mov %rax,0x1964(%rsp)
++mov 0x19c(%rsp),%eax
++mov %eax,0x196c(%rsp)
++mov 0x68(%rsp),%eax
++mov %ax,0x1970(%rsp)
++mov 0x8c(%rsp),%eax
++mov %eax,0x1974(%rsp)
++mov 0x1c(%rsp),%eax
++mov %al,0x1978(%rsp)
++movzbl 0xf(%rsp),%eax
++mov %al,0x1979(%rsp)
++mov 0x728(%rsp),%rax
++lea 0x1e70(%rsp),%rcx
+ mov %rax,-0x4d8(%rcx)
+-movups 0x72a(%rsp),%xmm0
+-movups 0x73a(%rsp),%xmm1
++movups 0x70a(%rsp),%xmm0
++movups 0x71a(%rsp),%xmm1
+ movups %xmm1,-0x4e6(%rcx)
+ movups %xmm0,-0x4f6(%rcx)
+-movaps 0x2b0(%rsp),%xmm0
+-movaps 0x2c0(%rsp),%xmm1
+-movaps 0x2d0(%rsp),%xmm2
++movaps 0x2e0(%rsp),%xmm0
++movaps 0x2f0(%rsp),%xmm1
++movaps 0x300(%rsp),%xmm2
+ movaps %xmm2,-0x4b0(%rcx)
+ movaps %xmm1,-0x4c0(%rcx)
+ movaps %xmm0,-0x4d0(%rcx)
+-mov 0x18(%rsp),%rdx
+-mov %rdx,0xce0(%rsp)
+-mov 0x160(%rsp),%rax
+-mov %rax,0xce8(%rsp)
+-mov %rdx,0xcf0(%rsp)
+-mov 0x5b0(%rsp),%rax
++mov 0x20(%rsp),%rdx
++mov %rdx,0x19d0(%rsp)
++mov 0x110(%rsp),%rax
++mov %rax,0x19d8(%rsp)
++mov %rdx,0x19e0(%rsp)
++mov 0x590(%rsp),%rax
+ mov %rax,-0x478(%rcx)
+-movaps 0x5a0(%rsp),%xmm0
++movaps 0x580(%rsp),%xmm0
+ movups %xmm0,-0x488(%rcx)
+-mov 0x590(%rsp),%rax
++mov 0x570(%rsp),%rax
+ mov %rax,-0x460(%rcx)
+-movaps 0x580(%rsp),%xmm0
++movaps 0x560(%rsp),%xmm0
+ movaps %xmm0,-0x470(%rcx)
+-mov 0x570(%rsp),%rax
++mov 0x550(%rsp),%rax
+ mov %rax,-0x448(%rcx)
+-movaps 0x560(%rsp),%xmm0
++movaps 0x540(%rsp),%xmm0
+ movups %xmm0,-0x458(%rcx)
+-mov 0xb0(%rsp),%rax
+-mov %rax,0xd40(%rsp)
+-mov 0xb8(%rsp),%rax
+-mov %rax,0xd48(%rsp)
+-mov 0x340(%rsp),%rax
+-mov %rax,-0x410(%rcx)
+-movl $0x0,0xcfa8(%rsp)
+-movaps 0x320(%rsp),%xmm0
+-movaps 0x330(%rsp),%xmm1
+-movaps %xmm1,-0x420(%rcx)
+-movaps %xmm0,-0x430(%rcx)
++mov 0x2d0(%rsp),%rax
++lea 0x1a30(%rsp),%rcx
++mov %rax,0x30(%rcx)
++movl $0x0,0xcf88(%rsp)
++movdqa 0x2a0(%rsp),%xmm0
++movdqa 0x2b0(%rsp),%xmm1
++movdqa 0x2c0(%rsp),%xmm2
++movdqa %xmm2,0x20(%rcx)
++movdqa %xmm1,0x10(%rcx)
++movdqa %xmm0,(%rcx)
+ mov $0xe8,%edx
+-lea 0xd78(%rsp),%rdi
+-lea 0x950(%rsp),%rsi
++lea 0x1a68(%rsp),%rdi
++lea 0x458(%rsp),%rsi
+ call *RIP<ROLE:memcpy>
+-mov 0xc8(%rsp),%rax
+-mov %eax,0xe60(%rsp)
+-lea 0x6b60(%rsp),%rax
+-mov %rax,0xe70(%rsp)
+-lea 0x267(%rsp),%rax
+-mov %rax,0xe78(%rsp)
+-lea 0x498(%rsp),%rax
+-mov %rax,0xe80(%rsp)
+-lea 0x550(%rsp),%rax
+-mov %rax,0xe88(%rsp)
+-lea 0x55c(%rsp),%rax
+-mov %rax,0xe90(%rsp)
+-lea 0x178(%rsp),%rax
+-mov %rax,0xe98(%rsp)
+-lea 0x17c(%rsp),%rax
+-mov %rax,0xea0(%rsp)
+-lea 0x33(%rsp),%rax
+-mov %rax,0xea8(%rsp)
+-lea 0x1c0(%rsp),%rax
+-mov %rax,0xeb0(%rsp)
++mov 0xa8(%rsp),%rax
++mov %eax,0x1b50(%rsp)
++lea 0x6b40(%rsp),%rax
++mov %rax,0x1b60(%rsp)
++lea 0x227(%rsp),%rax
++mov %rax,0x1b68(%rsp)
++lea 0x388(%rsp),%rax
++mov %rax,0x1b70(%rsp)
++lea 0x440(%rsp),%rax
++mov %rax,0x1b78(%rsp)
++lea 0x44c(%rsp),%rax
++mov %rax,0x1b80(%rsp)
++lea 0x1a8(%rsp),%rax
++mov %rax,0x1b88(%rsp)
++lea 0x1ac(%rsp),%rax
++mov %rax,0x1b90(%rsp)
++lea 0x1b(%rsp),%rax
++mov %rax,0x1b98(%rsp)
++lea 0x1b0(%rsp),%rax
++mov %rax,0x1ba0(%rsp)
+ cmp $0x5,%rbx
+-jne LOCAL+0x549c
+-mov 0x28(%rsp),%rdx
++jne LOCAL+0x50af
++mov 0x10(%rsp),%rdx
+ mov (%rdx),%eax
+ mov $0x726f6261,%ecx
+ xor %ecx,%eax
+ movzbl 0x4(%rdx),%ecx
+ xor $0x74,%ecx
+ or %eax,%ecx
+-lea 0x6b60(%rsp),%r13
+-je LOCAL+0x55a3
+-cmpq $0x0,0x18(%rsp)
+-je LOCAL+0x65c1
+-mov 0xd50(%rsp),%rbx
++lea 0x6b40(%rsp),%r14
++je LOCAL+0x53df
++mov 0x1a30(%rsp),%rax
++mov 0x1a40(%rsp),%rbx
++movabs $0x8000000000000000,%rcx
++cmp %rcx,%rax
++lea 0x1a30(%rsp),%rdx
++mov $0x0,%ecx
++cmove %rcx,%rdx
++sete %cl
+ test %rbx,%rbx
+-mov 0xb8(%rsp),%rax
+-mov 0x160(%rsp),%rdx
+-cmove %rdx,%rax
+-movabs $0x8000000000000000,%rcx
+-cmp %rcx,0xb0(%rsp)
+-cmove %rdx,%rax
++sete %sil
++or %cl,%sil
++je LOCAL+0x50f9
++cmpq $0x0,0x20(%rsp)
++jne LOCAL+0x5115
++jmp LOCAL+0x63df
++cmpq $0x0,0x20(%rsp)
++je LOCAL+0x63df
++mov 0x1a38(%rsp),%rcx
++mov %rcx,0x110(%rsp)
++xor %ecx,%ecx
++movabs $0x8000000000000000,%rsi
++cmp %rsi,%rax
++sete %cl
++mov 0x110(%rsp),%rax
+ movzwl (%rax),%r13d
+-lea 0x6b60(%rsp),%rdi
++inc %rcx
++cmpb $0x0,0x227(%rsp)
++mov $0x0,%eax
++cmovne %rax,%rcx
+ test %r15b,%r15b
+-je LOCAL+0x54fc
+-cmpb $0x0,0x267(%rsp)
+-je LOCAL+0x5763
+-mov %r13d,%esi
+-call TARGET<rook2::session::Session<_>::accept_move>
+-mov 0xeb0(%rsp),%rax
+-mov %r13w,0x3f62(%rsp)
+-movb $0x3,0x3f60(%rsp)
+-mov 0x10(%rax),%rdi
+-lea 0x3f60(%rsp),%rsi
+-call TARGET<<rook2::WireHost<W,E> as rook2::host::Host>::publish>
+-mov %rax,0x60(%rsp)
+-test %rax,%rax
+-je LOCAL+0x5555
+-movb $0xa,0x18(%rsp)
+-lea 0xc40(%rsp),%rdi
+-call TARGET<core::ptr::drop_in_place<rook2::timed::Outcome>>
+-mov $0x2,%r15d
+-jmp LOCAL+0x568e
+-mov 0xe70(%rsp),%r13
+-movzbl 0x6516(%r13),%eax
+-cmp $0x7,%al
+-je LOCAL+0x55a3
+-mov 0xeb0(%rsp),%rcx
+-mov %al,0x3f61(%rsp)
+-movb $0x4,0x3f60(%rsp)
+-mov 0x10(%rcx),%rdi
+-lea 0x3f60(%rsp),%rsi
+-call TARGET<<rook2::WireHost<W,E> as rook2::host::Host>::publish>
+-mov %rax,0x60(%rsp)
+-test %rax,%rax
+-jne LOCAL+0x5538
+-mov 0xe70(%rsp),%r13
+-mov 0xe60(%rsp),%eax
+-mov %eax,0x21c(%rsp)
+-mov 0xe90(%rsp),%rax
+-mov (%rax),%eax
+-mov %eax,0x218(%rsp)
+-mov 0xe88(%rsp),%rax
+-mov (%rax),%rcx
+-mov %rcx,0x3250(%rsp)
+-mov 0x8(%rax),%eax
+-mov %eax,0x3258(%rsp)
+-mov 0xc40(%rsp),%r15
+-movzbl 0xc48(%rsp),%eax
+-mov %al,0x18(%rsp)
+-movzbl 0xc49(%rsp),%eax
+-mov %al,0x5e(%rsp)
+-lea 0x1180(%rsp),%rcx
+-mov -0x536(%rcx),%eax
+-mov %eax,0x750(%rsp)
+-movzwl -0x532(%rcx),%eax
+-mov %ax,0x754(%rsp)
+-mov 0xc50(%rsp),%rax
+-mov %rax,0x60(%rsp)
+-movzwl 0xc58(%rsp),%r14d
+-mov 0xc5a(%rsp),%eax
+-movzwl 0xc5e(%rsp),%ecx
+-shl $0x20,%rcx
+-or %rax,%rcx
+-mov %rcx,0x458(%rsp)
+-mov 0xc60(%rsp),%rax
+-mov %rax,0x450(%rsp)
+-mov $0x208,%edx
+-lea 0x3f60(%rsp),%rdi
+-lea 0xc68(%rsp),%rsi
++cmove %rax,%rcx
++test %rcx,%rcx
++je LOCAL+0x5303
++cmp $0x2,%ecx
++jne LOCAL+0x51c0
++mov $0xa0,%edx
++lea 0x3f40(%rsp),%rbx
++mov %rbx,%rdi
++lea 0x388(%rsp),%rsi
+ call *RIP<ROLE:memcpy>
+-movzbl 0x6516(%r13),%eax
+-mov %al,0x5f(%rsp)
+-mov 0x750(%rsp),%eax
+-mov %eax,0x5c0(%rsp)
+-movzwl 0x754(%rsp),%eax
+-mov %ax,0x5c4(%rsp)
+-mov $0x208,%edx
+-lea 0xc40(%rsp),%rdi
+-lea 0x3f60(%rsp),%rsi
+-call *RIP<ROLE:memcpy>
+-mov 0x3250(%rsp),%rax
+-mov %rax,0x5f60(%rsp)
+-mov 0x3258(%rsp),%eax
+-mov %eax,0x5f68(%rsp)
+-cmpq $0x0,0x460(%rsp)
+-je LOCAL+0x56fe
+-mov 0x468(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpq $0x0,0x478(%rsp)
+-je LOCAL+0x5717
+-mov 0x480(%rsp),%rdi
+-call *RIP<ROLE:free>
+-movzwl %r14w,%eax
+-mov 0x458(%rsp),%rcx
+-shl $0x10,%rcx
+-or %rax,%rcx
+-mov %rcx,0x28(%rsp)
+-mov 0x450(%rsp),%rax
+-mov %rax,0x80(%rsp)
+-movzbl 0x5e(%rsp),%eax
+-mov %al,0x27(%rsp)
+-lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
+-mov RIP<ROLE:memcpy>,%rcx
+-lea 0xa38(%rsp),%r14
+-jmp LOCAL+0x20f7
+-movabs $0x8000000000000000,%rax
+-cmp %rax,0xb0(%rsp)
+-jne LOCAL+0x57d1
+-mov $0xa0,%edx
+-lea 0x3f60(%rsp),%rbx
+-mov %rbx,%rdi
+-lea 0x498(%rsp),%rsi
+-call *RIP<ROLE:memcpy>
+-mov %r13w,0x750(%rsp)
+-xorps %xmm0,%xmm0
+-movaps %xmm0,0x5f60(%rsp)
+-movl $0x0,0x5f70(%rsp)
++mov %r13w,0x730(%rsp)
++pxor %xmm0,%xmm0
++movdqa %xmm0,0x5f40(%rsp)
++movl $0x0,0x5f50(%rsp)
+ mov $0x1,%ecx
+-lea 0x3250(%rsp),%rdi
++lea 0xc20(%rsp),%rdi
+ mov %rbx,%rsi
+-lea 0x750(%rsp),%rdx
+-jmp LOCAL+0x5895
+-mov 0x178(%rsp),%ecx
+-mov 0x17c(%rsp),%r8d
+-lea 0x5f60(%rsp),%rdi
+-lea 0x498(%rsp),%r14
++lea 0x730(%rsp),%rdx
++lea 0x5f40(%rsp),%r8
++jmp LOCAL+0x5274
++lea 0x730(%rsp),%rdi
++lea 0x388(%rsp),%r14
+ mov %r14,%rsi
+-lea 0xd40(%rsp),%rdx
++mov 0xc8(%rsp),%ecx
++mov 0xb8(%rsp),%r8d
+ call *RIP<ROLE:rook2::output::capture_fields>
+-cmpb $0x0,0x33(%rsp)
++cmpb $0x0,0x1b(%rsp)
+ mov %r14,%rsi
+-je LOCAL+0x5869
+-mov 0xcf60(%rsp),%rdi
+-mov 0xcf68(%rsp),%rsi
++je LOCAL+0x5240
++mov 0xcf40(%rsp),%rdi
++mov 0xcf48(%rsp),%rsi
+ mov $0x3e8,%edx
+ xor %ecx,%ecx
+ call *RIP<ROLE:__udivti3>
+@@ -3799,211 +3583,391 @@
+ test %rdx,%rdx
+ mov $0x7fffffff,%ecx
+ cmovne %ecx,%eax
+-mov %eax,0x5f70(%rsp)
+-mov 0xe80(%rsp),%rsi
+-mov 0xd48(%rsp),%rax
+-mov %rax,0xb8(%rsp)
+-mov 0xd50(%rsp),%rbx
++mov %eax,0x740(%rsp)
++mov 0x1a40(%rsp),%rbx
++mov 0x1b70(%rsp),%rsi
+ mov $0xa0,%edx
+-lea 0x3f60(%rsp),%r14
++lea 0x3f40(%rsp),%r14
+ mov %r14,%rdi
+ call *RIP<ROLE:memcpy>
+-lea 0x3250(%rsp),%rdi
++mov 0x1a38(%rsp),%rdx
++lea 0xc20(%rsp),%rdi
+ mov %r14,%rsi
+-mov 0xb8(%rsp),%rdx
+ mov %rbx,%rcx
+-lea 0x5f60(%rsp),%r8
++lea 0x730(%rsp),%r8
+ call *RIP<ROLE:rook2::output::render>
+-mov 0x3250(%rsp),%rax
+-movabs $0x8000000000000000,%rcx
+-cmp %rcx,%rax
+-jne LOCAL+0x58da
+-mov 0x3258(%rsp),%rax
+-mov %rax,0x60(%rsp)
+-movzwl 0x3260(%rsp),%r14d
+-movb $0x6,0x18(%rsp)
+-jmp LOCAL+0x553d
+-movzbl 0x3258(%rsp),%ecx
+-lea 0x325a(%rsp),%r9
+-mov -0x1(%r9),%edx
+-mov 0x2(%r9),%esi
+-lea 0x4010(%rsp),%r10
+-mov %esi,-0x9c(%r10)
+-mov %edx,-0x9f(%r10)
+-mov 0x3260(%rsp),%rdx
+-movzwl 0x3268(%rsp),%esi
+-mov 0x10(%r9),%rdi
+-mov 0x16(%r9),%r8
+-mov %r8,-0x88(%r10)
+-mov %rdi,-0x8e(%r10)
+-mov 0x3e(%r9),%rdi
+-mov %rdi,-0x60(%r10)
+-movups 0x1e(%r9),%xmm0
+-movups 0x2e(%r9),%xmm1
+-movups %xmm1,-0x70(%r10)
+-movups %xmm0,-0x80(%r10)
+-mov 0xeb0(%rsp),%rdi
++mov 0xc20(%rsp),%rax
++mov 0xc28(%rsp),%rcx
++mov %rcx,0x30(%rsp)
++movzwl 0xc30(%rsp),%ecx
++mov 0xc32(%rsp),%esi
++movzwl 0xc36(%rsp),%edx
++shl $0x20,%rdx
++or %rsi,%rdx
++mov 0xc38(%rsp),%rsi
++mov 0xc40(%rsp),%rdi
++mov %rdi,0x50(%rsp)
++lea 0xc48(%rsp),%rdi
++movdqu (%rdi),%xmm0
++movdqu 0x10(%rdi),%xmm1
++movdqa %xmm0,0x5f40(%rsp)
++movdqa %xmm1,0x5f50(%rsp)
++mov 0x20(%rdi),%rdi
++mov %rdi,0x5f60(%rsp)
++movabs $0x8000000000000000,%rdi
++inc %rdi
++cmp %rdi,%rax
++jne LOCAL+0x534e
++mov 0x1b60(%rsp),%rdi
++mov %r13d,%esi
++call TARGET<rook2::session::Session<_>::accept_move>
++mov 0x1ba0(%rsp),%rax
++mov %r13w,0x3f42(%rsp)
++movb $0x3,0x3f40(%rsp)
++mov 0x10(%rax),%rdi
++lea 0x3f40(%rsp),%rsi
++call TARGET<<rook2::WireHost<W,E> as rook2::host::Host>::publish>
++mov $0xa,%ebx
++mov %rax,0x30(%rsp)
++test %rax,%rax
++je LOCAL+0x538d
++jmp LOCAL+0x536e
++movabs $0x8000000000000000,%rdi
++cmp %rdi,%rax
++jne LOCAL+0x551c
++movzwl %cx,%eax
++mov %rax,0x10(%rsp)
++mov $0x6,%ebx
++lea 0x1930(%rsp),%rdi
++call TARGET<core::ptr::drop_in_place<rook2::timed::Outcome>>
++mov $0x2,%eax
++mov %rax,0x20(%rsp)
++xor %r15d,%r15d
++jmp LOCAL+0x548a
++mov 0x1b60(%rsp),%r14
++movzbl 0x6516(%r14),%eax
++cmp $0x7,%al
++je LOCAL+0x53df
++mov 0x1ba0(%rsp),%rcx
++mov %al,0x3f41(%rsp)
++movb $0x4,0x3f40(%rsp)
++mov 0x10(%rcx),%rdi
++lea 0x3f40(%rsp),%rsi
++call TARGET<<rook2::WireHost<W,E> as rook2::host::Host>::publish>
++mov %rax,0x30(%rsp)
++test %rax,%rax
++jne LOCAL+0x534c
++mov 0x1b60(%rsp),%r14
++mov 0x1b50(%rsp),%eax
++mov %eax,0x1a4(%rsp)
++mov 0x1b80(%rsp),%rax
++mov (%rax),%eax
++mov %eax,0x1a0(%rsp)
++mov 0x1b78(%rsp),%rax
++mov (%rax),%rcx
++mov %rcx,0xc20(%rsp)
++mov 0x8(%rax),%eax
++mov %eax,0xc28(%rsp)
++mov 0x1930(%rsp),%rax
++mov %rax,0x20(%rsp)
++mov 0x1938(%rsp),%rbx
++mov %rbx,%rax
++and $0xffffffffffffff00,%rax
++mov %rax,%r15
++mov 0x1940(%rsp),%rax
++mov %rax,0x30(%rsp)
++mov 0x1948(%rsp),%rax
++mov %rax,0x10(%rsp)
++mov 0x1950(%rsp),%rax
++mov %rax,0x50(%rsp)
++mov $0x208,%edx
++lea 0x3f40(%rsp),%rdi
++lea 0x1958(%rsp),%rsi
++call *RIP<ROLE:memcpy>
++movzbl 0x6516(%r14),%eax
++mov %al,0x7f(%rsp)
++mov $0x208,%edx
++lea 0x1930(%rsp),%rdi
++lea 0x3f40(%rsp),%rsi
++call *RIP<ROLE:memcpy>
++mov 0xc20(%rsp),%rax
++mov %rax,0x5f40(%rsp)
++mov 0xc28(%rsp),%eax
++mov %eax,0x5f48(%rsp)
++cmpq $0x0,0x350(%rsp)
++je LOCAL+0x54dc
++mov 0x358(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpq $0x0,0x368(%rsp)
++je LOCAL+0x54f5
++mov 0x370(%rsp),%rdi
++call *RIP<ROLE:free>
++mov %r15,%rsi
++mov %esi,%edi
++shr $0x8,%edi
++shr $0x10,%rsi
++lea RIP<ROLE:__rust_no_alloc_shim_is_unstable>,%r13
++mov RIP<ROLE:memcpy>,%r8
++lea 0xa18(%rsp),%r14
++jmp LOCAL+0x1f8b
++mov 0x1ba0(%rsp),%rdi
++mov 0x5f60(%rsp),%r8
++lea 0x3ff0(%rsp),%r9
++mov %r8,-0x60(%r9)
++movdqa 0x5f40(%rsp),%xmm0
++movdqa 0x5f50(%rsp),%xmm1
++movdqu %xmm1,-0x70(%r9)
++movdqu %xmm0,-0x80(%r9)
++mov %rax,0x3f48(%rsp)
++mov 0x30(%rsp),%rax
++mov %rax,0x3f50(%rsp)
++mov %cx,0x3f58(%rsp)
++mov %edx,0x3f5a(%rsp)
++shr $0x20,%rdx
++mov %dx,0x3f5e(%rsp)
++mov %rsi,0x3f60(%rsp)
++mov 0x50(%rsp),%rax
+ mov %rax,0x3f68(%rsp)
+-mov %cl,0x3f70(%rsp)
+-mov %rdx,0x3f78(%rsp)
+-mov %si,0x3f80(%rsp)
+-movb $0x0,0x3f60(%rsp)
++movb $0x0,0x3f40(%rsp)
+ mov 0x10(%rdi),%rdi
+-lea 0x3f60(%rsp),%rsi
++lea 0x3f40(%rsp),%rsi
+ call TARGET<<rook2::WireHost<W,E> as rook2::host::Host>::publish>
+-mov %rax,0x60(%rsp)
++mov %rax,0x30(%rsp)
+ test %rax,%rax
+-jne LOCAL+0x5538
+-mov 0xe70(%rsp),%rdi
+-jmp LOCAL+0x54fc
+-mov 0xf0(%rsp),%rbx
+-cmp 0xe0(%rsp),%rbx
+-jne LOCAL+0x59cb
+-lea 0xe0(%rsp),%rdi
+-lea RIP<LOCATION:src/timed.rs:615:36>,%rsi
++je LOCAL+0x5303
++mov $0xa,%ebx
++jmp LOCAL+0x534c
++mov $0x5,%eax
++mov %rax,0x50(%rsp)
++lea RIP<DATA32:92053832b34a0d212823a7ded2bf7acfff1a617ffd086da67d0f19c82463581f>,%rax
++mov %rax,0x10(%rsp)
++mov 0x133a0(%rsp),%rax
++mov %rax,0xf8(%rsp)
++mov 0x12600(%rsp),%rax
++mov %rax,0x100(%rsp)
++mov 0xd194(%rsp),%eax
++sub 0xd0d4(%rsp),%eax
++mov %eax,0x8c(%rsp)
++shl $0x20,%rbx
++mov %r15d,%eax
++or %rbx,%rax
++mov %rax,0x150(%rsp)
++mov $0x2,%al
++mov %eax,0x1c(%rsp)
++mov $0x1,%eax
++mov %rax,0x90(%rsp)
++mov $0x1,%eax
++mov %rax,0x118(%rsp)
++cmpq $0x0,0x1b0(%rsp)
++je LOCAL+0x5662
++mov 0xb8(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpq $0x0,0x5a0(%rsp)
++je LOCAL+0x567b
++mov 0x5a8(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpq $0x0,0x5b8(%rsp)
++je LOCAL+0x5694
++mov 0x5c0(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0xd070(%rsp),%rax
++movq $0x3,0xd070(%rsp)
++cmp $0x3,%rax
++je LOCAL+0x63f0
++lea 0xd090(%rsp),%rbx
++movups 0xf0(%rbx),%xmm0
++movups 0x100(%rbx),%xmm1
++lea 0x710(%rsp),%rax
++movups %xmm1,0x10(%rax)
++movups %xmm0,(%rax)
++mov 0x120(%rbx),%rax
++mov %rax,0x570(%rsp)
++movaps 0x110(%rbx),%xmm0
++movaps %xmm0,0x560(%rsp)
++lea 0x948(%rsp),%rax
++movups (%rax),%xmm0
++movups 0x10(%rax),%xmm1
++movups 0x20(%rax),%xmm2
++movaps %xmm0,0x2a0(%rsp)
++movaps %xmm1,0x2b0(%rsp)
++movaps %xmm2,0x2c0(%rsp)
++mov 0x30(%rax),%rax
++mov %rax,0x2d0(%rsp)
++movups 0x930(%rsp),%xmm0
++movaps %xmm0,0x540(%rsp)
++mov 0x940(%rsp),%rax
++mov %rax,0x550(%rsp)
++mov 0x140(%rsp),%rax
++mov %rax,0x590(%rsp)
++movups 0x130(%rsp),%xmm0
++movaps %xmm0,0x580(%rsp)
++mov $0xe8,%edx
++lea 0x458(%rsp),%rdi
++lea 0x133a0(%rsp),%rsi
++call *RIP<ROLE:memcpy>
++movdqu 0x5548(%rbx),%xmm0
++movupd 0x5558(%rbx),%xmm1
++movdqu 0x5568(%rbx),%xmm2
++movdqa %xmm0,0x2e0(%rsp)
++movapd %xmm1,0x2f0(%rsp)
++movdqa %xmm2,0x300(%rsp)
++cmpl $0x3,0xd070(%rsp)
++jne LOCAL+0x477e
++jmp LOCAL+0x4797
++mov 0xd194(%rsp),%eax
++sub 0xd0d4(%rsp),%eax
++mov %eax,0x8c(%rsp)
++mov $0x1,%al
++mov %eax,0x1c(%rsp)
++movq $0x0,0x90(%rsp)
++mov %eax,0x68(%rsp)
++movq $0x0,0x118(%rsp)
++cmpq $0x0,0x1b0(%rsp)
++jne LOCAL+0x5654
++jmp LOCAL+0x5662
++movq $0x0,0xe0(%rsp)
++jmp LOCAL+0x4607
++mov 0x140(%rsp),%rbx
++cmp 0x130(%rsp),%rbx
++jne LOCAL+0x584f
++lea 0x130(%rsp),%rdi
++lea RIP<LOCATION:src/timed.rs:614:36>,%rsi
+ call TARGET<alloc::raw_vec::RawVec<T,A>::grow_one>
+-mov 0xe8(%rsp),%rax
++mov 0x138(%rsp),%rax
+ mov %rbx,%rcx
+ shl $0x5,%rcx
+-movups 0x238(%rsp),%xmm0
+-movups 0x248(%rsp),%xmm1
++movups 0x1f8(%rsp),%xmm0
++movups 0x208(%rsp),%xmm1
+ movups %xmm1,0x10(%rax,%rcx,1)
+ movups %xmm0,(%rax,%rcx,1)
+ inc %rbx
+-mov %rbx,0xf0(%rsp)
+-cmpl $0x3,0xd090(%rsp)
+-je LOCAL+0x65d2
+-mov 0xd1b4(%rsp),%eax
+-sub 0xd0f4(%rsp),%eax
+-mov %eax,0xd8(%rsp)
++mov %rbx,0x140(%rsp)
++cmpl $0x3,0xd070(%rsp)
++je LOCAL+0x63fd
++mov 0xd194(%rsp),%eax
++sub 0xd0d4(%rsp),%eax
++mov %eax,0x8c(%rsp)
+ mov $0x4,%eax
+-mov %rax,0x80(%rsp)
+-movq $0x0,0xa0(%rsp)
+-movl $0x0,0x34(%rsp)
++mov %rax,0x50(%rsp)
++movq $0x0,0x90(%rsp)
++movl $0x0,0x1c(%rsp)
+ lea RIP<DATA32:aaa9713c7daa446c261f0938ce31d4da209ed7fe3395f28401d758b276546ca1>,%rax
+-mov %rax,0x28(%rsp)
++mov %rax,0x10(%rsp)
+ mov $0x1,%eax
+-mov %rax,0x138(%rsp)
+-cmpq $0x0,0x1c0(%rsp)
+-jne LOCAL+0x48d0
+-jmp LOCAL+0x48de
+-cmpq $0x0,0x360(%rsp)
+-je LOCAL+0x5a88
+-mov 0x368(%rsp),%rdi
+-call *RIP<ROLE:free>
+-movabs $0x8000000000000000,%rax
+-add $0x5,%rax
+-mov %rax,0xd8(%rsp)
+-lea 0x238(%rsp),%rdi
+-call TARGET<core::ptr::drop_in_place<rook2::timed::Iteration>>
+-cmpq $0x0,0x1c0(%rsp)
+-jne LOCAL+0x47a3
+-jmp LOCAL+0x47b1
++mov %rax,0x118(%rsp)
++cmpq $0x0,0x1b0(%rsp)
++jne LOCAL+0x5654
++jmp LOCAL+0x5662
++mov 0x460(%rsp),%rcx
++mov %rcx,0x10(%rsp)
++mov 0x468(%rsp),%rcx
++mov %rcx,0x50(%rsp)
++jmp LOCAL+0x4631
+ xor %r15d,%r15d
+-mov 0x78(%rsp),%rcx
+-movzwl 0x954(%rsp),%eax
+-mov %ax,0x3f66(%rsp)
+-mov 0x950(%rsp),%eax
+-mov %eax,0x3f62(%rsp)
+-mov %r15b,0x3f60(%rsp)
+-mov %r8b,0x3f61(%rsp)
+-mov 0x98(%rsp),%rax
+-mov %rax,0x3f68(%rsp)
+-mov %rcx,0x3f70(%rsp)
+-mov 0x148(%rsp),%rax
+-mov %rax,0x3f78(%rsp)
++mov 0x98(%rsp),%rcx
++movzwl 0x45c(%rsp),%eax
++mov %ax,0x3f46(%rsp)
++mov 0x458(%rsp),%eax
++mov %eax,0x3f42(%rsp)
++mov %r15b,0x3f40(%rsp)
++mov %r8b,0x3f41(%rsp)
++mov 0x80(%rsp),%rax
++mov %rax,0x3f48(%rsp)
++mov %rcx,0x3f50(%rsp)
++mov 0x128(%rsp),%rax
++mov %rax,0x3f58(%rsp)
+ add $0xf9,%r15b
+ cmp $0x2,%r15b
+-jae LOCAL+0x5b46
++jae LOCAL+0x5999
+ movabs $0x8000000000000000,%rax
+-mov %rax,0x3250(%rsp)
+-lea 0x3f60(%rsp),%rdi
+-jmp LOCAL+0x5c2d
+-movzbl 0x3f60(%rsp),%eax
+-movzbl 0x3f61(%rsp),%ecx
+-mov 0x3f62(%rsp),%edx
+-movzwl 0x3f66(%rsp),%esi
+-mov 0x3f68(%rsp),%rdi
+-mov 0x3f70(%rsp),%r8
+-mov %r8,0xc50(%rsp)
+-mov 0x3f78(%rsp),%r8
+-mov %r8,0xc58(%rsp)
+-mov %al,0xc40(%rsp)
+-mov %cl,0xc41(%rsp)
+-mov %edx,0xc42(%rsp)
+-mov %si,0xc46(%rsp)
+-mov %rdi,0xc48(%rsp)
+-lea 0xc40(%rsp),%rbx
+-mov %rbx,0x5f60(%rsp)
++mov %rax,0xc20(%rsp)
++lea 0x3f40(%rsp),%rdi
++jmp LOCAL+0x5a80
++movzbl 0x3f40(%rsp),%eax
++movzbl 0x3f41(%rsp),%ecx
++mov 0x3f42(%rsp),%edx
++movzwl 0x3f46(%rsp),%esi
++mov 0x3f48(%rsp),%rdi
++mov 0x3f50(%rsp),%r8
++mov %r8,0x1940(%rsp)
++mov 0x3f58(%rsp),%r8
++mov %r8,0x1948(%rsp)
++mov %al,0x1930(%rsp)
++mov %cl,0x1931(%rsp)
++mov %edx,0x1932(%rsp)
++mov %si,0x1936(%rsp)
++mov %rdi,0x1938(%rsp)
++lea 0x1930(%rsp),%rbx
++mov %rbx,0x5f40(%rsp)
+ lea RIP<ROLE:<rook2::session::Error as core::fmt::Debug>::fmt>,%rax
+-mov %rax,0x5f68(%rsp)
+-lea RIP<ROLE:internal-address:0x8b41f>,%rax
+-mov %rax,0xd080(%rsp)
+-movq $0x2,0xd088(%rsp)
+-movq $0x0,0xd0a0(%rsp)
+-lea 0x5f60(%rsp),%rax
+-mov %rax,0xd090(%rsp)
+-movq $0x1,0xd098(%rsp)
+-lea 0x3250(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
++mov %rax,0x5f48(%rsp)
++lea RIP<ROLE:internal-address:0x8c479>,%rax
++mov %rax,0xd060(%rsp)
++movq $0x2,0xd068(%rsp)
++movq $0x0,0xd080(%rsp)
++lea 0x5f40(%rsp),%rax
++mov %rax,0xd070(%rsp)
++movq $0x1,0xd078(%rsp)
++lea 0xc20(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
+ call *RIP<ROLE:alloc::fmt::format::format_inner>
+ mov %rbx,%rdi
+ call TARGET<core::ptr::drop_in_place<rook2::session::Error>>
+-mov 0x3260(%rsp),%rax
+-mov 0xa8(%rsp),%rcx
++mov 0xc30(%rsp),%rax
++mov 0xa0(%rsp),%rcx
+ mov %rax,0x10(%rcx)
+-movdqu 0x3250(%rsp),%xmm0
++movdqu 0xc20(%rsp),%xmm0
+ movdqu %xmm0,(%rcx)
+-jmp LOCAL+0x5ddb
++jmp LOCAL+0x5c2e
+ movabs $0x8000000000000000,%rcx
+ inc %rcx
+-mov 0xa8(%rsp),%rax
++mov 0xa0(%rsp),%rax
+ mov %rcx,(%rax)
+-jmp LOCAL+0x5de9
+-mov %rbp,0x3250(%rsp)
+-lea 0x3250(%rsp),%rax
+-mov %rax,0x3f60(%rsp)
++jmp LOCAL+0x5c3c
++mov %rbp,0xc20(%rsp)
++lea 0xc20(%rsp),%rax
++mov %rax,0x3f40(%rsp)
+ lea RIP<ROLE:<std::io::error::Error as core::fmt::Display>::fmt>,%rax
+-mov %rax,0x3f68(%rsp)
+-lea RIP<ROLE:internal-address:0x8b41f>,%rax
+-mov %rax,0xd080(%rsp)
+-movq $0x2,0xd088(%rsp)
+-movq $0x0,0xd0a0(%rsp)
+-mov %r14,0xd090(%rsp)
+-movq $0x1,0xd098(%rsp)
+-lea 0xc40(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
++mov %rax,0x3f48(%rsp)
++lea RIP<ROLE:internal-address:0x8c479>,%rax
++mov %rax,0xd060(%rsp)
++movq $0x2,0xd068(%rsp)
++movq $0x0,0xd080(%rsp)
++mov %r14,0xd070(%rsp)
++movq $0x1,0xd078(%rsp)
++lea 0x1930(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
+ call *RIP<ROLE:alloc::fmt::format::format_inner>
+-mov 0x3250(%rsp),%rbx
++mov 0xc20(%rsp),%rbx
+ mov %ebx,%eax
+ and $0x3,%eax
+ cmp $0x1,%eax
+-jne LOCAL+0x5d30
++jne LOCAL+0x5b83
+ mov -0x1(%rbx),%r14
+ mov 0x7(%rbx),%r15
+ mov (%r15),%rax
+ test %rax,%rax
+-je LOCAL+0x5d14
++je LOCAL+0x5b67
+ mov %r14,%rdi
+ call *%rax
+ dec %rbx
+ cmpq $0x0,0x8(%r15)
+-je LOCAL+0x5d27
++je LOCAL+0x5b7a
+ mov %r14,%rdi
+ call *RIP<ROLE:free>
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+-mov 0xc50(%rsp),%rax
+-mov 0xa8(%rsp),%rcx
++mov 0x1940(%rsp),%rax
++mov 0xa0(%rsp),%rcx
+ mov %rax,0x10(%rcx)
+-movdqu 0xc40(%rsp),%xmm0
++movdqu 0x1930(%rsp),%xmm0
+ movdqu %xmm0,(%rcx)
+-jmp LOCAL+0x5de9
++jmp LOCAL+0x5c3c
+ movzbl 0x0(%r13),%eax
+ mov $0x2d,%edi
+ call *RIP<ROLE:malloc>
+ test %rax,%rax
+-je LOCAL+0x6387
++je LOCAL+0x61b2
+ movups RIP<DATA32:b153c20804db4bb4cddc98795932e67f95dc086080b8578dca28856094159147>,%xmm0
+ movups %xmm0,0x1d(%rax)
+ movups RIP<DATA32:cd87e79202b478bdce5240ead076100cfad1acb161822f02ef4e723b7b99e6f4>,%xmm0
+@@ -4012,92 +3976,92 @@
+ movups %xmm0,(%rax)
+ mov %rax,%rcx
+ shr $0x20,%rcx
+-mov 0xa8(%rsp),%rdx
++mov 0xa0(%rsp),%rdx
+ movq $0x2d,(%rdx)
+ mov %eax,0x8(%rdx)
+ mov %ecx,0xc(%rdx)
+ movq $0x2d,0x10(%rdx)
+-jmp LOCAL+0x5ddb
++jmp LOCAL+0x5c2e
+ test %rbx,%rbx
+-je LOCAL+0x626f
+-mov 0xa8(%rsp),%rdi
++je LOCAL+0x609a
++mov 0xa0(%rsp),%rdi
+ mov %rbx,%rsi
+-jmp LOCAL+0x5dd6
+-mov 0xa8(%rsp),%rdi
++jmp LOCAL+0x5c29
++mov 0xa0(%rsp),%rdi
+ mov %rax,%rsi
+ call TARGET<<rook2::Failure as core::convert::From<std::io::error::Error>>::from>
+ test %r12,%r12
+-je LOCAL+0x5de9
++je LOCAL+0x5c3c
+ mov %rbp,%rdi
+ call *RIP<ROLE:free>
+-cmpq $0x0,0xcf90(%rsp)
+-je LOCAL+0x5e02
+-mov 0xcf98(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpq $0x0,0xcfb8(%rsp)
+-je LOCAL+0x5e1b
+-mov 0xcfc0(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpq $0x0,0xcfd0(%rsp)
+-je LOCAL+0x5e34
+-mov 0xcfd8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpl $0x2,0x6b60(%rsp)
+-je LOCAL+0x5ed3
+-cmpq $0x0,0x6cf8(%rsp)
+-je LOCAL+0x5e5b
+-mov 0x6cf0(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpq $0x0,0x6d08(%rsp)
+-je LOCAL+0x5e74
+-mov 0x6d00(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0x6cd0(%rsp),%rax
++cmpq $0x0,0xcf70(%rsp)
++je LOCAL+0x5c55
++mov 0xcf78(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpq $0x0,0xcf98(%rsp)
++je LOCAL+0x5c6e
++mov 0xcfa0(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpq $0x0,0xcfb0(%rsp)
++je LOCAL+0x5c87
++mov 0xcfb8(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpl $0x2,0x6b40(%rsp)
++je LOCAL+0x5d26
++cmpq $0x0,0x6cd8(%rsp)
++je LOCAL+0x5cae
++mov 0x6cd0(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpq $0x0,0x6ce8(%rsp)
++je LOCAL+0x5cc7
++mov 0x6ce0(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0x6cb0(%rsp),%rax
+ shl $1,%rax
+ test %rax,%rax
+-je LOCAL+0x5e92
+-mov 0x6cd8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-cmpl $0x3,0x6b70(%rsp)
+-je LOCAL+0x5eb5
+-cmpq $0x0,0x6ca0(%rsp)
+-je LOCAL+0x5eb5
+-mov 0x6ca8(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0x9b10(%rsp),%rax
++je LOCAL+0x5ce5
++mov 0x6cb8(%rsp),%rdi
++call *RIP<ROLE:free>
++cmpl $0x3,0x6b50(%rsp)
++je LOCAL+0x5d08
++cmpq $0x0,0x6c80(%rsp)
++je LOCAL+0x5d08
++mov 0x6c88(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0x9af0(%rsp),%rax
+ shl $1,%rax
+ test %rax,%rax
+-je LOCAL+0x5ed3
+-mov 0x9b18(%rsp),%rdi
+-call *RIP<ROLE:free>
+-mov 0x208(%rsp),%rsi
++je LOCAL+0x5d26
++mov 0x9af8(%rsp),%rdi
++call *RIP<ROLE:free>
++mov 0x190(%rsp),%rsi
+ decl 0xc(%rsi)
+-jne LOCAL+0x5ef5
++jne LOCAL+0x5d48
+ movq $0x0,(%rsi)
+ xor %eax,%eax
+ xchg %eax,0x8(%rsi)
+ cmp $0x2,%eax
+-je LOCAL+0x61de
+-mov 0x100(%rsp),%rsi
++je LOCAL+0x6009
++mov 0xc0(%rsp),%rsi
+ decl 0xc(%rsi)
+-jne LOCAL+0x5f17
++jne LOCAL+0x5d6a
+ movq $0x0,(%rsi)
+ xor %eax,%eax
+ xchg %eax,0x8(%rsi)
+ cmp $0x2,%eax
+-je LOCAL+0x620f
+-mov 0x290(%rsp),%edi
+-mov 0x294(%rsp),%edx
++je LOCAL+0x603a
++mov 0x250(%rsp),%edi
++mov 0x254(%rsp),%edx
+ mov $0x4,%esi
+ xor %eax,%eax
+ call *RIP<ROLE:fcntl>
+-mov 0x290(%rsp),%edi
++mov 0x250(%rsp),%edi
+ call *RIP<ROLE:close>
+-cmpq $0x0,0x270(%rsp)
+-je LOCAL+0x5f58
+-mov 0x278(%rsp),%rdi
+-call *RIP<ROLE:free>
+-add $0x134b8,%rsp
++cmpq $0x0,0x230(%rsp)
++je LOCAL+0x5dab
++mov 0x238(%rsp),%rdi
++call *RIP<ROLE:free>
++add $0x13498,%rsp
+ pop %rbx
+ pop %r12
+ pop %r13
+@@ -4106,109 +4070,102 @@
+ pop %rbp
+ ret
+ call TARGET<std::thread::ThreadId::new::exhausted>
+-mov %rax,0x3250(%rsp)
+-lea 0x3250(%rsp),%rax
+-mov %rax,0x3f60(%rsp)
++mov %rax,0xc20(%rsp)
++lea 0xc20(%rsp),%rax
++mov %rax,0x3f40(%rsp)
+ lea RIP<ROLE:<std::io::error::Error as core::fmt::Display>::fmt>,%rax
+-mov %rax,0x3f68(%rsp)
+-lea RIP<ROLE:internal-address:0x8b41f>,%rax
+-mov %rax,0xd080(%rsp)
+-movq $0x2,0xd088(%rsp)
+-movq $0x0,0xd0a0(%rsp)
+-lea 0x3f60(%rsp),%rax
+-mov %rax,0xd090(%rsp)
+-movq $0x1,0xd098(%rsp)
+-lea 0xc40(%rsp),%rdi
+-lea 0xd080(%rsp),%rsi
++mov %rax,0x3f48(%rsp)
++lea RIP<ROLE:internal-address:0x8c479>,%rax
++mov %rax,0xd060(%rsp)
++movq $0x2,0xd068(%rsp)
++movq $0x0,0xd080(%rsp)
++lea 0x3f40(%rsp),%rax
++mov %rax,0xd070(%rsp)
++movq $0x1,0xd078(%rsp)
++lea 0x1930(%rsp),%rdi
++lea 0xd060(%rsp),%rsi
+ call *RIP<ROLE:alloc::fmt::format::format_inner>
+-mov 0x3250(%rsp),%rdi
++mov 0xc20(%rsp),%rdi
+ mov %edi,%eax
+ and $0x3,%eax
+ cmp $0x1,%eax
+-jne LOCAL+0x6055
++jne LOCAL+0x5ea8
+ mov -0x1(%rdi),%rcx
+ mov 0x7(%rdi),%r15
+ mov (%r15),%rax
+ test %rax,%rax
+-je LOCAL+0x6036
+-mov %rdi,0x108(%rsp)
++je LOCAL+0x5e89
++mov %rdi,0xd8(%rsp)
+ mov %rcx,%rdi
+ mov %rcx,0x168(%rsp)
+ call *%rax
+ mov 0x168(%rsp),%rcx
+-mov 0x108(%rsp),%rdi
++mov 0xd8(%rsp),%rdi
+ dec %rdi
+ cmpq $0x0,0x8(%r15)
+-je LOCAL+0x604f
++je LOCAL+0x5ea2
+ mov %rdi,%r15
+ mov %rcx,%rdi
+ call *RIP<ROLE:free>
+ mov %r15,%rdi
+ call *RIP<ROLE:free>
+-mov 0x60(%rsp),%rax
++mov 0x30(%rsp),%rax
+ lea (%rax,%rax,2),%r15
+ add $0xffffffffffffffe8,%r15
+-mov 0xc50(%rsp),%rax
+-mov 0xa8(%rsp),%rcx
++mov 0x1940(%rsp),%rax
++mov 0xa0(%rsp),%rcx
+ mov %rax,0x10(%rcx)
+-movdqu 0xc40(%rsp),%xmm0
++movdqu 0x1930(%rsp),%xmm0
+ movdqu %xmm0,(%rcx)
+ test %r13,%r13
+-je LOCAL+0x6091
++je LOCAL+0x5ee4
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+ cmp %r14,%r15
+-mov 0x78(%rsp),%rdi
+-mov 0x98(%rsp),%rsi
+-je LOCAL+0x60f9
+-mov 0x18(%rsp),%rax
++mov 0x98(%rsp),%rdi
++mov 0x80(%rsp),%rsi
++je LOCAL+0x5f55
++mov 0x20(%rsp),%rax
+ sub %r14,%rax
+ add $0xffffffffffffffe8,%rax
+ add %rdi,%r14
+ add $0x20,%r14
+ movabs $0xaaaaaaaaaaaaaaab,%rcx
+ mul %rcx
+-mov 0x78(%rsp),%rdi
++mov 0x98(%rsp),%rdi
+ mov %rdx,%rbx
+ shr $0x4,%rbx
+-jmp LOCAL+0x60da
++jmp LOCAL+0x5f33
+ add $0x18,%r14
+ dec %rbx
+-je LOCAL+0x60f9
++je LOCAL+0x5f55
+ cmpq $0x0,-0x8(%r14)
+-je LOCAL+0x60d1
++je LOCAL+0x5f2a
+ mov (%r14),%rdi
+ call *RIP<ROLE:free>
+-mov 0x98(%rsp),%rsi
+-mov 0x78(%rsp),%rdi
+-jmp LOCAL+0x60d1
++mov 0x80(%rsp),%rsi
++mov 0x98(%rsp),%rdi
++jmp LOCAL+0x5f2a
+ test %rsi,%rsi
+-je LOCAL+0x5ddb
+-call *RIP<ROLE:free>
+-jmp LOCAL+0x5ddb
++je LOCAL+0x5c2e
++call *RIP<ROLE:free>
++jmp LOCAL+0x5c2e
+ movabs $0x8000000000000000,%rcx
+ inc %rcx
+-mov 0xa8(%rsp),%rax
++mov 0xa0(%rsp),%rax
+ mov %rcx,(%rax)
+-jmp LOCAL+0x5ddb
+-movzwl 0x11c(%rsp),%eax
+-mov %ax,0xc46(%rsp)
+-mov 0x118(%rsp),%eax
+-mov %eax,0xc42(%rsp)
+-movzbl 0x18(%rsp),%eax
+-mov %al,0xc40(%rsp)
+-movzbl 0x27(%rsp),%eax
+-mov %al,0xc41(%rsp)
+-mov 0x60(%rsp),%rax
+-mov %rax,0xc48(%rsp)
+-mov 0x28(%rsp),%rax
+-mov %rax,0xc50(%rsp)
+-mov 0x80(%rsp),%rax
+-mov %rax,0xc58(%rsp)
+-lea 0xc40(%rsp),%rsi
+-mov 0xa8(%rsp),%rdi
++jmp LOCAL+0x5c2e
++mov %rbx,0x1930(%rsp)
++mov 0x30(%rsp),%rax
++mov %rax,0x1938(%rsp)
++mov 0x10(%rsp),%rax
++mov %rax,0x1940(%rsp)
++mov 0x50(%rsp),%rax
++mov %rax,0x1948(%rsp)
++lea 0x1930(%rsp),%rsi
++mov 0xa0(%rsp),%rdi
+ call TARGET<<rook2::Failure as core::convert::From<rook2::session::Error>>::from>
+-jmp LOCAL+0x5ddb
++jmp LOCAL+0x5c2e
+ lea RIP<DATA32:79c7531aa9930191d14fec31167e6608dd520ab2d890c79022b0477538bcccf3>,%rdi
+ lea RIP<LOCATION:src/sync/reentrant_lock.rs:290:45>,%rdx
+ mov $0x26,%esi
+@@ -4225,50 +4182,50 @@
+ mov $0x1,%ecx
+ xor %eax,%eax
+ call *RIP<ROLE:syscall>
+-mov 0x100(%rsp),%rsi
++mov 0xc0(%rsp),%rsi
+ decl 0xc(%rsi)
+-jne LOCAL+0x5f17
+-jmp LOCAL+0x5f02
++jne LOCAL+0x5d6a
++jmp LOCAL+0x5d55
+ add $0x8,%rsi
+ mov $0xca,%edi
+ mov $0x81,%edx
+ mov $0x1,%ecx
+ xor %eax,%eax
+ call *RIP<ROLE:syscall>
+-jmp LOCAL+0x5f17
+-mov %r14,0x6b60(%rsp)
+-mov %rbx,0x6b68(%rsp)
+-mov %r12,0x6b70(%rsp)
++jmp LOCAL+0x5d6a
++mov %r14,0x6b40(%rsp)
++mov %rbx,0x6b48(%rsp)
++mov %r12,0x6b50(%rsp)
+ lea RIP<DATA32:a1268a8ec3ac94cb7481cdfe04e0e5ae2e434e7c0f55d6473fb35d11c1dadf35>,%rdi
+ lea RIP<ROLE:core::ptr::drop_in_place<std::ffi::os_str::OsString>>,%rcx
+ lea RIP<LOCATION:src/env.rs:871:51>,%r8
+-lea 0x6b60(%rsp),%rdx
++lea 0x6b40(%rsp),%rdx
+ mov $0x2b,%esi
+ call *RIP<ROLE:core::result::unwrap_failed>
+-lea RIP<ROLE:internal-address:0x8aad0>,%rax
+-mov %rax,0xd080(%rsp)
+-movq $0x1,0xd088(%rsp)
+-movq $0x8,0xd090(%rsp)
++lea RIP<ROLE:internal-address:0x8bad0>,%rax
++mov %rax,0xd060(%rsp)
++movq $0x1,0xd068(%rsp)
++movq $0x8,0xd070(%rsp)
+ pxor %xmm0,%xmm0
+-movdqu %xmm0,0xd098(%rsp)
++movdqu %xmm0,0xd078(%rsp)
+ lea RIP<LOCATION:src/io/mod.rs:1896:21>,%rsi
+-lea 0xd080(%rsp),%rdi
++lea 0xd060(%rsp),%rdi
+ call *RIP<ROLE:core::panicking::panic_fmt>
+ lea RIP<LOCATION:src/io/stdio.rs:815:20>,%rdi
+ call *RIP<ROLE:core::cell::panic_already_borrowed>
+-lea RIP<LOCATION:src/session.rs:139:29>,%rdi
++lea RIP<LOCATION:src/session.rs:140:29>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+ mov $0x1,%edi
+ mov $0x1000,%esi
+ call *RIP<ROLE:alloc::alloc::handle_alloc_error>
+-mov 0xd090(%rsp),%rax
+-mov %rax,0xc50(%rsp)
+-movups 0xd080(%rsp),%xmm0
+-movaps %xmm0,0xc40(%rsp)
++mov 0xd070(%rsp),%rax
++mov %rax,0x1940(%rsp)
++movups 0xd060(%rsp),%xmm0
++movaps %xmm0,0x1930(%rsp)
+ lea RIP<DATA32:a1268a8ec3ac94cb7481cdfe04e0e5ae2e434e7c0f55d6473fb35d11c1dadf35>,%rdi
+ lea RIP<ROLE:core::ptr::drop_in_place<alloc::string::String>>,%rcx
+-lea RIP<LOCATION:src/session.rs:112:50>,%r8
+-lea 0xc40(%rsp),%rdx
++lea RIP<LOCATION:src/session.rs:113:50>,%r8
++lea 0x1930(%rsp),%rdx
+ mov $0x2b,%esi
+ call *RIP<ROLE:core::result::unwrap_failed>
+ mov $0x8,%edi
+@@ -4295,13 +4252,13 @@
+ lea RIP<LOCATION:src/clock.rs:130:9>,%rdx
+ mov $0x26,%esi
+ call *RIP<ROLE:core::panicking::panic>
+-lea RIP<LOCATION:src/session.rs:449:51>,%rdi
++lea RIP<LOCATION:src/session.rs:450:51>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+-movq $0x0,0xc40(%rsp)
++movq $0x0,0x1930(%rsp)
+ lea RIP<DATA32:4d2220a0c99438089bb68e632693be410cb029e44d871d4a70ab06235b60d544>,%rdx
+-lea RIP<LOCATION:src/timed.rs:441:9>,%r8
+-lea 0x3f60(%rsp),%rsi
+-lea 0xc40(%rsp),%rcx
++lea RIP<LOCATION:src/timed.rs:442:9>,%r8
++lea 0x3f40(%rsp),%rsi
++lea 0x1930(%rsp),%rcx
+ xor %edi,%edi
+ call *RIP<ROLE:core::panicking::assert_failed>
+ lea RIP<LOCATION:src/position.rs:187:13>,%rdx
+@@ -4309,25 +4266,25 @@
+ call *RIP<ROLE:core::slice::index::slice_end_index_len_fail>
+ lea RIP<LOCATION:src/movegen.rs:28:20>,%rdx
+ mov $0x200,%esi
+-mov 0x18(%rsp),%rdi
++mov 0x20(%rsp),%rdi
+ call *RIP<ROLE:core::slice::index::slice_end_index_len_fail>
+-mov 0xd090(%rsp),%rax
+-mov %rax,0xc50(%rsp)
+-movups 0xd080(%rsp),%xmm0
+-movaps %xmm0,0xc40(%rsp)
++mov 0xd070(%rsp),%rax
++mov %rax,0x1940(%rsp)
++movups 0xd060(%rsp),%xmm0
++movaps %xmm0,0x1930(%rsp)
+ lea RIP<DATA32:a1268a8ec3ac94cb7481cdfe04e0e5ae2e434e7c0f55d6473fb35d11c1dadf35>,%rdi
+ lea RIP<ROLE:core::ptr::drop_in_place<alloc::string::String>>,%rcx
+-lea RIP<LOCATION:src/session.rs:352:63>,%r8
+-lea 0xc40(%rsp),%rdx
++lea RIP<LOCATION:src/session.rs:353:63>,%r8
++lea 0x1930(%rsp),%rdx
+ mov $0x2b,%esi
+ call *RIP<ROLE:core::result::unwrap_failed>
+-lea RIP<LOCATION:src/session.rs:399:36>,%rdx
++lea RIP<LOCATION:src/session.rs:400:36>,%rdx
+ xor %edi,%edi
+ xor %esi,%esi
+ call *RIP<ROLE:core::panicking::panic_bounds_check>
+-lea RIP<LOCATION:src/session.rs:553:50>,%rdi
++lea RIP<LOCATION:src/session.rs:554:50>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+-lea RIP<LOCATION:src/session.rs:562:38>,%rdx
++lea RIP<LOCATION:src/session.rs:563:38>,%rdx
+ xor %edi,%edi
+ xor %esi,%esi
+ call *RIP<ROLE:core::panicking::panic_bounds_check>
+@@ -4344,25 +4301,25 @@
+ mov $0x8,%edi
+ mov $0x10,%esi
+ call *RIP<ROLE:alloc::alloc::handle_alloc_error>
+-lea RIP<ROLE:internal-address:0x8aad0>,%rax
+-mov %rax,0x3f60(%rsp)
+-movq $0x1,0x3f68(%rsp)
+-movq $0x8,0x3f70(%rsp)
++lea RIP<ROLE:internal-address:0x8bad0>,%rax
++mov %rax,0x3f40(%rsp)
++movq $0x1,0x3f48(%rsp)
++movq $0x8,0x3f50(%rsp)
+ pxor %xmm0,%xmm0
+-movdqu %xmm0,0x3f78(%rsp)
++movdqu %xmm0,0x3f58(%rsp)
+ lea RIP<LOCATION:src/io/mod.rs:1896:21>,%rsi
+-lea 0x3f60(%rsp),%rdi
++lea 0x3f40(%rsp),%rdi
+ call *RIP<ROLE:core::panicking::panic_fmt>
+ lea RIP<LOCATION:src/io/stdio.rs:1047:20>,%rdi
+ call *RIP<ROLE:core::cell::panic_already_borrowed>
+ lea RIP<LOCATION:src/timed.rs:477:38>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+-lea RIP<LOCATION:src/timed.rs:631:50>,%rdi
++lea RIP<LOCATION:src/timed.rs:630:50>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+ lea RIP<LOCATION:src/timed.rs:489:42>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+ lea RIP<LOCATION:src/timed.rs:490:54>,%rdx
+-mov 0x18(%rsp),%rsi
++mov 0x20(%rsp),%rsi
+ call *RIP<ROLE:core::panicking::panic_bounds_check>
+ lea RIP<LOCATION:src/timed.rs:564:46>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+@@ -4373,19 +4330,19 @@
+ call *RIP<ROLE:core::slice::index::slice_end_index_len_fail>
+ lea RIP<LOCATION:src/timed.rs:576:58>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+-lea RIP<LOCATION:src/timed.rs:612:26>,%rdi
++lea RIP<LOCATION:src/timed.rs:611:26>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+ lea RIP<LOCATION:src/timed.rs:525:66>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+-lea RIP<LOCATION:src/timed.rs:670:40>,%rdi
++lea RIP<LOCATION:src/session.rs:573:45>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+-lea RIP<LOCATION:src/session.rs:572:45>,%rdi
+-call *RIP<ROLE:core::option::unwrap_failed>
+-lea RIP<LOCATION:src/session.rs:593:58>,%rdx
++lea RIP<LOCATION:src/session.rs:594:58>,%rdx
+ xor %edi,%edi
+ xor %esi,%esi
+ call *RIP<ROLE:core::panicking::panic_bounds_check>
+-lea RIP<LOCATION:src/timed.rs:616:58>,%rdi
++lea RIP<LOCATION:src/timed.rs:669:40>,%rdi
++call *RIP<ROLE:core::option::unwrap_failed>
++lea RIP<LOCATION:src/timed.rs:615:58>,%rdi
+ call *RIP<ROLE:core::option::unwrap_failed>
+ incq 0x10(%r15)
+ mov %rax,%rdi
+@@ -4395,7 +4352,7 @@
+ call TARGET<_Unwind_Resume@plt>
+ mov %rax,%r12
+ test %r14,%r14
+-je LOCAL+0x6608
++je LOCAL+0x6433
+ mov %rbx,%rdi
+ call *RIP<ROLE:free>
+ mov %r12,%rdi

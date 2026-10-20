@@ -1,0 +1,88 @@
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-validation-preparation-20261018-01/stages.py
++++ /home/legolas/rook2/evidence/remembered-reciprocal-validation-preparation-20261018-01/stages.py
+@@ -1,13 +1,13 @@
+ #!/usr/bin/env python3
+-"""Exact isolated full-byte-pair relations generic functional trial; no timing."""
++"""Exact isolated remembered reciprocal generic functional trial; no timing."""
+ from pathlib import Path
+ import hashlib,json,os,shutil,subprocess,sys,tarfile
+ P=Path(__file__).resolve().parent;E=P.parent;ROOT=E.parent
+-B=E/'full-byte-pair-relations-generic-build-20261018-01'
+-N=E/'full-byte-pair-relations-native-validation-20261018-01'
+-R=E/'full-byte-pair-relations-regression-20261018-01'
++B=E/'remembered-reciprocal-generic-build-20261018-01'
++N=E/'remembered-reciprocal-native-validation-20261018-01'
++R=E/'remembered-reciprocal-regression-20261018-01'
+ REF=E/'activity-value-inputs-generic-build-20261018-01'
+-PRO=E/'full-byte-pair-relations-proposal-20261018-01'
++PRO=E/'remembered-reciprocal-proposal-20261018-01'
+ KIT=Path('/home/legolas/king-spec/conformance')
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]
+ def load(p):return json.loads(Path(p).read_text())
+@@ -42,27 +42,25 @@
+  authorized();assert sorted(os.sched_getaffinity(0))==H and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  m=manifest();s=Path(m['path']);reference=load(REF/'receipt.json')
+  assert len(m['native46'])==46 and len(m['tools23'])==23
+- assert m['path']=='/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp'
++ assert m['path']=='/home/legolas/rook2-work/imp2-remembered-reciprocal-20261018-zclxrngf'
+  assert m['source69']=={**m['native46'],**m['tools23']}
++ assert m['source_graph_sha256']=='6e17b76b4ba884b58630c00a3ce5ea20782e15e41a10e52bc9dbe16153cef7b7'
+  assert reference['binary_output']['sha256']=='7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16'
+  assert sha(REF/'rook2-exact')==reference['binary_output']['sha256']
+  assert m['tools23']==reference['tool_sha256_before']
+- assert [k for k,h in m['native46'].items() if reference['source_sha256_before'][k]!=h]==['src/influence.rs','src/relation_table.rs']
++ assert [k for k,h in m['native46'].items() if reference['source_sha256_before'][k]!=h]==['src/remembered.rs']
+  archive=load(REF/'archive-receipt.json');assert sha(REF/archive['archive'])==archive['sha256']
+- for name in ['src/influence.rs','src/relation_table.rs']:assert (s/name).read_bytes()==(PRO/'proposed'/name).read_bytes()
+- marker='\n#[cfg(test)]\nmod tests {'
+- current=(s/'src/influence.rs').read_text();baseline=(REF/'source-before/src/influence.rs').read_text()
+- assert current.count(marker)==baseline.count(marker)==1 and current.split(marker)[1]==baseline.split(marker)[1]
++ assert (s/'src/remembered.rs').read_bytes()==(PRO/'proposed/src/remembered.rs').read_bytes()
+  expected={**m['native46'],**m['tools23']}
+  actual={'Cargo.toml','Cargo.lock'}|{str(q.relative_to(s)) for d in [s/'src',s/'tools'] for q in d.rglob('*') if q.is_file() and '__pycache__' not in q.parts}
+  assert actual==set(expected)
+  for name,h in expected.items():assert sha(s/name)==h,name
+  for name in ['build.py','archive_build.py','check_live.py']:assert sha(ROOT/'tools'/name)==m['tools23']['tools/'+name]
+- files=[P/'stages.py',P/'execution-clearance.json',PRO/'source-manifest.json',PRO/'prepared.json',PRO/'source-proof.json',PRO/'proposal.patch',PRO/'generate_full_relations.py',PRO/'evaluation-relations.md',PRO/'proposed/src/influence.rs',PRO/'proposed/src/relation_table.rs',REF/'receipt.json',REF/'archive-receipt.json',REF/archive['archive'],REF/'rook2-exact',KIT.parent/'spec/evaluation-relations.md']
++ files=[P/'stages.py',P/'execution-clearance.json',PRO/'source-manifest.json',PRO/'prepared.json',PRO/'source-proof.json',PRO/'proposal.patch',PRO/'review.md',PRO/'reciprocal-helpers.rs',PRO/'reciprocal-oracle-test.rs',PRO/'proposed/src/remembered.rs',REF/'receipt.json',REF/'archive-receipt.json',REF/archive['archive'],REF/'rook2-exact']
+  files += [ROOT/'tools'/name for name in ['build.py','archive_build.py','check_live.py']]
+  files += [KIT/'profiling'/name for name in ['replay-check.mjs','benchmark.mjs','workloads.json','replay-oracle.json']]
+  files += [KIT/'fixtures/interrupted-sessions-v1.json',Path('/usr/bin/node'),Path('/usr/bin/python3')]
+- write(P/'execution-binding.json',{'source_root':str(s),'authority_sha256':{str(f):sha(f) for f in files},'source_sha256':m['native46'],'tool_sha256':m['tools23'],'scope':'Explicitly authorized isolated generic functional trial only, activity baseline retained, no pawn overlay/timing/profiling/Git/adoption; original proposal manifest unchanged','accepted_source_review_actual':'065c3f/0'})
++ write(P/'execution-binding.json',{'source_root':str(s),'authority_sha256':{str(f):sha(f) for f in files},'source_sha256':m['native46'],'tool_sha256':m['tools23'],'scope':'Explicitly authorized isolated generic functional trial only, activity baseline retained, no pawn overlay/timing/profiling/Git/adoption; original proposal manifest unchanged','accepted_source_review_actual':'00677b/0'})
+  guard()
+ 
+ def build():
+@@ -106,18 +104,18 @@
+    frozen.chmod(0o755);assert sha(frozen)==sha(original)
+    tests[key]={'original_executable':str(original),'executable':str(frozen),'sha256':sha(frozen)}
+  assert set(tests)=={'lib','dev'}
+- for key,count in [('dev',2),('lib',176)]:
++ for key,count in [('dev',2),('lib',177)]:
+   commands.append(run(N,key+'-tests',[tests[key]['executable'],'--test-threads=1'],env))
+   text=(N/(key+'-tests.stdout')).read_text();assert (N/(key+'-tests.stderr')).read_bytes()==b''
+   assert len([x for x in text.splitlines() if x.startswith('test ') and x.endswith(' ... ok')])==count
+   assert f'test result: ok. {count} passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;' in text
+   tests[key]['passed']=count
+- assert 'influence::tests::all_byte_pairs_and_exclusions_match_independent_digit_reference ... ok' in (N/'lib-tests.stdout').read_text()
+- guard();write(N/'result.json',{'complete':True,'failure':None,'source_root':str(s),'commands':commands,'tests':tests,'total_tests':178,'engine_sha256':sha(B/'rook2-exact'),'source_and_tools_unchanged':True,'test_environment':{k:env.get(k) for k in b['build_effective_environment']}})
+- print('NATIVE178 PASS',flush=True)
++ assert 'remembered::tests::reciprocal_group_remainders_match_builtin_modulo_and_survive_clear ... ok' in (N/'lib-tests.stdout').read_text()
++ guard();write(N/'result.json',{'complete':True,'failure':None,'source_root':str(s),'commands':commands,'tests':tests,'total_tests':179,'engine_sha256':sha(B/'rook2-exact'),'source_and_tools_unchanged':True,'test_environment':{k:env.get(k) for k in b['build_effective_environment']}})
++ print('NATIVE179 PASS',flush=True)
+ 
+ def regression():
+- guard();assert load(N/'result.json')['total_tests']==178;R.mkdir()
++ guard();assert load(N/'result.json')['total_tests']==179;R.mkdir()
+  binding=load(P/'execution-binding.json');before={path:sha(path) for path in binding['authority_sha256']};image=B/'rook2-exact';digest=sha(image)
+  commands=[run(R,'strict54',['/usr/bin/node',str(KIT/'profiling/replay-check.mjs'),'--',str(image)])]
+  report=load(R/'strict54.stdout');workloads=load(KIT/'profiling/workloads.json')
+@@ -133,7 +131,7 @@
+   for name,record in row['raw'].items():
+    file=R/'wire'/row['id']/(name+'.raw');assert file.stat().st_size==record['bytes'] and sha(file)==record['sha256']
+  after={path:sha(path) for path in before};assert after==before;guard()
+- write(R/'result.json',{'complete':True,'failure':None,'engine_sha256':digest,'commands':commands,'input_sha256_before':before,'input_sha256_after':after,'helper_and_engine_inherited_affinity':H,'strict54_pass':True,'interruption_fixtures':8,'interruption_searches':24,'source_and_tool_identity_unchanged':True,'untimed':True,'scope':'Isolated full-byte-pair relations standard functional checks on activity baseline; no pawn overlay/timing/adoption'})
++ write(R/'result.json',{'complete':True,'failure':None,'engine_sha256':digest,'commands':commands,'input_sha256_before':before,'input_sha256_after':after,'helper_and_engine_inherited_affinity':H,'strict54_pass':True,'interruption_fixtures':8,'interruption_searches':24,'source_and_tool_identity_unchanged':True,'untimed':True,'scope':'Isolated remembered reciprocal standard functional checks on activity baseline; no pawn overlay/timing/adoption'})
+  print('STRICT54 WIRE8/24 PASS',flush=True)
+ if __name__=='__main__':
+  authorized();stage=sys.argv[1];assert stage in ['build','native','regression']

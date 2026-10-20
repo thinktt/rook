@@ -1,0 +1,136 @@
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -8,7 +8,7 @@
+ use crate::movegen::{self, MoveList};
+ use crate::ordinary_policy::{self as policy, Extensions};
+ use crate::position::Position;
+-use crate::quiescence::{Entry as TacticalEntry, Limits, Stats, Stopped, Work};
++use crate::quiescence::{Entry as TacticalEntry, InternalStop, Limits, Stats, Stopped, Work};
+ use crate::quiescence_policy;
+ use crate::remembered::{Bound, Query, Store};
+ use crate::tactical;
+@@ -699,10 +699,21 @@
+         request: Request,
+         previous: Predecessor<'_>,
+     ) -> Result<i32, Stopped> {
++        self.visit_ordinary_compact::<ALLOW_IIO>(node, history, request, previous)
++            .map_err(|stop| stop.into_public(self.limits.nodes))
++    }
++
++    fn visit_ordinary_compact<const ALLOW_IIO: bool>(
++        &mut self,
++        node: &mut Node,
++        history: &mut SearchHistory,
++        request: Request,
++        previous: Predecessor<'_>,
++    ) -> Result<i32, InternalStop> {
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+         if policy::quiescence_handoff(request.depth, p, self.config.maximum_depth) {
+-            return self.visit_q(
++            return self.visit_q_compact(
+                 node,
+                 history,
+                 TacticalEntry {
+@@ -720,7 +731,7 @@
+                 false,
+             );
+         }
+-        self.charge_node(history)?;
++        self.charge_node_compact(history)?;
+         if DIAGNOSTICS {
+             self.stats.ordinary_nodes += 1;
+         }
+@@ -820,7 +831,7 @@
+                 }
+                 let mut child = node.null_child();
+                 history.push(&child.position, None);
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary_compact::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+                     Request {
+@@ -895,7 +906,7 @@
+                 }
+                 let mut child = node.child(&self.evaluator.root, movement);
+                 history.push(&child.position, Some(movement));
+-                let returned = self.visit_q(
++                let returned = self.visit_q_compact(
+                     &mut child,
+                     history,
+                     TacticalEntry {
+@@ -931,7 +942,7 @@
+                 .marked_depth
+                 .is_none_or(|d| d < request.depth - 2)
+         {
+-            self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 0)?;
++            self.ordering_phase_compact::<ALLOW_IIO>(node, history, request, previous, map, checked, 0)?;
+         }
+         let mut best = effective_lower;
+         let mut lower = request.lower;
+@@ -1017,7 +1028,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
++                let returned = self.visit_ordinary_compact::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
+                 let returned = match returned {
+                     Ok(value) => Ok(-value),
+                     Err(stop) => Err(stop),
+@@ -1030,7 +1041,7 @@
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
+-                        self.visit_ordinary_impl::<ALLOW_IIO>(
++                        self.visit_ordinary_compact::<ALLOW_IIO>(
+                             &mut child,
+                             history,
+                             Request {
+@@ -1069,7 +1080,7 @@
+             index += 1;
+             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
+             {
+-                self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 1)?;
++                self.ordering_phase_compact::<ALLOW_IIO>(node, history, request, previous, map, checked, 1)?;
+             }
+         }
+         best = best.min(effective_upper);
+@@ -1090,6 +1101,20 @@
+         checked: bool,
+         start: usize,
+     ) -> Result<(), Stopped> {
++        self.ordering_phase_compact::<ALLOW_IIO>(node, history, request, previous, map, checked, start)
++            .map_err(|stop| stop.into_public(self.limits.nodes))
++    }
++
++    fn ordering_phase_compact<const ALLOW_IIO: bool>(
++        &mut self,
++        node: &Node,
++        history: &mut SearchHistory,
++        request: Request,
++        previous: Predecessor<'_>,
++        map: &Influence,
++        checked: bool,
++        start: usize,
++    ) -> Result<(), InternalStop> {
+         if DIAGNOSTICS || !ALLOW_IIO {
+             if start == 0 {
+                 self.stats.iio_initial_phases += 1;
+@@ -1098,7 +1123,7 @@
+             }
+         }
+         if !ALLOW_IIO {
+-            return Err(Stopped::InternalIterativeOrdering);
++            return Err(InternalStop::InternalIterativeOrdering);
+         }
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+@@ -1137,7 +1162,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.iio_children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
++                let returned = self.visit_ordinary_compact::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+                     Request {

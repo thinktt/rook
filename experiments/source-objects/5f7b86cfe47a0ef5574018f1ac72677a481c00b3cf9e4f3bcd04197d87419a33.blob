@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Text/identity closure after every native stage and independent merge is terminal."""
+import hashlib,json
+from pathlib import Path
+from guard import HERE,load,sha,require_clearance,terminal
+
+def main():
+ require_clearance();plan=load(HERE/'plan.json');root=HERE.parent;train=Path(plan['training']);ib=Path(plan['instrumented_build']);use=Path(plan['use_build']);check=Path(plan['use_check']);rec=Path(plan['reconciliation']);wire=Path(plan['wire'])
+ records=[HERE/'readiness-tool-terminal.json',ib/'tool-terminal.json',train/'tool-terminal.json',train/'verify-tool-terminal.json',use/'tool-terminal.json',check/'tool-terminal.json',rec/'tool-terminal.json']
+ for path in records:terminal(path)
+ independent=load(rec/'independent-verification.json');tv=load(train/'verification.json');ci=load(check/'identity.json');training=load(train/'training.json');reuse=load(HERE/'control-reuse.json')
+ assert independent['status']=='pass' and independent['control_reuse'] and independent['candidate_own_profile_only'] and independent['changed_source_paths']==['src/attacks.rs','src/movegen.rs','src/quiescence.rs']
+ assert tv['complete'] and tv['independent_remerge_byte_identical'] and ci['status']=='pass' and ci['strict_replays']==54 and ci['interruption_fixtures']==8 and ci['interruption_searches']==24
+ assert independent['variants']['baseline']['artifact_sha256']==reuse['artifact_sha256'] and independent['variants']['baseline']['profile_sha256']==reuse['profile_sha256']
+ candidate=independent['variants']['phase2'];assert candidate['source_sha256']==plan['engine_source_sha256'] and candidate['profile_sha256']==training['profile_sha256']==tv['merged_profile_sha256']==ci['profile_sha256']
+ assert candidate['artifact_sha256']==ci['native_artifact_sha256']==sha(use/'rook2-exact')
+ assert len(load(train/'actual-engine-affinities.json'))==54 and all(r['affinity']==[14] for r in load(train/'actual-engine-affinities.json'))
+ assert len(ci['stages']['replay']['actual_engine_affinities'])==54 and len(ci['stages']['wire']['actual_engine_affinities'])==8
+ summary=dict(status='Phase2 own-PGO validation passed; stopped before CPU comparison/adoption',candidate_source_root=plan['source_root'],candidate_source_sha256=plan['engine_source_sha256'],tool_source_sha256=plan['tool_source_sha256'],control_same_artifact_reuse=True,control_artifact_sha256=reuse['artifact_sha256'],control_profile_sha256=reuse['profile_sha256'],candidate_instrumented_artifact_sha256=sha(ib/'rook2-exact'),candidate_artifact_sha256=candidate['artifact_sha256'],candidate_profile_sha256=candidate['profile_sha256'],new_training_replays=54,new_raw_pid_linked_profiles=54,new_post_use_strict_replays=54,new_interruption_fixtures=8,new_interruption_searches=24,reused_baseline_training_replays=54,reused_baseline_post_use_replays=54,independent_total_retained_replays=216,independent_total_raw_profiles=108,independent_total_wire_fixtures=16,independent_total_wire_searches=48,independent_remerge_byte_identical=True,missing_or_stale_function_warnings=0,native145_evidence_reused_exact_source=True,native_tests_rerun=False,terminal_records={str(path):load(path) for path in records},all_owned_processes_terminal=True,closure_basis='Every actual outer stage exit observed; subprocess drivers synchronously awaited all build/training/replay/wire/LLVM-merge children; independent retained raw/profile/source/artifact reconciliation passed; no detached jobs started.',execution_context=load(HERE/'execution-context.json'),storage_context=load(HERE/'storage-context.json'),use_build_environment=load(HERE/'use-build-environment.json'),training_verification_sha256=sha(train/'verification.json'),strict_identity_sha256=sha(check/'identity.json'),independent_verification_sha256=sha(rec/'independent-verification.json'),control_reuse_sha256=sha(HERE/'control-reuse.json'),scope='Training14 only; all helpers/builds/regression0-5,8-13 untimed. Parent102 housekeeping overlap possible; no absolute sibling15-idle claim. No CPU/Callgrind/PMU or adoption claim; source/root unchanged.')
+ with (HERE/'validation-summary.json').open('x') as f:json.dump(summary,f,indent=2);f.write('\n')
+ dirs=[HERE,train,ib,use,check,wire,rec];files={str(path):sha(path) for d in dirs for path in sorted(d.rglob('*')) if path.is_file() and path.name!='validation-file-manifest.json'}
+ with (HERE/'validation-file-manifest.json').open('x') as f:json.dump(files,f,indent=2);f.write('\n')
+ print(json.dumps(dict(summary=str(HERE/'validation-summary.json'),summary_sha256=sha(HERE/'validation-summary.json'),manifest_sha256=sha(HERE/'validation-file-manifest.json'),candidate_artifact_sha256=candidate['artifact_sha256'],candidate_profile_sha256=candidate['profile_sha256'],control_artifact_sha256=reuse['artifact_sha256'],all_owned_processes_terminal=True)))
+if __name__=='__main__':main()

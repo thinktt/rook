@@ -1,0 +1,9 @@
+# Projected-plane child matched generic CPU pilot
+
+Exact control1befaa6d versus candidate695206eb passes independently bound functional gates and all60 original-byte strict/wait4 lifetimes. Twelve warmups are excluded;48 measured lifetimes give four alternating samples per variant/case on CPU14. Helpers are confined to0-5,8-13 and all owned native/build/test/codegen/Git/archive/hash jobs were closed. Shared guest Herdr/other Codex eligibility remains an explicit uncontrolled condition; no affinity-plan change was applied during this pilot.
+
+Six CPU median sum14.0908895s control versus14.1479910s candidate:0.405237% higher. Five case medians rise and one falls; profile05 observed ranges are separated in favor of control, while the other five overlap. This finite reported-only result supports parking this exact variant, rather than production adoption. It proves neither universal regression nor component attribution. The saved plane writes do not establish a whole-engine gain against Q frame+112, the outlined constructor and surviving160-byte copies.
+
+Whole-suite siblingCPU15 has7 nonidle ticks: {"guest": 0, "guest_nice": 0, "idle": 15105, "iowait": 0, "irq": 0, "nice": 0, "softirq": 0, "steal": 0, "system": 0, "user": 7}. There is no process/pervariant attribution or absolute idle/exclusive-host claim. Guest-affinity dry-run/approval request is separate and was not applied. No PGO/PMU/full54/12/reference/calibration/gameplay qualification or future-source timing transfer follows.
+
+Driver ACTUAL75044/afeb59→d9f485 exit0; independent4128/927a1f→b530f1 exit0. analysis.json SHA256 4de6ce48e3040c14d076e8fafc7b7b1b0c9f78f935ed51184bc1693063847648; suite-summary.json SHA256 53702026105f99fc4222dc658544203e3eed5066078e833d5fe1ba8b0e088836. Full immutable gate926dependencies, source/build/oracle identities, raw receipts and parent decision remain adjacent. No source fix/rebuild occurred for the measurement.

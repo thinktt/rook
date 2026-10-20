@@ -1,0 +1,26 @@
+--- prepared/profile.py
++++ reviewed/profile.py
+@@ -14,10 +14,13 @@
+  assert sorted(os.sched_getaffinity(0))==PLAN['helper_affinity'] and os.environ.get('TMPDIR')=='/home/legolas/rook2-build-tmp'
+  assert not os.environ.get('LLVM_PROFILE_FILE') and not os.environ.get('LD_PRELOAD') and not os.environ.get('LD_LIBRARY_PATH') and not os.environ.get('NODE_OPTIONS')
+  out=Path(PLAN['output']);assert not out.exists()
+- engine=Path(PLAN['engine']);build=load(PLAN['build_receipt']);source=Path(PLAN['source_root']);prefix=Path(PLAN['valgrind_prefix']);spec=Path(PLAN['spec'])
++ engine=Path(PLAN['engine']);build=load(PLAN['build_receipt']);source=Path(PLAN['source_root']);compiled=Path(build['crate']);prefix=Path(PLAN['valgrind_prefix']);spec=Path(PLAN['spec'])
+  inputs={Path(path):digest for path,digest in PLAN['public_input_sha256'].items()}
+  inputs.update({engine:PLAN['engine_sha256'],Path(PLAN['build_receipt']):PLAN['build_receipt_sha256'],Path(PLAN['source_archive']):PLAN['source_archive_sha256'],Path(PLAN['strict_reference']):PLAN['strict_reference_sha256']})
+  inputs.update({source/path:digest for path,digest in (PLAN['source_sha256']|PLAN['tool_source_sha256']).items()})
++ # DWARF can retain absolute compilation paths. Bind BOTH possible source
++ # roots; archived cwd/include alone does not redirect absolute lookups.
++ inputs.update({compiled/path:digest for path,digest in (PLAN['source_sha256']|PLAN['tool_source_sha256']).items()})
+  assert all(sha(path)==digest for path,digest in inputs.items())
+  assert build['binary_output']['sha256']==PLAN['engine_sha256'] and build['pgo']['mode']=='profile-use' and build['source_sha256_before']==build['source_sha256_after']==PLAN['source_sha256']
+  with tarfile.open(PLAN['source_archive'],'r:gz') as tar:
+@@ -60,7 +63,7 @@
+     run([str(prefix/'bin/callgrind_annotate'),'--auto=no','--inclusive=no','--context=0','--include='+str(source),str(data),name],case+'-'+Path(name).stem+'-lines')
+    result['cases'][case]=dict(total_simulated_Ir=totals[0],original_strict_replay_pass=True,exact_raw_bytes_equal_current_own_pgo_reference=True,normal_exit=True,pid=row['pid'],profile_sha256=sha(data),log_sha256=sha(out/(case+'.log')))
+   assert list(result['cases'])==PLAN['cases'] and all(sha(Path(p))==digest for p,digest in before.items())
+-  result.update(complete=True,input_sha256=before,commands=commands,engine_sha256=PLAN['engine_sha256'],source_archive_sha256=PLAN['source_archive_sha256'],annotation_source_root=str(source),one_fixed_lifetime_per_case=True,performance_claim=False,outer_actual_terminal_required=True)
++  result.update(complete=True,input_sha256=before,commands=commands,engine_sha256=PLAN['engine_sha256'],source_archive_sha256=PLAN['source_archive_sha256'],annotation_source_root=str(source),compiled_source_root=str(compiled),one_fixed_lifetime_per_case=True,performance_claim=False,outer_actual_terminal_required=True)
+  except BaseException as error:result['failure']=f'{type(error).__name__}: {error}'
+  finally:write(out/'provenance.json',result)
+  print(json.dumps(result));return 0 if result['complete'] else 1

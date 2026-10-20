@@ -1,0 +1,401 @@
+//! Experimental exact Piece-tag planes; validation is recorded externally.
+//! Boolean geometry only; capped ordered checker identities retain their owner.
+use crate::geometry::{DIRECTIONS, KNIGHT};
+use crate::position::Position;
+use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AttackBits {
+    planes: [u64; 4],
+}
+
+#[repr(align(64))]
+struct Masks {
+    knight: [u64; 64],
+    king: [u64; 64],
+    pawn_sources: [[u64; 64]; 2],
+    rays: [[u64; 8]; 64],
+    increasing: [bool; 8],
+}
+
+const fn masks() -> Masks {
+    let mut result = Masks {
+        knight: [0; 64],
+        king: [0; 64],
+        pawn_sources: [[0; 64]; 2],
+        rays: [[0; 8]; 64],
+        increasing: [false; 8],
+    };
+    let mut index = 0;
+    while index < 64 {
+        let square = Square(index as u8);
+        let mut direction = 0;
+        while direction < 8 {
+            let (df, dr) = DIRECTIONS[direction];
+            result.increasing[direction] = df as i16 + 8 * dr as i16 > 0;
+            if let Some(target) = square.offset(df, dr) {
+                result.king[index] |= 1u64 << target.0;
+            }
+            let mut cursor = square;
+            while let Some(target) = cursor.offset(df, dr) {
+                result.rays[index][direction] |= 1u64 << target.0;
+                cursor = target;
+            }
+            let (df, dr) = KNIGHT[direction];
+            if let Some(target) = square.offset(df, dr) {
+                result.knight[index] |= 1u64 << target.0;
+            }
+            direction += 1;
+        }
+        let mut side = 0;
+        while side < 2 {
+            let back = if side == 0 { -1 } else { 1 };
+            if let Some(target) = square.offset(-1, back) {
+                result.pawn_sources[side][index] |= 1u64 << target.0;
+            }
+            if let Some(target) = square.offset(1, back) {
+                result.pawn_sources[side][index] |= 1u64 << target.0;
+            }
+            side += 1;
+        }
+        index += 1;
+    }
+    result
+}
+
+static MASKS: Masks = masks();
+
+impl AttackBits {
+    pub(crate) const fn empty() -> Self {
+        Self { planes: [0; 4] }
+    }
+
+    /// Reconstruction uses OR from actual tags, independently of replacement.
+    pub(crate) fn from_board(board: &[Piece; 64]) -> Self {
+        let mut result = Self::empty();
+        for (index, piece) in board.iter().enumerate() {
+            if piece.is_empty() {
+                continue;
+            }
+            let square = 1u64 << index;
+            for bit in 0..4 {
+                if piece.0 & (1 << bit) != 0 {
+                    result.planes[bit] |= square;
+                }
+            }
+        }
+        result
+    }
+
+    /// Local supply can gather ordered lists; the Boolean kernel is identical.
+    pub(crate) fn from_position(position: &Position) -> Self {
+        let mut result = Self::empty();
+        for side in [Color::White, Color::Black] {
+            for kind in PieceKind::ALL {
+                let mut squares = 0;
+                for square in position.piece_squares(side, kind) {
+                    squares |= 1u64 << square.0;
+                }
+                let piece = Piece::new(side, kind);
+                for bit in 0..4 {
+                    if piece.0 & (1 << bit) != 0 {
+                        result.planes[bit] |= squares;
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    #[inline]
+    pub(crate) fn replace(&mut self, square: Square, old: Piece, next: Piece) {
+        let changed = old.0 ^ next.0;
+        let mask = 1u64 << square.0;
+        for bit in 0..4 {
+            self.planes[bit] ^= mask & 0u64.wrapping_sub(((changed >> bit) & 1) as u64);
+        }
+    }
+
+    /// Decode each tag and compare with the mailbox; do not call the updater.
+    pub(crate) fn matches_board(&self, board: &[Piece; 64]) -> bool {
+        board.iter().enumerate().all(|(square, piece)| {
+            let mut tag = 0u8;
+            for bit in 0..4 {
+                tag |= (((self.planes[bit] >> square) & 1) as u8) << bit;
+            }
+            tag == piece.0
+        })
+    }
+
+    #[inline]
+    pub(crate) fn attacked(&self, square: Square, by: Color) -> bool {
+        let [a, b, c, black] = self.planes;
+        let color = if by == Color::Black { black } else { !black };
+        let pawns = a & !b & !c & color;
+        let knights = !a & b & !c & color;
+        let kings = !a & b & c & color;
+        let index = square.0 as usize;
+        if (pawns & MASKS.pawn_sources[by.index()][index])
+            | (knights & MASKS.knight[index])
+            | (kings & MASKS.king[index])
+            != 0
+        {
+            return true;
+        }
+        let diagonal = a & (b ^ c) & color; // Bishop3 or Queen5.
+        let orthogonal = c & !b & color; // Rook4 or Queen5.
+        if diagonal | orthogonal == 0 {
+            return false;
+        }
+        let occupied = a | b | c;
+        for direction in 0..8 {
+            let matching = if direction < 4 { diagonal } else { orthogonal };
+            let ray_mask = MASKS.rays[index][direction];
+            if matching & ray_mask == 0 {
+                continue;
+            }
+            let on_ray = occupied & ray_mask;
+            debug_assert_ne!(on_ray, 0);
+            let first = if MASKS.increasing[direction] {
+                on_ray & on_ray.wrapping_neg()
+            } else {
+                1u64 << (63 - on_ray.leading_zeros())
+            };
+            if matching & first != 0 {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[inline]
+    pub(crate) fn projected(mut self, position: &Position, movement: Move) -> Self {
+        let from = movement.from();
+        let to = movement.to();
+        let mover = position.board[from.0 as usize];
+        self.replace(from, mover, Piece::EMPTY);
+        let next = match movement.kind() {
+            MoveKind::Promotion(kind) => Piece::new(position.side, kind),
+            _ => mover,
+        };
+        self.replace(to, position.board[to.0 as usize], next);
+        match movement.kind() {
+            MoveKind::EnPassant => {
+                let victim = Square(if position.side == Color::White {
+                    to.0 - 8
+                } else {
+                    to.0 + 8
+                });
+                self.replace(victim, position.board[victim.0 as usize], Piece::EMPTY);
+            }
+            MoveKind::Castle => {
+                let base = from.rank() * 8;
+                let (rook_from, rook_to) = if to.file() == 2 {
+                    (base, base + 3)
+                } else {
+                    (base + 7, base + 5)
+                };
+                let rook = position.board[rook_from as usize];
+                self.replace(Square(rook_from), rook, Piece::EMPTY);
+                self.replace(Square(rook_to), position.board[rook_to as usize], rook);
+            }
+            _ => {}
+        }
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::movegen::{self, MoveList};
+
+    #[test]
+    fn every_tag_replacement_matches_independent_mailbox_decode() {
+        let pieces: Vec<_> = std::iter::once(Piece::EMPTY)
+            .chain([Color::White, Color::Black].into_iter().flat_map(|side| {
+                PieceKind::ALL
+                    .into_iter()
+                    .map(move |kind| Piece::new(side, kind))
+            }))
+            .collect();
+        for square in 0..64 {
+            for old in &pieces {
+                let mut board = [Piece::EMPTY; 64];
+                board[square] = *old;
+                let before = AttackBits::from_board(&board);
+                for next in &pieces {
+                    let mut changed = before;
+                    changed.replace(Square(square as u8), *old, *next);
+                    board[square] = *next;
+                    assert!(changed.matches_board(&board));
+                    assert!(before.matches_board(&{
+                        let mut b = board;
+                        b[square] = *old;
+                        b
+                    }));
+                }
+            }
+        }
+    }
+
+    fn random(state: &mut u64) -> u64 {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        *state
+    }
+    fn empty_square(board: &[Piece; 64], state: &mut u64, pawn: bool) -> usize {
+        loop {
+            let square = random(state) as usize % 64;
+            if board[square].is_empty() && (!pawn || (8..56).contains(&square)) {
+                return square;
+            }
+        }
+    }
+    fn constructed(state: &mut u64) -> Position {
+        let mut board = [Piece::EMPTY; 64];
+        for side in [Color::White, Color::Black] {
+            let square = empty_square(&board, state, false);
+            board[square] = Piece::new(side, PieceKind::King);
+            let mut pawns = 0;
+            for _ in 0..(random(state) % 16) {
+                let mut kind = PieceKind::ALL[random(state) as usize % 5];
+                if kind == PieceKind::Pawn && pawns == 8 {
+                    kind = PieceKind::Knight;
+                }
+                if kind == PieceKind::Pawn {
+                    pawns += 1;
+                }
+                let square = empty_square(&board, state, kind == PieceKind::Pawn);
+                board[square] = Piece::new(side, kind);
+            }
+        }
+        let mut placement = String::new();
+        for rank in (0..8).rev() {
+            if rank != 7 {
+                placement.push('/');
+            }
+            let mut empty = 0u8;
+            for file in 0..8 {
+                let piece = board[rank * 8 + file];
+                if piece.is_empty() {
+                    empty += 1;
+                    continue;
+                }
+                if empty != 0 {
+                    placement.push((b'0' + empty) as char);
+                    empty = 0;
+                }
+                placement.push(piece.fen_char());
+            }
+            if empty != 0 {
+                placement.push((b'0' + empty) as char);
+            }
+        }
+        Position::from_fen(&format!(
+            "{placement} {} KQkq - 0 1",
+            if random(state) & 1 == 0 { "w" } else { "b" }
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn boolean_queries_and_projections_match_mailbox_on_broad_setups() {
+        let mut state = 0x9e3779b97f4a7c15;
+        for iteration in 0..10000 {
+            let position = constructed(&mut state);
+            let bits = position.attack_view();
+            assert!(bits.matches_board(&position.board));
+            assert_eq!(bits, AttackBits::from_position(&position));
+            assert_eq!(bits, AttackBits::from_board(&position.board));
+            for side in [Color::White, Color::Black] {
+                for square in 0..64 {
+                    assert_eq!(
+                        bits.attacked(Square(square), side),
+                        movegen::attacked(&position.board, Square(square), side)
+                    );
+                }
+            }
+            if iteration < 500 {
+                let mut moves = MoveList::new();
+                movegen::generate_legal(&position, &mut moves);
+                for &movement in moves.as_slice() {
+                    let projected = bits.projected(&position, movement);
+                    let board = movegen::projected_board(&position, movement);
+                    assert!(projected.matches_board(&board));
+                    let child = position.played_unchecked(movement);
+                    child.validate().unwrap();
+                    assert_eq!(child.attack_view(), projected);
+                    assert!(child.null_child().attack_view().matches_board(&board));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn special_and_joined_projections_keep_actual_tags() {
+        for (fen, spelling, kind) in [
+            (
+                "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+                "e1c1",
+                MoveKind::Castle,
+            ),
+            (
+                "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1",
+                "e8g8",
+                MoveKind::Castle,
+            ),
+            (
+                "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1",
+                "a7b8",
+                MoveKind::Promotion(PieceKind::Knight),
+            ),
+            (
+                "4k3/8/8/8/8/8/p7/4K3 b - - 0 1",
+                "a2a1",
+                MoveKind::Promotion(PieceKind::Queen),
+            ),
+            (
+                "k7/8/8/4KPnr/8/8/8/8 w - g6 0 1",
+                "f5g6",
+                MoveKind::EnPassant,
+            ),
+            (
+                "7k/8/8/8/8/8/3rP3/K7 w - d3 0 1",
+                "e2d3",
+                MoveKind::EnPassant,
+            ),
+            (
+                "8/8/8/3kP3/8/8/8/K7 w - d6 0 1",
+                "e5d6",
+                MoveKind::EnPassant,
+            ),
+        ] {
+            let position = Position::from_fen(fen).unwrap();
+            let movement = Move::new(
+                Square::parse(&spelling[..2]).unwrap(),
+                Square::parse(&spelling[2..]).unwrap(),
+                kind,
+            );
+            let projected = position.attack_view().projected(&position, movement);
+            let board = movegen::projected_board(&position, movement);
+            assert!(projected.matches_board(&board));
+            for side in [Color::White, Color::Black] {
+                for square in 0..64 {
+                    assert_eq!(
+                        projected.attacked(Square(square), side),
+                        movegen::attacked(&board, Square(square), side)
+                    );
+                }
+            }
+            let child = if fen.starts_with("8/8/8/3kP3") {
+                position.exceptional_en_passant(movement)
+            } else {
+                position.played_unchecked(movement)
+            };
+            assert!(child.attack_view().matches_board(&board));
+            assert_eq!(child.attack_view(), projected);
+        }
+    }
+}

@@ -1,0 +1,3 @@
+# Ordinary projected-bit generic decision
+
+The one frozen70 generic pilot and original70/native accounting reconciliation pass the predeclared advancement rule. Exact2940 candidate passed178 native tests, original54/eightwire24 and independent source/raw/compiler closure. Decision is fresh own-source PGO preparation and a separate matched pilot against current79d, not adoption or a transferred generic speedup. Both intended ordinary Boolean paths changed representation; actual Q outline/frame+32 remains a measured whole-engine risk. Source/PGO identity, exact rule and all original measurements remain pinned in decision.json. Production is unchanged; fresh full117 validation precedes any future promotion and final-artifact54/12 cost+12pregate remain.

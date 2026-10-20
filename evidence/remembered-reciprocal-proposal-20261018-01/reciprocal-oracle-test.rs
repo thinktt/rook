@@ -1,0 +1,98 @@
+    #[test]
+    fn reciprocal_group_remainders_match_builtin_modulo_and_survive_clear() {
+        // Native % is the independent oracle; no alternative reciprocal
+        // approximation or fixture-derived answers appear in this test.
+        fn check(key: u32, count: usize) {
+            let actual = group_remainder(key, count, group_reciprocal(count));
+            assert_eq!(actual, key as usize % count, "key {key}, count {count}");
+            assert!(actual < count);
+            if let Ok(small) = u32::try_from(count) {
+                assert_eq!(actual, (key % small) as usize);
+            }
+        }
+
+        let mut divisors = vec![1usize, 2, 3, 4, 5, 6, 7, 9, 10, 12, 15, 17,
+                                31, 33, 63, 65, 97, 101, 127, 129, 251, 257,
+                                65_521, 65_535, 65_536, 65_537];
+        for bit in 0..=32 {
+            let power = 1u64 << bit;
+            for value in [power.saturating_sub(1), power, power + 1] {
+                if value != 0 {
+                    if let Ok(count) = usize::try_from(value) {
+                        divisors.push(count);
+                    }
+                }
+            }
+        }
+        for value in [u32::MAX as u64 - 1, u32::MAX as u64,
+                      (1u64 << 32) + 17, (1u64 << 33) - 1,
+                      1u64 << 33, 1u64 << 48, u64::MAX] {
+            if let Ok(count) = usize::try_from(value) {
+                divisors.push(count);
+            }
+        }
+        divisors.sort_unstable();
+        divisors.dedup();
+        let keys = [0, 1, 2, 3, 7, 255, 256, 65_535, 65_536,
+                    0x7fff_ffff, 0x8000_0000, u32::MAX - 1, u32::MAX];
+        for &count in &divisors {
+            for key in keys {
+                check(key, count);
+            }
+            let maximum_quotient = u32::MAX as u64 / count as u64;
+            for quotient in [0, 1, 2, 3, 7, 31, 255, 65_535,
+                             maximum_quotient / 2,
+                             maximum_quotient.saturating_sub(1), maximum_quotient] {
+                // u128 is test-only boundary construction: wide divisors need
+                // no giant Group allocation and cannot overflow this product.
+                let boundary = (quotient as u128) * (count as u128);
+                for neighbor in [boundary.checked_sub(1), Some(boundary),
+                                 boundary.checked_add(1)].into_iter().flatten() {
+                    if let Ok(key) = u32::try_from(neighbor) {
+                        check(key, count);
+                    }
+                }
+            }
+        }
+        // Reproducible bounded broader pairs: alternate small/high32/wide
+        // divisors to cover correction arithmetic as well as the key<count path.
+        let mut state = 0x8b5a_2e71_469c_d30fu64;
+        for index in 0..4096 {
+            state = state.wrapping_mul(6_364_136_223_846_793_005)
+                         .wrapping_add(1_442_695_040_888_963_407);
+            let key = (state ^ state.rotate_right(23)) as u32;
+            state = state.wrapping_mul(6_364_136_223_846_793_005)
+                         .wrapping_add(1_442_695_040_888_963_407);
+            let count = match index % 3 {
+                0 => ((state as u32 % 1_000_003) as usize).max(1),
+                1 => ((state >> 32) as usize).max(1),
+                _ => (state as usize).max(1),
+            };
+            check(key, count);
+        }
+
+        // Exercise the actual key-composition caller and both metadata
+        // constructors, then logical and physical generation clears. Black,
+        // no-rights/no-EP makes the composed u32 key exactly primary.
+        let mut position = Position::from_fen("4k3/8/8/8/8/8/8/4K3 b - - 0 1").unwrap();
+        let mut tables = [RememberedTable::with_groups(1),
+                          RememberedTable::with_groups(3),
+                          RememberedTable::with_groups(101),
+                          RememberedTable::from_tts(48 * 100).unwrap()];
+        for table in &mut tables {
+            let count = table.group_count();
+            let reciprocal = table.reciprocal;
+            assert_eq!(reciprocal, (1u64 << 32) / count as u64);
+            for _ in 0..256 {
+                for key in keys {
+                    position.primary = key;
+                    assert_eq!(table.group_for(&position), key as usize % count);
+                }
+                table.clear();
+                assert_eq!(table.group_count(), count);
+                assert_eq!(table.reciprocal, reciprocal);
+            }
+            assert_eq!(table.generation, 2);
+        }
+    }
+

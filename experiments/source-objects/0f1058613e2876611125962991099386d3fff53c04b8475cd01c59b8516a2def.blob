@@ -1,0 +1,71 @@
+--- experiment26/validate.py
++++ experiment27/validate.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Separate reviewed experiment26 build/native/strict stages; no timing."""
++"""Separate reviewed experiment27 build/native/strict stages; no timing."""
+ from pathlib import Path
+ import hashlib
+ import json
+@@ -11,8 +11,8 @@
+ HERE = Path(__file__).resolve().parent
+ ROOT = Path('/home/legolas/rook2')
+ E = ROOT / 'evidence'
+-TRIAL = Path('/home/legolas/rook2-work/imp2-full-evaluation-phase-sharing-20261018-01')
+-BUILD = E / 'full-evaluation-phase-sharing-generic-build-20261018-01'
++TRIAL = Path('/home/legolas/rook2-work/imp2-pressure-pair-sum-20261019-01')
++BUILD = E / 'full-pressure-pair-sum-generic-build-20261019-01'
+ HELPERS = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13]
+ 
+ 
+@@ -42,7 +42,7 @@
+     pins = {TRIAL / name: digest for name, digest in binding['source69'].items()}
+     pins.update({Path(name): digest for name, digest in binding['helpers_and_inputs'].items()})
+     assert all(sha(p) == digest for p, digest in pins.items())
+-    output = E / f'full-evaluation-phase-sharing-{stage}-validation-20261018-01'
++    output = E / f'full-pressure-pair-sum-{stage}-validation-20261019-01'
+     output.mkdir()
+     records = []
+ 
+@@ -74,15 +74,36 @@
+             assert sha(image) == receipt['binary_output']['sha256']
+             run(['/usr/bin/python3', str(ROOT / 'tools/archive_build.py'), str(BUILD)], 'archive')
+         elif stage == 'native':
+-            env = dict(os.environ, RUSTC='/usr/bin/rustc', RUSTFLAGS='-C target-cpu=x86-64',
++            env = dict(os.environ, RUSTC='/usr/bin/rustc', RUSTC_WRAPPER='', RUSTC_WORKSPACE_WRAPPER='',
++                       RUSTFLAGS='-C target-cpu=x86-64',
+                        CARGO_ENCODED_RUSTFLAGS='-C\x1ftarget-cpu=x86-64', CARGO_NET_OFFLINE='true')
+             run(['/usr/bin/cargo', 'test', '--offline', '--locked', '--release', '--target',
+                  'x86_64-unknown-linux-gnu', '--manifest-path', str(TRIAL / 'Cargo.toml'),
+                  '--target-dir', str(TRIAL / 'target/native-tests-generic-01'), '--jobs', '4',
+-                 '--lib', '--bin', 'rook2-dev', '--', '--test-threads=1'], 'native-tests', env)
+-            text = (output / 'native-tests.stdout').read_text()
+-            assert 'test result: ok. 176 passed; 0 failed;' in text
+-            assert 'test result: ok. 2 passed; 0 failed;' in text
++                 '--lib', '--bin', 'rook2-dev', '--no-run', '--message-format=json'], 'native-build', env)
++            artifacts = [json.loads(line) for line in (output / 'native-build.stdout').read_text().splitlines()]
++            artifacts = [a for a in artifacts if a.get('reason') == 'compiler-artifact'
++                         and a.get('executable') and a.get('profile', {}).get('test')]
++            assert len(artifacts) == 2
++            identities = {}
++            for artifact in artifacts:
++                kind = artifact['target']['kind']
++                name, count = ('lib', 177) if kind == ['lib'] else ('dev', 2)
++                assert kind in [['lib'], ['bin']] and name not in identities
++                source = Path(artifact['executable'])
++                frozen = output / ('rook2-' + name + '-tests-exact')
++                shutil.copyfile(source, frozen)
++                frozen.chmod(0o555)
++                identities[name] = dict(path=str(frozen), sha256=sha(frozen),
++                                        cargo_artifact=artifact, expected_passed=count)
++                save(output / (name + '-identity-before.json'), identities[name])
++                run([str(frozen), '--test-threads=1'], name + '-tests', env)
++                assert sha(frozen) == identities[name]['sha256']
++                text = (output / (name + '-tests.stdout')).read_text()
++                assert f'test result: ok. {count} passed; 0 failed;' in text
++            assert set(identities) == {'lib', 'dev'}
++            save(output / 'native-identities.json', dict(total_tests=179, tests=identities,
++                 frozen_before_first_test_execution=True, repeated_cargo_test_execution=False))
+         else:
+             image = BUILD / 'rook2-exact'
+             assert sha(image) == load(BUILD / 'receipt.json')['binary_output']['sha256']

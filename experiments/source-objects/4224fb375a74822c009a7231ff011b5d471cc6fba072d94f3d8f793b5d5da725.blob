@@ -1,0 +1,23 @@
+--- capture-before-terminal-record.py
++++ capture.py
+@@ -20,12 +20,18 @@
+  assert r['source_sha256_before']==r['source_sha256_after'] and len(r['source_sha256_before'])==49
+  assert r['tool_sha256_before']==r['tool_sha256_after'] and len(r['tool_sha256_before'])==23
+  assert sha(b/'rook2-exact')==EXPECTED[side]==r['binary_output']['sha256']
+- term=load(b/'tool-terminal.json');assert term['actual_tool_terminal_observed'] and term['exit_code']==0 and (term.get('terminal_chunk_id') or term.get('chunk_id'))
+- for n in ['receipt.json','rook2-exact','tool-terminal.json','frozen-image.json','build.stderr']:pins[str(b/n)]=sha(b/n)
++ terminal_path=(E/'shelter-ring-value-static-parent-review-20261019-01/generic-build-tool-terminal.json') if side=='candidate' else b/'tool-terminal.json'
++ term=load(terminal_path);pins[str(terminal_path)]=sha(terminal_path)
++ if side=='candidate':
++  assert term['exit_code']==0 and term['actual_terminal_chunk']=='7c6c77' and term['session_id']==50541 and term['launch_actual_chunk']=='34f66f'
++  assert term['artifact_sha256']==EXPECTED[side] and term['result_sha256']==sha(E/'shelter-ring-value-static-generic-build-execution-20261019-01/result.json')
++ else:assert term['actual_tool_terminal_observed'] and term['exit_code']==0 and (term.get('terminal_chunk_id') or term.get('chunk_id'))
++ for n in ['receipt.json','rook2-exact','frozen-image.json','build.stderr']:pins[str(b/n)]=sha(b/n)
+  for n,h in (r['source_sha256_before']|r['tool_sha256_before']).items():
+   f=b/'source-before'/n;assert sha(f)==h;pins[str(f)]=h
+  log=(b/'build.stderr').read_text();lines=[l for l in log.splitlines() if 'Running ' in l and '--crate-type bin' in l and 'src/bin/rook2.rs' in l]
+  assert len(lines)==1 and '-C lto=thin ' in lines[0] and '-C codegen-units=1 ' in lines[0]
++execution=E/'shelter-ring-value-static-generic-build-execution-20261019-01/result.json';pins[str(execution)]=sha(execution);assert load(execution)['complete'] and load(execution)['source_unchanged']
+ a,b=receipts.values()
+ for k in ['mode','target_triple','target_cpu','jobs','toolchain','build_effective_environment']:assert a[k]==b[k],k
+ assert a['tool_sha256_before']==b['tool_sha256_before']

@@ -1,0 +1,45 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -1,7 +1,7 @@
+ //! EVAL-ACTIVITY: mobility, fresh pressure marks and semantic relation work.
+ use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KNIGHT, KNIGHT_SOURCES};
+ use crate::influence::{
+-    adjusted_relation, profile_sum, relation, Contribution, Influence, Relation,
++    adjusted_relation, relation, Contribution, Influence, Relation,
+ };
+ use crate::position::{Phase, Position};
+ use crate::types::{Color, Piece, PieceKind, Square};
+@@ -344,6 +344,15 @@
+     result
+ }
+ 
++#[inline]
++fn profile_sums_pair(own: u8, opponent: u8) -> (u8, u8) {
++    let x = u32::from(own) | (u32::from(opponent) << 16);
++    let pairs = (x & 0x00330033) + ((x >> 2) & 0x00330033);
++    let sum = (pairs & 0x000f000f) + ((pairs >> 4) & 0x000f000f);
++    let counts = sum - ((x >> 1) & 0x00010001);
++    (counts as u8, (counts >> 16) as u8)
++}
++
+ fn piece_score_kind<const KIND: usize>(
+     influence: &Influence,
+     color: Color,
+@@ -362,8 +371,8 @@
+     let mut score = CURVE[index] as i64;
+     let own = influence.code(color, source);
+     let opponent = influence.code(color.opponent(), source);
+-    let attack_count = profile_sum(opponent);
+-    if profile_sum(own) <= attack_count {
++    let (own_count, attack_count) = profile_sums_pair(own, opponent);
++    if own_count <= attack_count {
+         score -= 5 * attack_count as i64 + 2;
+     }
+     let rank = relative_rank(color, source);
+@@ -828,3 +837,6 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++mod paired_support_tests;

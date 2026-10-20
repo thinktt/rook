@@ -1,0 +1,518 @@
+--- activity-audited/guard.py
++++ full-byte-pair-proposed/guard.py
+@@ -23,7 +23,7 @@
+ 
+ def validate_authority(c):
+  assert c.get('authorized') is True and c.get('all_conflicting_native_work_terminal') is True
+- assert c.get('scope')=='activity-value-inputs-own-pgo-validation-no-cpu'
++ assert c.get('scope')=='full-byte-pair-relations-own-pgo-validation-no-cpu'
+  assert c['plan_sha256']==sha(HERE/'plan.json')
+  assert c['source_root']==str(SOURCE)
+  assert c['prepared_scripts_sha256']==load(HERE/'script-pins.json')
+--- activity-audited/offline_controls.py
++++ full-byte-pair-proposed/offline_controls.py
+@@ -23,7 +23,7 @@
+  with tempfile.TemporaryDirectory(prefix='rook2-pgo-offline-',dir=g.PLAN['tempdir']) as d:
+   terminal=Path(d)/'terminal-fixture.json'
+   terminal.write_text(json.dumps(dict(actual_tool_terminal_observed=True,exit_code=0,session_id='OFFLINE-FIXTURE',terminal_chunk_id='OFFLINE-FIXTURE')))
+-  c=dict(authorized=True,all_conflicting_native_work_terminal=True,scope='activity-value-inputs-own-pgo-validation-no-cpu',plan_sha256=g.sha(g.HERE/'plan.json'),source_root=str(g.SOURCE),prepared_scripts_sha256=g.load(g.HERE/'script-pins.json'),functional_candidate_accepted=True,generic_pilot_advance_accepted=True,generic_candidate_sha256=g.PLAN['generic_candidate_sha256'],generic_pilot_evidence={str(g.HERE/'plan.json'):g.sha(g.HERE/'plan.json')},generic_pilot_actual_terminals={str(terminal):g.sha(terminal)},functional_evidence={str(g.HERE/'plan.json'):g.sha(g.HERE/'plan.json')},actual_terminals={str(terminal):g.sha(terminal)},training_cpu=14,sibling15_no_owned_task=True,quiet_window_and_interference_review='OFFLINE-FIXTURE ONLY')
++  c=dict(authorized=True,all_conflicting_native_work_terminal=True,scope='full-byte-pair-relations-own-pgo-validation-no-cpu',plan_sha256=g.sha(g.HERE/'plan.json'),source_root=str(g.SOURCE),prepared_scripts_sha256=g.load(g.HERE/'script-pins.json'),functional_candidate_accepted=True,generic_pilot_advance_accepted=True,generic_candidate_sha256=g.PLAN['generic_candidate_sha256'],generic_pilot_evidence={str(g.HERE/'plan.json'):g.sha(g.HERE/'plan.json')},generic_pilot_actual_terminals={str(terminal):g.sha(terminal)},functional_evidence={str(g.HERE/'plan.json'):g.sha(g.HERE/'plan.json')},actual_terminals={str(terminal):g.sha(terminal)},training_cpu=14,sibling15_no_owned_task=True,quiet_window_and_interference_review='OFFLINE-FIXTURE ONLY')
+   assert g.validate_authority(c)==c
+   negatives=0
+   for key,value in [('authorized',False),('all_conflicting_native_work_terminal',False),('scope','wrong'),('plan_sha256','0'*64),('source_root','/wrong'),('prepared_scripts_sha256',{}),('functional_candidate_accepted',False),('generic_pilot_advance_accepted',False),('generic_candidate_sha256','0'*64),('generic_pilot_evidence',{}),('generic_pilot_actual_terminals',{}),('functional_evidence',{}),('actual_terminals',{}),('training_cpu',0),('sibling15_no_owned_task',False),('quiet_window_and_interference_review','')]:
+--- activity-audited/reconcile.py
++++ full-byte-pair-proposed/reconcile.py
+@@ -1,4 +1,4 @@
+-"""Independent activity-value source/profile/artifact/raw reconciliation; no engine runs."""
++"""Independent full-byte-pair source/profile/artifact/raw reconciliation; no engine runs."""
+ from guard import *
+ import gzip,re,tarfile
+ from raw_model import replay,semantic
+@@ -6,7 +6,7 @@
+ SPEC=Path('/home/legolas/king-spec/conformance')
+ def main():
+  require_clearance();check_inputs();assert not OUT.exists();OUT.mkdir();variants={}
+- for variant,source in [('activity-value-inputs',PLAN['source_root'])]:
++ for variant,source in [('full-byte-pair-relations',PLAN['source_root'])]:
+   tr=Path(PLAN['training']);ib=Path(PLAN['instrumented_build']);build=Path(PLAN['use_build']);check=Path(PLAN['use_check']);wire=Path(PLAN['wire'])
+   for q in [ib/'tool-terminal.json',tr/'tool-terminal.json',tr/'verify-tool-terminal.json',build/'tool-terminal.json',check/'tool-terminal.json']:terminal(q)
+   training=load(tr/'training.json');tb=load(ib/'receipt.json');br=load(build/'receipt.json');identity=load(check/'identity.json');tv=load(tr/'verification.json')
+--- activity-audited/train.py
++++ full-byte-pair-proposed/train.py
+@@ -9,13 +9,13 @@
+ import sys
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "activity-value-inputs-pgo-training-20261018-01"
++OUT = HERE.parent / "full-byte-pair-relations-pgo-training-20261018-01"
+ ROOT = HERE.parents[1]
+-BUILD = ROOT / 'evidence/activity-value-inputs-pgo-instrumented-build-20261018-01'
+-SOURCE = Path('/home/legolas/rook2-work/imp2-activity-value-inputs-20261018-4ea01f85')
++BUILD = ROOT / 'evidence/full-byte-pair-relations-pgo-instrumented-build-20261018-01'
++SOURCE = Path('/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp')
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ sys.dont_write_bytecode=True
+-sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01')))
++sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01')))
+ from guard import require_clearance,terminal,check_inputs,check_merge_tool
+ sys.path.insert(0, str(SOURCE / 'tools'))
+ from build import source_snapshot, cargo_configs, tool_snapshot
+--- activity-audited/verify.py
++++ full-byte-pair-proposed/verify.py
+@@ -8,12 +8,12 @@
+ import subprocess
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "activity-value-inputs-pgo-training-20261018-01"
++OUT = HERE.parent / "full-byte-pair-relations-pgo-training-20261018-01"
+ ROOT = HERE.parents[1]
+ sys.dont_write_bytecode=True
+-sys.path.insert(0,'/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01')
++sys.path.insert(0,'/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01')
+ from guard import require_clearance,terminal,check_inputs,check_merge_tool
+-sys.path.insert(0,'/home/legolas/rook2-work/imp2-activity-value-inputs-20261018-4ea01f85/tools')
++sys.path.insert(0,'/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp/tools')
+ from build import source_snapshot,tool_snapshot
+ 
+ 
+@@ -38,7 +38,7 @@
+     terminal(OUT/'tool-terminal.json')
+     training = load(OUT/'training.json')
+     replay = load(OUT/'replay.json')
+-    build_path = ROOT/'evidence/activity-value-inputs-pgo-instrumented-build-20261018-01/receipt.json'
++    build_path = ROOT/'evidence/full-byte-pair-relations-pgo-instrumented-build-20261018-01/receipt.json'
+     build = load(build_path)
+     assert training['complete'] and training['schema'] == 'rook2-pgo-training-v1'
+     assert len(training['raw_profiles_sha256']) == 54
+@@ -55,19 +55,19 @@
+         assert row['exit']=={'code':0,'signal':None} and row['error'] is None and row['stderr']==''
+         assert row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
+     assert not (OUT/'replay.stderr').stat().st_size
+-    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../activity-value-inputs-pgo-preparation-20261018-01/train.py', 'driver_sha256'),
++    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../full-byte-pair-relations-pgo-preparation-20261018-01/train.py', 'driver_sha256'),
+                           ('merged.profdata', 'profile_sha256'), ('merged.profdata.gz', 'profile_archive_sha256')]:
+         assert sha(OUT/filename) == training[key]
+     assert gzip.decompress((OUT/'merged.profdata.gz').read_bytes()) == (OUT/'merged.profdata').read_bytes()
+     assert all(sha(Path(p)) == h for p, h in training['input_sha256'].items())
+     assert sha(build_path) == training['instrumented_build_receipt']['sha256']
+     assert sha(build_path.parent/'rook2-exact') == training['instrumented_engine_sha256'] == build['binary_output']['sha256']
+-    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-activity-value-inputs-20261018-4ea01f85'))
++    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp'))
+     assert sha(Path('/usr/bin/llvm-profdata-19').resolve()) == training['merge_tool_sha256']
+     terminal_receipt = load(OUT/'tool-terminal.json')
+     assert terminal_receipt['exit_code'] == 0
+     assert all(sha(Path(path))==h for path,h in load(OUT/'input-closure.json').items())
+-    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-activity-value-inputs-20261018-4ea01f85'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
++    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
+     merged=OUT/'independently-merged.profdata';assert not merged.exists()
+     command=['/usr/bin/llvm-profdata-19','merge','-o',str(merged),*sorted(training['raw_profiles_sha256'])]
+     with (OUT/'independent-merge.stdout').open('xb') as a,(OUT/'independent-merge.stderr').open('xb') as b:
+@@ -78,7 +78,7 @@
+     verification = dict(complete=True, independent_remerge_byte_identical=True, independent_remerge_exit_code=result.returncode, independent_remerge_command=command, independent_profile_sha256=sha(merged), strict_replays=54, raw_profiles_independently_hashed=54,
+           merged_profile_sha256=training['profile_sha256'], training_record_sha256=sha(OUT/'training.json'),
+           driver_terminal_sha256=sha(OUT/'tool-terminal.json'), verifier_sha256=sha(Path(__file__)),
+-          scope='Own exact activity-value candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
++          scope='Own exact full-byte-pair candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
+     check_inputs()
+     write('verification.json', verification)
+     print(json.dumps(verification))
+--- activity-audited/plan.json
++++ full-byte-pair-proposed/plan.json
+@@ -1,7 +1,7 @@
+ {
+-  "schema": "rook2-activity-value-inputs-own-pgo-plan-v1",
+-  "status": "PREPARATION ONLY; unparsed/unrun; parent review and independent generic advancement required",
+-  "source_root": "/home/legolas/rook2-work/imp2-activity-value-inputs-20261018-4ea01f85",
++  "schema": "rook2-full-byte-pair-relations-own-pgo-plan-v1",
++  "status": "PREPARATION ONLY; stages unrun; parent review and explicit execution clearance required",
++  "source_root": "/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp",
+   "engine_source_sha256": {
+     "Cargo.toml": "6199772414ef5972898842d76472301d256e42f9dd2181fa421ff5cbc21c85d1",
+     "Cargo.lock": "d34b5888f77c0319fb614ba5701a4a1177af31b803054ad3a8251926ba237c97",
+@@ -21,7 +21,7 @@
+     "src/history.rs": "f6b2a5073307d655e33e774900c9fea26f4bdfefbdd2cd9848ff0758c4b34fde",
+     "src/host.rs": "cc694d926fb1c1bc3063c3c9a20a8399abc92019f4927b2b79850e7a706924ac",
+     "src/identity.rs": "761779f7f2e0186dfbe28e162bf5fc8c8461d9f9c342787ebe2becfd0914a376",
+-    "src/influence.rs": "05b402b7e0137720d5fb4d2f062601ebf5abf61411fe648531cdc94e2959843e",
++    "src/influence.rs": "007b30c8ff463c1a330ed981725bbe80566f2793dc72bdd8997fdb92307c4513",
+     "src/lib.rs": "6f09459cb36d8e8e0dfc0d473f3b91fcd19feed4c8220888b83af37124abc0c4",
+     "src/movegen.rs": "3e12fc3659c76b06b48cffb72dcb18c60e300fcecfc02b91ba9c6608a16d2e46",
+     "src/ordinary.rs": "3813b729fda01f46216a30ed82ed514548397fb9db8bd79b616ca8612711f0e9",
+@@ -36,7 +36,7 @@
+     "src/post_lifecycle.rs": "1c429549a023d67b68304375a1b40d2a1228c104579b53659db5595df0d82bb6",
+     "src/quiescence.rs": "491d612aec3dcaff246e97541667d1296735d810e7a86e1b16889ebddf6ef838",
+     "src/quiescence_policy.rs": "baeb3f40c47f119481f0040b1c9bb15f9af25ee39376cf0c01d1a06091011468",
+-    "src/relation_table.rs": "2d0942b0fd96b25caeb9824f3dd2a41952356299019ba8d9a9d089f65c41e1e1",
++    "src/relation_table.rs": "8b559327e7fe433750ab30add4e172570a4a0a80d10b3b3b63bd475dd731de49",
+     "src/remembered.rs": "af2eb6046fd7e58b1a35e7ed3051936559b7f739224ed698b54c49317faec293",
+     "src/root_schedule.rs": "550146f895ef9a43b8ecdc6fce5e26fb973602e6f5d5b17add1a4920768a72d8",
+     "src/session.rs": "e3585bdf5fabb45eff8f3a48ea75da8e414b8b9dc2fbcbc4a44f51a30cc87d7f",
+@@ -83,7 +83,30 @@
+     "/home/legolas/king-spec/conformance/profiling/replay-oracle.json": "6719db738383dae810d49db96575dc981e5d83b57bd52acf7c5a23c1b22e09dc",
+     "/home/legolas/king-spec/conformance/fixtures/interrupted-sessions-v1.json": "1bad7f3582a37c439c8c7fc4c6b8ade095e0d4f210cc2ab4079a745e07bacf06",
+     "/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/receipt.json": "18585bc825ae3049fd7ffd3953bade1c8a78df0650d021364a5443d6c8eaf88b",
+-    "/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/rook2-exact": "7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16"
++    "/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/rook2-exact": "7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-generic-build-20261018-01/receipt.json": "f77347e6b02c21d2d99162ca9b4368f7f054f969e7952735031a0da0b77bf98e",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-generic-build-20261018-01/rook2-exact": "948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-generic-build-20261018-01/archive-receipt.json": "68802fde7e02097d472f818e018d7612288b457cb3a1c90f9e5f61342ec0eebf",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-generic-build-20261018-01/verified-source-before.tar.gz": "9c6e48b474bddde25c33e80361c85630d54d474f6fd1bf16485e2cefd7853789",
++    "/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/archive-receipt.json": "2c8cd76e4a9f1112da763f8ca40a189be4716645c797d90f620b4223e1ab48bf",
++    "/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/verified-source-before.tar.gz": "b7f0ac1e5e6edd343b68fd61ff81a38ed7983c9927d503eed6d187314197ec39",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-use-build-20261018-01/receipt.json": "acd980fa99fbc5a7e96f3fbde229321e02da8e6f2dcada12db8c74779652a7a0",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-use-build-20261018-01/rook2-exact": "d5ee1f3f7258f152c0a9c50664855c46f6b631e611a85bdfdae07f509654decc",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-use-build-20261018-01/archive-receipt.json": "aefb427b42730b3e689e4eeea61964b3b401138a5ee933482dc7686b842e1fd8",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-proposal-20261018-01/source-manifest.json": "1b5d00085dbcb1ed22595751932dc6e2c48d8c4b593cf5fa6defa04db6bf0a3e",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-proposal-20261018-01/source-proof.json": "a05e76b45e8d5293b72aab086bd07297908664b92807f6d963fa8e40cca31b3b",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-proposal-20261018-01/review.md": "4ccbf604c4cd1959bdf39478167323b823717eea222adb5325e6c2d135768740",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-proposal-20261018-01/proposal.patch": "de4a8a5c9e9155f1fab97bc3e6c6e8270b7e6eeec26ecdb1e1a68fc26d4072c3",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-cpu-plan-20261018-01/plan.json": "571b4cf361023fd791b363d484d9c7ff9fc7722da9a39297b863365e86a874df",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-cpu-independent-preparation-20261018-01/independent-reconciliation.json": "9209fdd94bb4e82c61b431d7c2f2615211e2f0659b49528a5b5c4628716334a8",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-cpu-independent-preparation-20261018-01/tool-terminal.json": "d621bb0ab95fe45d53fd377cb6266dc1fa445816e9484173cd793d29838f3b17",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-independent-preparation-20261018-01/independent-verification.json": "d44df08f54f438c7be18e7e2df1d6a118d83cc4a1abad5a601d21cdcddb77aa5",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-independent-preparation-20261018-01/tool-terminal.json": "9098ef08d2e8b6db5b99cacce05d7e7bc712c70d2a84225679025f987fda9164",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-codegen-review-20261018-01/review-summary.json": "3653f6d01e1eabcad06a9321c5529758adbf37fe6fb3cdd98f4ba4ab5c5611e2",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-codegen-review-20261018-01/review.md": "1b7c013c0dc7480ba5b9d6c5d501da38bc956221f82ea06de0a00344086717ae",
++    "/home/legolas/rook2/evidence/full-byte-pair-relations-codegen-review-20261018-01/tool-terminal.json": "97a88fd49a86c7a12d333371c21f0e6748a5afa81131e653f31333f4ee5fc5f5",
++    "/usr/bin/node": "ca0728526aa1cc4e3056decec848ecc6d2c5391cecdd4e21a0ebd221d665c84e",
++    "/usr/bin/python3": "889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9"
+   },
+   "training_input_sha256": {
+     "/home/legolas/king-spec/conformance/profiling/replay-check.mjs": "f25d63ad547505d1b2ade6b294d0b4a4a3cdb7c29000634373521ca3dbaa88cd",
+@@ -185,12 +208,12 @@
+   "merge_tool": "/usr/bin/llvm-profdata-19",
+   "merge_tool_sha256": "37768e7a46a090f7af39a1490d14f6f1c7b2567c31030069b3caa74d5c429531",
+   "merge_tool_version": "Debian LLVM version 19.1.7\n  Optimized build.\n",
+-  "instrumented_build": "/home/legolas/rook2/evidence/activity-value-inputs-pgo-instrumented-build-20261018-01",
+-  "training": "/home/legolas/rook2/evidence/activity-value-inputs-pgo-training-20261018-01",
+-  "use_build": "/home/legolas/rook2/evidence/activity-value-inputs-pgo-use-build-20261018-01",
+-  "use_check": "/home/legolas/rook2/evidence/activity-value-inputs-pgo-use-check-20261018-01",
+-  "wire": "/home/legolas/rook2/evidence/activity-value-inputs-pgo-interruption-wire-20261018-01",
+-  "reconciliation": "/home/legolas/rook2/evidence/activity-value-inputs-pgo-reconciliation-20261018-01",
++  "instrumented_build": "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-instrumented-build-20261018-01",
++  "training": "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-training-20261018-01",
++  "use_build": "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-use-build-20261018-01",
++  "use_check": "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-use-check-20261018-01",
++  "wire": "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-interruption-wire-20261018-01",
++  "reconciliation": "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-reconciliation-20261018-01",
+   "tempdir": "/home/legolas/rook2-build-tmp",
+   "helper_affinity": [
+     0,
+@@ -213,15 +236,15 @@
+     "--work-clock-post=work"
+   ],
+   "method_provenance": {
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/build_stage.py": "03778bd497c05b08dae7ea3ea0e74ad41d4719d22552c3dd49759ec78ce9a0e6",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/check.py": "fbab0041edcaa07bc59e7780fec0115ebd0c5c3a01df94bcce1c8f590f110d46",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/guard.py": "cf0c8b6578ce66ade5a956676d3708e488d7588b21ddf58a329219b338ad8bb9",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/offline_controls.py": "16b39bb0d73a90d9f6c1a1e9e9188b873c7d0d97a147f539147cc59692c4041a",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/raw_model.py": "a2f7ae8fc3c6ea0ed10399af164bb57451a6f79112b55b15f66332a687b5ec7a",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/recheck.mjs": "66eca5771eba1b7b3373e936bc9aae44214481c11743d4a2e3db889da3db83a9",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/reconcile.py": "2174030c6bf39b38f9ab5ec6ba380413388e3f91b4ca8265d330da6efb859768",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/train.py": "1a30d969299224b78614554b412d641088a14260c463e9f253b032941acd8c1a",
+-    "/home/legolas/rook2/evidence/complete117-pgo-preparation-20261018/verify.py": "f0d58716df1e7435ca387a7762abc95936475caed1b72fd3af65df3830c242d8"
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/build_stage.py": "03778bd497c05b08dae7ea3ea0e74ad41d4719d22552c3dd49759ec78ce9a0e6",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/check.py": "fbab0041edcaa07bc59e7780fec0115ebd0c5c3a01df94bcce1c8f590f110d46",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/guard.py": "52bbc0eb9ca49e406372f5ecf7b5fd051985d8484b0b8d66828651451fdd219e",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/offline_controls.py": "a87437f9d0ef060181def5fa587e65576cab88fe04139dc47e128dd30d259a68",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/raw_model.py": "a2f7ae8fc3c6ea0ed10399af164bb57451a6f79112b55b15f66332a687b5ec7a",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/recheck.mjs": "66eca5771eba1b7b3373e936bc9aae44214481c11743d4a2e3db889da3db83a9",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/reconcile.py": "19e15631c1fe693b4e0b0a63bb9051d5cb6d26329fc70d6a1fb38ba65f8a80b8",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/train.py": "0fe3cb1a4507648a5315ebd7dfa732e7106bfac881209d53aa61c50bd4e7c44d",
++    "/home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/verify.py": "cbafc6498def68ed395f5e2ceeccf39f5dbfe2849ab7994cb884ce8ed8d9cb3e"
+   },
+   "settings": {
+     "opt_level": 3,
+@@ -230,8 +253,27 @@
+     "panic": "abort",
+     "debug": 1
+   },
+-  "scope": "Exact activity-value-inputs candidate own profile only; no merged control profile reuse; no CPU comparison, timing, qualification or promotion",
+-  "generic_candidate_sha256": "7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16",
+-  "generic_build_receipt": "/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/receipt.json",
+-  "generic_build_receipt_sha256": "18585bc825ae3049fd7ffd3953bade1c8a78df0650d021364a5443d6c8eaf88b"
++  "scope": "Exact full-byte-pair own profile only; activity retained and pawn fusion excluded; no activity/control/117 profile transfer; no CPU comparison/timing/qualification/promotion",
++  "generic_candidate_sha256": "948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219",
++  "generic_build_receipt": "/home/legolas/rook2/evidence/full-byte-pair-relations-generic-build-20261018-01/receipt.json",
++  "generic_build_receipt_sha256": "f77347e6b02c21d2d99162ca9b4368f7f054f969e7952735031a0da0b77bf98e",
++  "source_manifest_path": "/home/legolas/rook2/evidence/full-byte-pair-relations-proposal-20261018-01/source-manifest.json",
++  "source_manifest_sha256": "1b5d00085dbcb1ed22595751932dc6e2c48d8c4b593cf5fa6defa04db6bf0a3e",
++  "source_graph_sha256": "6aa2f8a1f81bc9c6b6f4ba26b987a259bca648a61a7b052f7d1166fcb1ea9b50",
++  "future_cpu_predeclaration": {
++    "path": "/home/legolas/rook2/evidence/full-byte-pair-relations-pgo-cpu-plan-20261018-01/plan.json",
++    "sha256": "571b4cf361023fd791b363d484d9c7ff9fc7722da9a39297b863365e86a874df",
++    "rule": "Select for full117 conformance validation only if aggregate candidate/baseline median sum<=0.995, at least5of7 lower medians, and no case median ratio>1.02; otherwise park absent independently established collection or semantic defect",
++    "scope": "Later separate matched own-PGO70 only; this pipeline has no timing launch authority"
++  },
++  "baseline_generic": {
++    "path": "/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/rook2-exact",
++    "sha256": "7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16"
++  },
++  "baseline_own_pgo": {
++    "path": "/home/legolas/rook2/evidence/activity-value-inputs-pgo-use-build-20261018-01/rook2-exact",
++    "sha256": "d5ee1f3f7258f152c0a9c50664855c46f6b631e611a85bdfdae07f509654decc",
++    "source_equals_baseline_generic": true,
++    "profile_reused": false
++  }
+ }
+--- activity-audited/commands.md
++++ full-byte-pair-proposed/commands.md
+@@ -1,12 +1,12 @@
+ Prepared commands only. Parent authorization is absent; reviewed generic-pilot advancement is a separate required admission. Set TMPDIR and run each stage serially; capture actual outer session, final chunk and exit in an external terminal record before advancing. `tool-terminal.template.json` is not evidence.
+ 
+ ```
+-taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/build_stage.py instrumented
+-taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/train.py
+-taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/verify.py
+-taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/build_stage.py use
+-taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/check.py
+-taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/activity-value-inputs-pgo-preparation-20261018-01/reconcile.py
++taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01/build_stage.py instrumented
++taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01/train.py
++taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01/verify.py
++taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01/build_stage.py use
++taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01/check.py
++taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 python3 /home/legolas/rook2/evidence/full-byte-pair-relations-pgo-preparation-20261018-01/reconcile.py
+ ```
+ 
+ Expected outer terminal records in order: instrumented-build/tool-terminal.json; training/tool-terminal.json; training/verify-tool-terminal.json; use-build/tool-terminal.json; use-check/tool-terminal.json; reconciliation/tool-terminal.json, using the full directories in plan.json. Child-return records are supplemental, never substitutes for observed outer tool terminal. On any failure preserve all files and actual terminal; report before repair/retry; use new labels for retries. Never precreate training/raw: build.py requires absent raw and creates it. The build helper creates training/ only after clearance; no source copy/archive is made during preparation. Training engine alone is taskset14; Node/helper/merge/build and all post-use regression engines inherit housekeeping0-5,8-13. Parent reviews sibling15/interference; no absolute idle assertion. No CPU timing/PMU/codegen command is supplied.
+--- activity-audited/prepare.py
++++ full-byte-pair-proposed/prepare.py
+@@ -1,157 +1,84 @@
+-"""Metadata/text adaptation only: never imports stage helpers or executes tools."""
++"""Metadata/text adaptation only; never imports stage helpers or executes tools."""
+ from pathlib import Path
+-import difflib
+-import hashlib
+-import json
+-
++import difflib,hashlib,json
+ HERE=Path(__file__).resolve().parent
+-ROOT=HERE.parents[1]
+-OLD=ROOT/'evidence/complete117-pgo-preparation-20261018'
+-BUILD=ROOT/'evidence/activity-value-inputs-generic-build-20261018-01'
+-SOURCE=Path('/home/legolas/rook2-work/imp2-activity-value-inputs-20261018-4ea01f85')
+-OLD_SOURCE='/home/legolas/rook2-work/imp2-complete117-ledger-test-proposal-20261018-9a56f133'
+-NAMES=['build_stage.py','check.py','guard.py','offline_controls.py','raw_model.py',
+-       'recheck.mjs','reconcile.py','train.py','verify.py']
+-
+-def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+-def load(path):return json.loads(Path(path).read_text())
+-def write(path,value):
+-    with path.open('x') as stream:
+-        json.dump(value,stream,indent=2);stream.write('\n')
+-
++ROOT=HERE.parents[1];E=ROOT/'evidence'
++OLD=E/'activity-value-inputs-pgo-preparation-20261018-01'
++BUILD=E/'full-byte-pair-relations-generic-build-20261018-01'
++PRO=E/'full-byte-pair-relations-proposal-20261018-01'
++REF=E/'activity-value-inputs-generic-build-20261018-01'
++PGOREF=E/'activity-value-inputs-pgo-use-build-20261018-01'
++DECL=E/'full-byte-pair-relations-pgo-cpu-plan-20261018-01/plan.json'
++GENERIC=E/'full-byte-pair-relations-cpu-independent-preparation-20261018-01'
++SOURCE=Path('/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp')
++OLD_SOURCE='/home/legolas/rook2-work/imp2-activity-value-inputs-20261018-4ea01f85'
++NAMES=['build_stage.py','check.py','guard.py','offline_controls.py','raw_model.py','recheck.mjs','reconcile.py','train.py','verify.py']
++def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
++def load(p):return json.loads(Path(p).read_text())
++def write(p,v):
++ with p.open('x') as f:json.dump(v,f,indent=2);f.write('\n')
+ def main():
+-    before=load(OLD/'script-pins.json')
+-    assert set(before)==set(NAMES)
+-    assert all(sha(OLD/name)==before[name] for name in NAMES)
+-    receipt=load(BUILD/'receipt.json')
+-    assert sha(BUILD/'receipt.json')=='18585bc825ae3049fd7ffd3953bade1c8a78df0650d021364a5443d6c8eaf88b'
+-    assert sha(BUILD/'rook2-exact')==receipt['binary_output']['sha256']=='7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16'
+-    assert receipt['crate']==str(SOURCE)
+-    assert receipt['source_sha256_before']==receipt['source_sha256_after']
+-    assert receipt['tool_sha256_before']==receipt['tool_sha256_after']
+-    source_map=receipt['source_sha256_before'];tools=receipt['tool_sha256_before']
+-    assert len(source_map)==46 and len(tools)==23
+-    for relative,digest in (source_map|tools).items():
+-        assert sha(SOURCE/relative)==digest
+-        assert sha(BUILD/'source-before'/relative)==digest
+-    old_plan=load(OLD/'plan.json')
+-    assert receipt['toolchain']==old_plan['toolchain']
+-    assert receipt['rust_flags']==old_plan['base_flags']
+-    assert receipt['target_triple']==old_plan['target_triple']
+-    assert receipt['target_cpu']==old_plan['target_cpu']
+-    assert receipt['cargo_config_sha256_before']==receipt['cargo_config_sha256_after']==old_plan['cargo_config_sha256']
+-    assert sha(Path(old_plan['merge_tool']).resolve())==old_plan['merge_tool_sha256']
+-    renames={
+-        'complete117-pgo-preparation-20261018':HERE.name,
+-        'complete117-pgo-instrumented-build-20261018':'activity-value-inputs-pgo-instrumented-build-20261018-01',
+-        'complete117-pgo-training-20261018':'activity-value-inputs-pgo-training-20261018-01',
+-        'complete117-pgo-use-build-20261018':'activity-value-inputs-pgo-use-build-20261018-01',
+-        'complete117-pgo-use-check-20261018':'activity-value-inputs-pgo-use-check-20261018-01',
+-        'complete117-pgo-interruption-wire-20261018':'activity-value-inputs-pgo-interruption-wire-20261018-01',
+-        'complete117-pgo-reconciliation-20261018':'activity-value-inputs-pgo-reconciliation-20261018-01',
+-        OLD_SOURCE:str(SOURCE),
+-        'complete117-own-pgo-validation-no-cpu':'activity-value-inputs-own-pgo-validation-no-cpu',
+-        'functional_117_accepted':'functional_candidate_accepted',
+-    }
+-    def adapt(text):
+-        for old,new in renames.items():text=text.replace(old,new)
+-        return text
+-    delta=[]
+-    for name in NAMES:
+-        original=(OLD/name).read_text()
+-        text=adapt(original)
+-        if name=='guard.py':
+-            needle=" assert c['functional_candidate_accepted'] is True\n"
+-            assert text.count(needle)==1
+-            text=text.replace(needle,needle+
+-                " assert c['generic_pilot_advance_accepted'] is True\n"
+-                " assert c['generic_candidate_sha256']==PLAN['generic_candidate_sha256']\n"
+-                " assert c['generic_pilot_evidence'] and c['generic_pilot_actual_terminals']\n"
+-                " for path,digest in c['generic_pilot_evidence'].items():assert sha(path)==digest\n"
+-                " for path,digest in c['generic_pilot_actual_terminals'].items():assert sha(path)==digest;terminal(path)\n")
+-        if name=='offline_controls.py':
+-            needle='functional_candidate_accepted=True,'
+-            assert text.count(needle)==1
+-            text=text.replace(needle,needle+
+-                "generic_pilot_advance_accepted=True,generic_candidate_sha256=g.PLAN['generic_candidate_sha256'],"
+-                "generic_pilot_evidence={str(g.HERE/'plan.json'):g.sha(g.HERE/'plan.json')},"
+-                "generic_pilot_actual_terminals={str(terminal):g.sha(terminal)},")
+-            needle="('functional_candidate_accepted',False),"
+-            assert text.count(needle)==1
+-            text=text.replace(needle,needle+
+-                "('generic_pilot_advance_accepted',False),('generic_candidate_sha256','0'*64),"
+-                "('generic_pilot_evidence',{}),('generic_pilot_actual_terminals',{}),")
+-        if name=='reconcile.py':
+-            text=text.replace('Independent single117 source/profile/artifact/raw reconciliation',
+-                              'Independent activity-value source/profile/artifact/raw reconciliation')
+-            text=text.replace("[('complete117',PLAN['source_root'])]",
+-                              "[('activity-value-inputs',PLAN['source_root'])]")
+-            needle="  prefix='complete117-pgo'\n  tr=ROOT/f'evidence/{prefix}-training-20261018';ib=ROOT/f'evidence/{prefix}-instrumented-build-20261018';build=ROOT/f'evidence/{prefix}-use-build-20261018';check=ROOT/f'evidence/{prefix}-use-check-20261018';wire=ROOT/f'evidence/{prefix}-interruption-wire-20261018'\n"
+-            assert text.count(needle)==1
+-            text=text.replace(needle,"  tr=Path(PLAN['training']);ib=Path(PLAN['instrumented_build']);build=Path(PLAN['use_build']);check=Path(PLAN['use_check']);wire=Path(PLAN['wire'])\n")
+-            assert 'profile_remerge_command=merge_argv' in text
+-        if name=='verify.py':text=text.replace('Own exact117 compiler training','Own exact activity-value candidate compiler training')
+-        assert 'complete117' not in text,(name,'stale complete117 stage binding')
+-        assert OLD_SOURCE not in text
+-        (HERE/name).write_text(text)
+-        delta.extend(difflib.unified_diff(original.splitlines(True),text.splitlines(True),
+-            fromfile='complete117-audited/'+name,tofile='activity-value-proposed/'+name))
+-    plan=load(HERE/'plan.json')
+-    plan['schema']='rook2-activity-value-inputs-own-pgo-plan-v1'
+-    plan['status']='PREPARATION ONLY; unparsed/unrun; parent review and independent generic advancement required'
+-    plan['source_root']=str(SOURCE)
+-    plan['engine_source_sha256']=source_map
+-    plan['tool_source_sha256']=tools
+-    plan['generic_candidate_sha256']=receipt['binary_output']['sha256']
+-    plan['generic_build_receipt']=str(BUILD/'receipt.json')
+-    plan['generic_build_receipt_sha256']=sha(BUILD/'receipt.json')
+-    for key in ['instrumented_build','training','use_build','use_check','wire','reconciliation']:
+-        plan[key]=adapt(plan[key])
+-        path=Path(plan[key]);assert not path.exists() and not path.is_symlink(),str(path)
+-    for suffix in ['dev-generic-pgo-generate','dev-generic-pgo-use']:
+-        assert not (SOURCE/'target'/suffix).exists()
+-    plan['input_sha256'].update({str(BUILD/'receipt.json'):sha(BUILD/'receipt.json'),
+-                                 str(BUILD/'rook2-exact'):sha(BUILD/'rook2-exact')})
+-    plan['method_provenance']={str(OLD/name):before[name] for name in NAMES}
+-    plan['scope']='Exact activity-value-inputs candidate own profile only; no merged control profile reuse; no CPU comparison, timing, qualification or promotion'
+-    original=(OLD/'plan.json').read_text()
+-    text=json.dumps(plan,indent=2)+'\n';(HERE/'plan.json').write_text(text)
+-    delta.extend(difflib.unified_diff(original.splitlines(True),text.splitlines(True),
+-        fromfile='complete117-audited/plan.json',tofile='activity-value-proposed/plan.json'))
+-    commands=adapt((OLD/'commands.md').read_text())
+-    commands=commands.replace('Parent authorization is absent.',
+-        'Parent authorization is absent; reviewed generic-pilot advancement is a separate required admission.')
+-    (HERE/'commands.md').write_text(commands)
+-    delta.extend(difflib.unified_diff((OLD/'commands.md').read_text().splitlines(True),commands.splitlines(True),
+-        fromfile='complete117-audited/commands.md',tofile='activity-value-proposed/commands.md'))
+-    (HERE/'helper-adaptation.patch').write_text(''.join(delta))
+-    pins={name:sha(HERE/name) for name in NAMES}
+-    write(HERE/'script-pins.json',pins)
+-    template=dict(authorized=False,all_conflicting_native_work_terminal=False,
+-        scope='activity-value-inputs-own-pgo-validation-no-cpu',
+-        plan_sha256=sha(HERE/'plan.json'),source_root=str(SOURCE),
+-        prepared_scripts_sha256=pins,functional_candidate_accepted=False,
+-        generic_pilot_advance_accepted=False,generic_candidate_sha256=plan['generic_candidate_sha256'],
+-        generic_pilot_evidence={},generic_pilot_actual_terminals={},
+-        functional_evidence={},actual_terminals={},training_cpu=14,
+-        sibling15_no_owned_task=False,quiet_window_and_interference_review=None,
+-        notes='Inert template, not clearance. Parent must bind exact functional receipts plus original generic-pilot result/independent reconciliation and observed terminals before any stage. No timing authority.')
+-    write(HERE/'execution-clearance.template.json',template)
+-    assert not (HERE/'execution-clearance.json').exists()
+-    assert all(sha(OLD/name)==before[name] for name in NAMES)
+-    assert all(sha(SOURCE/path)==digest for path,digest in (source_map|tools).items())
+-    result=dict(complete=True,preparation_only=True,script_imports=0,ast_parses=0,
+-        stage_executions=0,native_engine_runs=0,builds=0,merges=0,tool_version_runs=0,
+-        source_copies=0,native_source_mutations=0,source_files=46,tool_files=23,
+-        plan_sha256=sha(HERE/'plan.json'),script_pins_sha256=sha(HERE/'script-pins.json'),
+-        authority_template_sha256=sha(HERE/'execution-clearance.template.json'),
+-        helper_delta_sha256=sha(HERE/'helper-adaptation.patch'),
+-        original_script_pins_sha256=sha(OLD/'script-pins.json'),
+-        exact_candidate_receipt_sha256=sha(BUILD/'receipt.json'),
+-        referenced_inputs_unchanged=True,original_helpers_unchanged=True,
+-        all_future_outputs_and_pgo_targets_absent=True,
+-        new_helper_hashes=pins,actual_terminal_reported_separately=True)
+-    write(HERE/'preparation-status.json',result)
+-    print(json.dumps(result))
+-
++ before=load(OLD/'script-pins.json');assert set(before)==set(NAMES)
++ assert all(sha(OLD/n)==before[n] for n in NAMES)
++ assert sha(DECL)=='571b4cf361023fd791b363d484d9c7ff9fc7722da9a39297b863365e86a874df'
++ assert sha(GENERIC/'independent-reconciliation.json')=='9209fdd94bb4e82c61b431d7c2f2615211e2f0659b49528a5b5c4628716334a8'
++ gp=load(GENERIC/'independent-reconciliation.json');gt=load(GENERIC/'tool-terminal.json')
++ assert gp['complete'] and gp['advance_rule_satisfied'] and gp['original_checkReplay']==70 and gp['normal_lifetimes']==70
++ assert gt['actual_tool_terminal_observed'] and gt['exit_code']==0 and gt['terminal_chunk_id']=='6cc934'
++ r=load(BUILD/'receipt.json');ref=load(REF/'receipt.json');pr=load(PGOREF/'receipt.json');m=load(PRO/'source-manifest.json')
++ assert sha(BUILD/'rook2-exact')==r['binary_output']['sha256']=='948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219'
++ assert sha(REF/'rook2-exact')==ref['binary_output']['sha256']=='7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16'
++ assert sha(PGOREF/'rook2-exact')==pr['binary_output']['sha256']=='d5ee1f3f7258f152c0a9c50664855c46f6b631e611a85bdfdae07f509654decc'
++ assert r['crate']==str(SOURCE)==m['path']
++ assert r['source_sha256_before']==r['source_sha256_after']==m['native46']
++ assert r['tool_sha256_before']==r['tool_sha256_after']==m['tools23']
++ assert ref['source_sha256_before']==ref['source_sha256_after']==pr['source_sha256_before']==pr['source_sha256_after']
++ assert ref['tool_sha256_before']==ref['tool_sha256_after']==pr['tool_sha256_before']==pr['tool_sha256_after']==m['tools23']
++ assert [n for n,h in m['native46'].items() if ref['source_sha256_before'][n]!=h]==['src/influence.rs','src/relation_table.rs']
++ assert m['source_graph_sha256']=='6aa2f8a1f81bc9c6b6f4ba26b987a259bca648a61a7b052f7d1166fcb1ea9b50'
++ assert len(m['native46'])==46 and len(m['tools23'])==23
++ for name,h in m['source69'].items():
++  assert sha(SOURCE/name)==h==sha(BUILD/'source-before'/name)
++ oldplan=load(OLD/'plan.json')
++ assert r['toolchain']==ref['toolchain']==pr['toolchain']==oldplan['toolchain']
++ assert r['rust_flags']==ref['rust_flags']==oldplan['base_flags']==['-C','target-cpu=x86-64']
++ assert r['target_triple']==oldplan['target_triple'] and r['target_cpu']==oldplan['target_cpu']
++ assert r['cargo_config_sha256_before']==r['cargo_config_sha256_after']==oldplan['cargo_config_sha256']=={}
++ assert sha(Path(oldplan['merge_tool']).resolve())==oldplan['merge_tool_sha256']
++ def adapt(text):return text.replace('activity-value-inputs-pgo-','full-byte-pair-relations-pgo-').replace(OLD_SOURCE,str(SOURCE)).replace('activity-value-inputs-own-pgo-validation-no-cpu','full-byte-pair-relations-own-pgo-validation-no-cpu').replace('Independent activity-value source/profile/artifact/raw reconciliation','Independent full-byte-pair source/profile/artifact/raw reconciliation').replace("[('activity-value-inputs',PLAN['source_root'])]","[('full-byte-pair-relations',PLAN['source_root'])]").replace('Own exact activity-value candidate compiler training','Own exact full-byte-pair candidate compiler training')
++ delta=[]
++ for name in NAMES:
++  original=(OLD/name).read_text();text=adapt(original)
++  assert OLD_SOURCE not in text and 'activity-value-inputs' not in text,(name,'stale active trial binding')
++  with (HERE/name).open('x') as f:f.write(text)
++  delta.extend(difflib.unified_diff(original.splitlines(True),text.splitlines(True),fromfile='activity-audited/'+name,tofile='full-byte-pair-proposed/'+name))
++ plan=load(OLD/'plan.json')
++ plan.update(schema='rook2-full-byte-pair-relations-own-pgo-plan-v1',status='PREPARATION ONLY; stages unrun; parent review and explicit execution clearance required',source_root=str(SOURCE),engine_source_sha256=m['native46'],tool_source_sha256=m['tools23'],generic_candidate_sha256=r['binary_output']['sha256'],generic_build_receipt=str(BUILD/'receipt.json'),generic_build_receipt_sha256=sha(BUILD/'receipt.json'),source_manifest_path=str(PRO/'source-manifest.json'),source_manifest_sha256=sha(PRO/'source-manifest.json'),source_graph_sha256=m['source_graph_sha256'])
++ for key in ['instrumented_build','training','use_build','use_check','wire','reconciliation']:
++  plan[key]=adapt(plan[key]);assert not Path(plan[key]).exists() and not Path(plan[key]).is_symlink()
++ for suffix in ['dev-generic-pgo-generate','dev-generic-pgo-use']:assert not (SOURCE/'target'/suffix).exists()
++ pins_to_add=[BUILD/'receipt.json',BUILD/'rook2-exact',BUILD/'archive-receipt.json',BUILD/'verified-source-before.tar.gz',REF/'archive-receipt.json',REF/'verified-source-before.tar.gz',PGOREF/'receipt.json',PGOREF/'rook2-exact',PGOREF/'archive-receipt.json',PRO/'source-manifest.json',PRO/'source-proof.json',PRO/'review.md',PRO/'proposal.patch',DECL,GENERIC/'independent-reconciliation.json',GENERIC/'tool-terminal.json',E/'full-byte-pair-relations-independent-preparation-20261018-01/independent-verification.json',E/'full-byte-pair-relations-independent-preparation-20261018-01/tool-terminal.json',E/'full-byte-pair-relations-codegen-review-20261018-01/review-summary.json',E/'full-byte-pair-relations-codegen-review-20261018-01/review.md',E/'full-byte-pair-relations-codegen-review-20261018-01/tool-terminal.json',Path('/usr/bin/node'),Path('/usr/bin/python3')]
++ plan['input_sha256'].update({str(p):sha(p) for p in pins_to_add})
++ plan['method_provenance']={str(OLD/n):before[n] for n in NAMES}
++ plan['scope']='Exact full-byte-pair own profile only; activity retained and pawn fusion excluded; no activity/control/117 profile transfer; no CPU comparison/timing/qualification/promotion'
++ plan['future_cpu_predeclaration']={'path':str(DECL),'sha256':sha(DECL),'rule':load(DECL)['advance_rule'],'scope':'Later separate matched own-PGO70 only; this pipeline has no timing launch authority'}
++ plan['baseline_generic']={'path':str(REF/'rook2-exact'),'sha256':sha(REF/'rook2-exact')}
++ plan['baseline_own_pgo']={'path':str(PGOREF/'rook2-exact'),'sha256':sha(PGOREF/'rook2-exact'),'source_equals_baseline_generic':True,'profile_reused':False}
++ write(HERE/'plan.json',plan)
++ delta.extend(difflib.unified_diff((OLD/'plan.json').read_text().splitlines(True),(HERE/'plan.json').read_text().splitlines(True),fromfile='activity-audited/plan.json',tofile='full-byte-pair-proposed/plan.json'))
++ commands=adapt((OLD/'commands.md').read_text());(HERE/'commands.md').write_text(commands)
++ delta.extend(difflib.unified_diff((OLD/'commands.md').read_text().splitlines(True),commands.splitlines(True),fromfile='activity-audited/commands.md',tofile='full-byte-pair-proposed/commands.md'))
++ delta.extend(difflib.unified_diff((OLD/'prepare.py').read_text().splitlines(True),Path(__file__).read_text().splitlines(True),fromfile='activity-audited/prepare.py',tofile='full-byte-pair-proposed/prepare.py'))
++ (HERE/'helper-adaptation.patch').write_text(''.join(delta))
++ pins={n:sha(HERE/n) for n in NAMES};write(HERE/'script-pins.json',pins)
++ template=dict(authorized=False,all_conflicting_native_work_terminal=False,scope='full-byte-pair-relations-own-pgo-validation-no-cpu',plan_sha256=sha(HERE/'plan.json'),source_root=str(SOURCE),prepared_scripts_sha256=pins,functional_candidate_accepted=False,generic_pilot_advance_accepted=False,generic_candidate_sha256=plan['generic_candidate_sha256'],generic_pilot_evidence={},generic_pilot_actual_terminals={},functional_evidence={},actual_terminals={},training_cpu=14,sibling15_no_owned_task=False,quiet_window_and_interference_review=None,notes='Inert template, not clearance. Parent binds actual functional/backend/generic70 evidence and terminals; no CPU timing authority.')
++ write(HERE/'execution-clearance.template.json',template)
++ write(HERE/'tool-terminal.template.json',load(OLD/'tool-terminal.template.json'))
++ assert not (HERE/'execution-clearance.json').exists()
++ assert all(sha(OLD/n)==before[n] for n in NAMES)
++ assert all(sha(SOURCE/n)==h for n,h in m['source69'].items())
++ assert all(sha(p)==h for p,h in plan['input_sha256'].items())
++ unchanged=[n for n in NAMES if sha(OLD/n)==sha(HERE/n)]
++ result=dict(complete=True,preparation_only=True,source_files=46,tool_files=23,source69_graph_sha256=m['source_graph_sha256'],source_copies=0,source_mutations=0,stage_executions=0,native_engine_runs=0,builds=0,profile_merges=0,tool_version_runs=0,script_imports=0,ast_parses=0,offline_controls_run=False,plan_sha256=sha(HERE/'plan.json'),script_pins_sha256=sha(HERE/'script-pins.json'),authority_template_sha256=sha(HERE/'execution-clearance.template.json'),helper_delta_sha256=sha(HERE/'helper-adaptation.patch'),prepare_sha256=sha(Path(__file__)),new_helper_hashes=pins,unchanged_helpers=unchanged,original_helpers_unchanged=True,all_future_outputs_and_pgo_targets_absent=True,actual_terminal_reported_separately=True)
++ write(HERE/'preparation-status.json',result);print(json.dumps(result,indent=2))
+ if __name__=='__main__':main()

@@ -1,0 +1,55 @@
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-cpu-independent-preparation-20261018-01/reconcile.py
++++ /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-cpu-independent-preparation-20261018-01/reconcile.py
+@@ -1,16 +1,16 @@
+ #!/usr/bin/env python3
+-"""Offline only: exact relation948c vs activity7cf seven-case frozen70-lifetime pilot."""
++"""Offline only: exact fullbyte reciprocal40b vs relation948 seven-case frozen70-lifetime pilot."""
+ from pathlib import Path
+ import hashlib,json,math,os,statistics,subprocess
+ P=Path(__file__).resolve().parent
+ E=Path('/home/legolas/rook2/evidence')
+-PRE=E/'full-byte-pair-relations-cpu-preparation-20261018-01'
+-RUN=E/'full-byte-pair-relations-cpu-pilot-20261018-01'
+-FUNCTIONAL=E/'full-byte-pair-relations-independent-preparation-20261018-01/independent-verification.json'
++PRE=E/'fullbyte-remembered-reciprocal-cpu-preparation-20261018-01'
++RUN=E/'fullbyte-remembered-reciprocal-cpu-pilot-20261018-01'
++FUNCTIONAL=E/'fullbyte-remembered-reciprocal-independent-preparation-20261018-01/independent-verification.json'
+ ROOT=Path('/home/legolas/rook2');KIT=Path('/home/legolas/king-spec/conformance/profiling')
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]
+ CASES=['profile-01','profile-02','profile-04','profile-05','profile-29','profile-35','profile-08']
+-RULE='Consider own-source PGO only if sum-of-case-medians candidate/baseline<=0.995, at least5of7 case medians lower, and no individual median ratio>1.02; otherwise park absent an independently demonstrated collection or semantic defect'
++RULE='Advance to own-PGO only if aggregate candidate/baseline median sum<=0.995, at least5of7 lower medians, and no case median ratio>1.02; otherwise park absent independently established collection or semantic defect'
+ def load(p):return json.loads(Path(p).read_text())
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(n,v):
+@@ -35,15 +35,15 @@
+  plan,clear,functional=validate_gate()
+  FUNCTIONAL_SHA=sha(FUNCTIONAL)
+  assert plan['cases']==CASES and list(plan['variants'])==['baseline','candidate'] and plan['advance_rule']==RULE
+- assert plan['variants']['baseline']['sha256']=='7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16'
+- assert plan['variants']['candidate']['sha256']=='948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219'
++ assert plan['variants']['baseline']['sha256']=='948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219'
++ assert plan['variants']['candidate']['sha256']=='40b26a4d8802c6f7124ae76f19e9898df911f0414438d63f38ba6dd1294566cc'
+  assert clear['parent_review_complete'] and clear['all_owned_jobs_closed']
+  assert sha(PRE/'plan.json')==clear['plan_sha256'] and sha(PRE/'run_pilot.py')==clear['driver_sha256']
+  for required in [KIT/'benchmark.mjs',ROOT/'tools/measure.py',Path('/usr/bin/node'),Path('/usr/bin/python3')]:assert str(required) in clear['dependencies']
+  assert sha(FUNCTIONAL)==FUNCTIONAL_SHA
+  functional=load(FUNCTIONAL)
+- assert functional['complete'] and functional['source46_tools23_archive69_equal'] and functional['only_influence_and_relation_table_changed_vs_activity_baseline'] and functional['activity_retained_pawn_unchanged']
+- assert functional['native_tests']==178 and functional['strict54_original_checkReplay'] and functional['new_native_engine_runs']==0
++ assert functional['complete'] and functional['source46_tools23_archive69_equal'] and functional['only_remembered_changed_vs_fullbyte_baseline'] and functional['fullbyte_activity_retained_pawn_unchanged']
++ assert functional['native_tests']==179 and functional['strict54_original_checkReplay'] and functional['new_native_engine_runs']==0
+  assert functional['engine_sha256']==plan['variants']['candidate']['sha256']
+  assert functional['all_dependencies_stable'] and functional['compiler_cargo_generic_bound']
+  assert len(functional['wire8_searches24_raw_protocol'])==8 and sum(x['searches'] for x in functional['wire8_searches24_raw_protocol'])==24
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-cpu-independent-preparation-20261018-01/replay70.mjs
++++ /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-cpu-independent-preparation-20261018-01/replay70.mjs
+@@ -2,7 +2,7 @@
+ import assert from 'node:assert/strict';
+ import {readFileSync,writeFileSync} from 'node:fs';
+ import {checkReplay,workloads,oracle} from '/home/legolas/king-spec/conformance/profiling/replay-check.mjs';
+-const base='/home/legolas/rook2/evidence/full-byte-pair-relations-cpu-pilot-20261018-01';
++const base='/home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-cpu-pilot-20261018-01';
+ const plan=JSON.parse(readFileSync(base+'/plan.json'));
+ assert.deepEqual(plan.cases,['profile-01','profile-02','profile-04','profile-05','profile-29','profile-35','profile-08']);
+ const checks=[];

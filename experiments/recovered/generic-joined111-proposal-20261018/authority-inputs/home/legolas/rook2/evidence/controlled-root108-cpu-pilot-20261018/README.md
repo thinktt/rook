@@ -1,0 +1,9 @@
+# Shared root108 matched generic CPU pilot
+
+Both exact images independently pass their complete functional/source/artifact gates. Original-byte replay and native wait4 receipts reconcile all60 lifetimes:12 excluded warmups plus48 measured, four alternating samples per case/variant over six unchanged cases. Native processes execute on CPU14; helpers use0-5,8-13, with no other owned native/build/test/codegen/Git/archive/large-hash jobs live during timed runs. Driver actual19980/ef6417→e1d77a exit0; independent10953/2243f8→551f24 exit0.
+
+Sum of six CPU medians:14.1212900s control1befaa6d versus14.1203510s candidate96dc74f1,0.0066495% lower. Four case medians are lower and two higher; all six observed ranges overlap. These samples establish neither speedup, regression nor CPU neutrality. Parent accepts the bounded actual root-helper/aggregate/lookup costs for further conformance composition, without promoting source here.
+
+Whole-suite siblingCPU15 has133 nonidle ticks: {"guest": 0, "guest_nice": 0, "idle": 14998, "iowait": 0, "irq": 0, "nice": 0, "softirq": 0, "steal": 0, "system": 7, "user": 126}. This has no process/pervariant attribution or absolute idle/exclusive-host implication. No PMU cycles/instructions are available. Exact generic settings/compiler/source/build/oracle dependencies remain stable; no PGO/full54/12/calibration/reference/gameplay qualification or later-source timing transfer follows.
+
+analysis.json SHA256 71c84ddc514a589c415e0a834b04c10dcd2eea02c96d133b23681bd8a5e95778. suite-summary.json SHA256 2abfe1e200cc5615d0fedac536f4475ea0086faba52e8cf53f305aa87497bb5e. Launch authorization, full immutable gate937dependencies, all raw lifetimes, actual terminals and parent decision remain adjacent. Original codegen01/referent-reader failures are preserved in the separately bound backend evidence.

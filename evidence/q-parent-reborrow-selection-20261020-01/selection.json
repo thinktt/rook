@@ -1,0 +1,31 @@
+{
+  "experiment": 67,
+  "baseline": 62,
+  "selected": "Q parent position borrowed only after evaluation",
+  "reason": "Q mutation of parent occurs only in noncheck evaluation; postselection parent uses are immutable. Remove preevaluation Position snapshot without API split or child construction changes.",
+  "delta": [
+    "src/quiescence.rs"
+  ],
+  "excluded": "No66 composition, main-child mutation helper, state/cache/unsafe/API/algorithm change",
+  "backend_falsifier": "Actual matching own-PGO Q entry160B parent snapshot must disappear rather than relocate; retain original lazy child construction/reply/history paths; price code/frame/call/copy effects",
+  "future_pilot": {
+    "cases": [
+      "profile-01",
+      "profile-02",
+      "profile-04",
+      "profile-05",
+      "profile-29",
+      "profile-35",
+      "profile-08"
+    ],
+    "lifetimes": 70,
+    "warmups": 14,
+    "measured": 56,
+    "aggregate_ratio_max": 0.995,
+    "minimum_lower_cases": 5,
+    "worst_ratio_max": 1.02,
+    "no_retry": true
+  },
+  "source_review_pending": true,
+  "scope": "Source prototype and existing native test lane only; ownPGO/backend/timing require separate actual evidence"
+}

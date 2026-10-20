@@ -1,0 +1,1256 @@
+--- b/src/activity.rs
++++ a/src/activity.rs
+@@ -81,10 +81,6 @@
+     28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 33, 33, 33,
+     33, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36,
+ ];
+-#[cfg(test)]
+-#[path = "activity/separated_tests.rs"]
+-mod separated_tests;
+-
+ type Marks = [[u8; 64]; 2];
+ 
+ #[derive(Clone, Copy, Debug, Default)]
+@@ -99,38 +95,6 @@
+     position: &Position,
+     influence: &Influence,
+     material_score: i32,
+-    weights: [i32; 2],
+-) -> Activity {
+-    compute_impl::<false>(position, influence, material_score, weights)
+-}
+-
+-/// Placement permission is supplied only by the existing guarded owned search.
+-/// The caller's Influence bytes remain authoritative on either route.
+-pub(crate) fn compute_for_search(
+-    position: &Position, influence: &Influence, material_score: i32,
+-    weights: [i32; 2], coherent_geometry: bool,
+-) -> Activity {
+-    if coherent_geometry && has_sliders(position) {
+-        compute_impl::<true>(position, influence, material_score, weights)
+-    } else {
+-        compute_impl::<false>(position, influence, material_score, weights)
+-    }
+-}
+-
+-// Permission is checked first by the caller. A zero-slider native invocation
+-// keeps the scalar consumer and cannot enter coherent plane decoding.
+-#[inline]
+-fn has_sliders(position: &Position) -> bool {
+-    position.counts.iter().any(|counts|
+-        counts[PieceKind::Bishop.index()] != 0
+-            || counts[PieceKind::Rook.index()] != 0
+-            || counts[PieceKind::Queen.index()] != 0)
+-}
+-
+-// Keep scalar and coherent complete consumers at distinct compiler boundaries.
+-#[inline(never)]
+-fn compute_impl<const GEOMETRY: bool>(
+-    position: &Position, influence: &Influence, material_score: i32,
+     weights: [i32; 2],
+ ) -> Activity {
+     debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+@@ -140,7 +104,7 @@
+     let mut relation_queries = 0;
+     for color in [Color::White, Color::Black] {
+         let values = &DESTINATION_VALUES[color.index()];
+-        accumulate_kind::<1, GEOMETRY>(
++        accumulate_kind::<1>(
+             position,
+             influence,
+             color,
+@@ -150,7 +114,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<2, GEOMETRY>(
++        accumulate_kind::<2>(
+             position,
+             influence,
+             color,
+@@ -160,7 +124,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<3, GEOMETRY>(
++        accumulate_kind::<3>(
+             position,
+             influence,
+             color,
+@@ -170,7 +134,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<4, GEOMETRY>(
++        accumulate_kind::<4>(
+             position,
+             influence,
+             color,
+@@ -194,7 +158,7 @@
+ }
+ 
+ #[inline]
+-fn accumulate_kind<const KIND: usize, const GEOMETRY: bool>(
++fn accumulate_kind<const KIND: usize>(
+     position: &Position,
+     influence: &Influence,
+     color: Color,
+@@ -205,128 +169,13 @@
+     queries: &mut u64,
+ ) {
+     let kind = PieceKind::ALL[KIND];
+-    let sources = position.piece_squares(color, kind);
+-    // No slider group means no mask decoding/setup. These borrow actual planes;
+-    // no copied AttackBits, mailbox transpose or category producer is involved.
+-    let geometry = if GEOMETRY && KIND != 1 && !sources.is_empty() {
+-        Some(SliderGeometry::new::<KIND>(position.attack_planes(), color))
+-    } else {
+-        None
+-    };
+-    for &source in sources {
++    for &source in position.piece_squares(color, kind) {
+         let values = piece_destination_values::<KIND>(position, color, values);
+-        let mobility = if let Some(geometry) = &geometry {
+-            destinations_borrowed::<KIND>(position, influence, color, source, values, marks, geometry)
+-        } else {
+-            destinations_kind::<KIND>(position, influence, color, source, values, marks)
+-        };
++        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
+         let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+         *score += piece;
+         *queries += work;
+     }
+-}
+-
+-// Invocation-local masks only; the referenced Position stays immutable.
+-struct SliderGeometry {
+-    occupied: u64,
+-    friendly: u64,
+-    opaque: u64,
+-    forward_opaque: u64,
+-}
+-impl SliderGeometry {
+-    fn new<const KIND: usize>(planes: &[u64; 4], color: Color) -> Self {
+-        let occupied = planes[0] | planes[1] | planes[2];
+-        let own = if color == Color::Black { planes[3] } else { !planes[3] };
+-        let friendly = occupied & own;
+-        let enemy = occupied & !own;
+-        let pawns = planes[0] & !planes[1] & !planes[2];
+-        let knights = !planes[0] & planes[1] & !planes[2];
+-        let bishops = planes[0] & planes[1] & !planes[2];
+-        let rooks = !planes[0] & !planes[1] & planes[2];
+-        let queens = planes[0] & !planes[1] & planes[2];
+-        let transparent = match KIND {
+-            2 => enemy | (friendly & (knights | rooks)),
+-            3 => (enemy & !pawns) | (friendly & rooks),
+-            4 => 0,
+-            _ => unreachable!("not an activity slider"),
+-        };
+-        let forward = if KIND == 3 {
+-            transparent | (friendly & (knights | bishops | queens))
+-        } else {
+-            transparent
+-        };
+-        Self { occupied, friendly, opaque: occupied & !transparent,
+-            forward_opaque: occupied & !forward }
+-    }
+-
+-    fn destinations<const KIND: usize>(
+-        &self, source: Square, direction: usize, color: Color,
+-    ) -> (u64, u64, bool) {
+-        let (rays, increasing) = crate::attacks::influence_rays(source);
+-        let ray = rays[direction];
+-        let increasing = increasing[direction];
+-        let direct = through(ray, nearest(ray & self.occupied, increasing), increasing);
+-        if KIND == 4 {
+-            return (direct & !self.friendly, 0, increasing);
+-        }
+-        let forward = if color == Color::White { 4 } else { 5 };
+-        let opaque = if KIND == 3 && direction == forward {
+-            self.forward_opaque
+-        } else {
+-            self.opaque
+-        };
+-        let visited = through(ray, nearest(ray & opaque, increasing), increasing);
+-        (direct & !self.friendly, (visited & !direct) & !self.friendly, increasing)
+-    }
+-}
+-#[inline]
+-fn nearest(blockers: u64, increasing: bool) -> u64 {
+-    if blockers == 0 { 0 }
+-    else if increasing { blockers & blockers.wrapping_neg() }
+-    else { 1u64 << (63 - blockers.leading_zeros()) }
+-}
+-#[inline]
+-fn through(ray: u64, blocker: u64, increasing: bool) -> u64 {
+-    if blocker == 0 { ray }
+-    else if increasing { ray & (blocker | blocker.wrapping_sub(1)) }
+-    else { ray & !blocker.wrapping_sub(1) }
+-}
+-#[inline]
+-fn take_nearest(targets: &mut u64, increasing: bool) -> Square {
+-    let index = if increasing { targets.trailing_zeros() } else { 63 - targets.leading_zeros() };
+-    *targets &= !(1u64 << index);
+-    Square(index as u8)
+-}
+-
+-fn destinations_borrowed<const KIND: usize>(
+-    position: &Position, influence: &Influence, color: Color, source: Square,
+-    values: &[u8; 64], marks: &mut Marks, geometry: &SliderGeometry,
+-) -> Mobility {
+-    let kind = PieceKind::ALL[KIND];
+-    let directions = match KIND { 2 => 0..4, 3 => 4..8, 4 => 0..8,
+-        _ => unreachable!("not an activity slider") };
+-    let mut result = Mobility::default();
+-    for direction in directions {
+-        let (mut direct, mut additional, increasing) = geometry.destinations::<KIND>(source, direction, color);
+-        let vertical = if KIND == 3 && DIRECTIONS[direction].0 == 0 { 2 } else { 1 };
+-        while direct != 0 {
+-            let target = take_nearest(&mut direct, increasing);
+-            let victim = position.board[target.0 as usize];
+-            let category = direct_category(influence, color, kind, target, victim);
+-            result.categories += category;
+-            mark(marks, color, kind, target, category);
+-            result.total += category * values[target.0 as usize] as i64 * vertical;
+-        }
+-        while additional != 0 {
+-            let target = take_nearest(&mut additional, increasing);
+-            let victim = position.board[target.0 as usize];
+-            result.queries += 1;
+-            let category = capture_priority(kind, victim,
+-                relation(influence.code(color, target), influence.code(color.opponent(), target), kind) as i64);
+-            result.total += category * values[target.0 as usize] as i64 * vertical;
+-        }
+-    }
+-    result
+ }
+ 
+ #[inline]
+--- b/src/evaluator.rs
++++ a/src/evaluator.rs
+@@ -336,12 +336,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, |_| {}, |_| {})
+-    }
+-    /// Only the existing owned-root placement permission may enable geometry.
+-    pub(crate) fn full_for_search(&mut self, node: &mut Node, influence: &Influence,
+-        in_check: bool, coherent_geometry: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, coherent_geometry, |_| {}, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -351,7 +346,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, observer, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -360,7 +355,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, false, observer, |_| {})
++        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -371,7 +366,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, false, |_| {}, observer)
++        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -381,14 +376,13 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, |_| {}, observer)
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+         in_check: bool,
+-        coherent_geometry: bool,
+         observer: F,
+         details: D,
+     ) -> Evaluation {
+@@ -404,7 +398,7 @@
+             self.pawns.select(position, influence)
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        let activity = activity::compute_for_search(position, influence, material, self.weights.mobility, coherent_geometry);
++        let activity = activity::compute(position, influence, material, self.weights.mobility);
+         let shelter = shelter::compute(
+             position,
+             influence,
+@@ -681,7 +675,7 @@
+                 } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+                 } else {
+-                    self.full_for_search(node, influence, false, coherent_geometry)
++                    self.full(node, influence, false)
+                 },
+                 initially_full: true,
+                 fast_score: None,
+@@ -703,7 +697,7 @@
+             } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+             } else {
+-                self.full_for_search(node, influence, false, coherent_geometry)
++                self.full(node, influence, false)
+             }
+         } else {
+             fast
+--- b/src/ordinary.rs
++++ a/src/ordinary.rs
+@@ -809,7 +809,7 @@
+             }
+         }
+         let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+-        let evaluation = self.evaluator.full_for_search(node, map, checked, coherent_geometry);
++        let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+--- b/src/quiescence.rs
++++ a/src/quiescence.rs
+@@ -150,11 +150,10 @@
+         let influence = self.evaluator.ensure_influence_for_search(
+             &position, &mut scratch, coherent_geometry,
+         );
+-        self.evaluator.full_for_search(
++        self.evaluator.full(
+             &mut root,
+             influence,
+             movegen::in_check(&position, position.side),
+-            coherent_geometry,
+         );
+         (root, scratch.unwrap())
+     }
+--- b/src/activity/separated_tests.rs
++++ /dev/null
+@@ -1,913 +0,0 @@
+-//! Source-only52 differential controls. No native result is claimed by this file.
+-use super::*;
+-
+-// BEGIN frozen43 scalar prefix: byte-exact numerical owner, no new mask calls.
+-#[allow(dead_code)]
+-mod frozen43 {
+-//! EVAL-ACTIVITY: mobility, fresh pressure marks and semantic relation work.
+-use crate::geometry::{ATTACK_RAYS, DIRECTIONS, KNIGHT, KNIGHT_SOURCES};
+-use crate::influence::{
+-    adjusted_relation, profile_sum, relation, Contribution, Influence, Relation,
+-};
+-use crate::position::{Phase, Position};
+-use crate::types::{Color, Piece, PieceKind, Square};
+-
+-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+-pub struct Activity {
+-    pub pieces: [i32; 2],
+-    pub pressure: [i32; 2],
+-    pub weighted: i32,
+-    pub relation_queries: u64,
+-}
+-
+-const DESTINATION_VALUE: [[u8; 8]; 8] = [
+-    [6, 7, 8, 8, 8, 8, 7, 6],
+-    [6, 7, 8, 8, 8, 8, 7, 6],
+-    [7, 10, 12, 13, 13, 12, 10, 7],
+-    [8, 12, 17, 20, 20, 17, 12, 8],
+-    [8, 13, 20, 23, 23, 20, 13, 8],
+-    [8, 13, 20, 23, 23, 20, 13, 8],
+-    [8, 12, 17, 20, 20, 17, 12, 8],
+-    [7, 10, 12, 13, 13, 12, 10, 7],
+-];
+-const ROOK_SEVENTH: [u8; 8] = [40, 43, 45, 47, 47, 45, 43, 40];
+-
+-// Physical-square indexed views: ordinary destinations, then the eligible
+-// rook's seventh-rank row. Construction is compile-time only.
+-type DestinationValues = [[u8; 64]; 2];
+-static DESTINATION_VALUES: [DestinationValues; 2] = oriented_destination_values();
+-
+-const fn oriented_destination_values() -> [DestinationValues; 2] {
+-    let mut values = [[[0; 64]; 2]; 2];
+-    let mut color = 0;
+-    while color < 2 {
+-        let mut square = 0;
+-        while square < 64 {
+-            let rank = if color == 0 { square / 8 } else { 7 - square / 8 };
+-            let file = square % 8;
+-            let ordinary = DESTINATION_VALUE[rank][file];
+-            values[color][0][square] = ordinary;
+-            values[color][1][square] = if rank == 6 { ROOK_SEVENTH[file] } else { ordinary };
+-            square += 1;
+-        }
+-        color += 1;
+-    }
+-    values
+-}
+-
+-#[inline]
+-fn piece_destination_values<const KIND: usize>(
+-    position: &Position,
+-    color: Color,
+-    values: &'static DestinationValues,
+-) -> &'static [u8; 64] {
+-    let seventh = if KIND == PieceKind::Rook.index() {
+-        let king = position.piece_squares(color.opponent(), PieceKind::King)[0];
+-        let rank = relative_rank(color, king);
+-        rank == 7 || (rank == 6 && king.file() >= 6)
+-    } else {
+-        false
+-    };
+-    &values[usize::from(seventh)]
+-}
+-const LOW_MOBILITY: [[u8; 8]; 8] = [
+-    [2, 1, 0, 0, 0, 0, 1, 2],
+-    [3, 2, 1, 1, 1, 1, 2, 3],
+-    [4, 4, 3, 3, 3, 3, 4, 4],
+-    [7, 6, 5, 5, 5, 5, 6, 7],
+-    [9, 8, 7, 7, 7, 7, 8, 9],
+-    [9, 9, 8, 8, 8, 8, 9, 9],
+-    [11, 10, 10, 9, 9, 10, 10, 11],
+-    [12, 12, 11, 11, 11, 11, 12, 12],
+-];
+-const CURVE: [u8; 120] = [
+-    0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14,
+-    14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20, 21, 21, 21, 22, 22,
+-    22, 22, 23, 23, 23, 23, 24, 24, 24, 24, 25, 25, 25, 25, 26, 26, 26, 26, 27, 27, 27, 27, 28, 28,
+-    28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 33, 33, 33,
+-    33, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36,
+-];
+-type Marks = [[u8; 64]; 2];
+-
+-#[derive(Clone, Copy, Debug, Default)]
+-struct Mobility {
+-    categories: i64,
+-    total: i64,
+-    queries: u64,
+-}
+-
+-/// Weights are already owned by color; shelter remains the caller's composition.
+-pub fn compute(
+-    position: &Position,
+-    influence: &Influence,
+-    material_score: i32,
+-    weights: [i32; 2],
+-) -> Activity {
+-    debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+-    let phase = position.phase();
+-    let mut marks = [[0u8; 64]; 2];
+-    let mut raw_scores = [0i64; 2];
+-    let mut relation_queries = 0;
+-    for color in [Color::White, Color::Black] {
+-        let values = &DESTINATION_VALUES[color.index()];
+-        accumulate_kind::<1>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<2>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<3>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<4>(
+-            position,
+-            influence,
+-            color,
+-            values,
+-            &mut marks,
+-            phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-    }
+-    let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
+-    Activity {
+-        pieces,
+-        pressure: [
+-            king_pressure(position, Color::White, &marks),
+-            king_pressure(position, Color::Black, &marks),
+-        ],
+-        weighted: weighted(pieces, material_score, weights, phase),
+-        relation_queries,
+-    }
+-}
+-
+-#[inline]
+-fn accumulate_kind<const KIND: usize>(
+-    position: &Position,
+-    influence: &Influence,
+-    color: Color,
+-    values: &'static DestinationValues,
+-    marks: &mut Marks,
+-    endgame: u16,
+-    score: &mut i64,
+-    queries: &mut u64,
+-) {
+-    let kind = PieceKind::ALL[KIND];
+-    for &source in position.piece_squares(color, kind) {
+-        let values = piece_destination_values::<KIND>(position, color, values);
+-        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
+-        let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+-        *score += piece;
+-        *queries += work;
+-    }
+-}
+-
+-#[inline]
+-fn relative_rank(color: Color, square: Square) -> usize {
+-    if color == Color::White {
+-        square.rank() as usize
+-    } else {
+-        7 - square.rank() as usize
+-    }
+-}
+-
+-#[inline]
+-fn removal(kind: PieceKind) -> Contribution {
+-    match kind {
+-        PieceKind::Knight | PieceKind::Bishop => Contribution::Minor,
+-        PieceKind::Rook => Contribution::Rook,
+-        PieceKind::Queen => Contribution::Queen,
+-        _ => unreachable!("non-activity piece"),
+-    }
+-}
+-
+-#[inline]
+-fn capture_priority(kind: PieceKind, victim: Piece, category: i64) -> i64 {
+-    if victim.is_empty() {
+-        return category;
+-    }
+-    match (kind, victim.kind()) {
+-        (PieceKind::Knight | PieceKind::Bishop, PieceKind::Knight | PieceKind::Bishop) => 2,
+-        (
+-            PieceKind::Knight | PieceKind::Bishop,
+-            PieceKind::Rook | PieceKind::Queen | PieceKind::King,
+-        ) => 3,
+-        (PieceKind::Rook, PieceKind::Rook) => 2,
+-        (PieceKind::Rook, PieceKind::Queen | PieceKind::King) => 3,
+-        _ => category,
+-    }
+-}
+-
+-fn direct_category(
+-    influence: &Influence,
+-    color: Color,
+-    kind: PieceKind,
+-    target: Square,
+-    victim: Piece,
+-) -> i64 {
+-    let own = influence.code(color, target);
+-    let opponent = influence.code(color.opponent(), target);
+-    let shortcut = if kind == PieceKind::Queen {
+-        opponent == 0 || (!victim.is_empty() && victim.kind() == PieceKind::Queen)
+-    } else {
+-        opponent == 0 && (kind == PieceKind::Knight || victim.is_empty())
+-    };
+-    let category = if shortcut {
+-        2
+-    } else {
+-        adjusted_relation(own, opponent, removal(kind), kind) as i64
+-    };
+-    capture_priority(kind, victim, category)
+-}
+-
+-#[inline]
+-fn mark(marks: &mut Marks, color: Color, kind: PieceKind, target: Square, category: i64) {
+-    let bit = 2 * (kind.index() - 1) + usize::from(category >= 2);
+-    marks[color.index()][target.0 as usize] |= 1 << bit;
+-}
+-
+-fn transparent(color: Color, kind: PieceKind, step: (i8, i8), occupant: Piece) -> bool {
+-    debug_assert!(!occupant.is_empty());
+-    let friendly = occupant.color() == color;
+-    match kind {
+-        PieceKind::Bishop => {
+-            !friendly || matches!(occupant.kind(), PieceKind::Knight | PieceKind::Rook)
+-        }
+-        PieceKind::Rook => {
+-            if !friendly {
+-                return occupant.kind() != PieceKind::Pawn;
+-            }
+-            let forward = if color == Color::White { 1 } else { -1 };
+-            occupant.kind() == PieceKind::Rook
+-                || (step.0 == 0
+-                    && step.1 == forward
+-                    && matches!(
+-                        occupant.kind(),
+-                        PieceKind::Knight | PieceKind::Bishop | PieceKind::Queen
+-                    ))
+-        }
+-        _ => false,
+-    }
+-}
+-
+-fn destinations_kind<const KIND: usize>(
+-    position: &Position,
+-    influence: &Influence,
+-    color: Color,
+-    source: Square,
+-    values: &[u8; 64],
+-    marks: &mut Marks,
+-) -> Mobility {
+-    let kind = PieceKind::ALL[KIND];
+-    let mut result = Mobility::default();
+-    if kind == PieceKind::Knight {
+-        let targets = &KNIGHT_SOURCES[source.0 as usize];
+-        for &target in &targets.squares[..targets.len as usize] {
+-            debug_assert!(target < 64);
+-            let target = Square(target & 63);
+-            let victim = position.board[target.0 as usize];
+-            if !victim.is_empty() && victim.color() == color {
+-                continue;
+-            }
+-            let category = direct_category(influence, color, kind, target, victim);
+-            result.categories += category;
+-            result.total += category * values[target.0 as usize] as i64;
+-            mark(marks, color, kind, target, category);
+-        }
+-        return result;
+-    }
+-    let directions = match kind {
+-        PieceKind::Bishop => 0..4,
+-        PieceKind::Rook => 4..8,
+-        PieceKind::Queen => 0..8,
+-        _ => unreachable!("non-activity piece"),
+-    };
+-    for direction in directions {
+-        let step = DIRECTIONS[direction];
+-        let mut additional = false;
+-        let ray = &ATTACK_RAYS.0[source.0 as usize][direction];
+-        for &target in &ray.squares[..ray.len as usize] {
+-            debug_assert!(target < 64);
+-            let target = Square(target & 63);
+-            let victim = position.board[target.0 as usize];
+-            let friendly = !victim.is_empty() && victim.color() == color;
+-            if !friendly {
+-                let category = if additional {
+-                    result.queries += 1;
+-                    capture_priority(
+-                        kind,
+-                        victim,
+-                        relation(
+-                            influence.code(color, target),
+-                            influence.code(color.opponent(), target),
+-                            kind,
+-                        ) as i64,
+-                    )
+-                } else {
+-                    let category = direct_category(influence, color, kind, target, victim);
+-                    result.categories += category;
+-                    mark(marks, color, kind, target, category);
+-                    category
+-                };
+-                let value = values[target.0 as usize];
+-                let vertical = if kind == PieceKind::Rook && step.0 == 0 {
+-                    2
+-                } else {
+-                    1
+-                };
+-                result.total += category * value as i64 * vertical;
+-            }
+-            if !victim.is_empty() {
+-                if !transparent(color, kind, step, victim) {
+-                    break;
+-                }
+-                additional = true;
+-            }
+-        }
+-    }
+-    result
+-}
+-
+-fn piece_score_kind<const KIND: usize>(
+-    influence: &Influence,
+-    color: Color,
+-    source: Square,
+-    mobility: Mobility,
+-    endgame: u16,
+-) -> (i64, u64) {
+-    let kind = PieceKind::ALL[KIND];
+-    let raw_mobility = match kind {
+-        PieceKind::Knight => (3 * mobility.total) / 4,
+-        PieceKind::Bishop => mobility.total / 2,
+-        PieceKind::Rook | PieceKind::Queen => (5 * mobility.total) / 16,
+-        _ => unreachable!("non-activity piece"),
+-    };
+-    let index = ((((512 - endgame as i64) / 2) * raw_mobility + 128) / 256).min(119) as usize;
+-    let mut score = CURVE[index] as i64;
+-    let own = influence.code(color, source);
+-    let opponent = influence.code(color.opponent(), source);
+-    let attack_count = profile_sum(opponent);
+-    if profile_sum(own) <= attack_count {
+-        score -= 5 * attack_count as i64 + 2;
+-    }
+-    let rank = relative_rank(color, source);
+-    let file = source.file() as usize;
+-    let knight_exempt = kind == PieceKind::Knight
+-        && own >> 6 != 0
+-        && (((2..=5).contains(&file) && (2..=5).contains(&rank))
+-            || ((file == 3 || file == 4) && rank == 6));
+-    let mut queries = mobility.queries;
+-    if mobility.categories < 3 && !knight_exempt {
+-        let mut penalty = LOW_MOBILITY[rank][file] as i64 * (3 - mobility.categories);
+-        if mobility.categories < 2 {
+-            queries += 1;
+-            if relation(own, opponent, kind) == Relation::Unfavorable {
+-                penalty += 6 + if mobility.categories == 0 { 15 } else { 0 };
+-            }
+-        }
+-        score -= penalty;
+-    }
+-    (score, queries)
+-}
+-
+-#[cfg(test)]
+-fn destinations(
+-    position: &Position,
+-    influence: &Influence,
+-    color: Color,
+-    kind: PieceKind,
+-    source: Square,
+-    marks: &mut Marks,
+-) -> Mobility {
+-    match kind {
+-        PieceKind::Knight => destinations_kind::<1>(position, influence, color, source,
+-            piece_destination_values::<1>(position, color, &DESTINATION_VALUES[color.index()]), marks),
+-        PieceKind::Bishop => destinations_kind::<2>(position, influence, color, source,
+-            piece_destination_values::<2>(position, color, &DESTINATION_VALUES[color.index()]), marks),
+-        PieceKind::Rook => destinations_kind::<3>(position, influence, color, source,
+-            piece_destination_values::<3>(position, color, &DESTINATION_VALUES[color.index()]), marks),
+-        PieceKind::Queen => destinations_kind::<4>(position, influence, color, source,
+-            piece_destination_values::<4>(position, color, &DESTINATION_VALUES[color.index()]), marks),
+-        _ => unreachable!("non-activity piece"),
+-    }
+-}
+-#[cfg(test)]
+-fn piece_score(
+-    influence: &Influence,
+-    color: Color,
+-    kind: PieceKind,
+-    source: Square,
+-    mobility: Mobility,
+-    endgame: u16,
+-) -> (i64, u64) {
+-    match kind {
+-        PieceKind::Knight => piece_score_kind::<1>(influence, color, source, mobility, endgame),
+-        PieceKind::Bishop => piece_score_kind::<2>(influence, color, source, mobility, endgame),
+-        PieceKind::Rook => piece_score_kind::<3>(influence, color, source, mobility, endgame),
+-        PieceKind::Queen => piece_score_kind::<4>(influence, color, source, mobility, endgame),
+-        _ => unreachable!("non-activity piece"),
+-    }
+-}
+-
+-// Each mark bit contributes independently; every sum is at most 112.
+-static PRESSURE_VALUES: [u8; 256] = {
+-    let weights = [16u8, 24, 8, 16, 8, 16, 8, 16];
+-    let mut values = [0u8; 256];
+-    let mut mark = 0usize;
+-    while mark < values.len() {
+-        let mut bit = 0usize;
+-        let mut value = 0u8;
+-        while bit < weights.len() {
+-            if mark & (1usize << bit) != 0 {
+-                value += weights[bit];
+-            }
+-            bit += 1;
+-        }
+-        values[mark] = value;
+-        mark += 1;
+-    }
+-    values
+-};
+-
+-#[inline]
+-fn pressure_value(mark: u8) -> i32 {
+-    i32::from(PRESSURE_VALUES[usize::from(mark)])
+-}
+-
+-fn king_pressure(position: &Position, defender: Color, marks: &Marks) -> i32 {
+-    let source = position.piece_squares(defender, PieceKind::King)[0];
+-    let attacker = defender.opponent();
+-    let counts = position.counts[attacker.index()];
+-    let mut pressure = 0;
+-    for (directions, mask, admitted) in [
+-        (
+-            &DIRECTIONS[4..],
+-            0xf0u8,
+-            counts[PieceKind::Rook.index()] != 0 || counts[PieceKind::Queen.index()] != 0,
+-        ),
+-        (
+-            &DIRECTIONS[..4],
+-            0xccu8,
+-            counts[PieceKind::Bishop.index()] != 0 || counts[PieceKind::Queen.index()] != 0,
+-        ),
+-    ] {
+-        if !admitted {
+-            continue;
+-        }
+-        for &step in directions {
+-            let mut cursor = source;
+-            while let Some(target) = cursor.offset(step.0, step.1) {
+-                let piece = position.board[target.0 as usize];
+-                if !piece.is_empty() && piece.color() == attacker {
+-                    break;
+-                }
+-                pressure += pressure_value(marks[attacker.index()][target.0 as usize] & mask);
+-                if !piece.is_empty() {
+-                    break;
+-                }
+-                cursor = target;
+-            }
+-        }
+-    }
+-    if counts[PieceKind::Knight.index()] != 0 {
+-        for step in KNIGHT {
+-            if let Some(target) = source.offset(step.0, step.1) {
+-                let piece = position.board[target.0 as usize];
+-                if piece.is_empty() || piece.color() == defender {
+-                    pressure += pressure_value(marks[attacker.index()][target.0 as usize] & 3);
+-                }
+-            }
+-        }
+-    }
+-    (pressure - 12).max(0)
+-}
+-
+-fn weighted(pieces: [i32; 2], material_score: i32, weights: [i32; 2], phase: Phase) -> i32 {
+-    let material = material_score.clamp(-256, 256) as i64;
+-    let white = ((1024 - material) * weights[0] as i64 + 512).div_euclid(1024);
+-    let black = ((1024 + material) * weights[1] as i64 + 512).div_euclid(1024);
+-    let difference = (white * pieces[0] as i64 - black * pieces[1] as i64 + 512).div_euclid(1024);
+-    ((9 * difference * (phase.opening as i64 + 2 * phase.middlegame as i64 + phase.endgame as i64)
+-        + 2048)
+-        .div_euclid(4096)) as i32
+-}
+-
+-
+-}
+-// END frozen43 scalar prefix.
+-
+-// Independent coordinate/radix model reused byte-exact from35 (constants only as data).
+-fn sq(name: &str) -> Square { Square::parse(name).unwrap() }
+-fn placed(pieces: &[(&str, char)]) -> Position {
+-    let mut board = [' '; 64];
+-    for &(name, piece) in pieces { let i = sq(name).0 as usize; assert_eq!(board[i], ' '); board[i] = piece; }
+-    from_cells(board)
+-}
+-fn from_cells(board: [char; 64]) -> Position {
+-    let mut fen = String::new();
+-    for rank in (0..8).rev() {
+-        if rank != 7 { fen.push('/'); }
+-        let mut empty = 0;
+-        for file in 0..8 {
+-            let c = board[8 * rank + file];
+-            if c == ' ' { empty += 1; } else {
+-                if empty != 0 { fen.push((b'0' + empty) as char); empty = 0; }
+-                fen.push(c);
+-            }
+-        }
+-        if empty != 0 { fen.push((b'0' + empty) as char); }
+-    }
+-    Position::from_fen(&format!("{fen} w - - 0 1")).unwrap()
+-}
+-fn digits(code: u8) -> [i32; 5] {
+-    let mut value = i32::from(code);
+-    let mut out = [0; 5];
+-    for (i, radix) in [2, 2, 4, 4, 4].into_iter().enumerate() { out[i] = value % radix; value /= radix; }
+-    out
+-}
+-fn profile(code: u8) -> (i32, i32) {
+-    let d = digits(code);
+-    let count = d.iter().sum::<i32>().min(4);
+-    let values = [99, 9, 5, 3, 1];
+-    let tier = (0..5).rev().find(|&i| d[i] != 0).map_or(0, |i| values[i]);
+-    (count, tier)
+-}
+-fn relation_ref(own: u8, opponent: u8, tested: i32, remove: u8) -> u8 {
+-    // Subtract the normalized mixed-radix magnitude, not a physical attacker.
+-    let remaining = (i32::from(own) - i32::from(remove)).max(0) as u8;
+-    let (d, u) = profile(remaining); let (a, v) = profile(opponent);
+-    if a == 0 { 2 } else if d == 0 || v < tested { 0 }
+-    else if v == tested { u8::from(a <= d) }
+-    else if a <= d || v > tested + u { 2 } else { 0 }
+-}
+-fn raw_kind(piece: Piece) -> usize { assert!((1..=6).contains(&(piece.0 % 8))); usize::from(piece.0 % 8 - 1) }
+-fn friendly(piece: Piece, color: Color) -> bool { piece.0 != 0 && usize::from((piece.0 / 8) % 2) == color.index() }
+-fn category_ref(map: &Influence, color: Color, kind: usize, target: usize, victim: Piece, direct: bool) -> u8 {
+-    let own = map.profiles[color.index()][target]; let opponent = map.profiles[color.opponent().index()][target];
+-    let occupied = victim.0 != 0;
+-    let victim_kind = if occupied { raw_kind(victim) } else { 6 };
+-    let tested = [0, 3, 3, 5, 9][kind];
+-    let remove = if direct { [0, 16, 16, 4, 2][kind] } else { 0 };
+-    let shortcut = direct && if kind == 4 { opponent == 0 || victim_kind == 4 }
+-        else { opponent == 0 && (kind == 1 || !occupied) };
+-    let class = if shortcut { 2 } else { relation_ref(own, opponent, tested, remove) };
+-    match (kind, victim_kind) {
+-        (1 | 2, 1 | 2) | (3, 3) => 2,
+-        (1 | 2, 3 | 4 | 5) | (3, 4 | 5) => 3,
+-        _ => class,
+-    }
+-}
+-fn offset(source: usize, df: i32, dr: i32) -> Option<usize> {
+-    let f = (source % 8) as i32 + df; let r = (source / 8) as i32 + dr;
+-    if (0..8).contains(&f) && (0..8).contains(&r) { Some((8 * r + f) as usize) } else { None }
+-}
+-const STEPS: [(i32, i32); 8] = [(1,1),(-1,1),(1,-1),(-1,-1),(1,0),(-1,0),(0,1),(0,-1)];
+-const LEAPS: [(i32, i32); 8] = [(1,2),(2,1),(-1,2),(-2,1),(1,-2),(2,-1),(-1,-2),(-2,-1)];
+-struct Walk { c: i64, t: i64, r: u64, d: u64, a: u64, marks: [u8; 64] }
+-impl Default for Walk {
+-    fn default() -> Self { Self { c: 0, t: 0, r: 0, d: 0, a: 0, marks: [0; 64] } }
+-}
+-fn transparent_ref(color: Color, kind: usize, df: i32, dr: i32, piece: Piece) -> bool {
+-    let own = friendly(piece, color); let occupant = raw_kind(piece);
+-    match kind {
+-        2 => !own || occupant == 1 || occupant == 3,
+-        3 if !own => occupant != 0,
+-        3 => occupant == 3 || (df == 0 && dr == (if color == Color::White { 1 } else { -1 })
+-            && matches!(occupant, 1 | 2 | 4)),
+-        _ => false,
+-    }
+-}
+-fn walk_ref(position: &Position, map: &Influence, color: Color, kind: usize, source: Square, values: &[u8; 64]) -> Walk {
+-    let mut out = Walk::default();
+-    let mut admit = |target: usize, direct: bool, vertical: bool| {
+-        let victim = position.board[target];
+-        if friendly(victim, color) { return; }
+-        let class = category_ref(map, color, kind, target, victim, direct);
+-        if direct {
+-            out.c += i64::from(class); out.d |= 1u64 << target;
+-            out.marks[target] |= 1u8 << (2 * (kind - 1) + usize::from(class >= 2));
+-        } else { out.r += 1; out.a |= 1u64 << target; }
+-        out.t += i64::from(class) * i64::from(values[target]) * if vertical { 2 } else { 1 };
+-    };
+-    if kind == 1 {
+-        for (df, dr) in LEAPS { if let Some(target) = offset(source.0 as usize, df, dr) { admit(target, true, false); } }
+-    } else {
+-        for (i, (df, dr)) in STEPS.into_iter().enumerate() {
+-            if (kind == 2 && i >= 4) || (kind == 3 && i < 4) { continue; }
+-            let mut additional = false;
+-            for distance in 1..8 {
+-                let Some(target) = offset(source.0 as usize, distance * df, distance * dr) else { break; };
+-                let victim = position.board[target];
+-                admit(target, !additional, kind == 3 && df == 0);
+-                if victim.0 != 0 {
+-                    if !transparent_ref(color, kind, df, dr, victim) { break; }
+-                    additional = true;
+-                }
+-            }
+-        }
+-    }
+-    out
+-}
+-fn values_ref(position: &Position, color: Color, kind: usize) -> [u8; 64] {
+-    let king = position.piece_squares(color.opponent(), PieceKind::King)[0];
+-    let rank = if color == Color::White { king.rank() } else { 7 - king.rank() };
+-    let seventh = kind == 3 && (rank == 7 || (rank == 6 && king.file() >= 6));
+-    // Authoritative scalar tables are data; do not call the oriented-view helper.
+-    std::array::from_fn(|i| {
+-        let rank = if color == Color::White { i / 8 } else { 7 - i / 8 };
+-        if seventh && rank == 6 { ROOK_SEVENTH[i % 8] } else { DESTINATION_VALUE[rank][i % 8] }
+-    })
+-}
+-fn piece_ref(position: &Position, map: &Influence, color: Color, kind: usize, source: Square, walk: &Walk) -> (i64, u64) {
+-    let e = i64::from(position.phase().endgame);
+-    let mobility = match kind { 1 => 3 * walk.t / 4, 2 => walk.t / 2, _ => 5 * walk.t / 16 };
+-    let index = (((512 - e) / 2 * mobility + 128) / 256).min(119) as usize;
+-    let mut score = i64::from(CURVE[index]);
+-    let own = digits(map.profiles[color.index()][source.0 as usize]);
+-    let opponent = digits(map.profiles[color.opponent().index()][source.0 as usize]);
+-    let attacks = opponent.iter().sum::<i32>();
+-    if own.iter().sum::<i32>() <= attacks { score -= i64::from(5 * attacks + 2); }
+-    let rank = (if color == Color::White { source.rank() } else { 7 - source.rank() }) as usize;
+-    let file = source.file() as usize;
+-    let exempt = kind == 1 && own[4] > 0 && (((2..=5).contains(&file) && (2..=5).contains(&rank))
+-        || ((file == 3 || file == 4) && rank == 6));
+-    let mut r = walk.r;
+-    if walk.c < 3 && !exempt {
+-        let mut penalty = i64::from(LOW_MOBILITY[rank][file]) * (3 - walk.c);
+-        if walk.c < 2 {
+-            r += 1;
+-            if relation_ref(map.profiles[color.index()][source.0 as usize],
+-                map.profiles[color.opponent().index()][source.0 as usize], [0,3,3,5,9][kind], 0) == 0 {
+-                penalty += 6 + if walk.c == 0 { 15 } else { 0 };
+-            }
+-        }
+-        score -= penalty;
+-    }
+-    (score, r)
+-}
+-fn pressure_ref(position: &Position, defender: Color, marks: &Marks) -> i32 {
+-    let color = defender.opponent(); let source = position.piece_squares(defender, PieceKind::King)[0];
+-    let counts = position.counts[color.index()]; let mut pressure = 0;
+-    let weights = [16,24,8,16,8,16,8,16];
+-    let value = |square: usize, mask: u8| -> i32 {
+-        (0..8).filter(|&bit| marks[color.index()][square] & mask & (1u8 << bit) != 0).map(|bit| weights[bit]).sum()
+-    };
+-    for (i, (df, dr)) in STEPS.into_iter().enumerate() {
+-        let mask = if i < 4 {
+-            if counts[2] == 0 && counts[4] == 0 { continue; } 0xcc
+-        } else { if counts[3] == 0 && counts[4] == 0 { continue; } 0xf0 };
+-        for distance in 1..8 {
+-            let Some(target) = offset(source.0 as usize, distance * df, distance * dr) else { break; };
+-            let piece = position.board[target]; if friendly(piece, color) { break; }
+-            pressure += value(target, mask); if piece.0 != 0 { break; }
+-        }
+-    }
+-    if counts[1] != 0 {
+-        for (df, dr) in LEAPS {
+-            if let Some(target) = offset(source.0 as usize, df, dr) {
+-                if !friendly(position.board[target], color) { pressure += value(target, 3); }
+-            }
+-        }
+-    }
+-    (pressure - 12).max(0)
+-}
+-fn activity_ref(position: &Position, map: &Influence, material: i32, weights: [i32; 2]) -> Activity {
+-    let mut marks = [[0; 64]; 2]; let mut raw = [0i64; 2]; let mut queries = 0;
+-    for color in [Color::White, Color::Black] {
+-        for kind in 1..=4 {
+-            let values = values_ref(position, color, kind);
+-            for &source in position.piece_squares(color, PieceKind::ALL[kind]) {
+-                let walk = walk_ref(position, map, color, kind, source, &values);
+-                for target in 0..64 { marks[color.index()][target] |= walk.marks[target]; }
+-                let (score, r) = piece_ref(position, map, color, kind, source, &walk);
+-                raw[color.index()] += score; queries += r;
+-            }
+-        }
+-    }
+-    let pieces = raw.map(|x| (276 * x + 128).div_euclid(256) as i32);
+-    let m = i64::from(material.clamp(-256,256));
+-    let white = ((1024 - m) * i64::from(weights[0]) + 512).div_euclid(1024);
+-    let black = ((1024 + m) * i64::from(weights[1]) + 512).div_euclid(1024);
+-    let d = (white * i64::from(pieces[0]) - black * i64::from(pieces[1]) + 512).div_euclid(1024);
+-    let phase = position.phase();
+-    Activity { pieces, pressure: [pressure_ref(position, Color::White, &marks), pressure_ref(position, Color::Black, &marks)],
+-        weighted: ((9 * d * (i64::from(phase.opening) + 2 * i64::from(phase.middlegame) + i64::from(phase.endgame)) + 2048).div_euclid(4096)) as i32,
+-        relation_queries: queries }
+-}
+-
+-fn patterned(seed: u32) -> Influence {
+-    Influence { profiles: std::array::from_fn(|side| std::array::from_fn(|square|
+-        ((square as u32 * 73 + side as u32 * 131 + seed * 29) % 256) as u8)) }
+-}
+-// Keep the frozen owner and its local Activity type byte-exact; adapt result fields only.
+-fn legacy_activity(position: &Position, map: &Influence, material: i32, weights: [i32; 2]) -> Activity {
+-    let value=frozen43::compute(position,map,material,weights);
+-    Activity { pieces:value.pieces, pressure:value.pressure, weighted:value.weighted,
+-        relation_queries:value.relation_queries }
+-}
+-fn compare(position: &Position, map: &Influence, material: i32, weights: [i32; 2]) -> Activity {
+-    let expected = legacy_activity(position, map, material, weights);
+-    assert_eq!(activity_ref(position, map, material, weights), expected,
+-        "independent coordinate/radix full numerical composition");
+-    let position_before = *position;
+-    let map_before = map.profiles;
+-    for actual in [compute(position, map, material, weights),
+-        compute_for_search(position, map, material, weights, false),
+-        compute_for_search(position, map, material, weights, true)] {
+-        assert_eq!(actual, expected, "complete Activity, including per-source R");
+-        assert_eq!(crate::shelter::compute(position, map, actual.pressure, material, [9173,10240]),
+-            crate::shelter::compute(position, map, expected.pressure, material, [9173,10240]),
+-            "actual produced Activity pressure reaches shelter");
+-    }
+-    assert_eq!(*position, position_before);
+-    assert_eq!(map.profiles, map_before);
+-    expected
+-}
+-fn reverse_chronology(position: &Position) -> Position {
+-    let mut result = *position;
+-    for side in 0..2 {
+-        let mut begin = 0;
+-        for count in result.counts[side] {
+-            let end = begin + usize::from(count);
+-            result.squares[side][begin..end].reverse(); begin = end;
+-        }
+-    }
+-    result.validate().unwrap(); result
+-}
+-fn transformed(pieces: &[(&str,char)], symmetry: usize, flip: bool) -> Position {
+-    let mut cells = [' ';64];
+-    for &(name,piece) in pieces {
+-        let square=sq(name); let mut file=usize::from(square.file()); let mut rank=usize::from(square.rank());
+-        if symmetry & 1 != 0 { file=7-file; }
+-        if symmetry & 2 != 0 { rank=7-rank; }
+-        if symmetry & 4 != 0 { std::mem::swap(&mut file,&mut rank); }
+-        let piece=if flip { if piece.is_ascii_uppercase() { piece.to_ascii_lowercase() }
+-            else { piece.to_ascii_uppercase() } } else { piece };
+-        assert_eq!(cells[8*rank+file],' '); cells[8*rank+file]=piece;
+-    }
+-    let result=from_cells(cells); result.validate().unwrap(); result
+-}
+-
+-#[test]
+-fn experiment52_complete_coordinate_custom_maps_and_chronology() {
+-    let cases: &[&[(&str,char)]] = &[
+-        &[("h1",'K'),("f4",'k'),("c1",'B'),("d2",'N'),("e3",'p'),("g5",'B')],
+-        &[("a1",'K'),("h8",'k'),("d4",'R'),("d5",'Q'),("d7",'p')],
+-        &[("a1",'K'),("h8",'k'),("d5",'R'),("d4",'Q'),("d2",'p')],
+-        &[("a1",'K'),("h8",'k'),("d4",'R'),("e4",'Q'),("g4",'p')],
+-        &[("a1",'K'),("h8",'k'),("d4",'R'),("c4",'R'),("a4",'r'),("d6",'r'),("d7",'p')],
+-        &[("h1",'K'),("h8",'k'),("a1",'Q'),("c3",'q')],
+-        &[("a1",'K'),("h8",'k'),("h1",'B'),("a8",'N')],
+-        &[("h1",'K'),("h8",'k'),("d4",'N'),("c6",'B'),("e6",'r')],
+-    ];
+-    for pieces in cases { for symmetry in 0..8 { for flip in [false,true] {
+-        let position=transformed(pieces,symmetry,flip);
+-        let chronological=reverse_chronology(&position);
+-        for map in [Influence::build(&position),patterned(0),patterned(7),Influence{profiles:[[255;64];2]}] {
+-            let expected=compare(&position,&map,-217,[9173,10240]);
+-            assert_eq!(compare(&chronological,&map,-217,[9173,10240]),expected);
+-        }
+-    } } }
+-}
+-
+-#[test]
+-fn experiment52_edge_rays_rook_seventh_and_vertical_boundaries() {
+-    for placement in [
+-        "8/5k2/8/8/3R4/8/8/K7", "8/6k1/8/8/3R4/8/8/K7",
+-        "7k/8/8/8/3R4/8/8/K7", "8/8/7k/8/3R4/8/8/K7",
+-        "k7/8/8/3r4/8/8/5K2/8", "k7/8/8/3r4/8/8/6K1/8",
+-        "k7/8/8/3r4/8/8/8/7K", "k7/8/8/3r4/8/7K/8/8",
+-        "7k/8/8/3B4/2RRQ3/3B4/8/K7",
+-    ] {
+-        let position=Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();
+-        for map in [Influence{profiles:[[0;64];2]},patterned(19)] {
+-            compare(&position,&map,100000,[10240,0]);
+-            compare(&position,&map,-100000,[0,10240]);
+-        }
+-    }
+-    // Every canonical source, both colors, all slider families: empty rays and bit63 endpoints.
+-    for source in 0..64 { for piece in ['B','R','Q','b','r','q'] {
+-        let mut cells=[' ';64]; cells[source]=piece;
+-        let white_king=(0..64).find(|&s|s!=source).unwrap();cells[white_king]='K';
+-        let black_king=(0..64).rev().find(|&s|s!=source&&s!=white_king).unwrap();cells[black_king]='k';
+-        let position=from_cells(cells);
+-        compare(&position,&patterned(source as u32),1,[1024,9173]);
+-    } }
+-}
+-
+-#[test]
+-fn experiment52_category_zero_coexisting_marks_and_per_source_work() {
+-    let weak=Influence{profiles:[[0;64],[64;64]]};
+-    let position=placed(&[("a8",'K'),("d4",'k'),("a1",'N')]);
+-    let result=compare(&position,&weak,0,[1024,1024]);
+-    assert_eq!(result.pressure[1],20); // Two category0 weak knight marks16+16−12.
+-    let position=placed(&[("a1",'K'),("e5",'k'),("c1",'B'),("h2",'B'),("d2",'N'),("g3",'N')]);
+-    let values=[1;64];
+-    let a=walk_ref(&position,&weak,Color::White,2,sq("c1"),&values);
+-    let b=walk_ref(&position,&weak,Color::White,2,sq("h2"),&values);
+-    let target=sq("f4").0 as usize;
+-    assert_ne!(a.a & b.a & (1u64<<target),0);
+-    assert_eq!((a.marks[target],b.marks[target]),(0,0));
+-    assert!(a.r+b.r>(a.a|b.a).count_ones() as u64);
+-    assert!(compare(&position,&weak,-1,[10240,799]).relation_queries>0);
+-    let labels=placed(&[("h1",'K'),("d8",'k'),("c3",'N'),("a2",'B'),("d1",'R'),("d5",'b')]);
+-    // Coordinate marks retain weak and strong presence independently when map classes vary.
+-    for seed in 0..16 { compare(&labels,&patterned(seed),1,[9173,10240]); }
+-}
+-
+-#[test]
+-fn experiment52_no_slider_true_custom_maps_and_lazy_inventory() {
+-    for placement in ["7k/8/8/8/8/8/8/K7", "7k/5p2/8/8/8/8/2P5/K7",
+-        "7k/5p2/3n4/8/8/2N5/2P5/K7"] {
+-        let position=Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();
+-        for map in [patterned(5),Influence{profiles:[[0;64];2]},Influence{profiles:[[255;64];2]}] {
+-            compare(&position,&map,217,[10240,8192]);
+-        }
+-    }
+-    let mut inactive=placed(&[("h1",'K'),("h8",'k'),("d2",'P'),("e7",'p')]);
+-    // Not active inventory: both no-slider routes must retain lazy mailbox behavior.
+-    inactive.board[sq("c4").0 as usize]=Piece(7);
+-    let map=patterned(9);
+-    let expected=legacy_activity(&inactive,&map,0,[1024,1024]);
+-    assert_eq!(compute_for_search(&inactive,&map,0,[1024,1024],true),expected);
+-    assert_eq!(compute_for_search(&inactive,&map,0,[1024,1024],false),expected);
+-    assert_eq!(compute(&inactive,&map,0,[1024,1024]),expected);
+-}
+-
+-fn public_outcome(position: &Position,map: &Influence,route: u8) -> Result<Activity,()> {
+-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(||match route {
+-        0=>legacy_activity(position,map,217,[9173,10240]),
+-        1=>compute(position,map,217,[9173,10240]),
+-        _=>compute_for_search(position,map,217,[9173,10240],false),
+-    })).map_err(|_|())
+-}
+-#[test]
+-fn experiment52_public_false_stale_raw_alias_and_lazy_panic_parity() {
+-    // Direct mailbox mutation intentionally leaves private planes stale. All256 raw bytes:
+-    // valid aliases, friendly short circuits, and reserved tags compare scalar outcomes.
+-    for (source,target,piece) in [("d4","c6",'N'),("d4","e5",'B'),("d4","d5",'R'),("d4","e4",'Q')] {
+-        let base=placed(&[("h1",'K'),("h8",'k'),(source,piece)]);
+-        for raw in 0..=255u16 {
+-            let mut stale=base;stale.board[sq(target).0 as usize]=Piece(raw as u8);
+-            let map=patterned(raw as u32);
+-            let expected=public_outcome(&stale,&map,0);
+-            assert_eq!(public_outcome(&stale,&map,1),expected,"public raw={raw}");
+-            assert_eq!(public_outcome(&stale,&map,2),expected,"false raw={raw}");
+-        }
+-    }
+-    let mut unvisited=placed(&[("h1",'K'),("h8",'k'),("d2",'P')]);
+-    unvisited.board[sq("a4").0 as usize]=Piece(7);
+-    assert!(public_outcome(&unvisited,&patterned(0),0).is_ok());
+-    assert_eq!(public_outcome(&unvisited,&patterned(0),1),public_outcome(&unvisited,&patterned(0),0));
+-    assert_eq!(public_outcome(&unvisited,&patterned(0),2),public_outcome(&unvisited,&patterned(0),0));
+-    let mut visited=placed(&[("h1",'K'),("h8",'k'),("d4",'R')]);
+-    visited.board[sq("d5").0 as usize]=Piece(15); // Enemy invalid kind at an actual visited destination.
+-    assert!(public_outcome(&visited,&patterned(0),0).is_err());
+-    assert_eq!(public_outcome(&visited,&patterned(0),1),public_outcome(&visited,&patterned(0),0));
+-    assert_eq!(public_outcome(&visited,&patterned(0),2),public_outcome(&visited,&patterned(0),0));
+-}
+-
+-#[test]
+-fn experiment52_actual_legal_walks_full_activity_and_supplied_map_authority() {
+-    for fen in ["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+-        "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+-        "7k/P7/8/3pP3/8/8/8/K7 w - d6 0 1"] {
+-        let mut position=Position::from_fen(fen).unwrap();
+-        for step in 0..12usize {
+-            position.validate().unwrap();
+-            for map in [Influence::build(&position),patterned(step as u32),Influence{profiles:[[255;64];2]}] {
+-                compare(&position,&map,217,[10240,8192]);
+-            }
+-            let mut moves=crate::movegen::MoveList::new();crate::movegen::generate_legal(&position,&mut moves);
+-            if moves.as_slice().is_empty() { break; }
+-            let movement=moves.as_slice()[(step*17+3)%moves.as_slice().len()];
+-            position=position.played_unchecked(movement);
+-        }
+-    }
+-    let position=placed(&[("a1",'K'),("h8",'k'),("d4",'R'),("d5",'Q')]);
+-    let zero=compare(&position,&Influence{profiles:[[0;64];2]},0,[1024,1024]);
+-    let attacked=compare(&position,&Influence{profiles:[[0;64],[64;64]]},0,[1024,1024]);
+-    assert_ne!(zero,attacked,"true route actually honors supplied map bytes, not a rebuilt map");
+-}

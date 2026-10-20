@@ -1,0 +1,96 @@
+--- accepted-age0/collect.py
++++ placement-census/collect54.py
+@@ -1,59 +1,37 @@
+ #!/usr/bin/env python3
+-"""Diagnostic-only replay parity and evaluation opportunity counts; no CPU timing."""
+-import hashlib
+-import json
+-import os
+-from pathlib import Path
+-import subprocess
+-import sys
+-
+-OUT = Path(__file__).resolve().parent
+-ROOT = OUT.parents[1]
+-SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+-ENGINE = ROOT/'evidence/evaluation-opportunity-build-20261018/rook2-exact'
+-
+-
+-def sha(path):
+-    return hashlib.sha256(path.read_bytes()).hexdigest()
+-
++"""One original54 strict serial collection; every native encounter preserved, untimed."""
++from common import *
++import shutil
+ 
+ def main():
+-    workloads = json.loads((SPEC/'workloads.json').read_text())
+-    files = [Path(__file__),ENGINE,SPEC/'workloads.json',SPEC/'replay-oracle.json',SPEC/'replay-check.mjs']
+-    before = {str(p):sha(p) for p in files}
+-    manifest=dict(schema='rook2-eval-opportunity-v1', case_order=[c['id'] for c in workloads['cases']],
+-                  input_sha256=before, helper_affinity=sorted(os.sched_getaffinity(0)),
+-                  scope='D=true ordinary wire derivative; full-entry retained-age0 opportunities include first root full call; no cache exists',
+-                  performance='No production CPU or PMU interpretation; outputs and diagnostic invocation counts only',
+-                  limits='Released checker owns case/time/stream and cleanup bounds; one invocation per case, stop first failure')
+-    (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+-    rows=[]
+-    for case in workloads['cases']:
+-        directory=OUT/case['id']; directory.mkdir()
+-        record=directory/'counts.json'
+-        command=['/usr/bin/node',str(SPEC/'replay-check.mjs'),'--case',case['id'],'--','/usr/bin/taskset','-c','14',str(ENGINE)]
+-        env=dict(os.environ,ROOK2_EVAL_PROBE=str(record))
+-        with (directory/'comparator.stdout').open('xb') as stdout,(directory/'comparator.stderr').open('xb') as stderr:
+-            child=subprocess.run(command,env=env,stdout=stdout,stderr=stderr)
+-        report=json.loads((directory/'comparator.stdout').read_text())
+-        assert child.returncode==0 and report['status']=='pass' and len(report['results'])==1
+-        assert not (directory/'comparator.stderr').stat().st_size
+-        counts=json.loads(record.read_text())
+-        assert all(isinstance(v,int) and v>=0 for v in counts.values())
+-        assert counts['full_entry_age_zero']<=counts['full']
+-        assert counts['full_relation_queries_at_age_zero']<=counts['full_relation_queries']
+-        rows.append(dict(case=case['id'],counts=counts,counts_sha256=sha(record),oracle_sha256=sha(directory/'comparator.stdout')))
+-        (OUT/'partial.json').write_text(json.dumps(rows,indent=2)+'\n')
+-        print(json.dumps(dict(case=case['id'],full=counts['full'],age_zero=counts['full_entry_age_zero'])),flush=True)
+-    after={str(p):sha(p) for p in files}
+-    assert before==after and len(rows)==54
+-    totals={key:sum(row['counts'][key] for row in rows) for key in rows[0]['counts']}
+-    report=dict(complete=True, rows=rows, totals=totals, input_sha256_after=after,
+-                full_age_zero_fraction=totals['full_entry_age_zero']/totals['full'] if totals['full'] else None,
+-                interpretation='Opportunity upper estimate including first root call; age0 alone is not a complete cache validity key or a speedup')
+-    (OUT/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+-    print(json.dumps(dict(complete=True,totals=totals,full_age_zero_fraction=report['full_age_zero_fraction'])))
+-
+-
+-if __name__ == '__main__':
+-    main()
++    plan=guard('collect');build=Path(plan['build']);terminal(build/'tool-terminal.json')
++    receipt=load(build/'receipt.json');image=build/'rook2-exact';identity=sha(image)
++    assert receipt['binary_output']['sha256']==identity
++    assert receipt['source_sha256_before']==receipt['source_sha256_after']==plan['native48'] and receipt['tool_sha256_before']==receipt['tool_sha256_after']==plan['tools23']
++    out=Path(plan['collection']);assert not out.exists();assert shutil.disk_usage(out.parent).free>=plan['maximum_private_bytes']+plan['free_disk_margin_bytes'];out.mkdir()
++    write(out/'manifest.json',{'plan_sha256':sha(P/'plan.json'),'image_sha256':identity,'case_order':plan['case_order'],'helper_affinity':H,'scope':'D=true diagnostic counts only; native inherits housekeeping, no separate per-native affinity observation; unrelated untimed full117 may overlap','maximum_private_bytes':plan['maximum_private_bytes']})
++    rows=[];used=0
++    try:
++        for case in plan['case_order']:
++            guard('collect');assert sha(image)==identity
++            d=out/case;d.mkdir();raw=d/'encounters.bin';report=d/'native-counts.jsonl'
++            allowance=plan['maximum_private_bytes']-used;assert allowance>=4244
++            assert shutil.disk_usage(out).free>=allowance+plan['free_disk_margin_bytes']
++            env=dict(os.environ,ROOK2_CENSUS_RAW=str(raw),ROOK2_CENSUS_REPORT=str(report),ROOK2_CENSUS_MAX_BYTES=str(allowance))
++            argv=['/usr/bin/node',plan['replay_checker'],'--case',case,'--',str(image)]
++            child(argv,d/'comparator',env=env)
++            comparator=load(d/'comparator.stdout');assert comparator['status']=='pass' and comparator['selectedCases']==[case] and len(comparator['results'])==1
++            result=comparator['results'][0]
++            assert result['command']==[str(image),*plan['runtime_modes']] and result['error'] is None
++            assert result['status']=='pass' and result['exit']=={'code':0,'signal':None} and result['complete'] and not result['truncated'] and result['discardedObservedBytes']==0 and not result.get('cleanupUnconfirmed',False)
++            assert result['stderr']=='' and (d/'comparator.stderr').read_bytes()==b''
++            with report.open('rb') as f:header=json.loads(f.readline())
++            assert header['type']=='header' and header['pid']==result['pid'] and header['byte_limit']==allowance
++            size=raw.stat().st_size+report.stat().st_size;assert size<=allowance;used+=size
++            rows.append({'case':case,'native_pid':result['pid'],'normal_exit':result['exit'],'raw_sha256':sha(raw),'report_sha256':sha(report),'private_bytes':size,'comparator_sha256':sha(d/'comparator.stdout'),'allowance':allowance})
++            write(d/'receipt.json',rows[-1]);print(json.dumps({'case':case,'private_bytes':size,'total_private_bytes':used}),flush=True)
++        assert len(rows)==54 and len({x['native_pid'] for x in rows})==54 and used<=plan['maximum_private_bytes'];guard('collect')
++        write(out/'result.json',{'complete':True,'cases':rows,'total_private_bytes':used,'image_sha256':identity,'plan_sha256':sha(P/'plan.json'),'native_runs':54,'cpu_interpretation':False})
++    except BaseException as error:
++        write(out/'failure.json',{'error':repr(error),'completed_cases':rows,'private_bytes_completed':used,'all_outputs_preserved':True});raise
++if __name__=='__main__':main()

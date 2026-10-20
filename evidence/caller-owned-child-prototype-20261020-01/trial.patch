@@ -1,0 +1,44 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -45,7 +45,8 @@
+         }
+     }
+ 
+-    pub fn child(&self, root: &RootContext, movement: Move) -> Self {
++    #[inline(always)]
++    fn child_nonking_squares(&self, root: &RootContext, movement: Move) -> i32 {
+         let moving = self.position.board[movement.from().0 as usize];
+         let victim_square = if movement.kind() == MoveKind::EnPassant {
+             Square(if moving.color() == Color::White {
+@@ -80,6 +81,19 @@
+             nonking +=
+                 square_value(root, rook, Square(to)) - square_value(root, rook, Square(from));
+         }
++        nonking
++    }
++
++    /// Internal caller supplies a fresh copy of the parent Node, not a searched child.
++    pub(crate) fn apply_child_in_place(&mut self, root: &RootContext, movement: Move) {
++        let nonking = self.child_nonking_squares(root, movement);
++        self.position.apply_unchecked(movement);
++        self.retained.nonking_squares = nonking;
++        self.retained.age = self.retained.age.wrapping_add(1);
++    }
++
++    pub fn child(&self, root: &RootContext, movement: Move) -> Self {
++        let nonking = self.child_nonking_squares(root, movement);
+         Self {
+             position: self.position.played_unchecked(movement),
+             retained: Retained {
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -1003,7 +1003,8 @@
+                 }
+                 estimate.unwrap()
+             } else {
+-                let mut child = node.child(&self.evaluator.root, movement);
++                let mut child = *node;
++                child.apply_child_in_place(&self.evaluator.root, movement);
+                 let inherited = child.retained;
+                 let predecessor = Predecessor {
+                     movement: Some(movement),

@@ -1,0 +1,136 @@
+--- /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-independent-preparation-20261018-01/verify.py
++++ /home/legolas/rook2/evidence/placement-pure-cache-independent-preparation-20261018-01/verify.py
+@@ -1,18 +1,16 @@
+ #!/usr/bin/env python3
+-"""Bounded offline verification of exact fullbyte reciprocal40b26a4d; no engine execution."""
++"""Bounded offline verification of placement pure-component cache; no engine execution."""
+ from pathlib import Path
+ import hashlib,json,os,re,subprocess,sys,tarfile
+ P=Path(__file__).resolve().parent
+ E=Path('/home/legolas/rook2/evidence')
+-PRE=E/'fullbyte-remembered-reciprocal-validation-preparation-20261018-01'
+-B=E/'fullbyte-remembered-reciprocal-generic-build-20261018-01'
+-N=E/'fullbyte-remembered-reciprocal-native-validation-20261018-01'
+-R=E/'fullbyte-remembered-reciprocal-regression-20261018-01'
++PRE=E/'placement-pure-cache-validation-preparation-20261018-01'
++B=E/'placement-pure-cache-generic-build-20261018-01'
++N=E/'placement-pure-cache-native-validation-20261018-01'
++R=E/'placement-pure-cache-regression-20261018-01'
+ REF=E/'full-byte-pair-relations-generic-build-20261018-01'
+-PRO=E/'fullbyte-remembered-reciprocal-proposal-20261018-01'
++PRO=E/'placement-pure-cache-proposal-20261018-01'
+ KIT=Path('/home/legolas/king-spec/conformance')
+-EXPECTED='40b26a4d8802c6f7124ae76f19e9898df911f0414438d63f38ba6dd1294566cc'
+-FUNCTIONAL_SHA='fd706572f894be25e41f47430d207e2127c44a60594853b7d05710f34347389c'
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+ def load(p):return json.loads(Path(p).read_text())
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+@@ -41,16 +39,28 @@
+  depth,score,cs,sid=map(int,m.groups()[:4])
+  return dict(type='post',depthToken=depth,evaluation=score,engineCentiseconds=cs,searchId=sid,pv=(m[5] or '').replace('0','O'))
+ 
++def manifest():
++ raw=load(PRO/'source-manifest.json');prepared=load(PRO/'prepared.json')
++ assert raw['schema']=='relative-path-sha256-v1' and raw['counts']=={'native_and_manifests':46,'tools':23,'total':69}
++ assert prepared['complete_source_proposal'] is True and prepared['source_graph_sha256']==raw['graph_sha256']
++ assert prepared['source_manifest_sha256']==sha(PRO/'source-manifest.json')
++ files=raw['files'];assert raw['graph_sha256']==hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++ native={k:h for k,h in files.items() if not k.startswith('tools/')};tools={k:h for k,h in files.items() if k.startswith('tools/')}
++ return {'path':prepared['source'],'native46':native,'tools23':tools,'source69':files,'source_graph_sha256':raw['graph_sha256']}
++
+ def main():
+  assert os.sched_getaffinity(0)==H
+  assert os.environ.get('TMPDIR')=='/home/legolas/rook2-build-tmp'
+  clearance=load(P/'launch-clearance.json')
+- assert clearance['authorized'] is True and clearance['scope']=='fullbyte-remembered-reciprocal-offline-verification-no-engine'
++ assert clearance['authorized'] is True and clearance['scope']=='placement-pure-cache-offline-verification-no-engine'
++ assert clearance['parent_review_complete'] is True
+  assert clearance['helpers_sha256']=={name:sha(P/name) for name in ['verify.py','original-replay54.mjs']}
++ EXPECTED=clearance['engine_sha256'];assert isinstance(EXPECTED,str) and re.fullmatch('[0-9a-f]{64}',EXPECTED)
++ FUNCTIONAL_SHA=clearance['dependencies'][str(PRE/'functional-result.json')]
+  for required in [PRE/'functional-result.json',PRO/'source-manifest.json',PRO/'prepared.json',PRO/'source-proof.json',PRE/'build-result.json',PRE/'stages.py',PRE/'execution-clearance.json',PRE/'execution-binding.json',PRE/'generic-build-driver-terminal.json',PRE/'generic-archive-terminal.json',B/'receipt.json',B/'archive-receipt.json',B/'tool-terminal.json',N/'result.json',N/'tool-terminal.json',R/'result.json',R/'tool-terminal.json',REF/'receipt.json',REF/'archive-receipt.json',REF/'verified-source-before.tar.gz']:
+   assert str(required) in clearance['dependencies'],required
+  for path,h in clearance['dependencies'].items():assert sha(path)==h,path
+- m=load(PRO/'source-manifest.json');s=Path(m['path']);b=load(B/'receipt.json');reference=load(REF/'receipt.json')
++ m=manifest();s=Path(m['path']);b=load(B/'receipt.json');reference=load(REF/'receipt.json')
+  # Snapshot the complete bounded input closure before any source/raw checks.
+  dependencies={Path(path) for path in clearance['dependencies']}
+  dependencies.update(s/name for name in [*m['native46'],*m['tools23']])
+@@ -68,21 +78,21 @@
+  assert built['build_receipt']==str(B/'receipt.json')
+  assert sha(PRE/'functional-result.json')==FUNCTIONAL_SHA
+  functional=load(PRE/'functional-result.json')
+- assert functional['status']=='GENERIC179_STRICT54_EIGHTWIRE24_PASS' and functional['source']==str(s) and functional['image']==str(B/'rook2-exact') and functional['image_sha256']==EXPECTED
++ assert functional['status']=='GENERIC184_STRICT54_EIGHTWIRE24_PASS' and functional['source']==str(s) and functional['image']==str(B/'rook2-exact') and functional['image_sha256']==EXPECTED
+  assert functional['source_graph_sha256']==m['source_graph_sha256'] and functional['source_and_authorities_unchanged'] and functional['all_owned_jobs_closed']
+- assert (functional['native_tests'],functional['library_tests'],functional['development_tests'],functional['original_strict_cases'],functional['original_wire_fixtures'],functional['original_wire_searches'])==(179,177,2,54,8,24) and functional['new_modulo_oracle_pass']
++ assert (functional['native_tests'],functional['library_tests'],functional['development_tests'],functional['original_strict_cases'],functional['original_wire_fixtures'],functional['original_wire_searches'])==(184,182,2,54,8,24) and functional['new_pure_cache_tests_pass']
+  for key,path in [('build_receipt_sha256',B/'receipt.json'),('archive_receipt_sha256',B/'archive-receipt.json'),('native_result_sha256',N/'result.json'),('regression_result_sha256',R/'result.json')]:assert functional[key]==sha(path)
+- assert s==Path('/home/legolas/rook2-work/imp2-fullbyte-remembered-reciprocal-20261018-ebbxxgu4')
++ assert s==Path('/home/legolas/rook2-work/imp2-placement-pure-cache-20261018-x2gvi1c5')
+  assert len(m['native46'])==46 and len(m['tools23'])==23 and m['source69']=={**m['native46'],**m['tools23']}
+- assert m['source_graph_sha256']=='5db8a6bcbfda4bcdd896ede97b8402bafd450ef7f539b706d41c5b67829b0efa'
++ assert m['source_graph_sha256']=='e784334543d6045f6952ce5d2b636b6e185705ebfbcf633bdb499e5549996937'
+  assert m['source_graph_sha256']==hashlib.sha256(json.dumps(m['source69'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
+  assert reference['binary_output']['sha256']=='948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219'
+  refarchive=load(REF/'archive-receipt.json');assert refarchive['files']==69 and refarchive['binary_sha256']==reference['binary_output']['sha256']
+  assert sha(REF/refarchive['archive'])==refarchive['sha256']
+  assert b['source_sha256_before']==b['source_sha256_after']==m['native46']
+  assert b['tool_sha256_before']==b['tool_sha256_after']==m['tools23']==reference['tool_sha256_before']
+- assert [k for k,h in m['native46'].items() if reference['source_sha256_before'][k]!=h]==['src/remembered.rs']
+- for name in ['src/activity.rs','src/pawn_progress.rs','src/influence.rs','src/relation_table.rs']:assert m['native46'][name]==reference['source_sha256_before'][name]
++ assert sorted(k for k,h in m['native46'].items() if reference['source_sha256_before'][k]!=h)==['src/activity.rs', 'src/evaluator.rs', 'src/ordinary.rs', 'src/quiescence.rs', 'src/shelter.rs']
++ for name in ['src/pawn_progress.rs','src/influence.rs','src/relation_table.rs','src/remembered.rs','src/position.rs']:assert m['native46'][name]==reference['source_sha256_before'][name]
+  assert b['cargo_config_sha256_before']==b['cargo_config_sha256_after']=={}
+  assert b['crate']==str(s) and b['mode']=='generic' and b['pgo']['mode']=='none'
+  assert b['rust_flags']==['-C','target-cpu=x86-64'] and b['engine_runs']==0
+@@ -119,7 +129,7 @@
+    if entry.name=='src/influence.rs':baseline_influence=data.decode()
+  marker='\n#[cfg(test)]\nmod tests {';current_influence=(s/'src/influence.rs').read_text()
+  assert current_influence.count(marker)==baseline_influence.count(marker)==1 and current_influence.split(marker)[1]==baseline_influence.split(marker)[1]
+- native=load(N/'result.json');assert native['complete'] and native['failure'] is None and native['total_tests']==179 and native['engine_sha256']==EXPECTED
++ native=load(N/'result.json');assert native['complete'] and native['failure'] is None and native['total_tests']==184 and native['engine_sha256']==EXPECTED
+  assert native['source_root']==str(s) and native['source_and_tools_unchanged'] is True
+  assert set(native['tests'])=={'lib','dev'}
+  assert native['test_environment']==b['build_effective_environment']
+@@ -127,14 +137,14 @@
+  assert len([d for d in artifacts if d.get('reason')=='build-finished' and d['success']])==1
+  test_paths={d['executable'] for d in artifacts if d.get('reason')=='compiler-artifact' and d.get('profile',{}).get('test') and d.get('executable')}
+  assert test_paths=={d['original_executable'] for d in native['tests'].values()}
+- for key,count in [('lib',177),('dev',2)]:
++ for key,count in [('lib',182),('dev',2)]:
+   row=native['tests'][key];path=Path(row['executable']);assert row['passed']==count and sha(path)==sha(row['original_executable'])==row['sha256'];dependencies.add(path)
+   terminal=command_receipt(N/(key+'-tests-terminal.json'));assert terminal['argv']==[str(path),'--test-threads=1']
+   assert terminal in native['commands']
+   stdout=(N/(key+'-tests.stdout')).read_text();assert (N/(key+'-tests.stderr')).read_bytes()==b''
+   assert len(re.findall(r'^test .+ \.\.\. ok$',stdout,re.M))==count
+   assert re.search(rf'test result: ok\. {count} passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;',stdout)
+- assert 'remembered::tests::reciprocal_group_remainders_match_builtin_modulo_and_survive_clear ... ok' in (N/'lib-tests.stdout').read_text()
++ for name in ['pure_cache_exact_collision_clear_and_heap_entry_layout', 'pure_cache_placement_reuse_ignores_chronology_rules_and_reweights_live', 'pure_cache_hit_still_replaces_interfering_pawn_cache_and_charges_all_work', 'pure_cache_all_public_custom_map_paths_bypass_reads_and_writes', 'pure_cache_trusted_default_and_observed_selectors_keep_native_stages', 'pure_cache_matches_uncached_whole_evaluation_through_special_children']:assert 'evaluator::tests::'+name+' ... ok' in (N/'lib-tests.stdout').read_text()
+  assert 'influence::tests::all_byte_pairs_and_exclusions_match_independent_digit_reference ... ok' in (N/'lib-tests.stdout').read_text()
+  cargo=command_receipt(N/'cargo-tests-terminal.json');assert cargo in native['commands']
+  assert cargo['argv']==['/usr/bin/cargo','test','--offline','--locked','--release','--target','x86_64-unknown-linux-gnu','--manifest-path',str(s/'Cargo.toml'),'--target-dir',str(s/'target/native-tests-generic-01'),'--jobs','4','--lib','--bin','rook2-dev','--no-run','--message-format=json-render-diagnostics']
+@@ -201,8 +211,8 @@
+  assert done.returncode==0 and (P/'original-replay54.stderr').read_bytes()==b''
+  assert load(P/'original-replay54-result.json')['original_checkReplay_calls']==54
+  after={path:sha(Path(path)) for path in before};assert before==after
+- write('independent-verification.json',{'complete':True,'engine_sha256':EXPECTED,'build_result_sha256':sha(PRE/'build-result.json'),'stage_terminals':terminals,'recorded_completed_children':expected_children,'functional_result_sha256':FUNCTIONAL_SHA,'native_tests':179,'strict54_original_checkReplay':True,'wire8_searches24_raw_protocol':checked,'source46_tools23_archive69_equal':True,'only_remembered_changed_vs_fullbyte_baseline':True,'fullbyte_activity_retained_pawn_unchanged':True,'independent_influence_test_module_unchanged':True,'compiler_cargo_generic_bound':True,'all_dependencies_stable':True,'dependencies':before,'new_native_engine_runs':0,'limits':['Strict stdin is bound via original runner/workloads; no separate native stdin byte stream was retained by that original strict runner','Wire receipt has observed direct native exit codes but no individual native PID field','Cross-stream wall ordering is not reconstructed; exact streams and unchanged original scheduler are bound','This offline verifier makes no exclusive-housekeeping or historical concurrency claim','No timing/PGO/adoption or whole-component/full-game qualification claim']})
+- print(json.dumps({'complete':True,'native':179,'strict':54,'wire_cases':8,'wire_searches':24,'new_engine_runs':0}))
++ write('independent-verification.json',{'complete':True,'engine_sha256':EXPECTED,'build_result_sha256':sha(PRE/'build-result.json'),'stage_terminals':terminals,'recorded_completed_children':expected_children,'functional_result_sha256':FUNCTIONAL_SHA,'native_tests':184,'strict54_original_checkReplay':True,'wire8_searches24_raw_protocol':checked,'source46_tools23_archive69_equal':True,'only_declared_placement_cache_sources_changed_vs_fullbyte_baseline':True,'influence_relation_pawn_and_remembered_unchanged':True,'independent_influence_test_module_unchanged':True,'compiler_cargo_generic_bound':True,'all_dependencies_stable':True,'dependencies':before,'new_native_engine_runs':0,'limits':['Strict stdin is bound via original runner/workloads; no separate native stdin byte stream was retained by that original strict runner','Wire receipt has observed direct native exit codes but no individual native PID field','Cross-stream wall ordering is not reconstructed; exact streams and unchanged original scheduler are bound','This offline verifier makes no exclusive-housekeeping or historical concurrency claim','No timing/PGO/adoption or whole-component/full-game qualification claim']})
++ print(json.dumps({'complete':True,'native':184,'strict':54,'wire_cases':8,'wire_searches':24,'new_engine_runs':0}))
+ if __name__=='__main__':
+  try:main()
+  except BaseException as error:
+--- /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-independent-preparation-20261018-01/original-replay54.mjs
++++ /home/legolas/rook2/evidence/placement-pure-cache-independent-preparation-20261018-01/original-replay54.mjs
+@@ -2,8 +2,8 @@
+ import assert from 'node:assert/strict';
+ import {readFileSync,writeFileSync} from 'node:fs';
+ import {checkReplay,workloads,oracle} from '/home/legolas/king-spec/conformance/profiling/replay-check.mjs';
+-const base='/home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-regression-20261018-01';
+-const image='/home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-generic-build-20261018-01/rook2-exact';
++const base='/home/legolas/rook2/evidence/placement-pure-cache-regression-20261018-01';
++const image='/home/legolas/rook2/evidence/placement-pure-cache-generic-build-20261018-01/rook2-exact';
+ const report=JSON.parse(readFileSync(base+'/strict54.stdout'));
+ assert.equal(workloads.cases.length,54);assert.equal(oracle.cases.length,54);
+ assert.deepEqual(report.selectedCases,workloads.cases.map(x=>x.id));

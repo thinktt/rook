@@ -1,0 +1,29 @@
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -5,7 +5,7 @@
+ use crate::movegen::{MoveList, MOVE_CAPACITY};
+ use crate::ordinary_policy::Learning;
+ use crate::position::Position;
+-use crate::quiescence::{Limits, Outcome, Stats, Stopped, Work};
++use crate::quiescence::{InternalStop, Limits, Outcome, Stats, Stopped, Work};
+ use crate::remembered::RememberedTable;
+ use crate::tactical::OrderingScratch;
+ use crate::types::Move;
+@@ -129,9 +129,15 @@
+     }
+ 
+     pub(crate) fn charge_node(&mut self, history: &SearchHistory) -> Result<(), Stopped> {
+-        if crate::work_clock::charge_search_unit(&mut self.stats.nodes,self.limits.nodes)? {
++        self.charge_node_compact(history)
++            .map_err(|stop| stop.into_public(self.limits.nodes))
++    }
++
++    pub(crate) fn charge_node_compact(&mut self, history: &SearchHistory) -> Result<(), InternalStop> {
++        if crate::work_clock::charge_search_unit(&mut self.stats.nodes,self.limits.nodes)
++            .map_err(InternalStop::from_public)? {
+             let work = self.work();
+-            self.work_poll(history, work)?;
++            self.work_poll(history, work).map_err(InternalStop::from_public)?;
+         }
+         Ok(())
+     }

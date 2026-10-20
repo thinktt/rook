@@ -1,0 +1,403 @@
+--- accepted-repeat-census/common.mjs
++++ generation-safety/common.mjs
+@@ -3,27 +3,55 @@
+ import path from 'node:path';
+ import crypto from 'node:crypto';
+ export const H='0-5,8-13';
+-export const counts=['epoch_allocations','full_calls','first_no_snapshot','first_new_epoch','exact_repeat','changed_input','equal_input_different_output','total_activity_r','exact_repeat_activity_r'];
+ export const read=p=>JSON.parse(fs.readFileSync(p,'utf8'));
+ export const save=(p,v)=>fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n',{flag:'wx'});
+ export const sha=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+ export function census(raw,pid){
+- assert(raw.length<=4096,'census byte cap');
+- const c=JSON.parse(raw.toString('utf8'));
+- assert.deepEqual(Object.keys(c).sort(),['schema','pid','complete','overflow',...counts].sort());
+- assert.equal(c.schema,'rook2-activity-repeat-census-v1');assert.equal(c.pid,pid);
+- assert.equal(c.complete,true);assert.equal(c.overflow,false);
+- for(const k of counts)assert(Number.isSafeInteger(c[k])&&c[k]>=0,k);
+- const partition=['first_no_snapshot','first_new_epoch','exact_repeat','changed_input','equal_input_different_output'].reduce((s,k)=>s+BigInt(c[k]),0n);
+- assert.equal(BigInt(c.full_calls),partition);assert.equal(c.equal_input_different_output,0);
+- assert(c.exact_repeat_activity_r<=c.total_activity_r);
+- assert(c.epoch_allocations>0&&c.full_calls>0);return c;
++ assert(raw.length<=65536,'census byte cap');
++ assert(raw.every(x=>x<128),'census must be ASCII JSON');
++ const c=JSON.parse(raw.toString('ascii'));
++ assert.deepEqual(Object.keys(c).sort(),['schema','pid','complete','overflow','invalid','calls_rows'].sort());
++ assert.equal(c.schema,'rook2-generation-safety-demand-v1');assert.equal(c.pid,pid);
++ assert.equal(c.complete,true);assert.equal(c.overflow,false);assert.equal(c.invalid,false);
++ const contract=read(new URL('./consumer-contract-proposal.json',import.meta.url));
++ assert(Array.isArray(c.calls_rows)&&c.calls_rows.length===6);const seen=new Set();let calls=0n;
++ const sum=a=>a.reduce((s,x)=>s+BigInt(x),0n), eq=(a,b)=>assert.equal(BigInt(a),BigInt(b));
++ const nonnegative=x=>assert(Number.isSafeInteger(x)&&x>=0,'counter must be exact nonnegative JSON integer');
++ for(const r of c.calls_rows){
++  assert(contract.row_dimensions.limit.includes(r.limit)&&contract.row_dimensions.checkers.includes(r.checkers));
++  const key=r.limit+'/'+r.checkers;assert(!seen.has(key));seen.add(key);
++  assert.deepEqual(Object.keys(r).sort(),['limit','checkers',...contract.scalar_fields,...Object.keys(contract.array_fields),...Object.keys(contract.object_fields),contract.histogram_field].sort());
++  for(const k of contract.scalar_fields)nonnegative(r[k]);
++  for(const [k,n]of Object.entries(contract.array_fields)){assert(Array.isArray(r[k])&&r[k].length===n);r[k].forEach(nonnegative);}
++  for(const [k,keys]of Object.entries(contract.object_fields)){assert.deepEqual(Object.keys(r[k]).sort(),[...keys].sort());Object.values(r[k]).forEach(nonnegative);}
++  const hist=r.bounded_final_count_histogram;assert(Array.isArray(hist)&&hist.length===3);hist.forEach(nonnegative);
++  const a=r.routes,s=r.special_routes;
++  eq(r.calls,BigInt(r.safety_new)+BigInt(r.prefix_limit_before_safety));
++  eq(r.calls,BigInt(r.threshold_returns)+BigInt(r.exhausted_returns));
++  eq(r.pin_summary_calls,BigInt(r.pin_summary_zero)+BigInt(r.pin_summary_nonzero));
++  assert(r.pin_summary_calls<=r.safety_new&&r.single_check_pawn_prefix_calls<=r.safety_new);
++  eq(sum(r.safety_trials_by_source),sum(Object.values(a)));eq(a.unexpected_special_accepts_route,0);
++  const accepted=['unchecked_unpinned_accept','unchecked_pinned_projection_accept','checked_onmask_projection_accept','king_projection_accept'].map(k=>BigInt(a[k])).reduce((x,y)=>x+y,0n);
++  const projections=Object.entries(a).filter(([k])=>k.includes('_projection_')).map(([,v])=>BigInt(v)).reduce((x,y)=>x+y,0n)+sum(Object.values(s));
++  eq(r.projection_calls,projections);assert(BigInt(r.promotion_destination_accepts)<=accepted);
++  assert(r.promotion_destination_accepts<=r.promotion_destination_trials);
++  assert(BigInt(r.promotion_choices_emitted)>=BigInt(r.promotion_destination_accepts)&&BigInt(r.promotion_choices_emitted)<=4n*BigInt(r.promotion_destination_accepts));
++  eq(r.emitted_moves,accepted-BigInt(r.promotion_destination_accepts)+BigInt(r.promotion_choices_emitted)+BigInt(s.ep_projection_accept)+BigInt(s.castle_final_projection_accept));
++  eq(r.emitted_moves,r.output_len_sum);eq(r.threshold_returns,sum(Object.values(r.threshold_stage)));
++  if(r.checkers!=='0'){eq(r.pin_summary_calls,0);eq(a.unchecked_unpinned_accept,0);eq(a.unchecked_pinned_projection_accept,0);eq(a.unchecked_pinned_projection_reject,0);}
++  else{eq(a.checked_offmask_reject,0);eq(a.checked_onmask_projection_accept,0);eq(a.checked_onmask_projection_reject,0);eq(r.single_check_pawn_prefix_calls,0);}
++  if(r.checkers!=='1')eq(r.single_check_pawn_prefix_calls,0);
++  if(r.limit==='limit2'){eq(sum(hist),r.calls);eq(r.output_len_sum,BigInt(hist[1])+2n*BigInt(hist[2]));eq(hist[2],r.threshold_returns);eq(r.exhausted_returns,BigInt(hist[0])+BigInt(hist[1]));}
++  else{eq(sum(hist),0);eq(r.threshold_returns,0);assert(BigInt(r.output_len_sum)<=512n*BigInt(r.calls));}
++  calls+=BigInt(r.calls);
++ }
++ assert(calls>0n,'no observed generator calls');return c;
+ }
+ export function pins(plan){
+  assert(plan.source_inputs&&Object.keys(plan.source_inputs).length>=74,'actual compiled source closure pending');
+  for(const [p,h]of Object.entries({...plan.immutable_inputs,...plan.source_inputs,...plan.helper_inputs}))assert.equal(sha(p),h,p);
+  assert.equal(sha(plan.engine.path),plan.engine.sha256);
+- for(const k of ['compiled_source_manifest','build_receipt','actual_build_terminal','source_review','schema_contract']){
++ for(const k of ['compiled_source_manifest','build_receipt','actual_build_terminal','source_review','schema_contract','parent_activation','runtime_binding','quiet_resources']){
+   assert(plan[k]?.path&&plan[k]?.sha256,'actual metadata binding '+k);assert.equal(sha(plan[k].path),plan[k].sha256);
+  }
+ }
+--- accepted-repeat-census/collect.mjs
++++ generation-safety/collect.mjs
+@@ -7,11 +7,11 @@
+ const plan=read(process.argv[2]);
+ assert(plan.launch_authorized&&plan.parent_review_complete&&plan.all_owned_jobs_closed&&plan.quiet_point_verified,'INERT: no parent activation');
+ assert(plan.engine.path&&plan.engine.sha256&&plan.build_receipt&&plan.actual_build_terminal&&plan.source_review&&plan.compiled_source_manifest&&plan.compiled_source_graph&&plan.schema_contract,'actual artifact/source/schema bindings pending');
+-assert.deepEqual(plan.cases,['profile-01','profile-35']);
+-assert.deepEqual(plan.limits,{setupMs:15000,searchMs:60000,cleanupMs:5000,aggregateMs:180000,byteCap:4194304,aggregateCap:8388608,censusBytes:4096});
++assert.deepEqual(plan.cases,['profile-04','profile-35']);
++assert.deepEqual(plan.limits,{setupMs:15000,searchMs:60000,cleanupMs:5000,aggregateMs:180000,byteCap:4194304,aggregateCap:8388608,censusBytes:65536});
+ assert.equal(process.env.TMPDIR,'/home/legolas/rook2-build-tmp');
+ assert.equal(fs.readFileSync('/proc/self/status','utf8').match(/^Cpus_allowed_list:\s*(.*)$/m)?.[1],H);
+-for(const k of ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE','NODE_OPTIONS','ROOK2_ACTIVITY_CENSUS_PATH'])assert(!process.env[k],k);
++for(const k of ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE','NODE_OPTIONS','ROOK2_GENERATION_SAFETY_CENSUS_PATH'])assert(!process.env[k],k);
+ pins(plan);assert(!fs.existsSync(plan.output));fs.mkdirSync(plan.output);save(path.join(plan.output,'plan.json'),plan);
+ const result={complete:false,failure:null,cases:[],engine_runs:0,performance_claim:false};
+ const budget={bytes:0};let deadline=null;
+@@ -22,15 +22,15 @@
+   const input=workloads.cases.find(c=>c.id===id),expected=oracle.cases.find(c=>c.id===id);assert(input&&expected);
+   const censusPath=path.join(dir,'census.json');assert(path.isAbsolute(censusPath)&&!fs.existsSync(censusPath));
+   const command=['/usr/bin/python3','/home/legolas/rook2/tools/account_native.py','--engine',plan.engine.path,'--record',path.join(dir,'native.json'),'--known-single-process'];
+-  save(path.join(dir,'command.json'),{command:[...command,...oracle.mode],env:{ROOK2_ACTIVITY_CENSUS_PATH:censusPath},limits:plan.limits});
++  save(path.join(dir,'command.json'),{command:[...command,...oracle.mode],env:{ROOK2_GENERATION_SAFETY_CENSUS_PATH:censusPath},limits:plan.limits});
+   save(path.join(dir,'input.json'),input);save(path.join(dir,'expected.json'),expected);
+   fs.writeFileSync(path.join(dir,'stdin-derived-from-released-api.txt'),input.protocol.recordsBeforeSearch.concat('cm_parm rnd',input.protocol.searchRecord,input.protocol.cleanupRecord).join('\n')+'\n',{flag:'wx'});
+   // This is the one whole-study clock, started immediately before the first actual runReplay call.
+   deadline??=Date.now()+180000;assert(Date.now()<deadline,'whole-study deadline before case');
+-  process.env.ROOK2_ACTIVITY_CENSUS_PATH=censusPath;
++  process.env.ROOK2_GENERATION_SAFETY_CENSUS_PATH=censusPath;
+   let row;
+   try{result.engine_runs++;row=await runReplay(command,input,expected,budget,{setupMs:15000,searchMs:60000,cleanupMs:5000,byteCap:4194304,aggregateCap:8388608,deadline});}
+-  finally{delete process.env.ROOK2_ACTIVITY_CENSUS_PATH;}
++  finally{delete process.env.ROOK2_GENERATION_SAFETY_CENSUS_PATH;}
+   save(path.join(dir,'replay.json'),row);
+   fs.writeFileSync(path.join(dir,'stdout'),row.stdout,{flag:'wx'});fs.writeFileSync(path.join(dir,'stderr'),row.stderr,{flag:'wx'});
+   save(path.join(dir,'api-child-terminal.json'),{pid:row.pid,exit:row.exit,complete:row.complete,error:row.error,cleanupUnconfirmed:row.cleanupUnconfirmed??false});
+@@ -42,15 +42,14 @@
+   assert.equal(native.supervisor_pid,row.pid);assert.equal(native.native_pre_exec.pgid,row.pid);assert.equal(native.native_post_exec.pgid,row.pid);assert.deepEqual(native.argv,[plan.engine.path,...oracle.mode]);assert.equal(native.engine_sha256_before,plan.engine.sha256);assert.equal(native.engine_sha256_after,plan.engine.sha256);
+   assert.deepEqual(native.native_pre_exec.affinity,[14]);assert.deepEqual(native.native_post_exec.affinity,[14]);assert.deepEqual(native.native_post_exec.tasks,[String(native.native_pid)]);
+   assert.deepEqual(native.supervisor_affinity,[0,1,2,3,4,5,8,9,10,11,12,13]);
+-  const stat=fs.lstatSync(censusPath);assert(stat.isFile()&&!stat.isSymbolicLink()&&stat.size<=4096);
++  const stat=fs.lstatSync(censusPath);assert(stat.isFile()&&!stat.isSymbolicLink()&&stat.size<=65536);
+   const raw=fs.readFileSync(censusPath),c=census(raw,native.native_pid);
+-  const share=c.full_calls?c.exact_repeat/c.full_calls:null;
+-  result.cases.push({id,native_pid:native.native_pid,census_sha256:sha(censusPath),census_bytes:raw.length,full_calls:c.full_calls,exact_repeat:c.exact_repeat,exact_repeat_share:share,consider_design_only:share!==null&&share>=.05});
++  result.cases.push({id,native_pid:native.native_pid,census_sha256:sha(censusPath),census_bytes:raw.length,rows:c.calls_rows});
+   save(path.join(dir,'case-summary.json'),result.cases.at(-1));pins(plan);
+  }
+  assert.equal(result.engine_runs,2);assert.equal(new Set(result.cases.map(c=>c.native_pid)).size,2);
+  assert(budget.bytes<=8388608);save(path.join(plan.output,'context-after.json'),context());pins(plan);
+- result.complete=true;result.consider_design_only=result.cases.some(c=>c.consider_design_only);
++ result.complete=true;
+ }catch(e){result.failure=String(e.stack??e);process.exitCode=1;}
+ finally{
+  try{pins(plan);result.input_closure_after=true;}catch(e){result.complete=false;result.input_closure_after=false;result.failure??=String(e.stack??e);process.exitCode=1;}
+--- accepted-repeat-census/verify.mjs
++++ generation-safety/verify.mjs
+@@ -5,16 +5,54 @@
+ import path from 'node:path';
+ import {checkReplay,workloads,oracle} from '/home/legolas/king-spec/conformance/profiling/replay-check.mjs';
+ import {read,save,sha,pins} from './common.mjs';
++
++function independentCensus(c,pid){
++ const scalars=["calls", "safety_new", "prefix_limit_before_safety", "pin_summary_calls", "pin_summary_zero", "pin_summary_nonzero", "single_check_pawn_prefix_calls", "threshold_returns", "exhausted_returns", "emitted_moves", "output_len_sum", "promotion_destination_trials", "promotion_destination_accepts", "promotion_choices_emitted", "projection_calls"];
++ const arrays={"source_entered": 6, "piece_cursor_destinations": 6, "piece_blocker_rejects": 6, "safety_trials_by_source": 6};
++ const objects={"routes": ["unchecked_unpinned_accept", "unchecked_pinned_projection_accept", "unchecked_pinned_projection_reject", "checked_offmask_reject", "checked_onmask_projection_accept", "checked_onmask_projection_reject", "king_projection_accept", "king_projection_reject", "unexpected_special_accepts_route"], "special_routes": ["ep_projection_accept", "ep_projection_reject", "castle_transit_projection_accept", "castle_transit_projection_reject", "castle_final_projection_accept", "castle_final_projection_reject"], "threshold_stage": ["ep", "castle", "early_king", "pawns", "knight", "bishop", "rook", "queen", "king"], "pawn_geometry_counters": ["capture_offsets_inboard", "capture_victim_eligible", "single_forward_offsets_inboard", "single_forward_empty", "double_forward_empty"]};
++ assert.equal(c.schema,'rook2-generation-safety-demand-v1');assert.equal(c.pid,pid);assert.equal(c.complete,true);assert.equal(c.overflow,false);assert.equal(c.invalid,false);
++ assert.deepEqual(Object.keys(c).sort(),['schema','pid','complete','overflow','invalid','calls_rows'].sort());assert.equal(c.calls_rows.length,6);
++ const num=v=>{assert(Number.isSafeInteger(v)&&v>=0);return BigInt(v);};
++ const add=vs=>vs.reduce((total,v)=>total+num(v),0n);const keys=[];let totalCalls=0n;
++ for(const row of c.calls_rows){
++  assert(['full512','limit2'].includes(row.limit)&&['0','1','2plus_saturated'].includes(row.checkers));keys.push(row.limit+':'+row.checkers);
++  assert.deepEqual(Object.keys(row).sort(),['limit','checkers',...scalars,...Object.keys(arrays),...Object.keys(objects),'bounded_final_count_histogram'].sort());
++  scalars.forEach(k=>num(row[k]));for(const[k,n]of Object.entries(arrays)){assert.equal(row[k].length,n);row[k].forEach(num);}
++  for(const[k,names]of Object.entries(objects)){assert.deepEqual(Object.keys(row[k]).sort(),names.slice().sort());Object.values(row[k]).forEach(num);}
++  const routes=row.routes,special=row.special_routes,h=row.bounded_final_count_histogram;assert.equal(h.length,3);h.forEach(num);
++  const calls=num(row.calls);totalCalls+=calls;
++  assert.equal(calls,num(row.safety_new)+num(row.prefix_limit_before_safety));assert.equal(calls,num(row.threshold_returns)+num(row.exhausted_returns));
++  assert.equal(num(row.pin_summary_calls),num(row.pin_summary_zero)+num(row.pin_summary_nonzero));assert(row.pin_summary_calls<=row.safety_new&&row.single_check_pawn_prefix_calls<=row.safety_new);
++  assert.equal(add(row.safety_trials_by_source),add(Object.values(routes)));assert.equal(routes.unexpected_special_accepts_route,0);
++  const accepts=add([routes.unchecked_unpinned_accept,routes.unchecked_pinned_projection_accept,routes.checked_onmask_projection_accept,routes.king_projection_accept]);
++  const projected=add([routes.unchecked_pinned_projection_accept,routes.unchecked_pinned_projection_reject,routes.checked_onmask_projection_accept,routes.checked_onmask_projection_reject,routes.king_projection_accept,routes.king_projection_reject,...Object.values(special)]);
++  assert.equal(num(row.projection_calls),projected);assert(num(row.promotion_destination_accepts)<=accepts&&row.promotion_destination_accepts<=row.promotion_destination_trials);
++  const promos=num(row.promotion_choices_emitted),pa=num(row.promotion_destination_accepts);assert(pa<=promos&&promos<=4n*pa);
++  const pushes=accepts-pa+promos+num(special.ep_projection_accept)+num(special.castle_final_projection_accept);
++  assert.equal(num(row.emitted_moves),pushes);assert.equal(num(row.output_len_sum),pushes);assert.equal(num(row.threshold_returns),add(Object.values(row.threshold_stage)));
++  if(row.checkers==='0'){assert.equal(add([routes.checked_offmask_reject,routes.checked_onmask_projection_accept,routes.checked_onmask_projection_reject,row.single_check_pawn_prefix_calls]),0n);}
++  else{assert.equal(add([row.pin_summary_calls,routes.unchecked_unpinned_accept,routes.unchecked_pinned_projection_accept,routes.unchecked_pinned_projection_reject]),0n);}
++  if(row.checkers!=='1')assert.equal(row.single_check_pawn_prefix_calls,0);
++  if(row.limit==='limit2'){assert.equal(add(h),calls);assert.equal(pushes,num(h[1])+2n*num(h[2]));assert.equal(h[2],row.threshold_returns);assert.equal(num(row.exhausted_returns),num(h[0])+num(h[1]));}
++  else{assert.equal(add(h),0n);assert.equal(row.threshold_returns,0);assert(pushes<=512n*calls);}
++ }
++ assert.equal(new Set(keys).size,6);assert(totalCalls>0n);
++}
++
+ const plan=read(process.argv[2]),out=plan.output;
++assert.deepEqual(plan.cases,['profile-04','profile-35']);assert.deepEqual(plan.limits,{setupMs:15000,searchMs:60000,cleanupMs:5000,aggregateMs:180000,byteCap:4194304,aggregateCap:8388608,censusBytes:65536});
+ pins(plan);assert.deepEqual(read(path.join(out,'plan.json')),plan);
+ const terminal=read(path.join(out,'tool-terminal.json'));
+ assert(terminal.actual_tool_terminal_observed&&terminal.exit_code===0);
+ const result=read(path.join(out,'result.json'));
+ assert(result.complete&&result.failure===null&&result.engine_runs===2&&result.input_closure_after===true);
+ const cases=[];let rawTotal=0;
+-for(const id of ['profile-01','profile-35']){
++for(const id of ['profile-04','profile-35']){
+  const dir=path.join(out,id),input=workloads.cases.find(c=>c.id===id),expected=oracle.cases.find(c=>c.id===id);
+  assert.deepEqual(read(path.join(dir,'input.json')),input);assert.deepEqual(read(path.join(dir,'expected.json')),expected);
++ const command=['/usr/bin/python3','/home/legolas/rook2/tools/account_native.py','--engine',plan.engine.path,'--record',path.join(dir,'native.json'),'--known-single-process',...oracle.mode];
++ assert.deepEqual(read(path.join(dir,'command.json')),{command,env:{ROOK2_GENERATION_SAFETY_CENSUS_PATH:path.join(dir,'census.json')},limits:plan.limits});
++ assert.equal(fs.readFileSync(path.join(dir,'stdin-derived-from-released-api.txt'),'utf8'),input.protocol.recordsBeforeSearch.concat('cm_parm rnd',input.protocol.searchRecord,input.protocol.cleanupRecord).join('\n')+'\n');
+  const row=read(path.join(dir,'replay.json')),stdout=fs.readFileSync(path.join(dir,'stdout')),stderr=fs.readFileSync(path.join(dir,'stderr'));
+  assert(stdout.every(x=>x<128)&&stderr.every(x=>x<128));assert.equal(stdout.toString('ascii'),row.stdout);assert.equal(stderr.toString('ascii'),row.stderr);
+  assert.equal(stdout.length+stderr.length,row.retainedBytes);assert(row.retainedBytes<=4194304);
+@@ -25,15 +63,10 @@
+  assert.deepEqual(n.argv,[plan.engine.path,...oracle.mode]);assert.deepEqual(n.native_pre_exec.affinity,[14]);assert.deepEqual(n.native_post_exec.affinity,[14]);assert.deepEqual(n.native_post_exec.tasks,[String(n.native_pid)]);
+  assert.deepEqual(n.supervisor_affinity,[0,1,2,3,4,5,8,9,10,11,12,13]);assert.equal(n.native_pre_exec.pgid,row.pid);assert.equal(n.native_post_exec.pgid,row.pid);
+  assert.equal(n.total_cpu_s,n.user_cpu_s+n.system_cpu_s);assert(n.wall_ns>=0&&n.reaped_monotonic_ns>=n.start_monotonic_ns);
+- const raw=fs.readFileSync(path.join(dir,'census.json'));assert(raw.length<=4096);const c=JSON.parse(raw.toString('utf8'));
+- const fields=['epoch_allocations','full_calls','first_no_snapshot','first_new_epoch','exact_repeat','changed_input','equal_input_different_output','total_activity_r','exact_repeat_activity_r'];
+- assert.deepEqual(Object.keys(c).sort(),['schema','pid','complete','overflow',...fields].sort());
+- assert.equal(c.schema,'rook2-activity-repeat-census-v1');assert.equal(c.pid,n.native_pid);assert.equal(c.complete,true);assert.equal(c.overflow,false);
+- for(const k of fields)assert(Number.isSafeInteger(c[k])&&c[k]>=0);
+- let partition=0n;for(const k of ['first_no_snapshot','first_new_epoch','exact_repeat','changed_input','equal_input_different_output'])partition+=BigInt(c[k]);
+- assert.equal(partition,BigInt(c.full_calls));assert.equal(c.equal_input_different_output,0);assert(c.epoch_allocations>0&&c.full_calls>0&&c.exact_repeat_activity_r<=c.total_activity_r);
+- const share=c.full_calls?c.exact_repeat/c.full_calls:null;
+- const summary={id,native_pid:n.native_pid,census_sha256:sha(path.join(dir,'census.json')),census_bytes:raw.length,full_calls:c.full_calls,exact_repeat:c.exact_repeat,exact_repeat_share:share,consider_design_only:share!==null&&share>=.05};
++ const censusStat=fs.lstatSync(path.join(dir,'census.json'));assert(censusStat.isFile()&&!censusStat.isSymbolicLink()&&censusStat.size<=65536);
++ const raw=fs.readFileSync(path.join(dir,'census.json'));assert(raw.length<=65536&&raw.every(x=>x<128));const c=JSON.parse(raw.toString('ascii'));
++ independentCensus(c,n.native_pid);
++ const summary={id,native_pid:n.native_pid,census_sha256:sha(path.join(dir,'census.json')),census_bytes:raw.length,rows:c.calls_rows};
+  assert.deepEqual(read(path.join(dir,'case-summary.json')),summary);cases.push(summary);
+ }
+ assert.equal(new Set(cases.map(c=>c.native_pid)).size,2);assert(rawTotal<=8388608&&rawTotal===result.retained_protocol_bytes);assert.deepEqual(result.cases,cases);
+@@ -43,6 +76,6 @@
+ const bt=ticks(before),at=ticks(after);assert(bt.length===at.length&&bt.length>=8);
+ const delta=at.map((v,i)=>v-bt[i]);assert(delta.every(v=>Number.isSafeInteger(v)&&v>=0));
+ const cpu15={tick_deltas:delta,idle_ticks:delta[3],iowait_ticks:delta[4],nonidle_ticks:delta[0]+delta[1]+delta[2]+delta[5]+delta[6]+delta[7],scope:'Point interval guest ticks; no continuous sibling ownership or host exclusivity proof.'};
+-const proof={complete:true,cases,cpu15,originalCheckReplayCount:2,engineRuns:0,protocol_bytes:rawTotal,census_body_bytes:cases.reduce((s,c)=>s+c.census_bytes,0),consider_design_only:cases.some(c=>c.consider_design_only),performance_claim:false,scope:'Two diagnostic observations only; threshold is a design-consideration trigger, never cache adoption or speed prediction.'};
++const proof={complete:true,cases,cpu15,originalCheckReplayCount:2,engineRuns:0,protocol_bytes:rawTotal,census_body_bytes:cases.reduce((s,c)=>s+c.census_bytes,0),performance_claim:false,scope:'Two whole-process diagnostic observations only; no CPU/cost interpretation, caller attribution, optimization admission or speed prediction.'};
+ save(path.join(out,'independent-verification.json'),proof);
+-console.log(JSON.stringify({complete:true,originalCheckReplayCount:2,engineRuns:0,consider_design_only:proof.consider_design_only,performance_claim:false}));
++console.log(JSON.stringify({complete:true,originalCheckReplayCount:2,engineRuns:0,performance_claim:false}));
+--- accepted-repeat-census/plan.json
++++ generation-safety/plan.json
+@@ -1,36 +1,44 @@
+ {
+-  "experiment": "current62 Activity exact-repeat diagnostic census",
+   "launch_authorized": false,
+   "parent_review_complete": false,
+   "all_owned_jobs_closed": false,
+   "quiet_point_verified": false,
++  "mode": "unchanged released oracle.mode",
++  "fresh_lifetimes": 2,
++  "warmups": 0,
++  "retries": 0,
++  "experiment": "current62 generation-safety demand diagnostic census",
+   "cases": [
+-    "profile-01",
++    "profile-04",
+     "profile-35"
+   ],
+   "engine": {
+-    "path": "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/rook2-exact",
+-    "sha256": "790d6e2a2f7850595ec520a7f1d3f99c90b275e0dff729ec782aacbfc12432be"
++    "path": null,
++    "sha256": null
+   },
+-  "compiled_source_manifest": {
+-    "path": "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/source-manifest.json",
+-    "sha256": "08a8e3682842dc02465bf8bab582788a96f3e082bd6c1891fbd9b68ceaa3e1a2"
++  "compiled_source_manifest": null,
++  "compiled_source_graph": null,
++  "source_inputs": {},
++  "build_receipt": null,
++  "source_review": null,
++  "actual_build_terminal": null,
++  "schema_contract": null,
++  "parent_activation": null,
++  "runtime_binding": null,
++  "quiet_resources": null,
++  "clock": null,
++  "output": "/home/legolas/rook2/evidence/current62-generation-safety-census-execution-20261020-01",
++  "limits": {
++    "setupMs": 15000,
++    "searchMs": 60000,
++    "cleanupMs": 5000,
++    "aggregateMs": 180000,
++    "byteCap": 4194304,
++    "aggregateCap": 8388608,
++    "censusBytes": 65536
+   },
+-  "compiled_source_graph": "8b9943149e5e6dedf091db2f5a41c27b3171f68f683d59329b323568b425b294",
+-  "build_receipt": {
+-    "path": "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/receipt.json",
+-    "sha256": "8d81273cc04ba6583b2769334caa57da3616d5f8e35d0c0c0b352ef097f9bb1f"
+-  },
+-  "source_review": null,
+-  "actual_build_terminal": {
+-    "path": "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/tool-terminal.json",
+-    "sha256": "179ce750cdfeece1bda3b5370065b4c893b31d9ab977876f6ada93eb58f6e490"
+-  },
+-  "schema_contract": {
+-    "path": "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/schema.json",
+-    "sha256": "2aba7990092437ea7096ce5ca53b7f76979e55fd76e4f583e2d9d2f8fe184b95"
+-  },
+-  "output": "/home/legolas/rook2/evidence/current62-activity-repeat-census-execution-20261020-01",
++  "env": "ROOK2_GENERATION_SAFETY_CENSUS_PATH",
++  "scope": "Whole native process, not search-only. No CPU/cost/speed interpretation. Actual future source must start from62, not66/67.",
+   "immutable_inputs": {
+     "/home/legolas/rook2/tools/README.md": "f440d5aaa77de9ad8f53bab524364578420103b2373bbbf5f2bc70629d8f4ae6",
+     "/home/legolas/rook2/tools/account_native.py": "f98132f3947a2320ebf6ae5d86f4abaa907650a6eb30f992d580e8290dbcb1fb",
+@@ -63,113 +71,15 @@
+     "/usr/bin/python3": "889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9",
+     "/usr/bin/taskset": "0c34de807bc9c617406360836fca2c7505eb86ede4df5a34854bde6eeddad9f3",
+     "/home/legolas/rook2/evidence/exttsp-profiled-integration-20261020-01/source-promotion.json": "d53c274290dcbd6c79dcbb1707df448a97d22eb67932a28916b26f20309ca510",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/schema.json": "2aba7990092437ea7096ce5ca53b7f76979e55fd76e4f583e2d9d2f8fe184b95",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/source-manifest.json": "08a8e3682842dc02465bf8bab582788a96f3e082bd6c1891fbd9b68ceaa3e1a2",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/source-proof.json": "c0b3809305ec1e14eacbc661a08ce2c0899a36fb9f5468abafbfe00f8fb42ddb",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/identity.json": "46c7f7993ba242bbc5ced4d09f8497864aacbfc023bf192a2d239e32ee786b34",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/tool-terminal.json": "179ce750cdfeece1bda3b5370065b4c893b31d9ab977876f6ada93eb58f6e490",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/receipt.json": "8d81273cc04ba6583b2769334caa57da3616d5f8e35d0c0c0b352ef097f9bb1f",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/closure.json": "200a1ee7993820c0948a3d1bd6a5e5994f0dcfe61bd1d9fdce0779078b30a70e"
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-preparation-20261020-01/plan.json": "9d07c7c71048736eb0b473c9b2e8b9efb6046c42c5190254e703cc056a9bc690",
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-preparation-20261020-01/design.md": "6a4349b3ec0b3d3b90211b088cae6e93b8b10414469a53088053a66f4aeee265",
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-preparation-20261020-01/counter-schema-proposal.json": "c431fbcd085ff3f4e922413cddde75c69927aee5ae7b1792374c6740de4a0757",
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-preparation-20261020-01/closure.json": "0bedfbe3fc53ee456688934de804a58820aeb81b3f1928c0fe25e2d81d251830"
+   },
+-  "limits": {
+-    "setupMs": 15000,
+-    "searchMs": 60000,
+-    "cleanupMs": 5000,
+-    "aggregateMs": 180000,
+-    "byteCap": 4194304,
+-    "aggregateCap": 8388608,
+-    "censusBytes": 4096
+-  },
+-  "env": "ROOK2_ACTIVITY_CENSUS_PATH",
+-  "mode": "unchanged released oracle.mode",
+-  "fresh_lifetimes": 2,
+-  "warmups": 0,
+-  "retries": 0,
+-  "threshold": {
+-    "exact_repeat_share_min": 0.05,
+-    "at_least_cases": 1,
+-    "effect": "ONLY consider a future architectural design, after census limitations review; no cache selected, speed forecast, adoption, or performance interpretation."
+-  },
+-  "scope": "Exact Node input/result snapshot observations; all original Activity computation remains live. Whole-native wait4 CPU/wall receipts are retained but never performance evidence. CPU14, helperH, sibling15 point/tick observations do not prove exclusive host.",
+   "helper_inputs": {
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-preparation-20261020-01/collect.mjs": "aca90e77f8c87fb6d245e9fabb1908f7c2c98c0bf392fb6a557249d6047c3723",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-preparation-20261020-01/verify.mjs": "27951bf1cc5f6c8b0722997e07676720ad69718547f969ef4204ead141069801",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-preparation-20261020-01/common.mjs": "8221d570fc16fc8a69433fcc178e55e98764abcd3412dc396db407d753b0af87"
+-  },
+-  "source_inputs": {
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/Cargo.lock": "d34b5888f77c0319fb614ba5701a4a1177af31b803054ad3a8251926ba237c97",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/Cargo.toml": "6199772414ef5972898842d76472301d256e42f9dd2181fa421ff5cbc21c85d1",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/activity.rs": "81cd2ff5ecd7125cbf2993031c57db97b02fa3877d314fc5f06350c6019024f5",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/attacks.rs": "00d4d2a89c32626be5ef501bc377d427a90588f28b2913e59438a1772e4494f3",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/bin/rook2-dev.rs": "1eea8e56f268a3fd943d1dc2d2ccd0c7607c80793c1a8f41eb464bdc53853c34",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/bin/rook2.rs": "ae4af0308c933c408dcfe91b5222729350b5e2d0fed488836cfd2157d3e22a46",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/clock.rs": "4b1d6f18e94d3161cefa8b4a5daafddffd1aba5d3d4ade182a03eed3ee493a79",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/development.rs": "e25b082c342df61b2aa8c30e2970e65007ad3e99750807724bda42ab59a3045f",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/endgame.rs": "4f382e7b5359f1956a0e155328aad08f35dab74252ee0794d61dafcd1cd2214a",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/engine.rs": "c17cfcf136d2b37f94d8c5c30b3a0a76d5c533ab3d6dc1103a7b724c68033995",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/engine/geometry_tests.rs": "4677760cbf58f0aaeec901b21cfb6dc3a797fdbe128afbad34fe20e9c4e5e921",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/eval_basis.rs": "5b369b122dc69aa40e5f8b81c3153173e633c9cfec89f160cef49886b5c36647",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/evaluation.rs": "767b1ef83fea5d30d1b5a6edaa259fa718c666cfdb568fb9ad7b2aca2e9f33f7",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/evaluator.rs": "f28361b9b8771480ff4f25c302adccbbf0a209aa15bc614fa601f7f8ae0bfe56",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/first_iteration.rs": "713830b62783a81033e1355687534783647b243c51e10f829546d080ce157722",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/geometry.rs": "582a2e8ad2672a937062ae829ae596ee263b69c6ec52103c55c658a6ecc225f1",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/history.rs": "f6b2a5073307d655e33e774900c9fea26f4bdfefbdd2cd9848ff0758c4b34fde",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/host.rs": "cc694d926fb1c1bc3063c3c9a20a8399abc92019f4927b2b79850e7a706924ac",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/identity.rs": "761779f7f2e0186dfbe28e162bf5fc8c8461d9f9c342787ebe2becfd0914a376",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/influence.rs": "fa01b22dc312b5e9161ce405571172b5d272c8ecc2bcca1ce3de1cf7f66eb7fa",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/influence/coherent.rs": "b4155e4b65beb0eb9aea822bae714b1222accde3b7be574d50ecf56da980ef64",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/influence/coherent_tests.rs": "999c4d015a447d4847de4f11d98175271e3c5a630ea5ae8b5fe6378767ebd8b0",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/lib.rs": "6f09459cb36d8e8e0dfc0d473f3b91fcd19feed4c8220888b83af37124abc0c4",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/movegen.rs": "2665dfbc957191b06f82c35412f72be94943944cffd0c04851bdcdc91086dcc8",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/ordinary.rs": "e5dae89f6bcc6651ac4e8aeb943b3f559b882232f2cf571c79fd0f3d463ecbfb",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/ordinary_policy.rs": "5a796d4f7b11c1818a7dbdfe34080d9502d7c517217b521315534a318e9301a6",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/output.rs": "90c1f45a9d907dcb85ed97a0b9d45828196d17a381bd84f09f8f49e1872eef6d",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/parameters.rs": "30dd03e5ead3df289b25929c7bea81e72d1e2b9a2250916883107f0cfaf7f42e",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/pawn_progress.rs": "0bca6bb9678657b2efadc023c07d1ffcc9ff91c1c97553b84e2131c6ce30d9dc",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/pawn_structure.rs": "b9d0921514c5ba7ba7532f07501fae7dc38b707f6c2f2f0bb01787be5263be13",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/pawn_terms.rs": "a2081196fb0bfdbd1ac7830d2f668009b267e77d3e56b92c249af709cd99fff3",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/position.rs": "e85eb42304bb010ea199160568b215958f9de966cc71d398e8e0e42553054d82",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/positional_terms.rs": "053b04b8f434db2ddadda71686831b40baf3c59d09be6cde5895af1b7d430260",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/post_lifecycle.rs": "1c429549a023d67b68304375a1b40d2a1228c104579b53659db5595df0d82bb6",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/quiescence.rs": "9ff56aefef807d7df53f446abef404dba90150572116c0cae09057556bb39e6a",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/quiescence_policy.rs": "baeb3f40c47f119481f0040b1c9bb15f9af25ee39376cf0c01d1a06091011468",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/relation_table.rs": "8b559327e7fe433750ab30add4e172570a4a0a80d10b3b3b63bd475dd731de49",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/remembered.rs": "af2eb6046fd7e58b1a35e7ed3051936559b7f739224ed698b54c49317faec293",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/root_schedule.rs": "550146f895ef9a43b8ecdc6fce5e26fb973602e6f5d5b17add1a4920768a72d8",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/session.rs": "e3585bdf5fabb45eff8f3a48ea75da8e414b8b9dc2fbcbc4a44f51a30cc87d7f",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/shelter.rs": "d6012e72cda2502538c215e074b2ebcba396342b903d9d431cc257eb3f9e5811",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/tactical.rs": "22fb473a0c3288a1ce392833e1dd09749bc77d795d3b697ba1071f21b58d3d4d",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/tactical/check_mask_tests.rs": "136d904829288e54c9efee9a107c95dfad651182d99800bf69e483174ffe85b3",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/tactical/check_masks.rs": "8468db1a066e1e6983271e3b54d6023c20d3b55386a775098f0db48472cec626",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/time_powers.rs": "8332a3c4516496ebfb77ab9426e35ae1c94108f21dbd071b8baf9ac3c4c2215e",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/timed.rs": "f62d6ea5591fc23515da241ee3dfefd30d500c79e0349068ca595076f8044d2e",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/timed_sequence.rs": "3089985b5b23dc397770cbf4e228219a27c71db1c01a8a553305e4adb3e3f08f",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/timing.rs": "a950ca151dbdbc026f7c11eff98d1f67985f932dd949d2872436c3271972f934",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/types.rs": "2a202da079b16b3becb6651427701ec8e40aed88bd19550854c800b842b22feb",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/wire.rs": "f851e0b386db01debc0107e01be64ebef0454934673bece463ecd39d0d984841",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/src/work_clock.rs": "946c1e40e29254e4d98f642fe051f4a4b337bb401f5f00d8b0e275539e71ab02",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/README.md": "f440d5aaa77de9ad8f53bab524364578420103b2373bbbf5f2bc70629d8f4ae6",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/account_native.py": "f98132f3947a2320ebf6ae5d86f4abaa907650a6eb30f992d580e8290dbcb1fb",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/archive_build.py": "ea3944cf7ce09a3e6c4476644083324ac8fabec12cd7436f8536a872f3ff4b86",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/build.py": "9ec72da0c15c07eee8c5ef1a63729ffdef6fc048baa37c58d9eed1bbe3d4df4e",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/check_core.py": "07bacfb310c50cf3770c9b644b33bb356f4a320cdd2ec72db02146682b540f34",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/check_evaluation.py": "ff1e685f5d678bd47c2edd81dda9a6eb3e32d73aea899ac5d82583eb74d55ff1",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/check_live.py": "eb8b3ef49a4acf7f41ea8d45308ae5ae501d607ecca89196ff0a553e2600a2c0",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/check_policies.py": "dbe4f2d7f93eb3f4fd7fb02bff0a5e9a9984f79827cb49e49e4d53d26ef37a1b",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/check_timing.py": "36d10917098ce67c4f6eda7f0886d55a90ca92a65ad7566fdd89b3b8cca8a5d5",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/clock_profile.py": "58c75d8a82a4e5eb17db559cd8d5aaca70419a988b66ce03d3cdfc9dcaa0310b",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/collect_games.py": "1fdae0d6e5cce440887c296a36386f8c62acef61cc824250cc0427120e84c39d",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/collect_ordinary.py": "755a3c61a97dd8bb6af3b219214456119c45da8115ce507d2e634424f9f4dc61",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/compare_ordinary.py": "814c39847f07cc1d50aa45c759e515af8a4dc55b16673d6278f2df2bd3d2ae53",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/evaluation_probe.rs": "49f6a1c57f12df3f3721f7f67d57af2ac322ce70af2d2989533c7673d4a1c5b7",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/generate_spec_tables.py": "4f4f2ac6c36e26f32eeb3a4de4f29239522e402c3a83c3fecefebab53ffc5de3",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/generate_time_powers.py": "795a100bd7a32893fef6d946a2fef9a15cb86672841bed51d633f67e0f14261a",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/measure.py": "a7aef2142b0aab59b2bfb62f78ccb589f9915e180f990f1be1e59ec3b9e86224",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/runner-control.c": "48ecf2dbcce382ba468c8f14e4d66211b691eeba6ea78b2870f94cc4f49dbfc8",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/tap_wire.mjs": "059679c485201568545b3eb12ed663403c3c2d3776edcf3b92a1dc1fd6ab9271",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/test_account_native.py": "248830e0bb69bb3f72372c138528b8085b7dc77fcb0270e5f535c4ba7fe2b353",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/test_measure.py": "7a7448ba95878beae6331c25ea0d3fee98fbccaebd2d5617a9c68189af24846b",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/test_tap_wire.py": "1d7122edf2fadfb18390c3e239742176cbdad26f70e3e2ea6a63979fd18b07a4",
+-    "/home/legolas/rook2/evidence/current62-activity-repeat-census-build-20261020-01/generic-build/source-before/tools/timing_probe.rs": "fe1f56db1564687383439df1edc1d81ab2fe419a76a50efcc521bd005b069442"
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-collector-preparation-20261020-01/common.mjs": "e49b27ec10389f8acd235dfb979b8cacd207a136237dfe5af28a13df10f151fa",
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-collector-preparation-20261020-01/collect.mjs": "8953c2ca13aa5d8e050bd7bc9dcebe86c8bd8b3ac6f0e64d794523c577c190a7",
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-collector-preparation-20261020-01/verify.mjs": "397f383b43e4eb318bd1e9a5b6c1c0e774887014d1c4b7cae717988a65a9f4ac",
++    "/home/legolas/rook2/evidence/current62-generation-safety-census-collector-preparation-20261020-01/consumer-contract-proposal.json": "cc1b82bfd0776212fc4b9050d8f3c3c528846be4e319c3d604e261402ffd6fef"
+   }
+ }

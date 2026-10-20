@@ -1,0 +1,76 @@
+--- /home/legolas/rook2/evidence/bitplane-pin-summary-standard54-preparation-20261020-01/collect54.py
++++ /home/legolas/rook2/evidence/exttsp-profiled-standard54-preparation-20261020-01/collect54.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Candidate57 local54 whole-native and search CPU collection with the strict oracle.
++"""Candidate62 local54 whole-native and search CPU collection with the strict oracle.
+ 
+ One excluded warmup followed by three measured fresh-process repetitions per
+ case, in stored corpus order. No reference qualification or PMU claim.
+@@ -61,7 +61,7 @@
+                     build_path, Path('/usr/bin/node').resolve(), Path(sys.executable).resolve()]
+     oracle = json.loads((SPEC/'replay-oracle.json').read_text())
+     schedule = [dict(case=c, repeat=i, warmup=i == 0) for c in case_ids for i in range(4)]
+-    manifest = dict(schema='rook2-candidate57-native-and-search54-v1', engine=str(engine), engine_sha256=engine_sha,
++    manifest = dict(schema='rook2-candidate62-native-and-search54-v1', engine=str(engine), engine_sha256=engine_sha,
+                     build_record=str(build_path), schedule=schedule,
+                     input_sha256={str(p):sha(p) for p in dependencies},
+                     limits=dict(seconds_per_run=960, aggregate_seconds=3600,
+--- /home/legolas/rook2/evidence/bitplane-pin-summary-standard54-preparation-20261020-01/verify.py
++++ /home/legolas/rook2/evidence/exttsp-profiled-standard54-preparation-20261020-01/verify.py
+@@ -106,9 +106,9 @@
+                              search_wall_s=search['wallNs'] / 1e9,
+                              native_wall_s=native['wall_ns'] / 1e9))
+     cases = []
+-    previous = read(Path('/home/legolas/rook2/evidence/tactical-check-mask-standard54-preparation-20261020-01/independent-reconciliation.json'))
++    previous = read(Path('/home/legolas/rook2/evidence/bitplane-pin-summary-standard54-preparation-20261020-01/independent-reconciliation.json'))
+     assert previous['verified'] and previous['lifetimes'] == 216
+-    prior51 = {r['case']: r for r in previous['case_results']}
++    prior57 = {r['case']: r for r in previous['case_results']}
+     for case in [c['id'] for c in workloads['cases']]:
+         measured = [r for r in all_rows if r['case'] == case and not r['warmup']]
+         assert len(measured) == 3
+@@ -119,23 +119,23 @@
+                                minimum=min(values), maximum=max(values))
+         assert row['native_cpu_s']['median'] == summary['case_summaries'][case]['median']
+         assert row['search_cpu_s']['median'] == summary['case_summaries'][case]['search_cpu_s']['median']
+-        row['previous51_search_cpu_median_s'] = prior51[case]['search_cpu_s']['median']
+-        row['previous51_native_cpu_median_s'] = prior51[case]['native_cpu_s']['median']
+-        row['candidate_div_previous51_search_cpu'] = row['search_cpu_s']['median'] / row['previous51_search_cpu_median_s']
++        row['previous57_search_cpu_median_s'] = prior57[case]['search_cpu_s']['median']
++        row['previous57_native_cpu_median_s'] = prior57[case]['native_cpu_s']['median']
++        row['candidate_div_previous57_search_cpu'] = row['search_cpu_s']['median'] / row['previous57_search_cpu_median_s']
+         cases.append(row)
+     totals = {metric: sum(c[metric]['median'] for c in cases)
+               for metric in ['native_cpu_s', 'search_cpu_s', 'search_wall_s', 'native_wall_s']}
+     assert totals['native_cpu_s'] == summary['sum_case_medians_s']
+     assert totals['search_cpu_s'] == summary['sum_case_search_cpu_medians_s']
+-    previous51_total = sum(c['previous51_search_cpu_median_s'] for c in cases)
+-    assert math.isclose(previous51_total, 69.05, abs_tol=1e-10)
++    previous57_total = sum(c['previous57_search_cpu_median_s'] for c in cases)
++    assert math.isclose(previous57_total, 68.64, abs_tol=1e-10)
+     before = read(COLLECTION / 'context-before.json')
+     after = read(COLLECTION / 'context-after.json')
+     sibling_delta = [a - b for a, b in zip(cpu_ticks(after, 'cpu15'), cpu_ticks(before, 'cpu15'))]
+     proof = dict(verified=True, engine_sha256=plan['engine_sha256'], cases=54,
+                  lifetimes=216, excluded_warmups=54, measured=162, semantic_posts=posts,
+-                 medians_total_s=totals, previous51_search_cpu_medians_total_s=previous51_total,
+-                 candidate_div_previous51_search_cpu=totals['search_cpu_s'] / previous51_total,
++                 medians_total_s=totals, previous57_search_cpu_medians_total_s=previous57_total,
++                 candidate_div_previous57_search_cpu=totals['search_cpu_s'] / previous57_total,
+                  historical_comparison='Separate Vic window and accounting; no paired current-control run or causal whole54 gain claim.',
+                  cpu15_guest_tick_delta=sibling_delta,
+                  cpu15_nonidle_ticks=sum(sibling_delta[:3]) + sum(sibling_delta[4:8]),
+@@ -146,10 +146,10 @@
+     with (OUT / 'timings.csv').open('w') as stream:
+         writer = csv.writer(stream)
+         writer.writerow(['case', 'vic_search_cpu_median_s', 'vic_native_cpu_median_s',
+-                         'previous51_search_cpu_median_s', 'candidate_div_previous51_search_cpu'])
++                         'previous57_search_cpu_median_s', 'candidate_div_previous57_search_cpu'])
+         for row in cases:
+             writer.writerow([row['case'], row['search_cpu_s']['median'], row['native_cpu_s']['median'],
+-                             row['previous51_search_cpu_median_s'], row['candidate_div_previous51_search_cpu']])
++                             row['previous57_search_cpu_median_s'], row['candidate_div_previous57_search_cpu']])
+     print(json.dumps({k: v for k, v in proof.items() if k != 'case_results'}))
+ 
+ 

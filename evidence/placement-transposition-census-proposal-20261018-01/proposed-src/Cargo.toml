@@ -1,0 +1,30 @@
+[package]
+name = "rook2"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+description = "Independent performance-oriented KingRE implementation"
+
+[lib]
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+debug = 1
+
+[profile.bench]
+inherits = "release"
+
+[dependencies]
+
+[features]
+placement-census = []
+
+[[bin]]
+name = "rook2-placement-census"
+path = "src/bin/rook2-placement-census.rs"
+required-features = ["placement-census"]

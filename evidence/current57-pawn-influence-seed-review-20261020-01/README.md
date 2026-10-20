@@ -1,0 +1,1 @@
+Unselected source-level hypothesis: aggregate own pawn attacks can seed only the two high wrapping Influence counter planes, replacing per-pawn accumulation in slider-owning colors. Formula and limits are in review.json. No source change, candidate number, engine/build/profile execution or speed claim. Revisit only after the live whole12 measurement closes.

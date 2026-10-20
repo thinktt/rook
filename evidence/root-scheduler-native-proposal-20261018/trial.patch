@@ -1,0 +1,429 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -33,6 +33,7 @@
+ pub mod quiescence_policy;
+ mod relation_table;
+ pub mod remembered;
++pub mod root_schedule;
+ pub mod session;
+ pub mod shelter;
+ pub mod tactical;
+--- a/src/root_schedule.rs
++++ b/src/root_schedule.rs
+@@ -0,0 +1,276 @@
++//! Root scheduling, retry and ranking shared by actual and controlled searches.
++//!
++//! An identity is a slot in the caller's immutable initial candidate table. The
++//! caller supplies actual absolute search work and executes each returned attempt;
++//! this owner never fabricates a child answer or charges work itself.
++use crate::timed::{aspiration, ranking_score};
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Row {
++    pub id: u16,
++    pub score: i32,
++    pub work: u64,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Policy {
++    Unrestricted,
++    Restricted,
++}
++
++pub const fn policy(search_count: u64) -> Policy {
++    if search_count >= 25000 {
++        Policy::Restricted
++    } else {
++        Policy::Unrestricted
++    }
++}
++
++/// The first candidate stays pinned; equal-effort tail rows keep their order.
++pub fn order_tail(rows: &mut [Row], selected: Policy) {
++    if selected == Policy::Restricted && rows.len() > 1 {
++        rows[1..].sort_by_key(|row| std::cmp::Reverse(row.work));
++    }
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Attempt {
++    pub id: u16,
++    pub index: usize,
++    pub window: [i32; 2],
++    pub retry: bool,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Completed {
++    pub id: u16,
++    pub index: usize,
++    pub window: [i32; 2],
++    pub returned_score: i32,
++    pub score: i32,
++    pub best: i32,
++    pub second: i32,
++    pub best_changed: bool,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Returned {
++    Retry(Attempt),
++    Completed(Completed),
++}
++
++#[derive(Clone, Copy)]
++struct Pending {
++    attempt: Attempt,
++    original_window: [i32; 2],
++    before_search: u64,
++}
++
++/// One iteration owns the existing exploration and completed-ranking vectors.
++/// Drop an interrupted instance without returning a score for its pending pass.
++pub struct Iteration {
++    rows: Vec<Row>,
++    ranked: Vec<Row>,
++    policy: Policy,
++    previous: i32,
++    best: i32,
++    index: usize,
++    pending: Option<Pending>,
++}
++
++impl Iteration {
++    pub fn new(rows: Vec<Row>, search_count: u64, previous: i32) -> Self {
++        assert!(!rows.is_empty());
++        let ranked = Vec::with_capacity(rows.len());
++        Self {
++            rows,
++            ranked,
++            policy: policy(search_count),
++            previous,
++            best: -10000,
++            index: 0,
++            pending: None,
++        }
++    }
++
++    pub fn policy(&self) -> Policy {
++        self.policy
++    }
++    pub fn best(&self) -> i32 {
++        self.best
++    }
++    pub fn second(&self) -> i32 {
++        self.ranked.get(1).map_or(-10000, |r| r.score)
++    }
++    pub fn ranked(&self) -> &[Row] {
++        &self.ranked
++    }
++
++    /// Begin a new candidate. A retry is returned only by `returned`, so a
++    /// caller cannot accidentally reset the candidate's work origin between passes.
++    pub fn next(&mut self, search_count: u64) -> Option<Attempt> {
++        assert!(
++            self.pending.is_none(),
++            "pending root attempt must return first"
++        );
++        if self.index == self.rows.len() {
++            return None;
++        }
++        if self.index == 1 {
++            order_tail(&mut self.rows, self.policy);
++        }
++        let window = if self.policy == Policy::Restricted && self.index != 0 {
++            aspiration(self.best, self.previous)
++        } else {
++            [self.second(), 10000]
++        };
++        let attempt = Attempt {
++            id: self.rows[self.index].id,
++            index: self.index,
++            window,
++            retry: false,
++        };
++        self.pending = Some(Pending {
++            attempt,
++            original_window: window,
++            before_search: search_count,
++        });
++        Some(attempt)
++    }
++
++    /// Commit one normally returned adjusted root score. An interrupted child
++    /// never calls this operation. Work includes both executed passes exactly once.
++    pub fn returned(&mut self, returned_score: i32, search_count: u64) -> Returned {
++        let mut pending = self.pending.take().expect("no pending root attempt");
++        assert!(search_count >= pending.before_search);
++        let restricted_nonfirst = self.policy == Policy::Restricted && self.index != 0;
++        if restricted_nonfirst
++            && !pending.attempt.retry
++            && returned_score >= pending.original_window[1]
++        {
++            pending.attempt.retry = true;
++            pending.attempt.window[1] = 10000;
++            self.pending = Some(pending);
++            return Returned::Retry(pending.attempt);
++        }
++        let score = ranking_score(returned_score, pending.original_window, restricted_nonfirst);
++        let row = &mut self.rows[self.index];
++        row.work += search_count - pending.before_search;
++        row.score = score;
++        let place = self.ranked.partition_point(|r| r.score >= score);
++        self.ranked.insert(place, *row);
++        let best_changed = score > self.best;
++        if best_changed {
++            self.best = score;
++        }
++        let completed = Completed {
++            id: row.id,
++            index: self.index,
++            window: pending.original_window,
++            returned_score,
++            score,
++            best: self.best,
++            second: self.second(),
++            best_changed,
++        };
++        self.index += 1;
++        Returned::Completed(completed)
++    }
++
++    /// Carry only the completed stable ranking into the next iteration.
++    pub fn into_ranked(self) -> Vec<Row> {
++        assert!(self.pending.is_none() && self.index == self.rows.len());
++        self.ranked
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn rows(work: &[u64]) -> Vec<Row> {
++        work.iter()
++            .enumerate()
++            .map(|(id, &work)| Row {
++                id: id as u16,
++                score: 123,
++                work,
++            })
++            .collect()
++    }
++    fn complete(value: Returned) -> Completed {
++        match value {
++            Returned::Completed(value) => value,
++            _ => panic!("unexpected retry"),
++        }
++    }
++
++    #[test]
++    fn policy_is_frozen_and_tail_order_waits_for_first_completion() {
++        let mut unrestricted = Iteration::new(rows(&[1, 3, 9, 9]), 24999, 0);
++        assert_eq!(unrestricted.next(24999).unwrap().id, 0);
++        complete(unrestricted.returned(5, 25001));
++        assert_eq!(unrestricted.next(25001).unwrap().id, 1);
++        assert_eq!(unrestricted.policy(), Policy::Unrestricted);
++        let mut restricted = Iteration::new(rows(&[1, 3, 9, 9]), 25000, 0);
++        assert_eq!(restricted.next(25000).unwrap().id, 0);
++        assert_eq!(
++            restricted.rows.iter().map(|r| r.id).collect::<Vec<_>>(),
++            [0, 1, 2, 3]
++        );
++        complete(restricted.returned(5, 25002));
++        assert_eq!(restricted.next(25002).unwrap().id, 2);
++        assert_eq!(
++            restricted.rows.iter().map(|r| r.id).collect::<Vec<_>>(),
++            [0, 2, 3, 1]
++        );
++    }
++
++    #[test]
++    fn retry_retains_original_window_identity_and_both_passes_work() {
++        let mut owner = Iteration::new(rows(&[100, 200]), 25000, 10);
++        let first = owner.next(25000).unwrap();
++        assert_eq!(first.window, [-10000, 10000]);
++        let first = complete(owner.returned(10, 25003));
++        assert!(first.best_changed);
++        let next = owner.next(25003).unwrap();
++        assert_eq!((next.id, next.window, next.retry), (1, [12, 13], false));
++        let retry = match owner.returned(13, 25007) {
++            Returned::Retry(attempt) => attempt,
++            _ => panic!("expected retry"),
++        };
++        assert_eq!(
++            (retry.id, retry.index, retry.window, retry.retry),
++            (1, 1, [12, 10000], true)
++        );
++        let result = complete(owner.returned(12, 25012));
++        assert_eq!(
++            (result.window, result.returned_score, result.score),
++            ([12, 13], 12, 10)
++        );
++        assert!(!result.best_changed);
++        assert_eq!((result.best, result.second), (10, 10));
++        assert!(owner.next(25012).is_none());
++        let ranked = owner.into_ranked();
++        assert_eq!(
++            ranked.iter().map(|r| (r.id, r.work)).collect::<Vec<_>>(),
++            [(0, 103), (1, 209)]
++        );
++    }
++
++    #[test]
++    fn sentinel_ties_do_not_invent_a_best_and_high_identity_survives() {
++        let mut initial = rows(&[0, 0]);
++        initial[1].id = 511;
++        let mut owner = Iteration::new(initial, 0, 0);
++        assert_eq!(owner.next(0).unwrap().id, 0);
++        assert!(!complete(owner.returned(-10000, 1)).best_changed);
++        assert_eq!(owner.next(1).unwrap().id, 511);
++        let last = complete(owner.returned(-10000, 2));
++        assert!(!last.best_changed);
++        assert_eq!((last.best, last.second), (-10000, -10000));
++        assert_eq!(
++            owner.into_ranked().iter().map(|r| r.id).collect::<Vec<_>>(),
++            [0, 511]
++        );
++    }
++}
+--- a/src/timed.rs
++++ b/src/timed.rs
+@@ -6,6 +6,9 @@
+ use crate::ordinary::{Error, Predecessor, Request};
+ use crate::position::Position;
+ use crate::quiescence::{Limits, Stats, Stopped, Work};
++use crate::root_schedule::{
++    Iteration as RootIteration, Policy as RootPolicy, Returned as RootReturned, Row as RootRow,
++};
+ use crate::timing::{Adaptive, Stage, Terminal};
+ use crate::types::{Move, MoveKind, PieceKind};
+ use crate::work_clock::Ledger;
+@@ -238,13 +241,6 @@
+         ^ (2097410 * promotion)
+         ^ kind;
+     (mixed % (randomness + 1)) as i32 - (randomness / 2) as i32
+-}
+-
+-#[derive(Clone, Copy)]
+-struct Root {
+-    movement: Move,
+-    score: i32,
+-    work: u64,
+ }
+ 
+ #[cfg(test)]
+@@ -452,10 +448,11 @@
+             return Err(Error::NoLegalRoots);
+         }
+         let initial_candidates = legal.as_slice().to_vec();
+-        let mut roots: Vec<Root> = initial_candidates
++        let mut roots: Vec<RootRow> = initial_candidates
+             .iter()
+-            .map(|&movement| Root {
+-                movement,
++            .enumerate()
++            .map(|(id, _)| RootRow {
++                id: id as u16,
+                 score: 0,
+                 work: 0,
+             })
+@@ -478,34 +475,26 @@
+         let stop = 'search: {
+             for depth in 1..=controls.maximum_entered_iterations {
+                 self.timing.as_mut().unwrap().depth = depth;
+-                let restricted = self.work().charged_search_units >= 25000;
+-                let mut ranked = Vec::<Root>::with_capacity(roots.len());
+-                let mut best = -10000;
++                let mut schedule =
++                    RootIteration::new(roots, self.work().charged_search_units, previous_best);
++                let restricted = schedule.policy() == RootPolicy::Restricted;
+                 let mut pv = Vec::new();
+                 let mut iteration = Iteration {
+                     depth,
+                     complete: false,
+                     steps: Vec::new(),
+                 };
+-                for index in 0..roots.len() {
+-                    if restricted && index == 1 {
+-                        roots[1..].sort_by_key(|r| std::cmp::Reverse(r.work));
+-                    }
++                while let Some(initial_attempt) = schedule.next(self.work().charged_search_units) {
++                    let index = initial_attempt.index;
+                     self.timing.as_mut().unwrap().root_index = index;
+-                    let movement = roots[index].movement;
+-                    let window = if restricted && index != 0 {
+-                        aspiration(best, previous_best)
+-                    } else {
+-                        [ranked.get(1).map_or(-10000, |r| r.score), 10000]
+-                    };
++                    let movement = initial_candidates[initial_attempt.id as usize];
++                    let window = initial_attempt.window;
+                     let adjustment =
+                         random_adjustment(controls.seed, controls.randomness, movement);
+-                    let before = self.work().charged_search_units;
+                     let mut child = root.child(&self.evaluator.root, movement);
+                     let mut attempt_window = window;
+                     let mut passes = Vec::new();
+-                    let mut retry = false;
+-                    let returned = loop {
++                    let completion = loop {
+                         history.push(&child.position, Some(movement));
+                         let result = self.visit_ordinary(
+                             &mut child,
+@@ -561,19 +550,15 @@
+                                 work: self.work(),
+                             });
+                         }
+-                        if restricted && index != 0 && !retry && value >= window[1] {
+-                            retry = true;
+-                            attempt_window[1] = 10000;
+-                        } else {
+-                            break value;
++                        match schedule.returned(value, self.work().charged_search_units) {
++                            RootReturned::Retry(attempt) => attempt_window = attempt.window,
++                            RootReturned::Completed(completed) => break completed,
+                         }
+                     };
+-                    let score = ranking_score(returned, window, restricted && index != 0);
+-                    roots[index].work += self.work().charged_search_units - before;
+-                    roots[index].score = score;
+-                    let place = ranked.partition_point(|r| r.score >= score);
+-                    ranked.insert(place, roots[index]);
+-                    let second = ranked.get(1).map_or(-10000, |r| r.score);
++                    let returned = completion.returned_score;
++                    let score = completion.score;
++                    let best = completion.best;
++                    let second = completion.second;
+                     let work = self.work();
+                     if restricted && index == 0 {
+                         self.timing.as_mut().unwrap().adjustment(
+@@ -584,8 +569,7 @@
+                             work,
+                         );
+                     }
+-                    if score > best {
+-                        best = score;
++                    if completion.best_changed {
+                         pv.clear();
+                         pv.push(movement);
+                         pv.extend_from_slice(&self.pv[1][..self.pv_len[1]]);
+@@ -641,7 +625,8 @@
+                         };
+                     }
+                 }
+-                let second = ranked.get(1).map_or(-10000, |r| r.score);
++                let best = schedule.best();
++                let second = schedule.second();
+                 let work = self.work();
+                 let clock = self.timing.as_mut().unwrap();
+                 let stage = if !restricted && work.charged_search_units >= 25000 {
+@@ -678,7 +663,7 @@
+                     };
+                 }
+                 previous_best = best;
+-                roots = ranked;
++                roots = schedule.into_ranked();
+             }
+             return Err(Error::IterationCapacity);
+         };

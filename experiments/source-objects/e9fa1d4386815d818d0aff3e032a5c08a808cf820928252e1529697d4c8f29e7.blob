@@ -1,0 +1,11 @@
+--- before/src/influence/coherent_tests.rs
++++ after/src/influence/coherent_tests.rs
+@@ -319,7 +319,7 @@
+     // Three promoted-capable queens on one ray; their contributions stay separate.
+     // Enemy king is transparent after the first friendly queen has weakened it.
+     let queens = described(&[("a4",W,Queen),("c4",W,Queen),("e4",W,Queen),("g4",B,King)]);
+-    check(&queens);assert_eq!(Influence::build_coherent(&queens).code(W,sq("h4")),3);
++    check(&queens);assert_eq!(Influence::build_coherent(&queens).code(W,sq("h4")),4);
+     for original in [zero,one,queens] {
+         let mut board = [Piece::EMPTY;64];
+         for (i,piece) in original.board.into_iter().enumerate() {

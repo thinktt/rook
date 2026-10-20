@@ -1,0 +1,192 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -75,6 +75,7 @@
+ 
+ /// Existing immutable leaper masks, only for a coherent private producer.
+ /// Pawn target direction is the opposite-side source row at this square.
++#[cfg(test)]
+ #[inline]
+ pub(crate) fn influence_pawn_targets(side: Color, square: Square) -> u64 {
+     MASKS.pawn_sources[side.opponent().index()][square.0 as usize]
+--- a/src/influence/coherent.rs
++++ b/src/influence/coherent.rs
+@@ -1,7 +1,7 @@
+ //! Private coherent-placement producer: scalar zero-slider colors, bit-sliced sums otherwise.
+ //! No cache, parent map, persistent state, relation queries or changed byte format.
+ use super::{Contribution, Influence};
+-use crate::attacks::{influence_rays, influence_pawn_targets, influence_knight_targets, influence_king_targets};
++use crate::attacks::{influence_rays, influence_knight_targets, influence_king_targets};
+ use crate::geometry::{DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+ use crate::position::Position;
+ use crate::types::{Color, PieceKind, Square};
+@@ -44,11 +44,13 @@
+             }
+             continue; // No bit-counter setup or transpose for this color.
+         }
+-        let mut sums = BitSums { planes: [0; 8] };
+-        for &source in position.piece_squares(side, PieceKind::Pawn) {
+-            debug_assert!(source.0 < 64);
+-            sums.add::<6>(influence_pawn_targets(side, source));
+-        }
++        let mut sums = if position.piece_squares(side, PieceKind::Pawn).is_empty() {
++            BitSums { planes: [0; 8] }
++        } else {
++            let own = if side == Color::Black { planes[3] } else { !planes[3] };
++            let pawns = planes[0] & !planes[1] & !planes[2] & own;
++            BitSums::from_pawns(side, pawns)
++        };
+         for &source in position.piece_squares(side, PieceKind::Knight) {
+             debug_assert!(source.0 < 64);
+             sums.add::<4>(influence_knight_targets(source));
+@@ -132,6 +134,19 @@
+ /// Plane b contains bit b of every target's wrapping byte. This is invocation-local.
+ struct BitSums { planes: [u64; 8] }
+ impl BitSums {
++    /// Fresh counter only: each target has at most one source per diagonal.
++    /// Keep both physical contributions where the two target masks overlap.
++    #[inline]
++    fn from_pawns(side: Color, pawns: u64) -> Self {
++        const FILE_A: u64 = 0x0101_0101_0101_0101;
++        const FILE_H: u64 = 0x8080_8080_8080_8080;
++        let (left, right) = if side == Color::White {
++            ((pawns & !FILE_A) << 7, (pawns & !FILE_H) << 9)
++        } else {
++            ((pawns & !FILE_A) >> 9, (pawns & !FILE_H) >> 7)
++        };
++        Self { planes: [0, 0, 0, 0, 0, 0, left ^ right, left & right] }
++    }
+     #[inline]
+     fn add<const SHIFT: usize>(&mut self, mut carry: u64) {
+         debug_assert!(SHIFT < 8);
+@@ -311,3 +326,12 @@
+     sums.store(&mut bytes);
+     bytes
+ }
++
++#[cfg(test)]
++pub(super) fn pawn_seed_for_test(side: Color, pawns: u64) -> ([u64; 8], [u8; 64]) {
++    let mut sums = BitSums::from_pawns(side, pawns);
++    let planes = sums.planes;
++    let mut bytes = [0; 64];
++    sums.store(&mut bytes);
++    (planes, bytes)
++}
+--- a/src/influence/coherent_tests.rs
++++ b/src/influence/coherent_tests.rs
+@@ -365,3 +365,116 @@
+     assert_eq!(evaluator.ensure_influence(&stale,&mut scratch).profiles,map_ref(&stale));
+     assert_eq!(coherent_build_count(),before+1);
+ }
++
++
++// The oracle visits physical source coordinates, never the seed shifts/masks.
++fn experiment58_coordinate_pawn_bytes(side: Color, pawns: u64) -> [u8; 64] {
++    let mut expected = [0u8; 64];
++    let forward = if side == Color::White { 1 } else { -1 };
++    for source in 0..64 {
++        if pawns & (1u64 << source) == 0 { continue; }
++        for df in [-1, 1] {
++            if let Some(target) = at(source, df, forward) {
++                expected[target] = expected[target].wrapping_add(64);
++            }
++        }
++    }
++    expected
++}
++
++#[test]
++fn experiment58_fresh_pawn_seed_coordinate_singles_pairs_and_many_masks() {
++    for side in [Color::White, Color::Black] {
++        let verify = |pawns| {
++            let expected = experiment58_coordinate_pawn_bytes(side, pawns);
++            let (planes, bytes) = coherent::pawn_seed_for_test(side, pawns);
++            assert_eq!(bytes, expected, "side={side:?} pawns={pawns:016x}");
++            assert_eq!(&planes[..6], &[0; 6]);
++            for target in 0..64 {
++                assert_eq!((planes[6] >> target) & 1, u64::from((expected[target] >> 6) & 1));
++                assert_eq!((planes[7] >> target) & 1, u64::from((expected[target] >> 7) & 1));
++            }
++        };
++        verify(0);
++        for first in 0..64 {
++            verify(1u64 << first);
++            for second in first + 1..64 { verify((1u64 << first) | (1u64 << second)); }
++        }
++        // Pure counter inputs, not claims that all these masks are admitted Positions.
++        for pawns in [u64::MAX, 0xff, 0xff00_0000_0000_0000,
++            0x8181_8181_8181_8181, 0x00ff_ff00_00ff_ff00, 0x55aa_55aa_55aa_55aa] {
++            verify(pawns);
++        }
++        let mut seed = 0xa718_d3c6_95e2_40bfu64;
++        for _ in 0..64 {
++            seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17;
++            verify(seed);
++        }
++    }
++}
++
++#[test]
++fn experiment58_complete_maps_pawn_seed_wrap_weak_edges_and_no_sliders() {
++    use Color::{White as W, Black as B}; use PieceKind::*;
++    let pieces = [("c3",W,Pawn),("e3",W,Pawn),
++        ("b3",W,Knight),("b5",W,Knight),("c2",W,Knight),("c6",W,Knight),
++        ("e2",W,Knight),("e6",W,Knight),("f3",W,Knight),("f5",W,Knight)];
++    let zero = described(&pieces);
++    assert!(zero.piece_squares(W,Bishop).is_empty() && zero.piece_squares(W,Rook).is_empty() && zero.piece_squares(W,Queen).is_empty());
++    check(&zero); assert_eq!(Influence::build_coherent(&zero).code(W,sq("d4")),0);
++    let mut with_slider = pieces.to_vec(); with_slider.push(("a8",W,Bishop));
++    let one = described(&with_slider);
++    check(&one); assert_eq!(Influence::build_coherent(&one).code(W,sq("d4")),0);
++    let no_pawns = described(&[("a4",W,Queen),("c4",W,Queen),("e4",W,Queen),("g4",B,King)]);
++    assert!(no_pawns.piece_squares(W,Pawn).is_empty());
++    check(&no_pawns); assert_eq!(Influence::build_coherent(&no_pawns).code(W,sq("h4")),4);
++    let weak_and_extra = described(&[("d4",W,Bishop),("c5",W,Pawn),("b6",B,Knight),
++        ("e3",W,Queen),("f2",W,Queen),("g1",B,King),("h2",B,Pawn)]);
++    let edges = described(&[("a7",W,Pawn),("h7",W,Pawn),("a2",W,Pawn),("h2",W,Pawn),
++        ("a3",W,Pawn),("h3",W,Pawn),("b6",W,Pawn),("g6",W,Pawn),("d4",W,Rook)]);
++    for position in [zero,one,no_pawns,weak_and_extra,edges] {
++        check(&position);
++        let before = Influence::build_coherent(&position);
++        let mut board = [Piece::EMPTY;64];
++        for (i,piece) in position.board.into_iter().enumerate() {
++            if !piece.is_empty() { board[i^56] = Piece::new(piece.color().opponent(),piece.kind()); }
++        }
++        let mirrored = placement(board); check(&mirrored);
++        let after = Influence::build_coherent(&mirrored);
++        for side in [W,B] { for target in 0..64 {
++            assert_eq!(before.profiles[side.index()][target],after.profiles[side.opponent().index()][target^56]);
++        }}
++        let mut chronology = position;
++        for side in 0..2 { let mut begin=0; for count in chronology.counts[side] {
++            let end=begin+usize::from(count); chronology.squares[side][begin..end].reverse(); begin=end;
++        }}
++        check(&chronology); assert_eq!(Influence::build_coherent(&chronology),before);
++    }
++}
++
++#[test]
++fn experiment58_pawn_seed_public_scalar_and_supplied_map_authority() {
++    use crate::evaluator::{Evaluator,coherent_build_count};
++    let position = Position::from_fen("4k3/8/8/3p4/2P5/8/8/2B1K3 w - - 0 1").unwrap();
++    check(&position);
++    let custom = Influence { profiles: std::array::from_fn(|color| std::array::from_fn(|target| (29*target+97*color+11) as u8)) };
++    assert_ne!(custom,Influence::build(&position));
++    let mut evaluator = Evaluator::<true>::new(&position);
++    let before = coherent_build_count(); let mut supplied = Some(custom);
++    assert_eq!(*evaluator.ensure_influence(&position,&mut supplied),custom);
++    assert_eq!(*evaluator.ensure_influence_for_search(&position,&mut supplied,true),custom);
++    assert_eq!(supplied,Some(custom)); assert_eq!(coherent_build_count(),before);
++    assert_eq!(evaluator.stats.influence_builds,0);
++    let mut fresh = None;
++    assert_eq!(evaluator.ensure_influence_for_search(&position,&mut fresh,true).profiles,map_ref(&position));
++    assert_eq!(coherent_build_count(),before+1); assert_eq!(evaluator.stats.influence_builds,1);
++    let mut stale = position;
++    stale.board[sq("d2").0 as usize] = Piece::new(Color::White,PieceKind::Pawn);
++    assert_eq!(stale.attack_view(),position.attack_view());
++    assert_ne!(Influence::build(&stale),Influence::build(&position));
++    assert_eq!(Influence::build(&stale).profiles,map_ref(&stale));
++    let mut public = None;
++    assert_eq!(evaluator.ensure_influence(&stale,&mut public).profiles,map_ref(&stale));
++    assert_eq!(coherent_build_count(),before+1); assert_eq!(evaluator.stats.influence_builds,2);
++    // Coherent producer is deliberately never called on the stale private planes.
++}

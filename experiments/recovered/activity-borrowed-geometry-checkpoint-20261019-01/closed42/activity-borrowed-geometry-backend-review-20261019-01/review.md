@@ -1,0 +1,33 @@
+# Experiment42 generic backend gate
+
+**GO to the parent's focused12 controls, then one fixed70 pilot if those pass.** The intended borrowed-geometry consumer is emitted and reaches the normal WireHost full evaluation. Costs are real and explained; this is not evidence of speed, numerical equivalence, adoption, or PGO authority.
+
+Control40 generic is `adbf66a39b710bc0f44db2ceb99cac7b823fc02962e4c23a2d6ec12dfa92d664`; candidate42 is `7177275ade2989d139998fcc667b0953a4b0edcd2617c1101bc51906a2bab3b3`. Source graphs are216c8f51… versus64cef0f2…, exactly72 members (49 native +23 tools). Receipts and rehashed source-before maps agree before/after; only activity/evaluator/ordinary/quiescence differ. Manifests/tools are identical. Both receipts identify rustc1.85.1 /LLVM19.1.7, generic x86-64, O3, thin LTO, one codegen unit and the same environment/base flags. Both actual verbose build lines confirm thin/CGU1. No build/compiler/native execution occurred in this review.
+
+| Actual emitted owner | Control40 | Candidate42 | Consequence |
+| --- | ---: | ---: | --- |
+| activity compute / compute_for_search |7884 B; local frame0x1c8|14520 B; frame0x218|+6636 B code, +80 B stack reservation; six register pushes remain |
+| common full_impl |2415 B; frame0x138|2421 B; frame0x138|One shared numerical full owner, added permission transport |
+| ordinary visit |8670 B; frame0x428|8704 B; frame0x428|Bounded entry/callsite inspection only |
+| Q visit |7316 B; frame0x4c8|7328 B; frame0x4c8|Both actual full call points inspected |
+| binary run |28669 B; frame0x134a8|28661 B; frame0x134a8|Bounded entry/root-full point only |
+| whole ELF .text |495739 B|502427 B|+6688 B; not a dynamic cost estimate |
+| whole ELF .rodata |322192 B|322376 B|+184 B; .data.rel.ro remains19992 B |
+
+The complete matched activity bodies and complete full_impl bodies are captured. Candidate entry18891 tests incoming r9 and branches at18894 to scalar fallback19fe7. True falls through1889a. LLVM merged the two const consumers into this one combined function: both complete paths survive, with code duplication and one entry dispatch. No per-piece Some/None dispatcher or outlined geometry helper call survives on the inspected true path. The false arm retains scalar ray traversal; it pays the combined function's larger frame. The source-level scalar destination oracle remains byte-identical.
+
+**Setup is not physically conditional on every nonempty group.** At189fc–18a18 the true path loads the four borrowed planes as scalar QWORDs from Position+0x80/+0x88/+0x90/+0x98. LLVM hoists common pure mask decoding at18a20–18a8f before color/group loops. Therefore a true zero-slider call still pays that common setup. The cfg(test) group counter proves logical group entry only, not physical zero setup. Nonempty B/R/Q tests still guard their group-specific color/opaque work (e.g.18f3c,1947a,19b32), before the source-piece loops. There is no repeated per-piece reconstruction of the common placement decode.
+
+The actual B/R/Q loops address the existing MASKS row using source*64+0x808 (19032–19049,19674–1968a,19c06–19c1b), then load one ray QWORD per direction. Nearest blockers/prefixes use AND/NEG/BSR/shifts; target loops use zero-guarded TZCNT/BSR/CMOV and BTR. Both signs remain selected by existing increasing flags. Queens have only the direct prefix path; bishop/rook retain distinct direct/additional loops and the rook forward-opaque choice. This trades mailbox visibility branching for mask setup, scans and loop control; it does not remove required destinations or classification work.
+
+Actual per-target mailbox and supplied-map loads remain. For example direct bishop19180–191b2 loads victim/map bytes, adjusts the packed byte and indexes RELATIONS;19149–19168 updates categories, immediate marks and weighted total. Additional19236–192aa loads the actual map/victim and performs the unadjusted relation/capture classification; the generated loop accumulates R at1922a. Rook197a0–19815 retains marks, category and vertical multiplication/shift. These are bounded mechanism anchors, not a machine-level proof of all arithmetic or work. Source proof and pending differential controls own that obligation.
+
+All calls in the **complete** activity bodies resolve by actual direct target or GOT relocation: only king_pressure and cold panic/bounds functions. There is no memcpy, geometry helper or classifier call in those bodies. Four static king_pressure sites in42 belong to the two mutually exclusive arms (two each), versus two sites in40; this is not four dynamic calls. The derived32-byte invocation-local geometry context is intended; register/stack mask spills are visible and are not a copied Position/AttackBits object. No eight-ray row, mailbox transpose or category map is materialized in the inspected producer. This scoped finding does not claim global absence of copies elsewhere.
+
+The common full handoff resolves40 GOT e4e60→activity18850;42 GOT e55e0→activity18850. Candidate full entry42c31 spills incoming r9d into existing stack space;42ec6 reloads that byte into r9d before42ee1 calls the actual activity target. The Q calls3de39/3e002, ordinary40ec8 and inlined root4727f all target the same full42c20 and explicitly supply r9. Source-before bin/rook2.rs106–113→Session.go_live541/566→timed468/518–519 establishes the normal WireHost ownership and existing validation/permission origin; ordinary849 and Q153/280 forward it. Partial caller windows establish concrete forwarding, not a full instruction proof of all permission lifetimes or every generic instantiation.
+
+Existing MASKS, ATTACK_RAYS and RELATIONS object extents remain0x1840/0x1000/0x40000 on both sides; static PRESSURE_VALUES remains0x100. No new geometry table is introduced. Source authority and actual supplied Influence remain separate.
+
+Capture is10 unique symbols:4 complete activity/full bodies and6 partial caller owners,243554 raw disassembly bytes, below12/1048576 limits. Whole Q/ordinary/run bodies, cold panic bodies, test/observed/NoHost variants and dynamic stack/copy/cache behavior are uninspected. Caller windows can begin/end inside instructions; only complete decoded setup and exact verified call instructions are used. No ISA expansion is inferred from disassembly spelling; declared generic compiler settings are unchanged.
+
+All32 binutils children returned0. Actual stages: discoverycd3f74/0, complete bodies0bcb20/0, caller points2c1bc7/0, offline analysisf697e7/0. No collector failure or native workload occurred. All owned tools are terminal; source/image/compiler/receipt/tool pins are rechecked. Root owns focused controls, fixed70 scheduling and the decision; no gain or CPU-neutrality claim follows from these static findings.

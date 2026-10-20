@@ -1,0 +1,24 @@
+--- a/src/tactical.rs
++++ b/src/tactical.rs
+@@ -405,11 +405,16 @@
+         }
+     }
+     let preferred = MOVE_CAPACITY - first;
+-    preferred_into(
+-        &mut scratch[first..],
+-        &mut priorities[first..],
+-        &mut list.moves[..preferred],
+-    );
++    if preferred <= 6 {
++        priority_sequence(&mut scratch[first..], &mut priorities[first..]);
++        list.moves[..preferred].copy_from_slice(&scratch[first..]);
++    } else {
++        preferred_into(
++            &mut scratch[first..],
++            &mut priorities[first..],
++            &mut list.moves[..preferred],
++        );
++    }
+     list.moves[preferred..preferred + low].copy_from_slice(&scratch[..low]);
+ }
+ 

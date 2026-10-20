@@ -1,0 +1,143 @@
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -35,6 +35,7 @@
+ mod pawn_retained;
+ mod pawn_subtotals;
+ mod policies;
++mod post_captures;
+ mod position_terms;
+ mod positions;
+ mod quiescence_evaluation;
+@@ -122,6 +123,7 @@
+ 
+ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+     match operation {
++        "output.postLifecycle" => post_captures::dispatch(input),
+         "search.rootWorkSchedule" | "search.unrestrictedRootSequence" | "search.restrictedRootSequence" => controlled_root::dispatch(operation,input),
+         "search.seededTimedSearch" | "session.goOutcome" => actual_timed::dispatch(operation, input),
+         "time.adaptiveSequence" | "search.iterationTerminalStop" | "session.timeSetup" => clock_boundaries::dispatch(operation,input),
+--- /dev/null
++++ b/diagnostic/src/post_captures.rs
+@@ -0,0 +1,122 @@
++//! Exact arbitrary-label schema; native code owns capture/clock/finish recurrence.
++use super::{array,integer,object,text,unsigned32,Result};
++use rook2::post_lifecycle::{self,ControlledCapture,ControlledReport};
++use serde_json::{json,Value};
++struct Query {
++    start:u32,
++    draw:i32,
++    events:Vec<ControlledCapture<Vec<String>>>,
++    clocks:Vec<u32>,
++}
++impl Query {
++    fn parse(value:&Value)->Result<Self> {
++        object(value,&["startClock","finishClock","drawPreference","events"])?;
++        let start=unsigned32(&value["startClock"])?;
++        // Eager syntax/domain validation; not a semantic source observation.
++        unsigned32(&value["finishClock"])?;
++        let draw=integer(&value["drawPreference"],-10000,10000)?;
++        let mut clocks=Vec::new();let mut events=Vec::new();
++        for event in array(&value["events"],1,16)? {
++            object(event,&["clock","depth","depthRemainder","rankingScore","searchId","principalVariation"])?;
++            let clock=unsigned32(&event["clock"])?;
++            let depth=integer(&event["depth"],1,62)? as u8;
++            let remainder=integer(&event["depthRemainder"],-64,64)?;
++            let ranking_score=integer(&event["rankingScore"],-10000,10000)?;
++            let search_id=u64::from(unsigned32(&event["searchId"])?);
++            let mut payload=Vec::new();
++            for label in array(&event["principalVariation"],0,63)? {
++                let label=text(label)?;
++                if !(1..=12).contains(&label.len())||!label.bytes()
++                    .all(|b|b.is_ascii_alphanumeric()||matches!(b,b'_'|b'-')) {
++                    return Err("invalid opaque post PV label".into());
++                }
++                payload.push(label.to_owned());
++            }
++            clocks.push(clock);
++            events.push(ControlledCapture{depth,remainder,ranking_score,search_id,payload});
++        }
++        Ok(Self{start,draw,events,clocks})
++    }
++    fn observe(self)->Result<Value> {
++        let mut clocks=self.clocks.into_iter();
++        let output=post_lifecycle::controlled(self.start,self.draw,self.events,
++            ||clocks.next().expect("validated event/clock dimensions disagree"))
++            .map_err(|_|"post lifecycle requires an actual capture")?;
++        if clocks.next().is_some() { return Err("unconsumed validated capture clock".into()); }
++        Ok(json!({"afterEach":output.after_each.iter().map(|rows|
++            rows.iter().map(report).collect::<Vec<_>>()).collect::<Vec<_>>(),
++            "onFinish":output.on_finish.iter().map(report).collect::<Vec<_>>(),
++            "clockReads":output.clock_reads}))
++    }
++}
++fn report(capture:&ControlledReport<Vec<String>>)->Value {
++    json!({"depthToken":capture.fields.depth_token,"reportedScore":capture.fields.evaluation,
++        "elapsed":capture.fields.centiseconds,"searchId":capture.fields.search_id,
++        "principalVariation":capture.payload})
++}
++pub(super) fn dispatch(input:&Value)->Result<Value> {
++    object(input,&["queries"])?;
++    let queries=array(&input["queries"],1,16)?.iter().map(Query::parse).collect::<Result<Vec<_>>>()?;
++    Ok(json!({"sequences":queries.into_iter().map(Query::observe).collect::<Result<Vec<_>>>()?}))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn query()->Value { json!({"startClock":4294967293u32,"finishClock":999,"drawPreference":25,
++        "events":[{"clock":1,"depth":2,"depthRemainder":-1,"rankingScore":100,"searchId":7,
++            "principalVariation":["0-O","7","_"]}]}) }
++    #[test]
++    fn exact_schema_and_finish_suffix_are_eagerly_validated() {
++        let good=query();assert!(Query::parse(&good).is_ok());
++        for value in [json!(-1),json!(4294967296u64),json!(false),json!("0")] {
++            let mut changed=good.clone();changed["finishClock"]=value;
++            assert!(dispatch(&json!({"queries":[good.clone(),changed]})).is_err());
++        }
++        for (field,value) in [("depth",json!(0)),("depth",json!(63)),("depthRemainder",json!(-65)),
++            ("rankingScore",json!(10001)),("searchId",json!(4294967296u64))] {
++            let mut changed=good.clone();changed["events"][0][field]=value;
++            assert!(Query::parse(&changed).is_err());
++        }
++        let mut changed=good.clone();changed["events"][0]["unused"]=Value::Null;
++        assert!(Query::parse(&changed).is_err());
++        assert!(dispatch(&json!({"queries":vec![good.clone();16]})).is_ok());
++        assert!(dispatch(&json!({"queries":vec![good;17]})).is_err());
++    }
++    #[test]
++    fn opaque_pv_domain_keeps_empty_long_and_digit_first_payloads() {
++        let mut input=query();input["events"][0]["principalVariation"]=json!(Vec::<String>::new());
++        assert!(Query::parse(&input).is_ok());
++        input["events"][0]["principalVariation"]=json!(vec!["a_123456789-";63]);
++        let out=dispatch(&json!({"queries":[input.clone()]})).unwrap();
++        assert_eq!(out["sequences"][0]["onFinish"][0]["principalVariation"].as_array().unwrap().len(),63);
++        input["events"][0]["principalVariation"]=json!(vec!["a";64]);assert!(Query::parse(&input).is_err());
++        for label in ["","é","bad!","abcdefghijklm"] {
++            input["events"][0]["principalVariation"]=json!([label]);assert!(Query::parse(&input).is_err());
++        }
++    }
++    #[test]
++    fn finish_clock_never_restamps_and_depth_decrease_never_republishes() {
++        let mut q=query();q["events"][0]["depth"]=json!(3);
++        let mut shallow=q["events"][0].clone();shallow["depth"]=json!(1);
++        shallow["clock"]=json!(7);shallow["principalVariation"]=json!([]);
++        q["events"].as_array_mut().unwrap().push(shallow);
++        let expected=dispatch(&json!({"queries":[q.clone()]})).unwrap();
++        assert_eq!(expected["sequences"][0]["afterEach"][0].as_array().unwrap().len(),1);
++        assert!(expected["sequences"][0]["afterEach"][1].as_array().unwrap().is_empty());
++        assert!(expected["sequences"][0]["onFinish"].as_array().unwrap().is_empty());
++        assert_eq!(expected["sequences"][0]["clockReads"],json!(2));
++        q["finishClock"]=json!(0);assert_eq!(dispatch(&json!({"queries":[q]})).unwrap(),expected);
++    }
++    #[test]
++    fn query_clocks_shift_without_extra_reads_or_cross_query_state() {
++        let first=query();let mut shifted=first.clone();let shift=11u32;
++        shifted["startClock"]=json!((first["startClock"].as_u64().unwrap() as u32).wrapping_add(shift));
++        shifted["events"][0]["clock"]=json!(1u32.wrapping_add(shift));
++        let output=dispatch(&json!({"queries":[first.clone(),shifted,first]})).unwrap();
++        assert_eq!(output["sequences"][0],output["sequences"][1]);
++        assert_eq!(output["sequences"][0],output["sequences"][2]);
++        assert_eq!(output["sequences"][0]["clockReads"],json!(1));
++        assert_eq!(output["sequences"][0]["onFinish"][0]["elapsed"],json!(4));
++    }
++}

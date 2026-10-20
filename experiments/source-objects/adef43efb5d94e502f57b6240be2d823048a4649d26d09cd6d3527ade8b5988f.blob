@@ -1,0 +1,37 @@
+--- a/guard.py
++++ b/guard.py
+@@ -14,7 +14,11 @@
+ def terminal(path):
+  t=load(path)
+  assert t.get('actual_tool_terminal_observed') is True and t['exit_code']==0
+- assert t.get('session_id') is not None and t.get('terminal_chunk_id')
++ chunk=t.get('terminal_chunk_id') or t.get('chunk_id')
++ assert isinstance(chunk,str) and chunk.strip()
++ # Retain the real session_id when exec yielded; fast terminal execs have none.
++ # The parent checks yielded-session linkage against the observed actual handle;
++ # never fabricate a session merely to satisfy this terminal-shape admission.
+  return t
+ 
+ def validate_authority(c):
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,8 +27,8 @@
+   assert gzip.decompress((tr/'merged.profdata.gz').read_bytes())==profile.read_bytes()
+   assert sha(tr/'merged.profdata.gz')==training['profile_archive_sha256']
+   merge_tool=Path('/usr/bin/llvm-profdata-19');assert sha(merge_tool.resolve())==training['merge_tool_sha256']
+-  profile_out=OUT/(variant+'-independently-merged.profdata');command=[str(merge_tool),'merge','-o',str(profile_out),*map(str,raw_paths)]
+-  with (OUT/(variant+'-remerge.stdout')).open('xb') as a,(OUT/(variant+'-remerge.stderr')).open('xb') as b:result=subprocess.run(command,stdout=a,stderr=b)
++  profile_out=OUT/(variant+'-independently-merged.profdata');merge_argv=[str(merge_tool),'merge','-o',str(profile_out),*map(str,raw_paths)]
++  with (OUT/(variant+'-remerge.stdout')).open('xb') as a,(OUT/(variant+'-remerge.stderr')).open('xb') as b:result=subprocess.run(merge_argv,stdout=a,stderr=b)
+   assert result.returncode==0 and sha(profile_out)==sha(profile),'independent profile merge differs'
+   assert br['pgo']['mode']=='profile-use' and br['pgo']['inputs_unchanged']
+   assert br['pgo']['input_sha256_before']==br['pgo']['input_sha256_after']=={str(profile):sha(profile),str(tr/'training.json'):sha(tr/'training.json')}
+@@ -62,7 +62,7 @@
+     searches+=1
+    assert list(lines)==[] and (wire/c['id']/'stdin.raw').read_text()=='\n'.join(stdin+['quit'])+'\n'
+   assert searches==24
+-  variants[variant]=dict(artifact_sha256=sha(build/'rook2-exact'),profile_sha256=sha(profile),profile_independently_remerged=True,profile_remerge_exit_code=result.returncode,profile_remerge_command=command,profile_remerge_stdout_sha256=sha(OUT/(variant+'-remerge.stdout')),profile_remerge_stderr_sha256=sha(OUT/(variant+'-remerge.stderr')),training_replay_sha256=sha(tr/'replay.json'),post_use_replay_sha256=sha(check/'profile-all.stdout'),training_verification_sha256=sha(tr/'verification.json'),training_strict_replays=54,post_use_strict_replays=54,raw_profiles=54,wire_fixtures=8,wire_searches=24,source_sha256=source_map,training_record_sha256=sha(tr/'training.json'),build_receipt_sha256=sha(build/'receipt.json'),strict_identity_sha256=sha(check/'identity.json'),wire_receipt_sha256=sha(wire/'receipt.json'))
++  variants[variant]=dict(artifact_sha256=sha(build/'rook2-exact'),profile_sha256=sha(profile),profile_independently_remerged=True,profile_remerge_exit_code=result.returncode,profile_remerge_command=merge_argv,profile_remerge_stdout_sha256=sha(OUT/(variant+'-remerge.stdout')),profile_remerge_stderr_sha256=sha(OUT/(variant+'-remerge.stderr')),training_replay_sha256=sha(tr/'replay.json'),post_use_replay_sha256=sha(check/'profile-all.stdout'),training_verification_sha256=sha(tr/'verification.json'),training_strict_replays=54,post_use_strict_replays=54,raw_profiles=54,wire_fixtures=8,wire_searches=24,source_sha256=source_map,training_record_sha256=sha(tr/'training.json'),build_receipt_sha256=sha(build/'receipt.json'),strict_identity_sha256=sha(check/'identity.json'),wire_receipt_sha256=sha(wire/'receipt.json'))
+  check_inputs()
+  write(OUT/'independent-verification.json',dict(complete=True,variants=variants,own_profile_only=True,strict_training54=True,fresh_strict54=True,wire8_searches24=True,scope='Compiler-training/regression provenance only; no CPU or qualification claim'))
+ if __name__=='__main__':main()

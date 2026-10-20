@@ -1,0 +1,22 @@
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -70,14 +70,16 @@
+             nonking +=
+                 square_value(root, rook, Square(to)) - square_value(root, rook, Square(from));
+         }
+-        Self {
+-            position: self.position.played_unchecked(movement),
++        let mut child = Self {
++            position: self.position,
+             retained: Retained {
+                 nonking_squares: nonking,
+                 age: self.retained.age.wrapping_add(1),
+                 ..self.retained
+             },
+-        }
++        };
++        child.position.apply_unchecked(movement);
++        child
+     }
+ 
+     pub fn null_child(&self) -> Self {

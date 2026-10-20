@@ -1,0 +1,87 @@
+{
+  "control": {
+    "q_file": "control-engine-function-6.txt",
+    "prepared_Node_reuse_136byte_copy_windows": [
+      [
+        "   3a016:\tmov    %r15,%rdi",
+        "   3a019:\tcall   *0x67f41(%rip)        # a1f60 <_GLOBAL_OFFSET_TABLE_+0x9b0>",
+        "   3a01f:\tmov    $0x88,%edx",
+        "   3a024:\tlea    0x420(%rsp),%rdi",
+        "   3a02c:\tlea    0x370(%rsp),%rsi",
+        "   3a034:\tcall   *0x67f2e(%rip)        # a1f68 <memcpy@GLIBC_2.14>",
+        "   3a03a:\tmovzbl 0x3f8(%rsp),%r15d"
+      ],
+      [
+        "   3a1e8:\tjmp    396de <rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q_impl+0xc4e>",
+        "   3a1ed:\tmov    %ebx,0x38(%rsp)",
+        "   3a1f1:\tmov    $0x88,%edx",
+        "   3a1f6:\tlea    0xc0(%rsp),%rdi",
+        "   3a1fe:\tlea    0x420(%rsp),%rsi",
+        "   3a206:\tcall   *0x67d5c(%rip)        # a1f68 <memcpy@GLIBC_2.14>",
+        "   3a20c:\tmovdqa 0x340(%rsp),%xmm0"
+      ]
+    ]
+  },
+  "candidate": {
+    "q_file": "candidate-engine-function-8.txt",
+    "prepared_Node_reuse_136byte_copy_windows": [
+      [
+        "   3ad0d:\tmov    %r15,%rdi",
+        "   3ad10:\tcall   *0x6824a(%rip)        # a2f60 <_GLOBAL_OFFSET_TABLE_+0x9b8>",
+        "   3ad16:\tmov    $0x88,%edx",
+        "   3ad1b:\tlea    0x490(%rsp),%rdi",
+        "   3ad23:\tlea    0xf0(%rsp),%rsi",
+        "   3ad2b:\tcall   *0x68237(%rip)        # a2f68 <memcpy@GLIBC_2.14>",
+        "   3ad31:\tmovzbl 0x178(%rsp),%r15d"
+      ],
+      [
+        "   3aefa:\tcall   *0x67f30(%rip)        # a2e30 <_GLOBAL_OFFSET_TABLE_+0x888>",
+        "   3af00:\tjmp    3a3c6 <rook2::quiescence::<impl rook2::engine::Search<_,H>>::visit_q_impl+0xc96>",
+        "   3af05:\tmov    $0x88,%edx",
+        "   3af0a:\tlea    0x3e0(%rsp),%rdi",
+        "   3af12:\tlea    0x490(%rsp),%rsi",
+        "   3af1a:\tcall   *0x68048(%rip)        # a2f68 <memcpy@GLIBC_2.14>",
+        "   3af20:\tmovdqa 0x3b0(%rsp),%xmm0"
+      ]
+    ]
+  },
+  "candidate_constructor": {
+    "symbol": "rook2::evaluator::Node::child_with_projection",
+    "address": "000000000001de20",
+    "frame_reservation": 296,
+    "bytes": 2140,
+    "instructions": 561,
+    "static_call_sites": 22,
+    "normal_path_160byte_memcpy_windows": [
+      [
+        "   1e0e1:\tadd    %r9d,%edx",
+        "   1e0e4:\tmov    %edx,%r12d",
+        "   1e0e7:\tmov    %r12,0x28(%rsp)",
+        "   1e0ec:\tmov    %r8,0x120(%rsp)",
+        "   1e0f4:\tlea    0x70(%rsp),%rdi",
+        "   1e0f9:\tmov    $0xa0,%edx",
+        "   1e0fe:\tcall   *0x84e64(%rip)        # a2f68 <memcpy@GLIBC_2.14>",
+        "   1e104:\tmov    %r15,0x30(%rsp)"
+      ],
+      [
+        "   1e4ae:\tmovups %xmm0,0xf0(%rsp)",
+        "   1e4b6:\tmovups %xmm1,0x100(%rsp)",
+        "   1e4be:\tmov    0x118(%rsp),%rbx",
+        "   1e4c6:\tlea    0x10(%rbx),%rdi",
+        "   1e4ca:\tlea    0x70(%rsp),%rsi",
+        "   1e4cf:\tmov    $0xa0,%edx",
+        "   1e4d4:\tcall   *0x84a8e(%rip)        # a2f68 <memcpy@GLIBC_2.14>",
+        "   1e4da:\tmov    0x110(%rsp),%rcx"
+      ]
+    ],
+    "incoming_projection_abi": "r8 holds pointer to32byte supplied AttackBits, saved at rsp+0x120 across false transition; no native mode/observer callback",
+    "install_at_tail": "1e49f loads pointer,1e4a7/1e4aa loads two16byte chunks,1e4ae/1e4b6 stores at child-local rsp+0xf0/+0x100, actual Position planes offset128 in160byte local startingrsp+0x70",
+    "Q_incoming_view_slot": "Four8byte stores rsp+0x1c8..+0x1e0, consumed by route/safety and both ctor sites through lea+r8; stack-resident liveness spans reply/history probing",
+    "old_planes_copy_not_elided": true,
+    "setter_mode_proof": {
+      "false": "2d740 from all5 projected ctor setter sites;253insn905B, no xor toPosition+0x80/+0x88/+0x90/+0x98",
+      "true": "2dad0 from all5 apply_unchecked setter sites;284insn1032B, four plane xor stores still emitted; no runtime bool mode branch"
+    },
+    "normal_path_160byte_copy_site_count": 2
+  }
+}

@@ -1,0 +1,330 @@
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -375,6 +375,101 @@
+         validate_pv(child.position, &search.pv[1][..search.pv_len[1]]);
+         assert_eq!(history.search_ply(), 1);
+     }
++    #[test]
++    fn disabled_iio_counts_actual_initial_and_tail_entry_before_any_phase_work() {
++        let position=Position::from_fen(START).unwrap();
++        for start in [0,1] {
++            let mut search=engine::<true>(&position);
++            let (node,map)=search.prepare_root_with_influence(position);
++            let mut history=SearchHistory::new(&position);
++            movegen::generate_legal(&position,&mut search.candidates[0]);
++            let before=search.candidates[0].as_slice().to_vec();
++            search.extension_flags[0].fill(7);
++            search.begin_sequence(Limits::default());
++            let result=search.ordering_phase::<false>(&node,&mut history,
++                Request{ply:0,depth:6,lower:-10000,upper:10000,
++                    previous_extension:0,iteration:6,checked:Some(false)},
++                Predecessor{position:&position,influence:&map,checked:false,movement:None},
++                &map,false,start);
++            assert_eq!(result,Err(Stopped::InternalIterativeOrdering));
++            assert_eq!((search.stats.iio_initial_phases,search.stats.iio_tail_phases),
++                if start==0 {(1,0)} else {(0,1)});
++            assert_eq!((search.stats.iio_passes,search.stats.iio_children,
++                search.stats.iio_nonzero_fresh_extensions),(0,0,0));
++            assert_eq!(search.work(),Work::default());
++            assert_eq!(search.candidates[0].as_slice(),before);
++            assert!(search.extension_flags[0].iter().all(|&flag|flag==7));
++            assert_eq!(history.search_ply(),0);
++            assert_eq!(node.position,position);
++        }
++    }
++
++    fn actual_iio_probe(mode:u8,tail:bool)->(Result<i32,Stopped>,Search<true>,SearchHistory,Node) {
++        let position=Position::from_fen("7k/R7/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        let mut search=engine::<true>(&position);
++        search.ensure_table().unwrap();
++        let (root,influence)=search.prepare_root_with_influence(position);
++        let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);
++        let movement=*legal.as_slice().iter().find(|m|m.to_string()=="a7a8").unwrap();
++        let mut child=root.child(&search.evaluator.root,movement);
++        search.begin_sequence(Limits{nodes:Some(200000)});
++        if tail {
++            // A legitimate deep exact remembered result for each main reply
++            // isolates the parent's real tail admission from nested IIO entry.
++            let mut replies=MoveList::new();movegen::generate_legal(&child.position,&mut replies);
++            for &reply in replies.as_slice() {
++                let grandchild=child.child(&search.evaluator.root,reply);
++                let table=search.remembered.as_mut().unwrap();
++                table.store(Store{query:Query{group:table.group_for(&grandchild.position),
++                    identity:grandchild.position.secondary,ply:2,target:64,
++                    lower:-10000,upper:10000},score:0,move_hint:None,
++                    quiet_mate_checked:true,mark_depth:true});
++            }
++            let table=search.remembered.as_mut().unwrap();
++            table.store(Store{query:Query{group:table.group_for(&child.position),
++                identity:child.position.secondary,ply:1,target:6,lower:-10000,upper:100},
++                score:100,move_hint:None,quiet_mate_checked:true,mark_depth:true});
++        }
++        let mut history=SearchHistory::new(&position);
++        history.push(&child.position,Some(movement));
++        let request=Request{ply:1,depth:5,lower:-10000,upper:10000,
++            previous_extension:0,iteration:6,checked:Some(true)};
++        let previous=Predecessor{position:&position,influence:&influence,checked:false,
++            movement:Some(movement)};
++        let result=match mode {
++            0=>search.visit_ordinary(&mut child,&mut history,request,previous),
++            1=>search.visit_ordinary_impl::<true>(&mut child,&mut history,request,previous),
++            2=>search.visit_ordinary_impl::<false>(&mut child,&mut history,request,previous),
++            _=>unreachable!(),
++        };
++        assert_eq!(history.search_ply(),1);
++        history.pop();
++        (result,search,history,child)
++    }
++
++    #[test]
++    fn recursive_iio_defaults_true_and_false_initial_tail_errors_unwind_without_phase_subtrees() {
++        for tail in [false,true] {
++            let (default,a,history_a,node_a)=actual_iio_probe(0,tail);
++            let (enabled,b,history_b,node_b)=actual_iio_probe(1,tail);
++            assert!(default.is_ok());assert_eq!(default,enabled);
++            assert_eq!(a.stats,b.stats);assert_eq!(a.evaluator.stats,b.evaluator.stats);
++            assert_eq!(a.work(),b.work());assert_eq!(node_a,node_b);
++            assert_eq!(&a.pv[1][..a.pv_len[1]],&b.pv[1][..b.pv_len[1]]);
++            assert_eq!((history_a.search_ply(),history_b.search_ply()),(0,0));
++            assert!(if tail {a.stats.iio_tail_phases>0} else {a.stats.iio_initial_phases>0});
++            let (disabled,c,history_c,_)=actual_iio_probe(2,tail);
++            assert_eq!(disabled,Err(Stopped::InternalIterativeOrdering));
++            assert_eq!((c.stats.iio_initial_phases,c.stats.iio_tail_phases),
++                if tail {(0,1)} else {(1,0)});
++            assert_eq!((c.stats.iio_passes,c.stats.iio_children,
++                c.stats.iio_nonzero_fresh_extensions),(0,0,0));
++            assert_eq!(history_c.search_ply(),0);
++            // Tail's first ordinary main child is permitted, but no IIO child.
++            if !tail {assert_eq!(c.stats.children,0);}
++        }
++    }
++
+ }
+ 
+ pub struct Iteration {
+@@ -580,7 +675,18 @@
+         threat.value
+     }
+ 
++    /// Ordinary production and fixed-iteration callers retain full IIO.
+     pub(crate) fn visit_ordinary(
++        &mut self,
++        node: &mut Node,
++        history: &mut SearchHistory,
++        request: Request,
++        previous: Predecessor<'_>,
++    ) -> Result<i32, Stopped> {
++        self.visit_ordinary_impl::<true>(node, history, request, previous)
++    }
++
++    pub(crate) fn visit_ordinary_impl<const ALLOW_IIO: bool>(
+         &mut self,
+         node: &mut Node,
+         history: &mut SearchHistory,
+@@ -708,7 +814,7 @@
+                 }
+                 let mut child = node.null_child();
+                 history.push(&child.position, None);
+-                let returned = self.visit_ordinary(
++                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+                     Request {
+@@ -819,7 +925,7 @@
+                 .marked_depth
+                 .is_none_or(|d| d < request.depth - 2)
+         {
+-            self.ordering_phase(node, history, request, previous, map, checked, 0)?;
++            self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 0)?;
+         }
+         let mut best = effective_lower;
+         let mut lower = request.lower;
+@@ -905,7 +1011,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;
+                 }
+-                let returned = self.visit_ordinary(&mut child, history, child_request, predecessor);
++                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
+                 let returned = match returned {
+                     Ok(value) => Ok(-value),
+                     Err(stop) => Err(stop),
+@@ -918,7 +1024,7 @@
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
+-                        self.visit_ordinary(
++                        self.visit_ordinary_impl::<ALLOW_IIO>(
+                             &mut child,
+                             history,
+                             Request {
+@@ -957,7 +1063,7 @@
+             index += 1;
+             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
+             {
+-                self.ordering_phase(node, history, request, previous, map, checked, 1)?;
++                self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 1)?;
+             }
+         }
+         best = best.min(effective_upper);
+@@ -968,7 +1074,7 @@
+         Ok(best)
+     }
+ 
+-    fn ordering_phase(
++    fn ordering_phase<const ALLOW_IIO: bool>(
+         &mut self,
+         node: &Node,
+         history: &mut SearchHistory,
+@@ -978,17 +1084,20 @@
+         checked: bool,
+         start: usize,
+     ) -> Result<(), Stopped> {
++        if DIAGNOSTICS || !ALLOW_IIO {
++            if start == 0 {
++                self.stats.iio_initial_phases += 1;
++            } else {
++                self.stats.iio_tail_phases += 1;
++            }
++        }
++        if !ALLOW_IIO {
++            return Err(Stopped::InternalIterativeOrdering);
++        }
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+         let position = &node.position;
+         let count = self.candidates[p].len;
+-        if DIAGNOSTICS {
+-            if start == 0 {
+-                self.stats.iio_initial_phases += 1;
+-            } else {
+-                self.stats.iio_tail_phases += 1;
+-            }
+-        }
+         for offset in (2..=20).rev().step_by(2) {
+             let shallow_target = target - offset;
+             if shallow_target < p as i32 + 2 {
+@@ -1022,7 +1131,7 @@
+                 if DIAGNOSTICS {
+                     self.stats.iio_children += 1;
+                 }
+-                let returned = self.visit_ordinary(
++                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+                     Request {
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -39,6 +39,8 @@
+ pub enum Stopped {
+     NodeLimit(u64),
+     WorkPoll,
++    /// Bounded diagnostic refused actual internal-iterative-ordering entry.
++    InternalIterativeOrdering,
+     HostStop,
+     HostAbort,
+     HostIo(std::io::ErrorKind),
+--- a/src/timed.rs
++++ b/src/timed.rs
+@@ -315,6 +315,56 @@
+         assert_eq!(out.iterations.len(), 1);
+         assert!(search.timing.is_none());
+     }
++    #[test]
++    fn default_explicit_true_and_guarded_zero_entry_timed_runs_keep_identical_records() {
++        let position=Position::from_fen(START).unwrap();
++        let mut results=Vec::new();
++        for mode in 0..3 {
++            let mut search=Search::<true>::new(&position);
++            search.config.tts_bytes=65536;
++            let mut history=SearchHistory::new(&position);
++            let mut control=controls();control.average_cs=1;control.origin=0;
++            let result=match mode {
++                0=>search.run_work_timed(position,&mut history,control,Limits{nodes:Some(8192)}),
++                1=>search.run_work_timed_entry::<true>(position,&mut history,control,Limits{nodes:Some(8192)}),
++                _=>search.run_work_timed_without_iio(position,&mut history,control,Limits{nodes:Some(8192)}),
++            }.unwrap();
++            assert!(search.timing.is_none());assert_eq!(history.search_ply(),0);
++            assert_eq!((result.stats.iio_initial_phases,result.stats.iio_tail_phases),(0,0));
++            results.push(result);
++        }
++        let expected=&results[0];
++        for actual in &results[1..] {
++            assert_eq!((&actual.initial_candidates,&actual.result,&actual.publications,
++                &actual.stop,&actual.checks,actual.ledger,actual.stats,actual.evaluations),
++                (&expected.initial_candidates,&expected.result,&expected.publications,
++                &expected.stop,&expected.checks,expected.ledger,expected.stats,expected.evaluations));
++            assert_eq!(actual.iterations.len(),expected.iterations.len());
++            for (a,b) in actual.iterations.iter().zip(&expected.iterations) {
++                assert_eq!((a.depth,a.complete,&a.steps),(b.depth,b.complete,&b.steps));
++            }
++        }
++    }
++
++    #[test]
++    fn guarded_timed_iio_error_unwinds_active_history_and_always_clears_timing() {
++        let position=Position::from_fen("6k1/8/8/8/8/8/P7/K6R w - - 0 1").unwrap();
++        let mut search=Search::<true>::new(&position);search.config.tts_bytes=96;
++        let mut history=SearchHistory::new(&position);
++        let control=Controls{average_cs:0,maximum_cs:0,origin:u32::MAX-2,
++            seed:0,randomness:0,maximum_entered_iterations:6};
++        assert!(matches!(search.run_work_timed_without_iio(position,&mut history,control,
++            Limits{nodes:Some(100000)}),Err(Error::Stopped(Stopped::InternalIterativeOrdering))));
++        assert_eq!(history.search_ply(),0);assert!(search.timing.is_none());
++        assert_eq!(search.stats.iio_initial_phases+search.stats.iio_tail_phases,1);
++        assert_eq!((search.stats.iio_passes,search.stats.iio_children),(0,0));
++        let retry=search.run_iterations(position,&mut history,1,Limits::default()).unwrap();
++        let mut fresh=Search::<true>::new(&position);fresh.config.tts_bytes=96;
++        let expected=fresh.run_iterations(position,&mut history,1,Limits::default()).unwrap();
++        assert_eq!((retry.score,retry.pv,retry.work),(expected.score,expected.pv,expected.work));
++        assert_eq!(history.search_ply(),0);assert!(search.timing.is_none());
++    }
++
+ }
+ 
+ impl<const D: bool, H: crate::host::Host> Search<D, H> {
+@@ -422,12 +472,34 @@
+         controls: Controls,
+         limits: Limits,
+     ) -> Result<Outcome, Error> {
+-        let result = self.run_work_timed_inner(position, history, controls, limits);
++        self.run_work_timed_entry::<true>(position, history, controls, limits)
++    }
++
++    /// Bounded diagnostic capability: fail at the first actual IIO entry.
++    /// Default timed/ordinary production continues to allow the complete rule.
++    pub fn run_work_timed_without_iio(
++        &mut self,
++        position: Position,
++        history: &mut SearchHistory,
++        controls: Controls,
++        limits: Limits,
++    ) -> Result<Outcome, Error> {
++        self.run_work_timed_entry::<false>(position, history, controls, limits)
++    }
++
++    fn run_work_timed_entry<const ALLOW_IIO: bool>(
++        &mut self,
++        position: Position,
++        history: &mut SearchHistory,
++        controls: Controls,
++        limits: Limits,
++    ) -> Result<Outcome, Error> {
++        let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
+         self.timing = None;
+         result
+     }
+ 
+-    fn run_work_timed_inner(
++    fn run_work_timed_inner<const ALLOW_IIO: bool>(
+         &mut self,
+         position: Position,
+         history: &mut SearchHistory,
+@@ -496,7 +568,7 @@
+                     let mut passes = Vec::new();
+                     let completion = loop {
+                         history.push(&child.position, Some(movement));
+-                        let result = self.visit_ordinary(
++                        let result = self.visit_ordinary_impl::<ALLOW_IIO>(
+                             &mut child,
+                             history,
+                             Request {

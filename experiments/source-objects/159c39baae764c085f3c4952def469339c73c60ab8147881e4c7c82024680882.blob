@@ -1,0 +1,29 @@
+--- accepted51-ownPGO/own_pgo
++++ inert56-ownPGO/own_pgo
+@@ -26,7 +26,7 @@
+   term=load(path);assert term['actual_tool_terminal_observed'] is True and term['exit_code']==0 and (term.get('terminal_chunk_id') or term.get('chunk_id') or '').strip()
+   pins[str(path)]=sha(path);stages[stage]=term
+  for stage in ['instrumented','use']:
+-  if side=='candidate' and stage=='instrumented':
++  if side=='control' and stage=='instrumented':
+    path=prep/'instrumented-stage-adoption.json';meta=load(path);assert meta['complete'] and meta['duplicate_build'] is False and meta['source74_verified'] is True
+    assert meta['receipt_sha256']==sha(inst/'receipt.json')
+    settings_path=inst/'effective-settings-verification.json';settings=load(settings_path);assert settings['complete'] is True
+@@ -34,7 +34,7 @@
+    effective={('src/lib.rs' if row['kind']=='lib' else 'src/bin/rook2.rs'):row['options'] for row in settings['commands']}
+    assert len(effective)==2
+    pins[str(settings_path)]=sha(settings_path);pins[str(inst/'build.stderr')]=sha(inst/'build.stderr')
+-   assert not re.search(r'no profile data|mismatched.*profile|out[- ]of[- ]date.*profile|function control flow change detected|hash mismatch',(inst/'build.stderr').read_text(),re.I)
++   assert not re.search(r'no profile data|mismatched.*profile|out[- ]of[- ]date.*profile|function control flow change detected|hash mismatch',read(inst/'build.stderr').decode(),re.I)
+   else:
+    path=prep/(stage+'-stage.json');meta=load(path);assert meta['complete'] and meta['missing_or_stale_profile_warnings']==0
+    effective=meta['effective_rustc_options']
+@@ -45,7 +45,7 @@
+    if unit=='src/bin/rook2.rs':assert options['lto']=='thin'
+    if stage=='use':assert options['profile-use']==str(profile)
+  for path in [build/'archive-receipt.json',build/'build.stderr',inst/'receipt.json',inst/'frozen-image.json',training/'training.json',training/'verification.json',profile]:pins[str(path)]=sha(path)
+- log=(build/'build.stderr').read_text();binary=[line for line in log.splitlines() if 'Running ' in line and '--crate-type bin' in line and 'src/bin/rook2.rs' in line]
++ log=read(build/'build.stderr').decode();binary=[line for line in log.splitlines() if 'Running ' in line and '--crate-type bin' in line and 'src/bin/rook2.rs' in line]
+  assert len(binary)==1 and '-C lto=thin ' in binary[0] and '-C codegen-units=1 ' in binary[0] and ('profile-use='+str(profile)+' ') in binary[0]
+  assert not re.search(r'no profile data|mismatched.*profile|out[- ]of[- ]date.*profile|function control flow change detected|hash mismatch',log,re.I)
+  assert r['rust_flags']==['-C','target-cpu=x86-64','-C','profile-use='+str(profile),'-C','llvm-args=-pgo-warn-missing-function']

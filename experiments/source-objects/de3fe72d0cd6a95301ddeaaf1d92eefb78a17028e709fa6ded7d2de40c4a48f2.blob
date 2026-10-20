@@ -1,0 +1,311 @@
+//! Private coherent-placement producer: scalar zero-slider colors, bit-sliced sums otherwise.
+//! No cache, parent map, persistent state, relation queries or changed byte format.
+use super::{Contribution, Influence};
+use crate::attacks::{influence_rays, influence_pawn_targets, influence_knight_targets, influence_king_targets};
+use crate::geometry::{DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+use crate::position::Position;
+use crate::types::{Color, PieceKind, Square};
+use std::arch::x86_64::{_mm_cvtsi64_si128, _mm_storeu_si128,
+    _mm_unpacklo_epi8, _mm_unpacklo_epi16, _mm_unpackhi_epi16,
+    _mm_unpacklo_epi32, _mm_unpackhi_epi32};
+#[cfg(test)]
+use std::arch::x86_64::{__m128i, _mm_add_epi8, _mm_loadu_si128, _mm_or_si128,
+    _mm_set_epi64x, _mm_slli_epi16};
+
+pub(super) fn fill(result: &mut Influence, position: &Position) {
+    let planes = position.attack_planes();
+    for side in [Color::White, Color::Black] {
+        let bishops = position.piece_squares(side, PieceKind::Bishop);
+        let rooks = position.piece_squares(side, PieceKind::Rook);
+        let queens = position.piece_squares(side, PieceKind::Queen);
+        if bishops.is_empty() && rooks.is_empty() && queens.is_empty() {
+            // Retain actual scalar P/N/K source lists, targets, order and wrapping.
+            for &source in position.piece_squares(side, PieceKind::Pawn) {
+                debug_assert!(source.0 < 64);
+                let targets = &PAWN_TARGETS[side.index()][(source.0 & 63) as usize];
+                for &target in &targets.squares[..targets.len as usize] {
+                    result.add(side, Square(target & 63), Contribution::Pawn as u8);
+                }
+            }
+            for &source in position.piece_squares(side, PieceKind::Knight) {
+                debug_assert!(source.0 < 64);
+                let targets = &KNIGHT_SOURCES[(source.0 & 63) as usize];
+                for &target in &targets.squares[..targets.len as usize] {
+                    result.add(side, Square(target & 63), Contribution::Minor as u8);
+                }
+            }
+            for &source in position.piece_squares(side, PieceKind::King) {
+                debug_assert!(source.0 < 64);
+                let targets = &KING_TARGETS[(source.0 & 63) as usize];
+                for &target in &targets.squares[..targets.len as usize] {
+                    result.add(side, Square(target & 63), Contribution::Weak as u8);
+                }
+            }
+            continue; // No bit-counter setup or transpose for this color.
+        }
+        let mut sums = BitSums { planes: [0; 8] };
+        for &source in position.piece_squares(side, PieceKind::Pawn) {
+            debug_assert!(source.0 < 64);
+            sums.add::<6>(influence_pawn_targets(side, source));
+        }
+        for &source in position.piece_squares(side, PieceKind::Knight) {
+            debug_assert!(source.0 < 64);
+            sums.add::<4>(influence_knight_targets(source));
+        }
+        for &source in position.piece_squares(side, PieceKind::King) {
+            debug_assert!(source.0 < 64);
+            sums.add::<0>(influence_king_targets(source));
+        }
+        for &source in bishops {
+            let (normal, weak) = slider_masks::<2>(planes, side, source);
+            sums.add_slider::<4>(normal, weak);
+        }
+        for &source in rooks {
+            let (normal, weak) = slider_masks::<3>(planes, side, source);
+            sums.add_slider::<2>(normal, weak);
+        }
+        for &source in queens {
+            let (normal, weak) = slider_masks::<4>(planes, side, source);
+            sums.add_slider::<1>(normal, weak);
+        }
+        sums.store(&mut result.profiles[side.index()]);
+    }
+}
+
+#[inline]
+fn first(blockers: u64, increasing: bool) -> u64 {
+    if blockers == 0 { 0 }
+    else if increasing { blockers & blockers.wrapping_neg() }
+    else { 1u64 << (63 - blockers.leading_zeros()) }
+}
+#[inline]
+fn through(ray: u64, blocker: u64, increasing: bool) -> u64 {
+    if blocker == 0 { ray }
+    else if increasing { ray & (blocker | blocker.wrapping_sub(1)) }
+    else { ray & !blocker.wrapping_sub(1) }
+}
+
+/// For one source, original and weakened targets are disjoint. Different
+/// sources must still be emitted separately to retain contribution multiplicity.
+#[inline]
+pub(super) fn slider_masks<const KIND: usize>(planes: &[u64; 4], side: Color,
+    source: Square) -> (u64, u64) {
+    let own = if side == Color::Black { planes[3] } else { !planes[3] };
+    let occupied = planes[0] | planes[1] | planes[2];
+    let queens = planes[0] & !planes[1] & planes[2] & own;
+    let pawns = planes[0] & !planes[1] & !planes[2] & own;
+    let rooks = !planes[0] & !planes[1] & planes[2] & own;
+    let bishops = planes[0] & planes[1] & !planes[2] & own;
+    let enemy_kings = !planes[0] & planes[1] & planes[2] & !own;
+    let (rays, increasing) = influence_rays(source);
+    let directions = match KIND { 2 => 0..4, 3 => 4..8, 4 => 0..8,
+        _ => unreachable!("not an influence slider") };
+    let mut normal = 0;
+    let mut weak = 0;
+    for direction in directions {
+        let diagonal = direction < 4;
+        let transparent = queens | enemy_kings | if diagonal { bishops } else { rooks };
+        let ray = rays[direction];
+        let stop = first(ray & occupied & !transparent, increasing[direction]);
+        let mut visited = through(ray, stop, increasing[direction]);
+        let step = DIRECTIONS[direction];
+        let forward = if side == Color::White { 1 } else { -1 };
+        if diagonal && step.1 == forward && stop & pawns != 0 {
+            // Add exactly one square past the stopping pawn, without inspecting
+            // that square's occupant. Intersect R to guard its board edge.
+            let delta = step.0 as i16 + 8 * step.1 as i16;
+            let extra = if delta > 0 { stop << delta as u32 }
+                else { stop >> (-delta) as u32 };
+            visited |= extra & ray;
+        }
+        let queen = first(visited & queens, increasing[direction]);
+        let original = through(visited, queen, increasing[direction]);
+        normal |= original;
+        weak |= visited & !original;
+    }
+    (normal, weak)
+}
+
+
+/// Plane b contains bit b of every target's wrapping byte. This is invocation-local.
+struct BitSums { planes: [u64; 8] }
+impl BitSums {
+    #[inline]
+    fn add<const SHIFT: usize>(&mut self, mut carry: u64) {
+        debug_assert!(SHIFT < 8);
+        for bit in SHIFT..7 {
+            let old = self.planes[bit];
+            self.planes[bit] = old ^ carry;
+            carry &= old;
+        }
+        self.planes[7] ^= carry; // Modulo256: discard the final outgoing carry.
+    }
+    #[inline]
+    fn add_slider<const SHIFT: usize>(&mut self, normal: u64, weak: u64) {
+        debug_assert!(SHIFT > 0 && SHIFT < 8);
+        debug_assert_eq!(normal & weak, 0);
+        if weak == 0 {
+            self.add::<SHIFT>(normal);
+        } else {
+            let mut carry = weak;
+            for bit in 0..SHIFT {
+                let old = self.planes[bit];
+                self.planes[bit] = old ^ carry;
+                carry &= old;
+            }
+            // Carry is a subset of weak, so cannot overlap normal at SHIFT.
+            self.add::<SHIFT>(carry | normal);
+        }
+    }
+    #[inline]
+    fn swap<const I: usize, const J: usize, const SHIFT: u32>(&mut self, mask: u64) {
+        let t = ((self.planes[I] >> SHIFT) ^ self.planes[J]) & mask;
+        self.planes[J] ^= t;
+        self.planes[I] ^= t << SHIFT;
+    }
+    #[inline]
+    fn store(&mut self, bytes: &mut [u8; 64]) {
+        // Transpose eight8x8 bit tiles in parallel: plane-index bits exchange
+        // with target-within-byte bits. No second counter array is staged.
+        self.swap::<0,4,4>(0x0f0f_0f0f_0f0f_0f0f);
+        self.swap::<1,5,4>(0x0f0f_0f0f_0f0f_0f0f);
+        self.swap::<2,6,4>(0x0f0f_0f0f_0f0f_0f0f);
+        self.swap::<3,7,4>(0x0f0f_0f0f_0f0f_0f0f);
+        self.swap::<0,2,2>(0x3333_3333_3333_3333);
+        self.swap::<1,3,2>(0x3333_3333_3333_3333);
+        self.swap::<4,6,2>(0x3333_3333_3333_3333);
+        self.swap::<5,7,2>(0x3333_3333_3333_3333);
+        self.swap::<0,1,1>(0x5555_5555_5555_5555);
+        self.swap::<2,3,1>(0x5555_5555_5555_5555);
+        self.swap::<4,5,1>(0x5555_5555_5555_5555);
+        self.swap::<6,7,1>(0x5555_5555_5555_5555);
+        // Word j now contains bytes for targets j,j+8,...,j+56. Transpose this
+        // byte matrix with baseline SSE2, yielding contiguous targets0..63.
+        // SAFETY: x86-64 guarantees SSE2. Four unaligned16B stores cover exactly
+        // the initialized64B destination. cvtsi64 only transfers raw64 bits.
+        unsafe {
+            let a = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[0] as i64), _mm_cvtsi64_si128(self.planes[1] as i64));
+            let b = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[2] as i64), _mm_cvtsi64_si128(self.planes[3] as i64));
+            let c = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[4] as i64), _mm_cvtsi64_si128(self.planes[5] as i64));
+            let d = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[6] as i64), _mm_cvtsi64_si128(self.planes[7] as i64));
+            let ab0 = _mm_unpacklo_epi16(a, b);
+            let ab1 = _mm_unpackhi_epi16(a, b);
+            let cd0 = _mm_unpacklo_epi16(c, d);
+            let cd1 = _mm_unpackhi_epi16(c, d);
+            _mm_storeu_si128(bytes.as_mut_ptr().cast(), _mm_unpacklo_epi32(ab0, cd0));
+            _mm_storeu_si128(bytes.as_mut_ptr().add(16).cast(), _mm_unpackhi_epi32(ab0, cd0));
+            _mm_storeu_si128(bytes.as_mut_ptr().add(32).cast(), _mm_unpacklo_epi32(ab1, cd1));
+            _mm_storeu_si128(bytes.as_mut_ptr().add(48).cast(), _mm_unpackhi_epi32(ab1, cd1));
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn bitplanes_for_test(planes: [u64; 8]) -> [u8; 64] {
+    let mut sums = BitSums { planes };
+    let mut result = [0; 64];
+    sums.store(&mut result);
+    result
+}
+#[cfg(test)]
+pub(super) fn bits_sources_for_test(previous: [u8; 64], sources: &[(usize, u64, u64)]) -> [u8; 64] {
+    let mut sums = BitSums { planes: [0; 8] };
+    for (target, byte) in previous.into_iter().enumerate() {
+        for bit in 0..8 { sums.planes[bit] |= u64::from((byte >> bit) & 1) << target; }
+    }
+    for &(shift, normal, weak) in sources {
+        match shift {
+            0 => { assert_eq!(weak, 0); sums.add::<0>(normal); },
+            1 => sums.add_slider::<1>(normal, weak),
+            2 => sums.add_slider::<2>(normal, weak),
+            4 => sums.add_slider::<4>(normal, weak),
+            6 => { assert_eq!(weak, 0); sums.add::<6>(normal); },
+            _ => panic!("unsupported test contribution"),
+        }
+    }
+    let mut result = [0; 64];
+    sums.store(&mut result);
+    result
+}
+
+// Exactly 256 * 8 = 2048 immutable bytes. Little-endian byte lane i represents
+// bit i. The only consumers use x86-64 baseline SSE2; no feature dispatch.
+#[cfg(test)]
+const fn expansion_table() -> [u64; 256] {
+    let mut result = [0u64; 256];
+    let mut pattern = 0;
+    while pattern < 256 {
+        let mut lane = 0;
+        while lane < 8 {
+            result[pattern] |= (((pattern >> lane) & 1) as u64) << (8 * lane);
+            lane += 1;
+        }
+        pattern += 1;
+    }
+    result
+}
+#[cfg(test)]
+static EXPANSION: [u64; 256] = expansion_table();
+
+#[cfg(test)]
+struct ColorSums { chunks: [__m128i; 4] }
+#[cfg(test)]
+impl ColorSums {
+    #[inline]
+    fn load(bytes: &[u8; 64]) -> Self {
+        // SAFETY: x86-64 supplies SSE2. Four unaligned16B reads cover exactly
+        // this64B array; no reference alignment or initialization is assumed.
+        unsafe { Self { chunks: [
+            _mm_loadu_si128(bytes.as_ptr().cast()),
+            _mm_loadu_si128(bytes.as_ptr().add(16).cast()),
+            _mm_loadu_si128(bytes.as_ptr().add(32).cast()),
+            _mm_loadu_si128(bytes.as_ptr().add(48).cast()),
+        ] } }
+    }
+    #[inline]
+    fn store(&self, bytes: &mut [u8; 64]) {
+        // SAFETY: the same four disjoint16B ranges are writable within bytes.
+        unsafe { for i in 0..4 {
+            _mm_storeu_si128(bytes.as_mut_ptr().add(16 * i).cast(), self.chunks[i]);
+        } }
+    }
+    #[inline]
+    fn add<const SHIFT: i32>(&mut self, normal: u64, weak: u64) {
+        debug_assert_eq!(normal & weak, 0);
+        debug_assert!((0..=6).contains(&SHIFT));
+        // SAFETY: baseline SSE2; table indices are masked to bytes. Expanded
+        // byte values0/1 shifted at most6 cannot carry into adjacent bytes,
+        // even though slli operates on16-bit lanes. paddb wraps each byte.
+        unsafe {
+            if weak == 0 {
+                for i in 0..4 {
+                    let add = _mm_slli_epi16::<SHIFT>(expand((normal >> (16 * i)) as u16));
+                    self.chunks[i] = _mm_add_epi8(self.chunks[i], add);
+                }
+            } else {
+                for i in 0..4 {
+                    let original = _mm_slli_epi16::<SHIFT>(expand((normal >> (16 * i)) as u16));
+                    let add = _mm_or_si128(original, expand((weak >> (16 * i)) as u16));
+                    self.chunks[i] = _mm_add_epi8(self.chunks[i], add);
+                }
+            }
+        }
+    }
+}
+#[cfg(test)]
+#[inline]
+unsafe fn expand(bits: u16) -> __m128i {
+    // Both scalar table loads are in bounds; low8 squares precede high8.
+    _mm_set_epi64x(EXPANSION[(bits >> 8) as usize] as i64,
+        EXPANSION[(bits & 255) as usize] as i64)
+}
+
+#[cfg(test)]
+pub(super) fn emit_for_test<const SHIFT: i32>(previous: [u8; 64], normal: u64,
+    weak: u64) -> [u8; 64] {
+    let mut bytes = previous;
+    let mut sums = ColorSums::load(&bytes);
+    sums.add::<SHIFT>(normal, weak);
+    sums.store(&mut bytes);
+    bytes
+}

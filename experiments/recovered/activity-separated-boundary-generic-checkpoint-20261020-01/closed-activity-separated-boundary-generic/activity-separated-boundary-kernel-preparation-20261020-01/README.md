@@ -1,0 +1,9 @@
+# Experiment52 source checkpoint
+
+Trial `/home/legolas/rook2-work/imp2-activity-separated-boundary-20261020-01` is75files=52native+23tools, graph5bd41b0a68d4b48bd4dba05344a714d6eb4084470a0b26055edafda4ce86063e. Exact frozen51 baseline74 is preserved in baseline-source-manifest.json; source-manifest.json maps the new closure. Four existing core files change; one independent test module is added. All51 tactical files and its generation call are preserved. No root/W51/old42 evidence is changed.
+
+Read review.md, source-proof.json, owned-source-proof.json, trial.patch and trial-inverse.patch. Baseline/proposed four-file snapshots and owned-only patch/inverse are retained. input-pins.json binds the actual42 geometry/numerical owner and the accepted feasibility/spec sources; no42 timing/authority transfers. Independent tests and their frozen scalar/coordinate oracle proof are owned in ../activity-separated-boundary-test-preparation-20261020-01/.
+
+Registration: `#[cfg(test)] #[path="activity/separated_tests.rs"] mod separated_tests;` inside activity.rs. Six new tests are qualified `activity::separated_tests::experiment52_*`. Source declarations total199=197lib+2dev, with all193 inherited test bodies byte-exact. None is parsed/compiled/executed here. Native source acceptance, emitted separate-owner/no-slider mechanism, caller/result-buffer/frame/code costs and all later functional/CPU gates are parent decisions.51 baseline acceptance remains a prerequisite. No new runtime field/counter/ISA or persistent state exists. No speed/readback claim.
+
+Actual copyeab70e/0, production write136ee0/0, owned reconstruction49da04/0, independent testowner ccb15d/0, combined source verifier1fd748/0. All source writes are closed; metadata closure only follows. No Rust parser/formatter/compiler/unit/native/engine/binutils/archive/Git or timing run occurred. All owned helpers are terminal.

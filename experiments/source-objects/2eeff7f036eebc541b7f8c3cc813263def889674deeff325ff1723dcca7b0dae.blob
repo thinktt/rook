@@ -1,0 +1,39 @@
+--- before/finalize.py
++++ after/finalize.py
+@@ -2,6 +2,26 @@
+ from pathlib import Path
+ import json,os,tarfile
+ from guard import HERE,clearance,load,sha,write,terminal,check_sources,check_dependencies
++
++EVIDENCE_ROOT=Path('/home/legolas/rook2/evidence')
++def archive_member(path, root=EVIDENCE_ROOT):
++ relative=Path(path).resolve().relative_to(Path(root).resolve())
++ assert relative.parts and not relative.is_absolute() and all(part not in ['.','..'] for part in relative.parts)
++ return relative.as_posix()
++
++def package_metadata(path, entries, root=EVIDENCE_ROOT):
++ members={archive_member(p,root):Path(p) for p in entries}
++ assert len(members)==len(entries) and not path.exists()
++ expected={name:sha(p) for name,p in members.items()}
++ with tarfile.open(path,'w:gz') as t:
++  for name,p in members.items():
++   assert p.is_file() and not p.is_symlink()
++   t.add(p,arcname=name,recursive=False)
++ with tarfile.open(path,'r:gz') as t:
++  rows=t.getmembers();assert len(rows)==len(members) and all(m.isfile() for m in rows)
++  actual={m.name:__import__('hashlib').sha256(t.extractfile(m).read()).hexdigest() for m in rows}
++ assert actual==expected
++ return dict(path=str(path),sha256=sha(path),members=actual,reopened_members_exact=True)
+ 
+ def main():
+  plan=clearance();paths={k:Path(v) for k,v in plan['output'].items()}
+@@ -24,7 +44,7 @@
+  entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','source-proof.json','archive-verification.json','validation-summary.json','guard.py','stage.py','record_case.py','reconcile.py','finalize.py']]
+  entries += [paths['reconciliation']/name for name in ['independent-verification.json','case-reconciliation.json','raw-case-sha256.json','tool-terminal.json']]
+  manifest={str(p):sha(p) for p in entries};write(HERE/'final-metadata-manifest.json',manifest)
+- with tarfile.open(HERE/'final-metadata.tar.gz','w:gz') as t:
+-  for p in entries:t.add(p,arcname=str(p.relative_to(HERE)),recursive=False)
++ packaged=package_metadata(HERE/'final-metadata.tar.gz',entries)
++ write(HERE/'final-metadata-archive.json',packaged)
+  print(json.dumps(result))
+ if __name__=='__main__':main()

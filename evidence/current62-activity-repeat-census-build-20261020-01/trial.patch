@@ -1,0 +1,195 @@
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -119,7 +119,12 @@
+ }
+ 
+ fn main() -> ExitCode {
+-    match run() {
++    let result = run();
++    if let Err(error) = rook2::evaluator::flush_activity_census() {
++        let _ = writeln!(io::stderr(), "rook2: activity census flush failed: {error}");
++        return ExitCode::from(1);
++    }
++    match result {
+         Ok(()) => ExitCode::SUCCESS,
+         Err(Failure::Fatal) => ExitCode::from(1),
+         Err(Failure::Message(message)) => {
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -18,6 +18,116 @@
+     COHERENT_BUILDS.with(|count| count.get())
+ }
+ 
++// Diagnostic-only repeat census. No Activity or map result is reused.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct ActivityCensusSnapshot {
++    position: Position,
++    profiles: [[u8; 64]; 2],
++    material: i32,
++    mobility_weights: [i32; 2],
++    epoch: u64,
++    result: activity::Activity,
++}
++
++#[derive(Clone, Copy, Default)]
++struct ActivityCensus {
++    epoch_allocations: u64,
++    full_calls: u64,
++    first_no_snapshot: u64,
++    first_new_epoch: u64,
++    exact_repeat: u64,
++    changed_input: u64,
++    equal_input_different_output: u64,
++    total_activity_r: u64,
++    exact_repeat_activity_r: u64,
++    overflow: bool,
++}
++std::thread_local! {
++    static ACTIVITY_CENSUS: std::cell::Cell<ActivityCensus> = const {
++        std::cell::Cell::new(ActivityCensus {
++            epoch_allocations: 0, full_calls: 0, first_no_snapshot: 0,
++            first_new_epoch: 0, exact_repeat: 0, changed_input: 0,
++            equal_input_different_output: 0, total_activity_r: 0,
++            exact_repeat_activity_r: 0, overflow: false,
++        })
++    };
++}
++fn census_add(value: &mut u64, amount: u64, overflow: &mut bool) {
++    match value.checked_add(amount) {
++        Some(sum) => *value = sum,
++        None => *overflow = true,
++    }
++}
++fn next_activity_census_epoch() -> u64 {
++    ACTIVITY_CENSUS.with(|cell| {
++        let mut state = cell.get();
++        census_add(&mut state.epoch_allocations, 1, &mut state.overflow);
++        cell.set(state);
++        state.epoch_allocations
++    })
++}
++fn record_activity_census(
++    snapshot: &mut Option<ActivityCensusSnapshot>, position: &Position,
++    influence: &Influence, material: i32, mobility_weights: [i32; 2],
++    epoch: u64, result: activity::Activity,
++) {
++    let current = ActivityCensusSnapshot {
++        position: *position, profiles: influence.profiles, material,
++        mobility_weights, epoch, result,
++    };
++    ACTIVITY_CENSUS.with(|cell| {
++        let mut state = cell.get();
++        census_add(&mut state.full_calls, 1, &mut state.overflow);
++        census_add(&mut state.total_activity_r, result.relation_queries, &mut state.overflow);
++        match *snapshot {
++            None => census_add(&mut state.first_no_snapshot, 1, &mut state.overflow),
++            Some(previous) if previous.epoch != epoch =>
++                census_add(&mut state.first_new_epoch, 1, &mut state.overflow),
++            Some(previous) => {
++                let same_inputs = previous.position == current.position
++                    && previous.profiles == current.profiles
++                    && previous.material == material
++                    && previous.mobility_weights == mobility_weights;
++                if !same_inputs {
++                    census_add(&mut state.changed_input, 1, &mut state.overflow);
++                } else if previous.result != result {
++                    census_add(&mut state.equal_input_different_output, 1, &mut state.overflow);
++                } else {
++                    census_add(&mut state.exact_repeat, 1, &mut state.overflow);
++                    census_add(&mut state.exact_repeat_activity_r, result.relation_queries,
++                        &mut state.overflow);
++                }
++            }
++        }
++        cell.set(state);
++    });
++    *snapshot = Some(current);
++}
++
++/// Called once after the diagnostic CLI's run() has returned. No search I/O.
++pub fn flush_activity_census() -> std::io::Result<()> {
++    use std::io::Write;
++    let path = std::env::var_os("ROOK2_ACTIVITY_CENSUS_PATH")
++        .ok_or_else(|| std::io::Error::other("ROOK2_ACTIVITY_CENSUS_PATH is required"))?;
++    let path = std::path::Path::new(&path);
++    if !path.is_absolute() {
++        return Err(std::io::Error::other("activity census path must be absolute"));
++    }
++    let state = ACTIVITY_CENSUS.with(|cell| cell.get());
++    let complete = !state.overflow && state.equal_input_different_output == 0;
++    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
++    writeln!(file, "{{\"schema\":\"rook2-activity-repeat-census-v1\",\"pid\":{},\"complete\":{},\"overflow\":{},\"epoch_allocations\":{},\"full_calls\":{},\"first_no_snapshot\":{},\"first_new_epoch\":{},\"exact_repeat\":{},\"changed_input\":{},\"equal_input_different_output\":{},\"total_activity_r\":{},\"exact_repeat_activity_r\":{}}}",
++        std::process::id(), complete, state.overflow, state.epoch_allocations,
++        state.full_calls, state.first_no_snapshot, state.first_new_epoch,
++        state.exact_repeat, state.changed_input, state.equal_input_different_output,
++        state.total_activity_r, state.exact_repeat_activity_r)?;
++    file.flush()?;
++    if !complete {
++        return Err(std::io::Error::other("activity census overflow or unequal deterministic output"));
++    }
++    Ok(())
++}
++
+ pub const OMITTED_TERMS: &str = "production personality/session/protocol binding";
+ 
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+@@ -32,12 +142,14 @@
+ pub struct Node {
+     pub position: Position,
+     pub retained: Retained,
++    pub activity_census: Option<ActivityCensusSnapshot>,
+ }
+ 
+ impl Node {
+     pub fn root(position: Position, root: &RootContext) -> Self {
+         Self {
+             position,
++            activity_census: None,
+             retained: Retained {
+                 nonking_squares: root.nonking_square_balance(&position),
+                 ..Retained::default()
+@@ -82,6 +194,7 @@
+         }
+         Self {
+             position: self.position.played_unchecked(movement),
++            activity_census: None,
+             retained: Retained {
+                 nonking_squares: nonking,
+                 age: self.retained.age.wrapping_add(1),
+@@ -93,6 +206,7 @@
+     pub fn null_child(&self) -> Self {
+         Self {
+             position: self.position.null_child(),
++            activity_census: None,
+             retained: Retained {
+                 age: self.retained.age.wrapping_add(1),
+                 ..self.retained
+@@ -276,6 +390,7 @@
+     weights: Weights,
+     pawns: PawnCache,
+     pub stats: EvalStats,
++    activity_census_epoch: u64,
+ }
+ 
+ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+@@ -290,9 +405,11 @@
+             variation_range,
+             pawns: PawnCache::new(),
+             stats: EvalStats::default(),
++            activity_census_epoch: next_activity_census_epoch(),
+         }
+     }
+     pub fn begin_search(&mut self, position: &Position) {
++        self.activity_census_epoch = next_activity_census_epoch();
+         (
+             self.root,
+             self.weights,
+@@ -399,6 +516,8 @@
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+         let activity = activity::compute(position, influence, material, self.weights.mobility);
++        record_activity_census(&mut node.activity_census, position, influence, material,
++            self.weights.mobility, self.activity_census_epoch, activity);
+         let shelter = shelter::compute(
+             position,
+             influence,

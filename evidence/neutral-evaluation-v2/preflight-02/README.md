@@ -1,0 +1,1 @@
+Both first-case timing schedules completed. The collector then rejected the diagnostics-off output because it expected per-root-step diagnostic records, which are intentionally absent from that specialization. These attempts are excluded from the final collection. Exact collector and measurements are retained; manifests retain their initial paths.

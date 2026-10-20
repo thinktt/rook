@@ -1,0 +1,234 @@
+//! Independent released class-sort/global-sort oracle; no rank/head algorithm.
+use super::{order_by, preferred_into, priority_sequence, OrderingScratch};
+use crate::movegen::{MoveList, MOVE_CAPACITY};
+use crate::types::Move;
+use std::cmp::Reverse;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+
+fn permutation(keys: &[u32]) -> Vec<usize> {
+    let mut slots: Vec<usize> = (0..keys.len()).collect();
+    for residue in 0..6 {
+        let places: Vec<usize> = (residue..keys.len()).step_by(6).collect();
+        let mut items: Vec<usize> = places.iter().map(|&place| slots[place]).collect();
+        // Rust's stable sort preserves original class order for equal keys.
+        items.sort_by_key(|&item| Reverse(keys[item]));
+        for (place, item) in places.into_iter().zip(items) { slots[place] = item; }
+    }
+    // Stable again, now relative to the combined post-class-sort sequence.
+    slots.sort_by_key(|&item| Reverse(keys[item]));
+    slots
+}
+
+fn payloads(n: usize, duplicates: bool) -> Vec<Move> {
+    (0..n).map(|index| {
+        if duplicates {
+            // Repeated raw payloads, NONE, reserved tags and high bit included.
+            Move([0, 0xffff, 0x7000, 0x8000, 0x1234][index % 5])
+        } else {
+            // Odd multiplication is injective mod2^16; all bits opaque here.
+            Move((index as u16).wrapping_mul(40503) ^ 0xf000)
+        }
+    }).collect()
+}
+
+fn compare_preferred(keys: &[u32], original: &[Move], compare_public: bool) {
+    assert_eq!(keys.len(), original.len());
+    let indices = permutation(keys);
+    let expected: Vec<Move> = indices.iter().map(|&index| original[index]).collect();
+    let mut moves = original.to_vec();
+    let mut priorities = keys.to_vec();
+    let guard = Move(0x6a5a);
+    let mut output = vec![guard; keys.len() + 2];
+    preferred_into(&mut moves, &mut priorities, &mut output[1..keys.len() + 1]);
+    assert_eq!(&output[1..keys.len() + 1], expected.as_slice(), "keys={keys:?}");
+    assert_eq!(output[0], guard);
+    assert_eq!(output[keys.len() + 1], guard);
+    // Internal workspace is allowed to remain post-gap6, not globally sorted.
+    if compare_public {
+        let mut public_moves = original.to_vec();
+        let mut public_keys = keys.to_vec();
+        priority_sequence(&mut public_moves, &mut public_keys);
+        assert_eq!(public_moves, expected);
+        let expected_keys: Vec<u32> = indices.iter().map(|&index| keys[index]).collect();
+        assert_eq!(public_keys, expected_keys);
+    }
+}
+
+#[test]
+fn experiment54_complete_ternary_permutations_and_post_six_ties() {
+    for n in 0usize..=9 {
+        let original = payloads(n, false);
+        for mut encoding in 0usize..3usize.pow(n as u32) {
+            let mut keys = vec![0; n];
+            for key in &mut keys { *key = (encoding % 3) as u32; encoding /= 3; }
+            compare_preferred(&keys, &original, true);
+        }
+    }
+    let keys = [2, 5, 2, 2, 2, 2, 5];
+    let expected = permutation(&keys);
+    assert_eq!(&expected[..2], &[6, 1]); // Not original-input stable tie order.
+    compare_preferred(&keys, &payloads(keys.len(), false), true);
+}
+
+#[test]
+fn experiment54_all_lengths_unsigned_extrema_opaque_duplicates_and_exhaustion() {
+    for n in 0usize..=MOVE_CAPACITY {
+        for pattern in 0..7 {
+            let keys: Vec<u32> = (0..n).map(|i| match pattern {
+                0 => 0, // n512/last slot: packed rank+1 must remain nonzero.
+                1 => 1,
+                2 => u32::MAX,
+                3 => i as u32,
+                4 => (n - i) as u32,
+                5 => [0, 1, 2, u32::MAX, u32::MAX - 1, 0x80000000, 0x7fffffff][i % 7],
+                _ => ((i / 6 + i % 6) % 3) as u32,
+            }).collect();
+            for duplicates in [false, true] {
+                compare_preferred(&keys, &payloads(n, duplicates), false);
+            }
+        }
+    }
+}
+
+fn ordered_indices(keys: &[u32]) -> Vec<usize> {
+    let preferred: Vec<usize> = (0..keys.len()).rev().filter(|&i| keys[i] > 1).collect();
+    let preferred_keys: Vec<u32> = preferred.iter().map(|&i| keys[i]).collect();
+    let mut output: Vec<usize> = permutation(&preferred_keys).into_iter().map(|i| preferred[i]).collect();
+    output.extend((0..keys.len()).filter(|&i| keys[i] <= 1));
+    output
+}
+
+fn native_case(scratch: &mut OrderingScratch, n: usize, salt: usize, duplicates: bool) {
+    let original = payloads(n, duplicates);
+    let keys: Vec<u32> = (0..n).map(|i| match (i + salt) % 8 {
+        0 | 5 => 0, 1 | 6 => 1, 2 | 4 => 7, 3 => u32::MAX, _ => 2,
+    }).collect();
+    let expected: Vec<Move> = ordered_indices(&keys).into_iter().map(|i| original[i]).collect();
+    let tail = Move(0xa55a);
+    let mut list = MoveList { moves: [tail; MOVE_CAPACITY], len: n };
+    list.moves[..n].copy_from_slice(&original);
+    let mut seen = Vec::new();
+    let mut index = 0;
+    order_by(&mut list, scratch, |movement| {
+        seen.push(movement);
+        let key = keys[index];
+        index += 1;
+        key
+    });
+    assert_eq!(seen, original); // Exactly once and in original callback order.
+    assert_eq!(index, n);
+    assert_eq!(list.len, n);
+    assert_eq!(list.as_slice(), expected.as_slice());
+    assert!(list.moves[n..].iter().all(|&movement| movement == tail));
+}
+
+#[test]
+fn experiment54_native_partition_callback_chronology_and_reused_scratch() {
+    let mut scratch = OrderingScratch::new();
+    for (salt, n) in [0, 1, 6, 7, 11, 31, 512, 2, 505, 0, 17].into_iter().enumerate() {
+        native_case(&mut scratch, n, salt, false);
+        native_case(&mut scratch, n, salt + 3, true);
+    }
+    // Entirely deferred0/1 remain unsorted, despite reverse preferred policy.
+    let mut list = MoveList::new();
+    let original = payloads(19, true);
+    for &movement in &original { list.push(movement); }
+    let mut index = 0;
+    order_by(&mut list, &mut scratch, |_| { index += 1; (index % 2) as u32 });
+    assert_eq!(index, original.len());
+    assert_eq!(list.as_slice(), original.as_slice());
+}
+
+#[test]
+fn experiment54_public_partial_panics_and_callback_panic_precede_list_mutation() {
+    for n in 0usize..=1 {
+        let mut moves = payloads(n, false);
+        let original = moves.clone();
+        priority_sequence(&mut moves, &mut []);
+        assert_eq!(moves, original);
+    }
+    let mut moves: Vec<Move> = (1..=8).map(Move).collect();
+    let mut keys = vec![0, 0, 0, 0, 0, 0, 1];
+    let failed = catch_unwind(AssertUnwindSafe(|| priority_sequence(&mut moves, &mut keys)));
+    assert!(failed.is_err());
+    assert_eq!(moves, vec![Move(7), Move(2), Move(3), Move(4), Move(5), Move(6), Move(1), Move(8)]);
+    assert_eq!(keys, vec![1, 0, 0, 0, 0, 0, 0]);
+    let mut moves = [Move(1), Move(2)];
+    let mut keys = [1, 2, 0xdeadbeef];
+    priority_sequence(&mut moves, &mut keys);
+    assert_eq!(moves, [Move(2), Move(1)]);
+    assert_eq!(keys, [2, 1, 0xdeadbeef]);
+
+    let mut scratch = OrderingScratch::new();
+    let mut list = MoveList::new();
+    for movement in payloads(13, true) { list.push(movement); }
+    let before = list.moves;
+    let before_len = list.len;
+    let mut seen = Vec::new();
+    let failed = catch_unwind(AssertUnwindSafe(|| {
+        order_by(&mut list, &mut scratch, |movement| {
+            seen.push(movement);
+            if seen.len() == 4 { panic!("deliberate test callback stop"); }
+            9
+        });
+    }));
+    assert!(failed.is_err());
+    assert_eq!(seen, before[..4]);
+    assert_eq!(list.moves, before);
+    assert_eq!(list.len, before_len);
+    // Later valid calls must overwrite any private partial callback scratch.
+    native_case(&mut scratch, 512, 5, true);
+    native_case(&mut scratch, 1, 0, false);
+}
+
+#[test]
+fn experiment55_native_entry_exact_preferred_zero_through_seven_and_scratch_reuse() {
+    let mut scratch = OrderingScratch::new();
+    // Prime the same workspace with a large merge before every small boundary
+    // and return to large work afterward; no route flags or counters needed.
+    native_case(&mut scratch, MOVE_CAPACITY, 4, false);
+    for preferred in 0usize..=7 {
+        for mixed in [false, true] {
+            let selected = [2u32, 9, u32::MAX, 9, 2, 17, 9];
+            let keys: Vec<u32> = if mixed {
+                let mut keys = Vec::new();
+                for slot in 0usize..7 {
+                    if slot < preferred { keys.push(selected[slot]); }
+                    keys.push((slot % 2) as u32);
+                }
+                keys
+            } else {
+                selected[..preferred].to_vec()
+            };
+            assert_eq!(keys.iter().filter(|&&key| key > 1).count(), preferred);
+            assert_eq!(keys.len(), preferred + if mixed { 7 } else { 0 });
+            if mixed {
+                assert!(keys.contains(&0) && keys.contains(&1));
+                // Even preferred0..6 has original length>=7: selection must
+                // depend on preferred count, not original candidate-list len.
+                assert!(keys.len() >= 7);
+            }
+            let original = payloads(keys.len(), mixed);
+            let expected: Vec<Move> = ordered_indices(&keys).into_iter()
+                .map(|index| original[index]).collect();
+            let tail = Move(0x55aa);
+            let mut list = MoveList { moves: [tail; MOVE_CAPACITY], len: keys.len() };
+            list.moves[..keys.len()].copy_from_slice(&original);
+            let mut seen = Vec::new();
+            let mut calls = 0;
+            order_by(&mut list, &mut scratch, |movement| {
+                seen.push(movement);
+                let key = keys[calls];
+                calls += 1;
+                key
+            });
+            assert_eq!(calls, original.len());
+            assert_eq!(seen, original);
+            assert_eq!(list.len, keys.len());
+            assert_eq!(list.as_slice(), expected.as_slice(),
+                "preferred={preferred} mixed={mixed}");
+            assert!(list.moves[keys.len()..].iter().all(|&movement| movement == tail));
+        }
+    }
+    native_case(&mut scratch, MOVE_CAPACITY, 7, true);
+}

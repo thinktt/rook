@@ -1,0 +1,1 @@
+Park48:13.730016→13.687949s summed case-median CPU is0.306387%lower,7of7lower,worst0.998589.13focused tests and70 live/offline originals pass; actual entry160 copy is removed with original evaluator source/ABI unchanged and ordinary frame−144B. The fixed aggregate≤.995 gate fails. No retry or own-PGO. Accepted43 and its whole54/12 timings stay unchanged.

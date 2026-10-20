@@ -115,3 +115,13 @@ Directed-by: Tobias Toland <github@thinktt.e4ward.com>
 Before completing a commit, verify that all three trailers are present at the
 end of the message in the required order, with the Sol model version matching
 the active model at commit time.
+
+## Evidence storage
+
+Keep code history, reproducible experiment setups and concise outcome reports in
+this repository. Store raw runs, binaries, profiles, intermediate build products
+and packed checkpoints in `/home/legolas/rook2-experiments`. The complete original
+worktree/history is preserved there. Read `docs/evidence-layout.md` for relocated
+paths and commit mapping, and update `docs/performance-experiments.md` with brief
+idea/result entries (label untried proposals explicitly). Do not automatically
+commit new evidence trees or replace old immutable records to fix their paths.

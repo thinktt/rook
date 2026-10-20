@@ -1,0 +1,265 @@
+--- a/src/position.rs
++++ b/src/position.rs
+@@ -297,7 +297,9 @@
+                 "king-victim continuation requires the cold ingress path"
+             );
+             self.remove_ordered(victim, victim_square);
+-            self.set_square(victim_square, Piece::EMPTY);
++            if victim_square != to {
++                self.set_square(victim_square, Piece::EMPTY);
++            }
+         }
+         let resulting_piece = match movement.kind() {
+             MoveKind::Promotion(promoted) => {
+@@ -790,3 +792,251 @@
+         }
+     }
+ }
++
++
++#[cfg(test)]
++mod experiment59_tests {
++    use super::*;
++
++    fn sq(name: &str) -> Square { Square::parse(name).unwrap() }
++
++    // Initial parsing is shared; the expected transition never calls a native
++    // transition, setter, ordered-list updater or derived-state recomputation.
++    fn placement(pieces: &[(Square, Piece)], side: Color, rights: &str) -> Position {
++        let mut board = [Piece::EMPTY; 64];
++        for &(square, piece) in pieces {
++            assert!(board[square.0 as usize].is_empty());
++            board[square.0 as usize] = piece;
++        }
++        let mut fen = String::new();
++        for rank in (0..8).rev() {
++            if rank != 7 { fen.push('/'); }
++            let mut empty = 0;
++            for file in 0..8 {
++                let piece = board[rank * 8 + file];
++                if piece.is_empty() { empty += 1; }
++                else {
++                    if empty != 0 { fen.push(char::from(b'0' + empty)); empty = 0; }
++                    fen.push(piece.fen_char());
++                }
++            }
++            if empty != 0 { fen.push(char::from(b'0' + empty)); }
++        }
++        let side = if side == Color::White { "w" } else { "b" };
++        let mut result = Position::from_fen(&format!("{fen} {side} {rights} - 255 1")).unwrap();
++        // Deliberately non-coordinate chronology, without changing placement.
++        for color in 0..2 {
++            let mut start = 0;
++            for kind in 0..6 {
++                let end = start + result.counts[color][kind] as usize;
++                result.squares[color][start..end].reverse();
++                start = end;
++            }
++        }
++        result
++    }
++
++    fn reflected(square: Square, side: Color) -> Square {
++        Square(square.0 ^ if side == Color::Black { 56 } else { 0 })
++    }
++
++    fn expected(parent: &Position, from: Square, to: Square, kind: MoveKind) -> Position {
++        let mover = parent.board[from.0 as usize];
++        let side = mover.color();
++        let victim_square = if kind == MoveKind::EnPassant {
++            Square(if side == Color::White { to.0 - 8 } else { to.0 + 8 })
++        } else { to };
++        let victim = parent.board[victim_square.0 as usize];
++        let mut groups: [[Vec<Square>; 6]; 2] = std::array::from_fn(|color| {
++            let mut start = 0;
++            std::array::from_fn(|k| {
++                let end = start + parent.counts[color][k] as usize;
++                let group = parent.squares[color][start..end].to_vec();
++                start = end;
++                group
++            })
++        });
++        if !victim.is_empty() {
++            groups[victim.color().index()][victim.kind().index()]
++                .retain(|&square| square != victim_square);
++        }
++        let result_piece = if let MoveKind::Promotion(promoted) = kind {
++            groups[side.index()][PieceKind::Pawn.index()].retain(|&square| square != from);
++            groups[side.index()][promoted.index()].push(to);
++            Piece::new(side, promoted)
++        } else {
++            let group = &mut groups[side.index()][mover.kind().index()];
++            for square in group { if *square == from { *square = to; } }
++            mover
++        };
++        let mut board = parent.board;
++        board[from.0 as usize] = Piece::EMPTY;
++        board[victim_square.0 as usize] = Piece::EMPTY;
++        board[to.0 as usize] = result_piece;
++        if kind == MoveKind::Castle {
++            let (rook_from, rook_to) = match (side, to.file()) {
++                (Color::White, 6) => (sq("h1"), sq("f1")),
++                (Color::White, 2) => (sq("a1"), sq("d1")),
++                (Color::Black, 6) => (sq("h8"), sq("f8")),
++                (Color::Black, 2) => (sq("a8"), sq("d8")),
++                _ => panic!("invalid test castle"),
++            };
++            board[rook_from.0 as usize] = Piece::EMPTY;
++            board[rook_to.0 as usize] = Piece::new(side, PieceKind::Rook);
++            for square in &mut groups[side.index()][PieceKind::Rook.index()] {
++                if *square == rook_from { *square = rook_to; }
++            }
++        }
++        let mut counts = [[0; 6]; 2];
++        let mut squares = [[Square(NO_SQUARE); 16]; 2];
++        for color in 0..2 {
++            let mut index = 0;
++            for k in 0..6 {
++                counts[color][k] = groups[color][k].len() as u8;
++                for &square in &groups[color][k] {
++                    squares[color][index] = square;
++                    index += 1;
++                }
++            }
++        }
++        // Literal released corner/king rights map, not rights_mask().
++        let mut rights = parent.rights;
++        for square in [from.0, to.0] {
++            rights &= !match square { 0 => 1, 4 => 3, 7 => 2, 56 => 4, 60 => 12, 63 => 8, _ => 0 };
++        }
++        let mut ep = NO_SQUARE;
++        if mover.kind() == PieceKind::Pawn && from.0.abs_diff(to.0) == 16 {
++            let adjacent = [-1i16, 1].iter().any(|&df| {
++                let file = i16::from(to.file()) + df;
++                (0..8).contains(&file)
++                    && board[(i16::from(to.0) + df) as usize]
++                        == Piece::new(side.opponent(), PieceKind::Pawn)
++            });
++            if adjacent { ep = (from.0 + to.0) / 2; }
++        }
++        // Reconstruct total credit from the final mailbox, not by deltas.
++        let mut starting_units = 0;
++        for (index, &piece) in board.iter().enumerate() {
++            if piece.is_empty() { continue; }
++            let relative = index ^ if piece.color() == Color::Black { 56 } else { 0 };
++            starting_units += match (piece.kind(), relative) {
++                (PieceKind::Rook, 0 | 7) | (PieceKind::Knight, 1 | 6)
++                | (PieceKind::Bishop, 2 | 5) | (PieceKind::Queen, 3) => 2,
++                (PieceKind::Pawn, 11 | 12) => 1,
++                _ => 0,
++            };
++        }
++        // These independent from-board owners share only immutable tag/key
++        // definitions with the incremental transition under test.
++        let keys = identity::fingerprints(&board);
++        Position {
++            board, squares, counts, primary: keys.primary, secondary: keys.secondary,
++            pawn: keys.pawn, side: side.opponent(), rights, ep,
++            halfmove: if mover.kind() == PieceKind::Pawn || !victim.is_empty() {
++                0
++            } else { (u16::from(parent.halfmove) + 1) as u8 },
++            starting_units, attack_bits: AttackBits::from_board(&board),
++        }
++    }
++
++    fn check(parent: &Position, from: Square, to: Square, kind: MoveKind) -> Position {
++        let wanted = expected(parent, from, to, kind);
++        let mut actual = *parent;
++        actual.apply_unchecked(Move::new(from, to, kind));
++        assert_eq!(actual, wanted, "{from:?}->{to:?} {kind:?}");
++        actual.validate().unwrap();
++        actual
++    }
++
++    #[test]
++    fn experiment59_all_ordinary_kinds_match_independent_final_state() {
++        for side in [Color::White, Color::Black] {
++            for (kind, quiet, capture) in [
++                (PieceKind::Pawn, "d5", "e5"),
++                (PieceKind::Knight, "f5", "f5"),
++                (PieceKind::Bishop, "f6", "f6"),
++                (PieceKind::Rook, "d6", "d6"),
++                (PieceKind::Queen, "f6", "f6"),
++                (PieceKind::King, "e5", "e5"),
++            ] {
++                for victim_kind in [None, Some(PieceKind::Pawn), Some(PieceKind::Knight),
++                    Some(PieceKind::Bishop), Some(PieceKind::Rook), Some(PieceKind::Queen)] {
++                    let from = reflected(sq("d4"), side);
++                    let to = reflected(sq(if victim_kind.is_some() { capture } else { quiet }), side);
++                    let mut pieces = vec![(from, Piece::new(side, kind)),
++                        (reflected(sq("a8"), side), Piece::new(side.opponent(), PieceKind::King)),
++                        (reflected(sq("a7"), side), Piece::new(side.opponent(), PieceKind::Pawn)),
++                        (reflected(sq("b7"), side), Piece::new(side.opponent(), PieceKind::Pawn))];
++                    if kind != PieceKind::King {
++                        pieces.push((reflected(sq("h1"), side), Piece::new(side, PieceKind::King)));
++                        for square in ["b2", "f2"] {
++                            pieces.push((reflected(sq(square), side), Piece::new(side, kind)));
++                        }
++                    }
++                    if let Some(victim) = victim_kind { pieces.push((to, Piece::new(side.opponent(), victim))); }
++                    let parent = placement(&pieces, side, "-");
++                    let child = check(&parent, from, to, MoveKind::Ordinary);
++                    assert_eq!(child.halfmove, 0); // Pawn/capture reset, or noncapture255 wrap.
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn experiment59_promotion_capture_and_quiet_keep_append_chronology() {
++        for side in [Color::White, Color::Black] {
++            for promoted in [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++                for capture in [false, true] {
++                    let from = reflected(sq("a7"), side);
++                    let to = reflected(sq(if capture { "b8" } else { "a8" }), side);
++                    let mut pieces = vec![(from, Piece::new(side, PieceKind::Pawn)),
++                        (reflected(sq("h1"), side), Piece::new(side, PieceKind::King)),
++                        (reflected(sq("h8"), side), Piece::new(side.opponent(), PieceKind::King)),
++                        (reflected(sq("d4"), side), Piece::new(side, promoted)),
++                        (reflected(sq("f2"), side), Piece::new(side, promoted))];
++                    if capture { pieces.push((to, Piece::new(side.opponent(), PieceKind::Rook))); }
++                    let parent = placement(&pieces, side, "-");
++                    let child = check(&parent, from, to, MoveKind::Promotion(promoted));
++                    assert_eq!(child.piece_squares(side, promoted).last(), Some(&to));
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn experiment59_rights_credit_wrap_and_special_fallbacks_match_model() {
++        for side in [Color::White, Color::Black] {
++            let mut pieces = Vec::new();
++            for (square, owner, kind) in [
++                ("e1", side, PieceKind::King), ("a1", side, PieceKind::Rook),
++                ("h1", side, PieceKind::Rook), ("b7", side, PieceKind::Queen),
++                ("e8", side.opponent(), PieceKind::King),
++                ("a8", side.opponent(), PieceKind::Rook), ("h8", side.opponent(), PieceKind::Rook),
++            ] { pieces.push((reflected(sq(square), side), Piece::new(owner, kind))); }
++            let parent = placement(&pieces, side, "KQkq");
++            let captured = check(&parent, reflected(sq("b7"), side), reflected(sq("a8"), side), MoveKind::Ordinary);
++            assert_eq!(captured.starting_units, parent.starting_units - 2);
++            for to in ["c1", "g1"] {
++                check(&parent, reflected(sq("e1"), side), reflected(sq(to), side), MoveKind::Castle);
++            }
++            let quiet = check(&parent, reflected(sq("h1"), side), reflected(sq("h2"), side), MoveKind::Ordinary);
++            assert_eq!(quiet.halfmove, 0); // 255 wraps; a rook move is not a capture.
++            let pawn = placement(&[
++                (reflected(sq("h1"), side), Piece::new(side, PieceKind::King)),
++                (reflected(sq("d8"), side), Piece::new(side.opponent(), PieceKind::King)),
++                (reflected(sq("d1"), side), Piece::new(side, PieceKind::Rook)),
++                (reflected(sq("e2"), side), Piece::new(side, PieceKind::Pawn)),
++                (reflected(sq("d4"), side), Piece::new(side.opponent(), PieceKind::Pawn)),
++            ], side, "-");
++            let pushed = check(&pawn, reflected(sq("e2"), side), reflected(sq("e4"), side), MoveKind::Ordinary);
++            assert_eq!(pushed.ep, reflected(sq("e3"), side).0); // Adjacent pawn is pinned to d8.
++            let ep = placement(&[
++                (reflected(sq("a1"), side), Piece::new(side, PieceKind::King)),
++                (reflected(sq("h8"), side), Piece::new(side.opponent(), PieceKind::King)),
++                (reflected(sq("e5"), side), Piece::new(side, PieceKind::Pawn)),
++                (reflected(sq("d5"), side), Piece::new(side.opponent(), PieceKind::Pawn)),
++            ], side, "-");
++            check(&ep, reflected(sq("e5"), side), reflected(sq("d6"), side), MoveKind::EnPassant);
++        }
++    }
++}

@@ -1,0 +1,31 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -357,19 +357,25 @@
+         PieceKind::Bishop => mobility.total / 2,
+         PieceKind::Rook | PieceKind::Queen => (5 * mobility.total) / 16,
+         _ => unreachable!("non-activity piece"),
+     };
+     let index = ((((512 - endgame as i64) / 2) * raw_mobility + 128) / 256).min(119) as usize;
+     let mut score = CURVE[index] as i64;
+     let own = influence.code(color, source);
+     let opponent = influence.code(color.opponent(), source);
+-    let attack_count = profile_sum(opponent);
+-    if profile_sum(own) <= attack_count {
+-        score -= 5 * attack_count as i64 + 2;
++    if opponent == 0 {
++        if own == 0 {
++            score -= 2;
++        }
++    } else {
++        let attack_count = profile_sum(opponent);
++        if profile_sum(own) <= attack_count {
++            score -= 5 * attack_count as i64 + 2;
++        }
+     }
+     let rank = relative_rank(color, source);
+     let file = source.file() as usize;
+     let knight_exempt = kind == PieceKind::Knight
+         && own >> 6 != 0
+         && (((2..=5).contains(&file) && (2..=5).contains(&rank))
+             || ((file == 3 || file == 4) && rank == 6));
+     let mut queries = mobility.queries;

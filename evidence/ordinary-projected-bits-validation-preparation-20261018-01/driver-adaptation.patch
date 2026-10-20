@@ -1,0 +1,94 @@
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-validation-preparation-20261018-01/stages.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-validation-preparation-20261018-01/stages.py
+@@ -1,13 +1,13 @@
+ #!/usr/bin/env python3
+-"""Exact isolated full-byte-pair relations generic functional trial; no timing."""
++"""Exact isolated ordinary projected-bit generic functional trial; no timing."""
+ from pathlib import Path
+-import hashlib,json,os,shutil,subprocess,sys,tarfile
++import hashlib,json,os,shutil,subprocess,sys,tarfile,difflib
+ P=Path(__file__).resolve().parent;E=P.parent;ROOT=E.parent
+-B=E/'full-byte-pair-relations-generic-build-20261018-01'
+-N=E/'full-byte-pair-relations-native-validation-20261018-01'
+-R=E/'full-byte-pair-relations-regression-20261018-01'
+-REF=E/'activity-value-inputs-generic-build-20261018-01'
+-PRO=E/'full-byte-pair-relations-proposal-20261018-01'
++B=E/'ordinary-projected-bits-generic-build-20261018-01'
++N=E/'ordinary-projected-bits-native-validation-20261018-01'
++R=E/'ordinary-projected-bits-regression-20261018-01'
++REF=E/'full-byte-pair-relations-generic-build-20261018-01'
++PRO=E/'ordinary-projected-bits-proposal-20261018-01'
+ KIT=Path('/home/legolas/king-spec/conformance')
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]
+ def load(p):return json.loads(Path(p).read_text())
+@@ -19,6 +19,8 @@
+  assert sorted(os.sched_getaffinity(0))==H and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  c=load(P/'execution-clearance.json');assert c['authorized'] is True and c['parent_review_complete'] is True
+  assert c['stages_sha256']==sha(P/'stages.py')
++ assert isinstance(c['source_review_sha256'],dict) and c['source_review_sha256']
++ for path,h in c['source_review_sha256'].items():assert sha(path)==h,path
+ def guard():
+  authorized();bound=load(P/'execution-binding.json');m=manifest();s=Path(m['path'])
+  for path,h in bound['authority_sha256'].items():assert sha(path)==h,path
+@@ -42,27 +44,35 @@
+  authorized();assert sorted(os.sched_getaffinity(0))==H and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  m=manifest();s=Path(m['path']);reference=load(REF/'receipt.json')
+  assert len(m['native46'])==46 and len(m['tools23'])==23
+- assert m['path']=='/home/legolas/rook2-work/imp2-full-byte-pair-relations-20261018-oc3es5rp'
++ assert m['path']=='/home/legolas/rook2-work/imp2-ordinary-projected-bits-20261018-txi745mj'
+  assert m['source69']=={**m['native46'],**m['tools23']}
+- assert reference['binary_output']['sha256']=='7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16'
++ assert reference['binary_output']['sha256']=='948c336c70b8e803b982cc88ea1f0cf3791c172c2c6f3fd090bb69bce1a98219'
+  assert sha(REF/'rook2-exact')==reference['binary_output']['sha256']
+  assert m['tools23']==reference['tool_sha256_before']
+- assert [k for k,h in m['native46'].items() if reference['source_sha256_before'][k]!=h]==['src/influence.rs','src/relation_table.rs']
++ assert [k for k,h in m['native46'].items() if reference['source_sha256_before'][k]!=h]==['src/ordinary.rs']
+  archive=load(REF/'archive-receipt.json');assert sha(REF/archive['archive'])==archive['sha256']
+- for name in ['src/influence.rs','src/relation_table.rs']:assert (s/name).read_bytes()==(PRO/'proposed'/name).read_bytes()
+- marker='\n#[cfg(test)]\nmod tests {'
+- current=(s/'src/influence.rs').read_text();baseline=(REF/'source-before/src/influence.rs').read_text()
+- assert current.count(marker)==baseline.count(marker)==1 and current.split(marker)[1]==baseline.split(marker)[1]
++ proposal=load(PRO/'plan.json')
++ assert m['source_graph_sha256']==proposal['source69_graph']=='d4bb0f948c650f9675b050410a3a4d2811dcc58357ceb2fc1c4f99f21f2fff50'
++ assert proposal['source_root']==m['path'] and proposal['changed_native']==['src/ordinary.rs']
++ assert sha(PRO/'source69.tar.gz')==proposal['source_archive_sha256'] and sha(PRO/'native-only.patch')==proposal['native_patch_sha256']
++ current=(s/'src/ordinary.rs').read_text();baseline=(REF/'source-before/src/ordinary.rs').read_text()
++ patch=''.join(difflib.unified_diff(baseline.splitlines(keepends=True),current.splitlines(keepends=True),fromfile='fullbyte/src/ordinary.rs',tofile='ordinary-projected-bits/src/ordinary.rs'))
++ assert patch==(PRO/'native-only.patch').read_text()
++ with tarfile.open(PRO/'source69.tar.gz','r:gz') as archive_source:
++  members={member.name:hashlib.sha256(archive_source.extractfile(member).read()).hexdigest() for member in archive_source}
++ assert members==m['source69']
++ for path,h in load(P/'input-pins.json').items():assert sha(path)==h,path
+  expected={**m['native46'],**m['tools23']}
+  actual={'Cargo.toml','Cargo.lock'}|{str(q.relative_to(s)) for d in [s/'src',s/'tools'] for q in d.rglob('*') if q.is_file() and '__pycache__' not in q.parts}
+  assert actual==set(expected)
+  for name,h in expected.items():assert sha(s/name)==h,name
+  for name in ['build.py','archive_build.py','check_live.py']:assert sha(ROOT/'tools'/name)==m['tools23']['tools/'+name]
+- files=[P/'stages.py',P/'execution-clearance.json',PRO/'source-manifest.json',PRO/'prepared.json',PRO/'source-proof.json',PRO/'proposal.patch',PRO/'generate_full_relations.py',PRO/'evaluation-relations.md',PRO/'proposed/src/influence.rs',PRO/'proposed/src/relation_table.rs',REF/'receipt.json',REF/'archive-receipt.json',REF/archive['archive'],REF/'rook2-exact',KIT.parent/'spec/evaluation-relations.md']
++ files=[P/'stages.py',P/'execution-clearance.json',P/'input-pins.json',P/'preparation-plan.json',PRO/'source-manifest.json',PRO/'plan.json',PRO/'README.md',PRO/'native-only.patch',PRO/'source69.tar.gz',REF/'receipt.json',REF/'archive-receipt.json',REF/archive['archive'],REF/'rook2-exact']
++ files += [Path(path) for path in load(P/'execution-clearance.json')['source_review_sha256']]
+  files += [ROOT/'tools'/name for name in ['build.py','archive_build.py','check_live.py']]
+  files += [KIT/'profiling'/name for name in ['replay-check.mjs','benchmark.mjs','workloads.json','replay-oracle.json']]
+  files += [KIT/'fixtures/interrupted-sessions-v1.json',Path('/usr/bin/node'),Path('/usr/bin/python3')]
+- write(P/'execution-binding.json',{'source_root':str(s),'authority_sha256':{str(f):sha(f) for f in files},'source_sha256':m['native46'],'tool_sha256':m['tools23'],'scope':'Explicitly authorized isolated generic functional trial only, activity baseline retained, no pawn overlay/timing/profiling/Git/adoption; original proposal manifest unchanged','accepted_source_review_actual':'065c3f/0'})
++ write(P/'execution-binding.json',{'source_root':str(s),'authority_sha256':{str(f):sha(f) for f in files},'source_sha256':m['native46'],'tool_sha256':m['tools23'],'scope':'Explicitly authorized isolated ordinary projected-bit generic functional trial only; current fullbyte baseline retained, no cache/pawn overlay/timing/profiling/Git/adoption; original proposal manifest unchanged','parent_source_review_sha256':load(P/'execution-clearance.json')['source_review_sha256']})
+  guard()
+ 
+ def build():
+@@ -112,7 +122,6 @@
+   assert len([x for x in text.splitlines() if x.startswith('test ') and x.endswith(' ... ok')])==count
+   assert f'test result: ok. {count} passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;' in text
+   tests[key]['passed']=count
+- assert 'influence::tests::all_byte_pairs_and_exclusions_match_independent_digit_reference ... ok' in (N/'lib-tests.stdout').read_text()
+  guard();write(N/'result.json',{'complete':True,'failure':None,'source_root':str(s),'commands':commands,'tests':tests,'total_tests':178,'engine_sha256':sha(B/'rook2-exact'),'source_and_tools_unchanged':True,'test_environment':{k:env.get(k) for k in b['build_effective_environment']}})
+  print('NATIVE178 PASS',flush=True)
+ 
+@@ -133,7 +142,7 @@
+   for name,record in row['raw'].items():
+    file=R/'wire'/row['id']/(name+'.raw');assert file.stat().st_size==record['bytes'] and sha(file)==record['sha256']
+  after={path:sha(path) for path in before};assert after==before;guard()
+- write(R/'result.json',{'complete':True,'failure':None,'engine_sha256':digest,'commands':commands,'input_sha256_before':before,'input_sha256_after':after,'helper_and_engine_inherited_affinity':H,'strict54_pass':True,'interruption_fixtures':8,'interruption_searches':24,'source_and_tool_identity_unchanged':True,'untimed':True,'scope':'Isolated full-byte-pair relations standard functional checks on activity baseline; no pawn overlay/timing/adoption'})
++ write(R/'result.json',{'complete':True,'failure':None,'engine_sha256':digest,'commands':commands,'input_sha256_before':before,'input_sha256_after':after,'helper_and_engine_inherited_affinity':H,'strict54_pass':True,'interruption_fixtures':8,'interruption_searches':24,'source_and_tool_identity_unchanged':True,'untimed':True,'scope':'Isolated ordinary projected-bit standard functional checks on current fullbyte baseline; no cache/pawn overlay/timing/adoption'})
+  print('STRICT54 WIRE8/24 PASS',flush=True)
+ if __name__=='__main__':
+  authorized();stage=sys.argv[1];assert stage in ['build','native','regression']

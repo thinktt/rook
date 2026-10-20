@@ -1,0 +1,21 @@
+--- frozen strict parser
++++ separate exact-raw partial postmortem parser
+@@ -116,8 +116,8 @@
+     require(pending is None and events is not None and summary is not None and totals is not None,'incomplete profile')
+     sums={event:sum(row['events'][event] for row in rows) for event in events}
+     require(all(value<=U64 for value in sums.values()),'summed counter overflow')
+-    require(sums==summary==totals,'SELF/summary/totals vector mismatch')
+-    return dict(schema='rook2-callgrind-named-SELF-v1',events=events,headers=headers,
++    require(sums==totals and all(summary[event]>=sums[event] for event in events),'partial postmortem still requires SELF==totals and nonnegative gap')
++    return dict(schema='rook2-callgrind-partial-postmortem-v1',original_strict_study_complete=False,unattributed_summary_events={event:summary[event]-sums[event] for event in events},events=events,headers=headers,
+         descriptions=descriptions,event_descriptions=event_descriptions,summary=summary,totals=totals,
+         SELF_sum=sums,model_rates=model_rates(sums),raw_SELF_rows=rows,
+         raw_inclusive_call_arcs_NOT_ADDED=arcs,
+@@ -139,6 +139,7 @@
+ 
+ def parse_file(path,expected_events=None):
+     path=Path(path);raw=path.read_bytes()
++    require(hashlib.sha256(raw).hexdigest()=='0cb25d4d181b32f95555f077b96b36cdc9afdc11168f9f77262e7177d8a885d8','postmortem bound to exact original failed capture only')
+     result=parse_text(raw.decode('ascii'),expected_events)
+     result.update(raw_path=str(path),raw_sha256=hashlib.sha256(raw).hexdigest())
+     return result

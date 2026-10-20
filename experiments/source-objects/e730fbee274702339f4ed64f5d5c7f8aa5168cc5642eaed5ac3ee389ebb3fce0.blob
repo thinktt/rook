@@ -1,0 +1,106 @@
+//! Private two-cell map update. No parent payload copy or returned map lives here.
+//! The authenticated caller owns the initialized final output and transition proof.
+use super::{coherent::SliderView, Contribution, Influence};
+use crate::attacks::{influence_rays, influence_pawn_targets, influence_knight_targets, influence_king_targets};
+use crate::position::Position;
+use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+
+#[inline]
+fn scatter<const REMOVE: bool>(bytes: &mut [u8; 64], mut targets: u64, weight: u8) {
+    while targets != 0 {
+        let target = targets.trailing_zeros() as usize;
+        targets &= targets - 1;
+        bytes[target] = if REMOVE { bytes[target].wrapping_sub(weight) }
+            else { bytes[target].wrapping_add(weight) };
+    }
+}
+
+#[inline]
+fn source<const REMOVE: bool>(output: &mut Influence, piece: Piece, square: Square,
+    view: &SliderView) {
+    if piece.is_empty() { return; }
+    let side = piece.color();
+    let bytes = &mut output.profiles[side.index()];
+    let kind = piece.kind();
+    match kind {
+        PieceKind::Pawn => scatter::<REMOVE>(bytes, influence_pawn_targets(side, square), Contribution::Pawn as u8),
+        PieceKind::Knight => scatter::<REMOVE>(bytes, influence_knight_targets(square), Contribution::Minor as u8),
+        PieceKind::King => scatter::<REMOVE>(bytes, influence_king_targets(square), Contribution::Weak as u8),
+        PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen => {
+            let (rays, increasing) = influence_rays(square);
+            let directions = match kind { PieceKind::Bishop => 0..4,
+                PieceKind::Rook => 4..8, _ => 0..8 };
+            let mut normal = 0;
+            let mut weak = 0;
+            for direction in directions {
+                let (n, w) = view.ray_masks(rays[direction], increasing[direction], direction);
+                normal |= n;
+                weak |= w;
+            }
+            let weight = match kind { PieceKind::Bishop => Contribution::Minor,
+                PieceKind::Rook => Contribution::Rook, _ => Contribution::Queen } as u8;
+            scatter::<REMOVE>(bytes, normal, weight);
+            scatter::<REMOVE>(bytes, weak, Contribution::Weak as u8);
+        }
+    }
+}
+
+pub(super) fn update(parent: &Position, child: &Position, movement: Move,
+    output: &mut Influence) {
+    debug_assert!(matches!(movement.kind(), MoveKind::Ordinary | MoveKind::Promotion(_)));
+    let from = movement.from();
+    let to = movement.to();
+    debug_assert_ne!(from, to);
+    let mover = parent.board[from.0 as usize];
+    let victim = parent.board[to.0 as usize];
+    let added = child.board[to.0 as usize];
+    debug_assert!(!mover.is_empty() && !added.is_empty());
+    debug_assert!(child.board[from.0 as usize].is_empty());
+    let old_planes = parent.attack_planes();
+    let new_planes = child.attack_planes();
+    let excluded = (1u64 << from.0) | (1u64 << to.0);
+    let (from_rays, _) = influence_rays(from);
+    let (to_rays, _) = influence_rays(to);
+    let bishops = old_planes[0] & old_planes[1] & !old_planes[2];
+    let rooks = !old_planes[0] & !old_planes[1] & old_planes[2];
+    let queens = old_planes[0] & !old_planes[1] & old_planes[2];
+    // DIRECTIONS has opposite pairs 0/1,2/3,4/5,6/7. The inverse rays
+    // enumerate ALL collinear sources, including those beyond old blockers.
+    for side in [Color::White, Color::Black] {
+        let old_view = SliderView::new(old_planes, side);
+        let new_view = SliderView::new(new_planes, side);
+        if mover.color() == side { source::<true>(output, mover, from, &old_view); }
+        if !victim.is_empty() && victim.color() == side {
+            source::<true>(output, victim, to, &old_view);
+        }
+        if added.color() == side { source::<false>(output, added, to, &new_view); }
+        let own = if side == Color::Black { old_planes[3] } else { !old_planes[3] };
+        for direction in 0..8 {
+            let slider_origins = if direction < 4 { bishops | queens } else { rooks | queens };
+            let mut origins = (from_rays[direction ^ 1] | to_rays[direction ^ 1])
+                & slider_origins & own & !excluded;
+            // The OR deduplicates an origin/direction selected by both changed
+            // cells. F/T sources were handled completely above and cannot recur.
+            while origins != 0 {
+                let index = origins.trailing_zeros() as usize;
+                origins &= origins - 1;
+                let (rays, increasing) = influence_rays(Square(index as u8));
+                let (old_normal, old_weak) = old_view.ray_masks(rays[direction], increasing[direction], direction);
+                let (new_normal, new_weak) = new_view.ray_masks(rays[direction], increasing[direction], direction);
+                let weight = match parent.board[index].kind() {
+                    PieceKind::Bishop => Contribution::Minor,
+                    PieceKind::Rook => Contribution::Rook,
+                    PieceKind::Queen => Contribution::Queen,
+                    _ => unreachable!("coherent slider plane"),
+                } as u8;
+                let bytes = &mut output.profiles[side.index()];
+                // Cancel only equal weights from THIS unchanged source/ray.
+                // Normal-to-weak transitions remain one remove and one add.
+                scatter::<true>(bytes, old_normal & !new_normal, weight);
+                scatter::<false>(bytes, new_normal & !old_normal, weight);
+                scatter::<true>(bytes, old_weak & !new_weak, Contribution::Weak as u8);
+                scatter::<false>(bytes, new_weak & !old_weak, Contribution::Weak as u8);
+            }
+        }
+    }
+}

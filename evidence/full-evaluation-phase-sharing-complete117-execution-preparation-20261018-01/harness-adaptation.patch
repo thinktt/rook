@@ -1,0 +1,11 @@
+--- closed-cold-prep/reconcile.py
++++ resolved-phase-sharing117/reconcile.py
+@@ -49,7 +49,7 @@
+  assert report['status']=='pass' and len(report['results'])==len(work['cases'])==len(oracle['cases'])==54 and report['selectedCases']==[c['id'] for c in work['cases']]
+  engine=Path(plan['native_reference']['image'])
+  for row,c in zip(report['results'],work['cases']):
+-  answer=next(a for a in oracle['cases'] if a['id']==c['id']);assert row['case']==c['id'] and row['status']=='pass' and row['command']==[str(engine),'--work-clock=kingwcr','--work-clock-post=work'] and row['exit']==answer['exit']==dict(code=0,signal=None)
++  answer=next(a for a in oracle['cases'] if a['id']==c['id']);assert row['case']==c['id'] and row['status']=='pass' and row['command']==['/usr/bin/taskset','-c','14',str(engine),'--work-clock=kingwcr','--work-clock-post=work'] and row['exit']==answer['exit']==dict(code=0,signal=None)
+   assert row['complete'] and not row['truncated'] and not row.get('cleanupUnconfirmed',False) and row['discardedObservedBytes']==0 and row['error'] is None and row['stderr']==answer['stderr']=='' and row['stdout'].endswith('\n')
+   lines=row['stdout'].splitlines();acks=[x for x in c['protocol']['recordsBeforeSearch'] if x.startswith('cm_parm ')]+['cm_parm rnd=0'];assert lines[:len(acks)]==acks;lines=lines[len(acks):]
+   assert [semantic(x) for x in lines[:len(answer['posts'])]]==answer['posts'] and lines[len(answer['posts']):]==['move '+answer['move']]+answer['resultRecords']

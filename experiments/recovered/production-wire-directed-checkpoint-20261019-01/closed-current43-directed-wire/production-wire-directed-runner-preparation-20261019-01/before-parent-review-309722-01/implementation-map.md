@@ -1,0 +1,10 @@
+# Closed-design implementation map
+
+- `main`: parent review/launch/quiet gate; exact current43 executable/interpreter/source/spec/input/helper identity checks; fixed four IDs and valid ASCII record bytes; final source/identity recheck; no next case or hash work after unconfirmed cleanup.
+- `Process.start`: single direct ordinary CLI child, fresh session/group, native actual PID/start/exe/affinity/pgid/sid. No Node/Valgrind, seed hook or native source change.
+- `send`, `expect`, `line`, `fragment_consumed`: retained real stdin chunks and flushes; exact replies before the next write; atomic <=PIPE_BUF control packets; own-pipe consumption then fixed quiet observation; unsupported FIONREAD/partial atomic write becomes unavailable coverage, not pass.
+- `status`, `run_case`: exact released first-stop expected bytes; directly observed third/fourth poll N; raw abort and no-move effects; late idle dot, duplicate selected-move source check and force-mode followup. No manufactured finalN or complete hidden-state assertion.
+- `finish`, `cleanup`: explicit quit with stdin held open versus idle EOF; actual0/no signal/drained streams; one monotonic5s completion/cleanup budget reserved inside lifetime120s/study600s. TERM/KILL group fallback; late/unknown closure invalid, no automatic retry. Unknown native descendants invalidate the known single-process model.
+- `Budget`, `capture`, `log`: exact retained raw bytes, observed/discarded counts and bounded timestamp events; streaming file hashes; partial retained-file writes accounted. Raw/event4MiB, stdin16KiB, whole64MiB with internal256KiB metadata reserve. No silently discarded overflow or rewritten failure.
+
+The structural inspiration is our accepted `tools/check_live.py` byte-process pattern, already pinned by the closed design. This is new finite interactive code, not claimed to be byte-equivalent to that helper. Original fixture/expected inputs are unchanged; checks come from the closed design and released wire/PV rules. All mechanisms remain unrun pending separate parent review/activation. No protocol/full3288/performance qualification is asserted.

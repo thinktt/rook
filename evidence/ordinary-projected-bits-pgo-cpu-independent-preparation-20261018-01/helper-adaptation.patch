@@ -1,0 +1,52 @@
+--- /home/legolas/rook2/evidence/placement-pure-cache-pgo-cpu-independent-preparation-20261018-01/reconcile.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-pgo-cpu-independent-preparation-20261018-01/reconcile.py
+@@ -1,16 +1,16 @@
+ #!/usr/bin/env python3
+-"""Offline only: exact own-PGO placement pure-cache vs fullbyte79d seven-case frozen70-lifetime pilot."""
++"""Offline only: exact own-PGO ordinary projected-bits vs fullbyte79d seven-case frozen70-lifetime pilot."""
+ from pathlib import Path
+ import hashlib,json,math,os,statistics,subprocess
+ P=Path(__file__).resolve().parent
+ E=Path('/home/legolas/rook2/evidence')
+-PRE=E/'placement-pure-cache-pgo-cpu-preparation-20261018-01'
+-RUN=E/'placement-pure-cache-pgo-cpu-pilot-20261018-01'
+-FUNCTIONAL=E/'placement-pure-cache-pgo-reconciliation-20261018-01/independent-verification.json'
++PRE=E/'ordinary-projected-bits-pgo-cpu-preparation-20261018-01'
++RUN=E/'ordinary-projected-bits-pgo-cpu-pilot-20261018-01'
++FUNCTIONAL=E/'ordinary-projected-bits-pgo-reconciliation-20261018-01/independent-verification.json'
+ ROOT=Path('/home/legolas/rook2');KIT=Path('/home/legolas/king-spec/conformance/profiling')
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]
+ CASES=['profile-01','profile-02','profile-04','profile-05','profile-29','profile-35','profile-08']
+-RULE='Select for full117 conformance validation only if aggregate candidate/baseline median sum<=0.995, at least5of7 lower medians, and no case median ratio>1.02; otherwise park absent independently established collection or semantic defect'
++RULE='Advance only if aggregate candidate/baseline median sum<=0.995 AND at least5of7 lower medians AND no case median ratio>1.02; otherwise park absent independently established collection or semantic defect.'
+ def load(p):return json.loads(Path(p).read_text())
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(n,v):
+@@ -36,14 +36,14 @@
+  FUNCTIONAL_SHA=sha(FUNCTIONAL)
+  assert plan['cases']==CASES and list(plan['variants'])==['baseline','candidate'] and plan['advance_rule']==RULE
+  assert plan['variants']['baseline']['sha256']=='79d19ebe1b01fbe94dbf03025140b292807ecf6acdc181a52a5d1849bbc478df'
+- assert plan['variants']['candidate']['sha256']==functional['variants']['placement-pure-cache']['artifact_sha256']
++ assert plan['variants']['candidate']['sha256']==functional['variants']['ordinary-projected-bits']['artifact_sha256']
+  assert clear['parent_review_complete'] and clear['all_owned_jobs_closed']
+  assert sha(PRE/'plan.json')==clear['plan_sha256'] and sha(PRE/'run_pilot.py')==clear['driver_sha256']
+  for required in [KIT/'benchmark.mjs',ROOT/'tools/measure.py',Path('/usr/bin/node'),Path('/usr/bin/python3')]:assert str(required) in clear['dependencies']
+  assert sha(FUNCTIONAL)==FUNCTIONAL_SHA
+  functional=load(FUNCTIONAL)
+  assert functional['complete'] and functional['own_profile_only'] and functional['strict_training54'] and functional['fresh_strict54'] and functional['wire8_searches24']
+- assert functional['variants']['placement-pure-cache']['artifact_sha256']==plan['variants']['candidate']['sha256']
++ assert functional['variants']['ordinary-projected-bits']['artifact_sha256']==plan['variants']['candidate']['sha256']
+  assert str(FUNCTIONAL) in review['dependencies'] and review['dependencies'][str(FUNCTIONAL)]==FUNCTIONAL_SHA
+  dependencies={Path(x) for x in clear['dependencies']}
+  dependencies.update(Path(x) for x in review['dependencies'])
+--- /home/legolas/rook2/evidence/placement-pure-cache-pgo-cpu-independent-preparation-20261018-01/replay70.mjs
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-pgo-cpu-independent-preparation-20261018-01/replay70.mjs
+@@ -2,7 +2,7 @@
+ import assert from 'node:assert/strict';
+ import {readFileSync,writeFileSync} from 'node:fs';
+ import {checkReplay,workloads,oracle} from '/home/legolas/king-spec/conformance/profiling/replay-check.mjs';
+-const base='/home/legolas/rook2/evidence/placement-pure-cache-pgo-cpu-pilot-20261018-01';
++const base='/home/legolas/rook2/evidence/ordinary-projected-bits-pgo-cpu-pilot-20261018-01';
+ const plan=JSON.parse(readFileSync(base+'/plan.json'));
+ assert.deepEqual(plan.cases,['profile-01','profile-02','profile-04','profile-05','profile-29','profile-35','profile-08']);
+ const checks=[];

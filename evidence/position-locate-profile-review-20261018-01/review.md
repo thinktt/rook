@@ -1,0 +1,24 @@
+Park the fixed16-slot locate rewrite as evidence-insufficient. The bounded split identifies shared prefix/slice work inside apply_unchecked, but the existing source mapping does not isolate mover/victim locate or its parent-site overhead. No implementation, new census, native/codegen/profiler run or speed estimate is warranted from these rows alone.
+
+Current position.rs compares exactly with the frozen6a compiled source. locate195–201 computes a kind-group prefix, obtains piece_squares (which computes a prefix), searches that slice, and adds the prefix. Source appearance of repeated arithmetic does not prove two emitted prefix traversals; existing optimization/CSE may share it. It serves remove_ordered206 (victim/promotion removal), normal mover309 and castling rook325. Movement, history and board maintenance owners are unchanged. This is not the previously parked persistent king-square-cache idea.
+
+Using the accepted exclusive compressed file/function/position parser on the existing closed35/08 profiles:
+
+| Simulated exclusive Ir attribution |35|08|
+|---|---:|---:|
+| Direct known position.rs locate195–201 rows |0 mapped|0 mapped|
+| Known parent site206/309/325 rows |0 mapped|0 mapped|
+| group_start rows177+179 within apply_unchecked context |37,940,281|8,036,082|
+| piece_squares row187 within apply_unchecked context |16,938,304|2,378,405|
+
+Neither raw profile contains a separate executed Position::locate function context. This is attribution absence, NOT a zero-cost or absent-instructions claim. The shared rows are in the apply_unchecked inline owner, not an independent locate callee. They cannot be partitioned among mover/victim/rook, append_ordered's prefix, prefix reuse, slice guarding and other lowering from these source positions. Their corresponding broader all-consumer group_start totals349,448,388/34,959,670 and piece_squares281,104,100/41,679,501 are recorded only for provenance and must not be added to these subsets or assigned to locate. Likewise library/types overlays owned by apply_unchecked include unrelated movement/hash/attack/list work; no multiplier or summed removable budget is inferred.
+
+For context only, all-file apply_unchecked self contexts total1,792,523,759/274,643,353 Ir, broader than the thresholded function display1,786,307,493/273,850,292. This covers the entire placement transition and is not a locate opportunity estimate. Each whole exclusive profile total matches48,746,346,838/4,163,216,998; all displayed apply_unchecked file-context counts independently reconcile. Inclusive callee rows are excluded. The first extraction0214f3/0 and focused apply-inline split22a34d/0 are both preserved, rather than replacing absent rows with guessed counts.
+
+Source-level semantic feasibility is conditional on coherence. On a coherent placement, every valid on-board square occurs exactly once in that color's used chronological slots, inside the requested kind group, while unused slots are NO_SQUARE. A global first matching index therefore equals group_start plus the old slice's first match. No sorting/chronology mutation is needed. Captures still remove the victim before locating the mover; promotion removal/append and castling rook lookup retain their original sequence. Joined nonpawn EP and cold exceptional king removal must obey those same actual board/list identities.
+
+A blind full16 search is not identical for arbitrary invalid inputs: NO_SQUARE could match an unused slot, and a wrong supplied kind could find a square outside the old kind slice instead of panicking. The existing source-absent panic must remain for applicable invalid callers; current native callers derive piece/source from admitted coherent placement, but that invariant must be explicitly bound before deleting validations. Full-list scanning may also compare preceding unrelated kinds where the old slice is short (notably the singleton king). No benefit follows simply from removing prefix arithmetic, and searching16 versus a small kind slice may regress.
+
+If reopened after reliable cost evidence, the focused correctness oracle would compare first returned indices to the unchanged old grouped finder across coherent type/chronology permutations and all actual mover/victim/castling/promotion/EP operations, plus absent/sentinel/wrong-kind failure witnesses. No cached king square, maintained index or field is requested. For now preserve the current kernel and let the separately assigned larger placement-component work guide priority. Do not start a larger locate census to repair this attribution limitation.
+
+All work was read-only source/existing-profile text on0-5,8-13 with HOME TMPDIR. Source33fa05/0, function display83a388/0, extraction0214f3/0, final split22a34d/0; original rows/helper and focused02 rows/helper retained. No engine/build/test/profiler/annotator/codegen/timing/Git or production edit occurred. All owned processes are closed; no follow-on work scheduled.

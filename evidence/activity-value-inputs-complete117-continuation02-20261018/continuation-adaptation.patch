@@ -1,0 +1,211 @@
+--- attempt01/guard.py
++++ continuation02/guard.py
+@@ -6,14 +6,14 @@
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(path,value):
+  with Path(path).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
+-def terminal(path):
+- t=load(path);assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['initial_chunk_id'] and t['terminal_chunk_id']
++def terminal(path,expected=0):
++ t=load(path);assert t['actual_tool_terminal_observed'] is True and t['exit_code']==expected and t['initial_chunk_id'] and t['terminal_chunk_id']
+  return t
+ def clearance(kind='execution'):
+  assert kind in ['freeze','execution']
+  c=load(HERE/'execution-clearance.json');plan=load(HERE/'validation-plan.json')
+  assert c['authorized'] is True,'HOLD: explicit parent execution clearance absent'
+- assert c['scope']=='activity-value-inputs-complete117-untimed-diagnostic'
++ assert c['scope']=='activity-value-inputs-complete117-corpus-continuation02'
+  assert c['source_graph_sha256']==plan['source_graph_sha256'] and c['plan_sha256']==sha(HERE/'validation-plan.json')
+  assert c['conflicting_cpu_windows_closed'] is True and not c.get('timing_pgo_profiler_authorized',False)
+  a=c['parent_advancement_acceptance'];assert a and sha(a['path'])==a['sha256']
+@@ -35,6 +35,7 @@
+  for name,h in plan['diagnostic_sha256'].items():assert sha(Path(plan['root_cold_source'])/name.removeprefix('diagnostic/'))==h
+  for name,h in plan['harness_sha256'].items():assert sha(HERE/name)==h
+  check_native_reuse(plan)
++ check_partial(plan)
+ def check_dependencies(plan):
+  for path,h in plan['immutable_dependencies'].items():assert sha(path)==h,path
+  for path,h in plan['fixtures'].items():assert sha(path)==h,path
+@@ -52,3 +53,32 @@
+  independent=load(ref['independent']);assert independent['complete'] and independent['native_tests']==178 and independent['strict54_original_checkReplay'] and independent['source46_tools23_archive69_equal']
+  assert independent['engine_sha256']==ref['image_sha256'] and len(independent['wire8_searches24_raw_protocol'])==8
+  for path in ref['actual_terminals']:terminal(path)
++
++def check_partial(plan):
++ """Reuse green children without relabeling failed01 outer as successful."""
++ import re,tarfile
++ ref=plan['partial01'];diag=Path(ref['diagnostic']);build=Path(ref['build'])
++ terminal(diag/'tool-terminal.json',expected=1)
++ terminal(Path(plan['output']['freeze'])/'tool-terminal.json')
++ vr=load(diag/'verification.json');assert vr['complete'] is False and vr['failure'].startswith('AssertionError:')
++ assert len(vr['stages'])==4 and all(row['actual_child_return_observed'] and row['exit_code']==0 for row in vr['stages'])
++ for stem,row in zip(['unit-build','rook2-diag-tests','build-driver','archive'],vr['stages']):
++  assert sha(diag/(stem+'.stdout'))==row['stdout_sha256'] and sha(diag/(stem+'.stderr'))==row['stderr_sha256']
++ assert not (diag/'raw-cases').exists() and not (diag/'conformance.stdout').exists() and not (diag/'conformance.stderr').exists()
++ text=(diag/'rook2-diag-tests.stdout').read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==209 and 'test result: ok. 209 passed; 0 failed;' in text
++ assert sha(diag/'unit-bin/rook2-diag/unit-exact')==vr['units']['rook2-diag']['binary_sha256']==ref['unit_sha256']
++ br=load(build/'receipt.json');cold={k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()}
++ assert br['source_sha256_before']==br['source_sha256_after']==cold and br['source_identity_unchanged']
++ # build.py snapshots tools inside --crate, not the root helper's directory.
++ assert br['tool_sha256_before']==br['tool_sha256_after']==plan['diagnostic_crate_tools_sha256']=={}
++ assert len(plan['tools_sha256'])==23 # separately checked by check_sources/native reuse
++ assert br['outcome']=='build-succeeded-with-stable-input-snapshot' and br['cargo_exit_code']==0
++ nr=load(plan['native_reference']['build_receipt'])
++ for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
++ assert br['mode']=='generic' and br['pgo']['mode']=='none'
++ assert sha(build/'rook2-diag-exact')==br['binary_output']['sha256']==vr['artifact_sha256']==ref['adapter_sha256']
++ ar=load(build/'archive-receipt.json');assert ar['verified_against_build_before_hashes'] and ar['files']==43 and ar['binary_sha256']==ref['adapter_sha256']
++ assert sha(build/ar['archive'])==ar['sha256']
++ with tarfile.open(build/ar['archive'],'r:gz') as t:
++  members={m.name:hashlib.sha256(t.extractfile(m).read()).hexdigest() for m in t if m.isfile()}
++ assert members==cold #43 crate files +0 crate-local tools, not root23
+--- attempt01/stage.py
++++ continuation02/run_corpus.py
+@@ -1,79 +1,26 @@
+-#!/usr/bin/env python3
+-"""Future activity-only complete117 freeze/DIAG; blocked until parent clearance."""
+-import argparse,json,os,re,shutil,subprocess,sys,tarfile
++"""One original full corpus on the exact existing adapter; no build/unit/replay path."""
++import json,os,subprocess,sys
+ from pathlib import Path
+ sys.dont_write_bytecode=True
+-from guard import HERE,load,sha,write,clearance,terminal,check_sources,check_dependencies
+-
+-def run(argv,stem,out,env,cwd,stages):
+- with (out/(stem+'.stdout')).open('xb') as a,(out/(stem+'.stderr')).open('xb') as b:
+-  child=subprocess.Popen(argv,cwd=cwd,env=env,stdout=a,stderr=b)
+-  code=child.wait()
+- record=dict(command=argv,pid=child.pid,exit_code=code,actual_child_return_observed=True,stdout_sha256=sha(out/(stem+'.stdout')),stderr_sha256=sha(out/(stem+'.stderr')))
+- stages.append(record);assert code==0,stem+' failed'
+- return record
+-
+-def units(source,crate,counts,target,out,env,stages):
+- command=['/usr/bin/cargo','test','--offline','--locked','--release','--no-run','--message-format=json','--target','x86_64-unknown-linux-gnu','--jobs','4','--target-dir',str(target),'--manifest-path',str(crate/'Cargo.toml')]
+- if crate==source:command+=['--lib','--bin','rook2-dev']
+- run(command,'unit-build',out,env,source,stages);artifacts={}
+- for line in (out/'unit-build.stdout').read_text().splitlines():
+-  item=json.loads(line)
+-  if item.get('reason')=='compiler-artifact' and item['profile']['test'] and item.get('executable'):artifacts[item['target']['name']]=Path(item['executable'])
+- assert set(artifacts)==set(counts),'unit target inventory'
+- observed={}
+- for name,count in counts.items():
+-  frozen=out/'unit-bin'/name/'unit-exact';frozen.parent.mkdir(parents=True);shutil.copy2(artifacts[name],frozen);identity=sha(frozen)
+-  run([str(frozen),'--test-threads=1'],name+'-tests',out,env,source,stages)
+-  text=(out/(name+'-tests.stdout')).read_text();match=re.search(r'test result: ok\. (\d+) passed; 0 failed;',text)
+-  assert match and int(match[1])==count and len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==count
+-  assert sha(frozen)==identity;observed[name]=dict(passed=count,binary_sha256=identity)
+- return observed
+-
+-def build(source,crate,binary,out,logs,env,stages,expected):
+- run([sys.executable,str(source/'tools/build.py'),'--crate',str(crate),'--mode','generic','--bin',binary,'--jobs','4','--output',str(out)],'build-driver',logs,env,source,stages)
+- receipt=load(out/'receipt.json');assert receipt['outcome']=='build-succeeded-with-stable-input-snapshot' and receipt['source_sha256_before']==receipt['source_sha256_after']==expected
+- assert receipt['mode']=='generic' and receipt['rust_flags']==['-C','target-cpu=x86-64'] and receipt['pgo']['mode']=='none'
+- frozen=out/(binary+'-exact');shutil.copy2(receipt['binary_output']['path'],frozen);assert sha(frozen)==receipt['binary_output']['sha256']
+- run([sys.executable,str(source/'tools/archive_build.py'),str(out)],'archive',logs,env,source,stages)
+- write(out/'child-build-terminal.json',dict(exit_code=0,actual_build_child_return_observed=True,frozen_sha256=sha(frozen),note='Actual outer tool terminal must be recorded externally before next stage'))
+- return sha(frozen)
++from guard import HERE,clearance,load,sha,write,check_sources,check_dependencies
+ 
+ def main():
+- parser=argparse.ArgumentParser();parser.add_argument('stage',choices=['freeze','diag']);args=parser.parse_args()
+- plan=clearance('freeze' if args.stage=='freeze' else 'execution')
+- source=Path(plan['home_source']);frozen=Path(plan['frozen_source']);paths={k:Path(v) for k,v in plan['output'].items()}
+- out=paths['freeze' if args.stage=='freeze' else 'diagnostic'];assert not out.exists(),'fresh absent stage output required'
+- check_sources(plan);check_dependencies(plan)
+- if args.stage=='freeze':assert not source.exists() and not source.is_symlink(),'fresh absent HOME execution copy required'
+- else:terminal(paths['freeze']/'tool-terminal.json');assert source.exists()
+- out.mkdir();stages=[];result=dict(complete=False,stage=args.stage,failure=None,stages=stages,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR'],native178_strict54_wire8_reused=True)
+- env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',RUSTC='/usr/bin/rustc',RUSTFLAGS='-C target-cpu=x86-64',CARGO_ENCODED_RUSTFLAGS='-C\x1ftarget-cpu=x86-64',RUSTC_WRAPPER='',RUSTC_WORKSPACE_WRAPPER='',CARGO_NET_OFFLINE='true',CARGO_BUILD_JOBS='4');env.pop('LLVM_PROFILE_FILE',None)
++ plan=clearance();check_sources(plan);check_dependencies(plan)
++ out=Path(plan['output']['diagnostic']);assert not out.exists(),'one fresh corpus attempt only'
++ out.mkdir();raw=out/'raw-cases';raw.mkdir();adapter=Path(plan['partial01']['build'])/'rook2-diag-exact'
++ result=dict(complete=False,failure=None,stages=[],adapter_sha256=sha(adapter),units209_reused=True,build_and_archive_reused=True,failed01_outer_exit_preserved=1)
+  try:
+-  if args.stage=='freeze':
+-   source.mkdir()
+-   for name,h in plan['source_sha256'].items():
+-    dest=source/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(frozen/name,dest);assert sha(dest)==h
+-   assert {str(q.relative_to(source)) for q in source.rglob('*') if q.is_file()}==set(plan['source_sha256'])
+-   with tarfile.open(out/'source-frozen.tar.gz','w:gz') as t:
+-    for name in plan['source_sha256']:t.add(source/name,arcname=name,recursive=False)
+-   result['source_archive_sha256']=sha(out/'source-frozen.tar.gz')
+-  else:
+-   # No generic ordinary build/native tests/strict replay branch exists here.
+-   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/activity-value-inputs-complete117-diag-unit',out,env,stages)
+-   assert not paths['diagnostic-build'].exists(),'build.py output must be absent'
+-   result['artifact_sha256']=build(source,source/'diagnostic','rook2-diag',paths['diagnostic-build'],out,env,stages,{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})
+-   br=load(paths['diagnostic-build']/'receipt.json');nr=load(plan['native_reference']['build_receipt'])
+-   for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
+-   assert br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
+-   raw=out/'raw-cases';raw.mkdir();command=['/usr/bin/node','/home/legolas/king-spec/conformance/run.mjs']
+-   for path in plan['fixtures']:command+=['--fixtures',path]
+-   command+=['--',sys.executable,str(HERE/'record_case.py'),'--adapter',str(paths['diagnostic-build']/'rook2-diag-exact'),'--records',str(raw)]
+-   run(command,'conformance',out,env,source,stages)
+-   report=load(out/'conformance.stdout');assert report['pass'] and len(report['results'])==7673 and not (out/'conformance.stderr').stat().st_size
+-   assert sha(paths['diagnostic-build']/'rook2-diag-exact')==result['artifact_sha256'];result.update(cases=7673,operations=117,whole_files=115)
+-  check_sources(plan);check_dependencies(plan);result['complete']=True
++  command=['/usr/bin/node','/home/legolas/king-spec/conformance/run.mjs']
++  for filename in plan['fixtures']:command+=['--fixtures',filename]
++  command+=['--',sys.executable,str(HERE/'record_case.py'),'--adapter',str(adapter),'--records',str(raw)]
++  with (out/'conformance.stdout').open('xb') as a,(out/'conformance.stderr').open('xb') as b:
++   child=subprocess.Popen(command,cwd=plan['home_source'],env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1'),stdout=a,stderr=b);code=child.wait()
++  result['stages'].append(dict(command=command,pid=child.pid,exit_code=code,actual_child_return_observed=True,stdout_sha256=sha(out/'conformance.stdout'),stderr_sha256=sha(out/'conformance.stderr')))
++  assert code==0,'original conformance runner failed'
++  report=load(out/'conformance.stdout');assert report['pass'] and len(report['results'])==7673 and not (out/'conformance.stderr').stat().st_size
++  check_sources(plan);check_dependencies(plan);assert sha(adapter)==result['adapter_sha256']
++  result.update(complete=True,cases=7673,operations=117,whole_files=115)
+  except BaseException as error:result['failure']=f'{type(error).__name__}: {error}'
+  finally:write(out/'verification.json',result)
+- print(json.dumps({k:v for k,v in result.items() if k!='stages'}));return 0 if result['complete'] else 1
++ print(json.dumps(result));return 0 if result['complete'] else 1
+ if __name__=='__main__':sys.exit(main())
+--- attempt01/reconcile.py
++++ continuation02/reconcile.py
+@@ -29,18 +29,20 @@
+  for key in ['freeze','diagnostic']:terminal(paths[key]/'tool-terminal.json')
+  check_sources(plan);check_dependencies(plan)
+  assert archive(paths['freeze']/'source-frozen.tar.gz')==plan['source_sha256']
+- assert archive(HERE/'source-112.tar.gz')==plan['source_sha256']
+- assert archive(HERE/'official-inputs-115.tar.gz')=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
++ assert archive(Path(plan['prepared01'])/'source-112.tar.gz')==plan['source_sha256']
++ assert archive(Path(plan['prepared01'])/'official-inputs-115.tar.gz')=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
+  br=load(paths['diagnostic-build']/'receipt.json');expected={k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()}
+  assert br['source_sha256_before']==br['source_sha256_after']==expected and br['source_identity_unchanged'] and br['crate']==str(source/'diagnostic')
+  nr=load(plan['native_reference']['build_receipt'])
+  for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
+- assert br['mode']=='generic' and br['pgo']['mode']=='none' and br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
++ assert br['mode']=='generic' and br['pgo']['mode']=='none' and br['tool_sha256_before']==br['tool_sha256_after']==plan['diagnostic_crate_tools_sha256']=={}
+  ar=load(paths['diagnostic-build']/'archive-receipt.json');assert ar['verified_against_build_before_hashes'] and sha(paths['diagnostic-build']/ar['archive'])==ar['sha256'] and archive(paths['diagnostic-build']/ar['archive'])==expected|br['tool_sha256_before']
+  assert sha(paths['diagnostic-build']/'rook2-diag-exact')==br['binary_output']['sha256']==ar['binary_sha256']
+  diag=paths['diagnostic'];vr=load(diag/'verification.json');assert vr['complete'] and vr['failure'] is None and all(s['exit_code']==0 and s['actual_child_return_observed'] for s in vr['stages'])
+- text=(diag/'rook2-diag-tests.stdout').read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==209 and 'test result: ok. 209 passed; 0 failed;' in text
+- assert vr['units']['rook2-diag']['passed']==209 and sha(diag/'unit-bin/rook2-diag/unit-exact')==vr['units']['rook2-diag']['binary_sha256']
++ partial=Path(plan['partial01']['diagnostic']);units=load(partial/'verification.json')
++ assert units['complete'] is False # preserve failed01 outer; green unit child reused
++ text=(partial/'rook2-diag-tests.stdout').read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==209 and 'test result: ok. 209 passed; 0 failed;' in text
++ assert units['units']['rook2-diag']['passed']==209 and sha(partial/'unit-bin/rook2-diag/unit-exact')==units['units']['rook2-diag']['binary_sha256']==plan['partial01']['unit_sha256']
+  n=Path(plan['native_reference']['native_result']).parent
+  for stem,count in [('lib',176),('dev',2)]:
+   t=(n/(stem+'-tests.stdout')).read_text();assert len(re.findall(r'^test .* \.\.\. ok$',t,re.M))==count and f'test result: ok. {count} passed; 0 failed;' in t
+@@ -90,6 +92,6 @@
+   rows.append(dict(ordinal=ordinal,fixture=name,case_index=index,id=c['id'],operation=c['request']['operation'],raw_output_sha256=sha(stem.with_suffix('.stdout')),actual_child_exit_code=0))
+  check_sources(plan);check_dependencies(plan)
+  write(out/'raw-case-sha256.json',hashes);write(out/'case-reconciliation.json',dict(cases=7673,whole_files=115,partial_files=0,duplicate_ids=0,all_original_expected_raw_and_official_actual_equal=True,rows=rows))
+- result=dict(status='pass',native_reused=True,fresh_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict_replays_reused=54,interruption_fixtures_reused=8,interruption_searches_reused=24,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_artifact_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_graph_sha256=plan['source_graph_sha256'],source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Fresh complete117 DIAG, exact reused178native/54strict/eightwire; no promotion/full-game/CPU qualification claim')
++ result=dict(status='pass',native_reused=True,fresh_ordinary_engine_or_unit_runs=0,diagnostic_units_reused=209,new_adapter_corpus_lifetimes=7673,failed01_outer_exit_preserved=1,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict_replays_reused=54,interruption_fixtures_reused=8,interruption_searches_reused=24,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_artifact_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_graph_sha256=plan['source_graph_sha256'],source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Fresh complete117 corpus on exact reused209DIAG build/image and178native/54strict/eightwire; no promotion/full-game/CPU qualification claim')
+  write(out/'independent-verification.json',result);print(json.dumps({k:v for k,v in result.items() if k!='source_sha256'}))
+ if __name__=='__main__':main()
+--- attempt01/finalize.py
++++ continuation02/finalize.py
+@@ -39,9 +39,9 @@
+   except OSError:continue
+   if any(exe.startswith(x) for x in prefixes) or ('python' in Path(exe).name and len(argv)>1 and argv[1].endswith('.py') and argv[1].startswith(str(HERE)+'/')):live.append({'pid':int(p.name),'exe':exe,'argv':argv})
+  assert not live,live
+- result=dict(status='ACTIVITY_ONLY_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native_reused=True,fresh_ordinary_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict54_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,operations=117,cases=7673,whole_files=115,native_sha256=ind['native_artifact_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
++ result=dict(status='ACTIVITY_ONLY_COMPLETE117_CONTINUATION02_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native_reused=True,fresh_ordinary_native_runs=0,diagnostic209_unit_and_build_reused=True,failed01_outer_exit_preserved=1,failed01_actual_terminal=load(Path(plan['partial01']['diagnostic'])/'tool-terminal.json'),native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict54_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,operations=117,cases=7673,whole_files=115,native_sha256=ind['native_artifact_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
+  write(HERE/'validation-summary.json',result)
+- entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','source-proof.json','archive-verification.json','validation-summary.json','guard.py','stage.py','record_case.py','reconcile.py','finalize.py']]
++ entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','partial-proof.json','validation-summary.json','guard.py','run_corpus.py','record_case.py','reconcile.py','finalize.py']]
+  entries += [paths['reconciliation']/name for name in ['independent-verification.json','case-reconciliation.json','raw-case-sha256.json','tool-terminal.json']]
+  manifest={str(p):sha(p) for p in entries};write(HERE/'final-metadata-manifest.json',manifest)
+  packaged=package_metadata(HERE/'final-metadata.tar.gz',entries)

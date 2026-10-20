@@ -1,0 +1,59 @@
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -407,6 +407,10 @@
+     fn actual_iio_probe(mode:u8,tail:bool)->(Result<i32,Stopped>,Search<true>,SearchHistory,Node) {
+         let position=Position::from_fen("7k/R7/8/8/8/8/8/K7 w - - 0 1").unwrap();
+         let mut search=engine::<true>(&position);
++        // Tail-only controlled native gate witness: the parent at ply1
++        // remains ordinary, while its first ply2 child enters actual Q.
++        // This is not a claim about genericTimedSearch's md>=6 admission.
++        if tail {search.config.maximum_depth=2;}
+         search.ensure_table().unwrap();
+         let (root,influence)=search.prepare_root_with_influence(position);
+         let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);
+@@ -414,21 +418,17 @@
+         let mut child=root.child(&search.evaluator.root,movement);
+         search.begin_sequence(Limits{nodes:Some(200000)});
+         if tail {
+-            // A legitimate deep exact remembered result for each main reply
+-            // isolates the parent's real tail admission from nested IIO entry.
+-            let mut replies=MoveList::new();movegen::generate_legal(&child.position,&mut replies);
+-            for &reply in replies.as_slice() {
+-                let grandchild=child.child(&search.evaluator.root,reply);
+-                let table=search.remembered.as_mut().unwrap();
+-                table.store(Store{query:Query{group:table.group_for(&grandchild.position),
+-                    identity:grandchild.position.secondary,ply:2,target:64,
+-                    lower:-10000,upper:10000},score:0,move_hint:None,
+-                    quiet_mate_checked:true,mark_depth:true});
+-            }
++            // Lower metadata skips parent initial IIO without returning a
++            // score; real Q terminates its first ordinary main-child call.
+             let table=search.remembered.as_mut().unwrap();
+             table.store(Store{query:Query{group:table.group_for(&child.position),
+                 identity:child.position.secondary,ply:1,target:6,lower:-10000,upper:100},
+                 score:100,move_hint:None,quiet_mate_checked:true,mark_depth:true});
++            let observed=table.probe(Query{group:table.group_for(&child.position),
++                identity:child.position.secondary,ply:1,target:6,
++                lower:-10000,upper:10000});
++            assert_eq!((observed.bound,observed.marked_depth,observed.score),
++                (Bound::Lower,Some(5),None));
+         }
+         let mut history=SearchHistory::new(&position);
+         history.push(&child.position,Some(movement));
+@@ -465,8 +465,14 @@
+             assert_eq!((c.stats.iio_passes,c.stats.iio_children,
+                 c.stats.iio_nonzero_fresh_extensions),(0,0,0));
+             assert_eq!(history_c.search_ply(),0);
+-            // Tail's first ordinary main child is permitted, but no IIO child.
+-            if !tail {assert_eq!(c.stats.children,0);}
++            // False reaches the parent's tail only after index1: one
++            // ordinary main-child call handed to actual charged Q, with no
++            // recursive ordinary entry. Global children includes Q children.
++            if tail {
++                assert_eq!((c.stats.ordinary_nodes,c.stats.table_probes),(1,1));
++                assert!(c.stats.children>=1);
++                assert!(c.work().charged_search_units>1);
++            } else {assert_eq!(c.stats.children,0);}
+         }
+     }
+ 

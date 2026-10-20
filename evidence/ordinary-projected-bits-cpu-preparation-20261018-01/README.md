@@ -1,0 +1,5 @@
+# Ordinary projected-bit fixed70 helper preparation — HOLD
+
+The original accepted full-byte70 driver/guard and independent accounting/replay methods are preserved except trial paths/identities, new source-proof labels and the exact textual frozen proposal rule. Separate adaptation patches expose every edit. The numerical rule remains aggregate<=0.995 AND at least5/7lower AND worst<=1.02. All70 samples are retained; no ordinary variability repeat.
+
+Actual178/strict54/eightwire24 stages have closed, but independent functional proof and final generic backend review are still pending. Both clearances remain false; no timing/helper execution by this preparation. Python AST syntax passed without imports; original Node checker is not run. Final immutable input/proof closure must be frozen before parent quiet launch. The later offline approval must use the actual pilot terminal and pin helpers/full raw inputs; never put its future mutable review-clearance in current pilot dependencies. No PGO/promotion or qualification follows from preparation.

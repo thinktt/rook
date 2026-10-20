@@ -1,0 +1,7 @@
+INERT54 fixed70 generic screen only. The preserved53 preactivation plan (188pins, not the expanded active union) is the metadata basis; three accepted53/52 helper bytes unchanged. Exact51genericcontrol460cbf5b and closed51source74/public/runtime/roottools pins retained; all53source/mechanism/result/clearance pins absent. Known54 source-onlyselection is pinned separately and grants no runtime.
+
+Cases01/02/04/05/29/35/08, unchanged order/alternation:14warm excluded+56measured=70lifetimes,4measured pervariant/percase. Original live/offlinecheckReplay/raw/directexits/wait4 whole-request boundaries preserved; no samples removed. Advance onlyaggregate<=.995 AND>=5of7lower ANDworst<=1.02, elsePARK/no retry/no PGO/broad/adoption authority. EngineCPU14/sibling15 and helpersH0-5,8-13/TMPDIR=/home/legolas/rook2-build-tmp unchanged.
+
+Futurecandidate ordering-six-stream-generic-build-20261020-01/rook2-exact hashNULL. Actualsourcecounts/graph/declarations/sourcefreeze/build/archive/focused/backend/results/terminals pendingNULL; all review/launch/alljobs flagsfalse, realclearanceabsent. Root binds actual closed54 dependency union and activates after quietreview. No candidate source read or runner import/parse/execute/native/build/binutils/archive/Git or otherdir writes.
+
+Metadata attempt2171b6/1 correctly rejected a mistakenly read root-expanded plan via the cardinality assertion, before writing any new plan or running helpers. Failure preserved; retry uses exact retained inert snapshot281ac49c. Historical helperdocstring43 intentionally unchanged.

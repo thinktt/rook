@@ -1,0 +1,13 @@
+# Experiment65: typed one-sided global relation rows — source only
+
+The isolated worktree copies all retained62 native51/tools23 files exactly before the selected change. Only src/influence.rs and src/relation_table.rs differ in source74; scripts/generate_relation_table.py is the separate maintenance-only third changed file, outside the executable source graph. No64/census changes are present. Production62 is untouched.
+
+The generator visits tested tiers1/3/5/9, own bytes0..255, then opponent bytes0..255. Identical complete rows share their first-appearance ID globally. It emits exactly27 crate-private repr(u8) RowId variants, a4x256 RowId map and27x256 typed Relation outcomes:1024+6912=7936 logical payload bytes. Relation uses one metadata load and a safe RowId-to-usize cast before the typed outcome load. No unsafe conversion, numeric enum decoder, packing, new geometry state, mutable cache, permission or sentinel exists.
+
+The original kind dispatch/King panic precedes opponent-zero Favorable; raw own saturating subtraction remains in adjusted_relation before mapping. All consumers, charges, influence producers and inherited195 tests remain literal unchanged. Generator numeric features/relation functions and original main CLI/check/output behavior are literal unchanged. All helper/copy/lookup/generator source is pinned; trial.patch and inverse.patch cover the exact three-file delta.
+
+Actual pure-data generation and --check both exit0 at e6025a. Independent source-data verification fa7733/0 parses every generated enum ID and typed outcome, verifies first-appearance order, and reconstructs all262144 typed tuples against both canonical source and an independently written radix/Boolean characterization. Per-tier distinct rows12/9/6/3 collapse globally to27. No fixture input or runtime answer database was used. No Cargo/compiler/tests/engine/binutils/PGO/Git/archive ran.
+
+focused-plan.json proposes the existing eight Influence tests, including exhaustive byte-pair/all-exclusion and crowded wrapping controls, on an isolated target. It is unactivated; root owns execution, actual commands/raw named results and future build/profile decisions. No new mirror tests were added. Codegen remains unknown: safe bounds, actual load chain, call/frame/register effects, typed static storage and current-target cost must be reviewed later. No speed, cache residency or emitted-byte claim is made.
+
+Source is now immutable. All native/build/profile/result identities remain absent; this handoff does not grant timing or source promotion. Normal speed is policy without a switch/readback claim.

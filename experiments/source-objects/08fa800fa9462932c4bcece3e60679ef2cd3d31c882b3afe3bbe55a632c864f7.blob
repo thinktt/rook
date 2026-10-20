@@ -1,0 +1,20 @@
+--- run_pregate.before-parent-metadata-correction.py
++++ run_pregate.py
+@@ -26,7 +26,7 @@
+ def terminal(path):
+     row=json.loads(Path(path).read_text())
+     assert row['actual_tool_terminal_observed'] is True and row['exit_code']==0
+-    assert (row.get('terminal_chunk_id') or row.get('chunk_id') or '').strip()
++    assert (row.get('terminal_chunk_id') or row.get('chunk_id') or row.get('terminal_chunk') or '').strip()
+ def pins():
+     names=['run.mjs','combine.mjs','continuous.mjs','seed-command-controls.mjs',
+            'seed-persistence-controls.mjs','accepted-games-v1.json','continuous-switching-v1.json']
+@@ -95,7 +95,7 @@
+         assert sha(BUILD/'source-before'/name)==h
+     before=pins();OUT.mkdir()
+     write(OUT/'binding.json',{'before':before,'engine_sha256':EXPECTED,'image':str(ENGINE),'affinity':sorted(MASK),
+-      'scope':'Untimed exact own-PGO51 regular pre-gate after current57 strict/wire+ownPGO70 pass; full195 native/117 are separately parent-owned; full3288 external, no CPU qualification.',
++      'scope':'Untimed exact own-PGO57 regular pre-gate after current57 strict/wire+ownPGO70 pass; full195 native/117 are separately parent-owned; full3288 external, no CPU qualification.',
+       'parallel_independent_games':3})
+     fixture=json.loads((KIT/'accepted-games-v1.json').read_text())
+     games=fixture['games'];assert len(games)==12 and sum(len(g['plies']) for g in games)==632

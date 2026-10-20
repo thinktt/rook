@@ -1,0 +1,22 @@
+--- attempt01/stage.py
++++ scope-corrected-reference/stage.py
+@@ -65,7 +65,7 @@
+    result['artifact_sha256']=build(source,source/'diagnostic','rook2-diag',paths['diagnostic-build'],out,env,stages,{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})
+    br=load(paths['diagnostic-build']/'receipt.json');nr=load(plan['native_reference']['build_receipt'])
+    for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
+-   assert br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
++   assert br['tool_sha256_before']==br['tool_sha256_after']=={} #diagnostic crate-local tools; root23 separately pinned
+    raw=out/'raw-cases';raw.mkdir();command=['/usr/bin/node','/home/legolas/king-spec/conformance/run.mjs']
+    for path in plan['fixtures']:command+=['--fixtures',path]
+    command+=['--',sys.executable,str(HERE/'record_case.py'),'--adapter',str(paths['diagnostic-build']/'rook2-diag-exact'),'--records',str(raw)]
+--- attempt01/reconcile.py
++++ scope-corrected-reference/reconcile.py
+@@ -35,7 +35,7 @@
+  assert br['source_sha256_before']==br['source_sha256_after']==expected and br['source_identity_unchanged'] and br['crate']==str(source/'diagnostic')
+  nr=load(plan['native_reference']['build_receipt'])
+  for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
+- assert br['mode']=='generic' and br['pgo']['mode']=='none' and br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
++ assert br['mode']=='generic' and br['pgo']['mode']=='none' and br['tool_sha256_before']==br['tool_sha256_after']=={} #diagnostic crate-local tools; root23 separately pinned
+  ar=load(paths['diagnostic-build']/'archive-receipt.json');assert ar['verified_against_build_before_hashes'] and sha(paths['diagnostic-build']/ar['archive'])==ar['sha256'] and archive(paths['diagnostic-build']/ar['archive'])==expected|br['tool_sha256_before']
+  assert sha(paths['diagnostic-build']/'rook2-diag-exact')==br['binary_output']['sha256']==ar['binary_sha256']
+  diag=paths['diagnostic'];vr=load(diag/'verification.json');assert vr['complete'] and vr['failure'] is None and all(s['exit_code']==0 and s['actual_child_return_observed'] for s in vr['stages'])

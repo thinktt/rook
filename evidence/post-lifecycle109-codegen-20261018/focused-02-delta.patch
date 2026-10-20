@@ -1,0 +1,11 @@
+--- focused.py
++++ focused-02.py
+@@ -1,7 +1,7 @@
+ from pathlib import Path
+ import json,hashlib,struct,re,difflib,collections,os
+ C=Path(__file__).parent;cap=json.loads((C/'capture.json').read_text());metrics=json.loads((C/'resolved-functions.json').read_text())
+-ns={};source=(C/'analyze.py').read_text();exec(source[:source.index('\nDATA={};')],ns);ELF=ns['ELF']
++ns={'__file__':str(C/'analyze.py')};source=(C/'analyze.py').read_text();exec(source[:source.index('\nDATA={};')],ns);ELF=ns['ELF']
+ write=lambda p,d:p.write_text(json.dumps(d,indent=2)+'\n')
+ proof={};fixed={};byname={}
+ for tag,c in cap['tags'].items():

@@ -1,0 +1,39 @@
+--- /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-cpu-preparation-20261018-01/run_pilot.py
++++ /home/legolas/rook2/evidence/placement-pure-cache-cpu-preparation-20261018-01/run_pilot.py
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env python3
+-"""One frozen matched fullbyte remembered reciprocal generic development pilot; unchanged strict comparator."""
++"""One frozen matched placement pure-component cache generic development pilot; unchanged strict comparator."""
+ from pathlib import Path
+ import datetime,hashlib,json,os,subprocess,sys
+ P=Path(__file__).resolve().parent
+ ROOT=P.parents[1]
+-OUT=ROOT/'evidence/fullbyte-remembered-reciprocal-cpu-pilot-20261018-01'
++OUT=ROOT/'evidence/placement-pure-cache-cpu-pilot-20261018-01'
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]
+ sys.path.insert(0,str(ROOT/'tools'))
+ from measure import cgroup_snapshot
+--- /home/legolas/rook2/evidence/fullbyte-remembered-reciprocal-cpu-preparation-20261018-01/guard.py
++++ /home/legolas/rook2/evidence/placement-pure-cache-cpu-preparation-20261018-01/guard.py
+@@ -4,7 +4,7 @@
+ import hashlib,json
+ P=Path(__file__).resolve().parent
+ E=P.parent;ROOT=E.parent
+-FUNCTIONAL=E/'fullbyte-remembered-reciprocal-independent-preparation-20261018-01/independent-verification.json'
++FUNCTIONAL=E/'placement-pure-cache-independent-preparation-20261018-01/independent-verification.json'
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def load(p):return json.loads(Path(p).read_text())
+ def terminal(value):
+@@ -32,9 +32,9 @@
+  for v in plan['variants'].values():assert sha(v['path'])==v['sha256']
+  functional=load(FUNCTIONAL)
+  assert functional['complete'] and functional['engine_sha256']==plan['variants']['candidate']['sha256']
+- assert functional['source46_tools23_archive69_equal'] and functional['only_remembered_changed_vs_fullbyte_baseline']
+- assert functional['fullbyte_activity_retained_pawn_unchanged'] and functional['independent_influence_test_module_unchanged']
+- assert functional['native_tests']==179 and functional['strict54_original_checkReplay']
++ assert functional['source46_tools23_archive69_equal'] and functional['only_declared_placement_cache_sources_changed_vs_fullbyte_baseline']
++ assert functional['influence_relation_pawn_and_remembered_unchanged'] and functional['independent_influence_test_module_unchanged']
++ assert functional['native_tests']==plan['expected_native_tests'] and functional['strict54_original_checkReplay']
+  assert functional['compiler_cargo_generic_bound'] and functional['all_dependencies_stable'] and functional['new_native_engine_runs']==0
+  assert len(functional['wire8_searches24_raw_protocol'])==8
+  assert sum(x['searches'] for x in functional['wire8_searches24_raw_protocol'])==24

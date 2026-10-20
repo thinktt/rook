@@ -1,0 +1,55 @@
+--- control/constructor
++++ candidate/constructor
+@@ -14,7 +14,7 @@
+ mov edi,0x28
+ call QWORD PTR [PCREL malloc@GLIBC_2.2.5]
+ test rax,rax
+-je LOCAL+0x2df
++je LOCAL+0x2f2
+ movups xmm0,XMMWORD PTR [PCREL rook2::relation_table::RELATIONS+0x40087]
+ movups XMMWORD PTR [rax+0x10],xmm0
+ movups xmm0,XMMWORD PTR [PCREL rook2::relation_table::RELATIONS+0x40077]
+@@ -41,7 +41,7 @@
+ movabs rsi,0x5555555555555556
+ jmp LOCAL+0xdd
+ cmp rcx,0x3
+-je LOCAL+0x2d4
++je LOCAL+0x2e7
+ add rcx,0xfffffffffffffffe
+ cmp rcx,0x2
+ jbe LOCAL+0x1ab
+@@ -123,7 +123,7 @@
+ mov QWORD PTR [rsp+0x20],rax
+ lea rax,[PCREL <alloc::collections::TryReserveError as core::fmt::Display>::fmt]
+ mov QWORD PTR [rsp+0x28],rax
+-lea rax,[PCREL anon.6885b4ebbb9ebb005495b342e4a07d64.340.llvm.12549816398431449828+0x48]
++lea rax,[PCREL anon.6c02fb29ac5f93ab719a77cb99b866e3.340.llvm.13449752346486655729+0x48]
+ mov QWORD PTR [rsp+0x30],rax
+ mov QWORD PTR [rsp+0x38],0x1
+ mov QWORD PTR [rsp+0x50],0x0
+@@ -132,7 +132,7 @@
+ mov QWORD PTR [rsp+0x48],0x1
+ lea rdi,[rsp+0x8]
+ lea rsi,[rsp+0x30]
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x440]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x450]
+ mov rax,QWORD PTR [rsp+0x8]
+ movups xmm0,XMMWORD PTR [rsp+0x10]
+ movups XMMWORD PTR [rbx+0x10],xmm0
+@@ -173,10 +173,14 @@
+ mov QWORD PTR [rbx],r14
+ mov QWORD PTR [rbx+0x8],r15
+ mov QWORD PTR [rbx+0x10],r14
+-mov BYTE PTR [rbx+0x18],0x1
++movabs rax,0x100000000
++xor edx,edx
++div r14
++mov QWORD PTR [rbx+0x18],rax
++mov BYTE PTR [rbx+0x20],0x1
+ jmp LOCAL+0x249
+ mov r14d,0x3
+ jmp LOCAL+0x1ab
+ mov edi,0x1
+ mov esi,0x28
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x490]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x4a0]

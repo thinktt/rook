@@ -1,0 +1,1 @@
+Parent accepts experiment41 source equivalence and freezes future progression/rule. Live40 fixed48 CPU collection must close before any build/native work. Only shelter.rs changes and all185 existing declarations stay exact. No current build, speed, broad conformance or adoption is claimed. See source-review.json for precise gates and risks.

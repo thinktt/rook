@@ -1,0 +1,49 @@
+# Evidence and history layout
+
+The working repository keeps engine/tool history, experiment patches and scripts,
+small plans/schemas/build receipts, concise reports and a
+[brief ideas/results catalog](performance-experiments.md).
+Bulk records are outside Git at `/home/legolas/rook2-experiments`.
+
+- `original-worktree/`: the entire original checkout, including its original
+  `.git`, tracked/untracked evidence, binaries and local build products.
+- `original-history.git/`: independently verified original-history mirror.
+- `migration/`: full relocation/recovery logs, selection lists and audit records.
+- `catalogs/`: detailed working catalogs; only the brief summary is in the repo.
+- `workspaces/`: previous `/home/legolas/rook2-work` experiment workspaces;
+  the old outside-repo path remains a compatibility symlink.
+
+The original HEAD was `18ca16d66dde64c13c6161302ccd3bdf54bd568a`.
+All168 original commits remain in the cleaned history; bulk evidence paths were
+removed and therefore commit hashes changed. The
+[commit map](history-migration/commit-map.tsv) connects original and cleaned IDs.
+[Verification](history-migration/verification.json) compares every original
+non-evidence root tree, author/committer identity and timestamp, and parent edge.
+Original commit citations in old records refer to the preserved history.
+
+For a historical path `/home/legolas/rook2/<relative-path>` missing here, look at
+`/home/legolas/rook2-experiments/original-worktree/<relative-path>`.
+Frozen records retain their original bytes, hashes and absolute paths; their
+presence is not permission to rerun a closed experiment or claim new results.
+Old scripts may need explicit path rebinding before reuse. They also depend on
+the released king-spec, external runtimes, private profiles and sometimes old
+temporary paths; the small repository alone is not the full execution closure.
+No reference-engine source was introduced by this cleanup.
+
+Additional setup files were recovered from readable existing archives. The
+[archive index](../experiments/archive-setup-index.json) records archive hashes
+and notes two pre-existing empty archives whose contents could not be recovered;
+the original bytes remain preserved. This is not a claim that every historical
+recipe can run unchanged on a fresh machine.
+
+Repeated compiled-source snapshots are stored once by content hash in
+`experiments/source-objects/`, with paths/modes in
+`experiments/source-snapshots.json`. Use `tools/restore_experiment_snapshot.py`
+to restore a chosen source prefix to a new directory. Snapshot files and recovered
+historical setup code are preserved records, not part of the engine build.
+
+Future raw outputs, binaries, profiles and build products belong in the external
+archive. Keep new reproducible setups under `experiments/`, and short outcomes in
+the catalog/decision records. Do not add raw case streams or packed checkpoints
+to Git. Existing tracked historical `evidence/` summaries remain for navigation;
+new `evidence/` material is ignored by default.

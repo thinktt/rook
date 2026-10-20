@@ -1,0 +1,64 @@
+--- /home/legolas/rook2/evidence/activity-value-inputs-complete117-preparation-20261018-01/guard.py
++++ /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/guard.py
+@@ -1,4 +1,4 @@
+-"""Activity-only complete117 guard; no native launch from this module."""
++"""Full-byte-pair complete117 guard; no native launch from this module."""
+ from pathlib import Path
+ import hashlib,json,os
+ HERE=Path(__file__).resolve().parent
+@@ -13,7 +13,7 @@
+  assert kind in ['freeze','execution']
+  c=load(HERE/'execution-clearance.json');plan=load(HERE/'validation-plan.json')
+  assert c['authorized'] is True,'HOLD: explicit parent execution clearance absent'
+- assert c['scope']=='activity-value-inputs-complete117-untimed-diagnostic'
++ assert c['scope']=='full-byte-pair-relations-complete117-untimed-diagnostic'
+  assert c['source_graph_sha256']==plan['source_graph_sha256'] and c['plan_sha256']==sha(HERE/'validation-plan.json')
+  assert c['conflicting_cpu_windows_closed'] is True and not c.get('timing_pgo_profiler_authorized',False)
+  a=c['parent_advancement_acceptance'];assert a and sha(a['path'])==a['sha256']
+--- /home/legolas/rook2/evidence/activity-value-inputs-complete117-preparation-20261018-01/stage.py
++++ /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/stage.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Future activity-only complete117 freeze/DIAG; blocked until parent clearance."""
++"""Future full-byte-pair complete117 freeze/DIAG; blocked until parent clearance."""
+ import argparse,json,os,re,shutil,subprocess,sys,tarfile
+ from pathlib import Path
+ sys.dont_write_bytecode=True
+@@ -60,12 +60,13 @@
+    result['source_archive_sha256']=sha(out/'source-frozen.tar.gz')
+   else:
+    # No generic ordinary build/native tests/strict replay branch exists here.
+-   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/activity-value-inputs-complete117-diag-unit',out,env,stages)
++   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/full-byte-pair-relations-complete117-diag-unit',out,env,stages)
+    assert not paths['diagnostic-build'].exists(),'build.py output must be absent'
+    result['artifact_sha256']=build(source,source/'diagnostic','rook2-diag',paths['diagnostic-build'],out,env,stages,{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})
+    br=load(paths['diagnostic-build']/'receipt.json');nr=load(plan['native_reference']['build_receipt'])
+    for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
+-   assert br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
++   assert br['tool_sha256_before']==br['tool_sha256_after']==plan['diagnostic_crate_tools_sha256']=={}
++   assert len(plan['tools_sha256'])==23 # separately checked in the full112 closure
+    raw=out/'raw-cases';raw.mkdir();command=['/usr/bin/node','/home/legolas/king-spec/conformance/run.mjs']
+    for path in plan['fixtures']:command+=['--fixtures',path]
+    command+=['--',sys.executable,str(HERE/'record_case.py'),'--adapter',str(paths['diagnostic-build']/'rook2-diag-exact'),'--records',str(raw)]
+--- /home/legolas/rook2/evidence/activity-value-inputs-complete117-preparation-20261018-01/reconcile.py
++++ /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/reconcile.py
+@@ -35,7 +35,7 @@
+  assert br['source_sha256_before']==br['source_sha256_after']==expected and br['source_identity_unchanged'] and br['crate']==str(source/'diagnostic')
+  nr=load(plan['native_reference']['build_receipt'])
+  for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
+- assert br['mode']=='generic' and br['pgo']['mode']=='none' and br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
++ assert br['mode']=='generic' and br['pgo']['mode']=='none' and br['tool_sha256_before']==br['tool_sha256_after']==plan['diagnostic_crate_tools_sha256']=={}
+  ar=load(paths['diagnostic-build']/'archive-receipt.json');assert ar['verified_against_build_before_hashes'] and sha(paths['diagnostic-build']/ar['archive'])==ar['sha256'] and archive(paths['diagnostic-build']/ar['archive'])==expected|br['tool_sha256_before']
+  assert sha(paths['diagnostic-build']/'rook2-diag-exact')==br['binary_output']['sha256']==ar['binary_sha256']
+  diag=paths['diagnostic'];vr=load(diag/'verification.json');assert vr['complete'] and vr['failure'] is None and all(s['exit_code']==0 and s['actual_child_return_observed'] for s in vr['stages'])
+--- /home/legolas/rook2/evidence/activity-value-inputs-complete117-preparation-20261018-01/finalize.py
++++ /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/finalize.py
+@@ -39,7 +39,7 @@
+   except OSError:continue
+   if any(exe.startswith(x) for x in prefixes) or ('python' in Path(exe).name and len(argv)>1 and argv[1].endswith('.py') and argv[1].startswith(str(HERE)+'/')):live.append({'pid':int(p.name),'exe':exe,'argv':argv})
+  assert not live,live
+- result=dict(status='ACTIVITY_ONLY_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native_reused=True,fresh_ordinary_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict54_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,operations=117,cases=7673,whole_files=115,native_sha256=ind['native_artifact_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
++ result=dict(status='FULL_BYTE_PAIR_RELATIONS_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native_reused=True,fresh_ordinary_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict54_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,operations=117,cases=7673,whole_files=115,native_sha256=ind['native_artifact_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
+  write(HERE/'validation-summary.json',result)
+  entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','source-proof.json','archive-verification.json','validation-summary.json','guard.py','stage.py','record_case.py','reconcile.py','finalize.py']]
+  entries += [paths['reconciliation']/name for name in ['independent-verification.json','case-reconciliation.json','raw-case-sha256.json','tool-terminal.json']]

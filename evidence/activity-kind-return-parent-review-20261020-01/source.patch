@@ -1,0 +1,198 @@
+--- accepted57/src/activity.rs
++++ candidate60/src/activity.rs
+@@ -104,46 +104,46 @@
+     let mut relation_queries = 0;
+     for color in [Color::White, Color::Black] {
+         let values = &DESTINATION_VALUES[color.index()];
+-        accumulate_kind::<1>(
++        let (piece, work) = accumulate_kind::<1>(
+             position,
+             influence,
+             color,
+             values,
+             &mut marks,
+             phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<2>(
++        );
++        raw_scores[color.index()] += piece;
++        relation_queries += work;
++        let (piece, work) = accumulate_kind::<2>(
+             position,
+             influence,
+             color,
+             values,
+             &mut marks,
+             phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<3>(
++        );
++        raw_scores[color.index()] += piece;
++        relation_queries += work;
++        let (piece, work) = accumulate_kind::<3>(
+             position,
+             influence,
+             color,
+             values,
+             &mut marks,
+             phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
+-        accumulate_kind::<4>(
++        );
++        raw_scores[color.index()] += piece;
++        relation_queries += work;
++        let (piece, work) = accumulate_kind::<4>(
+             position,
+             influence,
+             color,
+             values,
+             &mut marks,
+             phase.endgame,
+-            &mut raw_scores[color.index()],
+-            &mut relation_queries,
+-        );
++        );
++        raw_scores[color.index()] += piece;
++        relation_queries += work;
+     }
+     let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
+     Activity {
+@@ -157,7 +157,7 @@
+     }
+ }
+ 
+-#[inline]
++#[inline(never)]
+ fn accumulate_kind<const KIND: usize>(
+     position: &Position,
+     influence: &Influence,
+@@ -165,17 +165,18 @@
+     values: &'static DestinationValues,
+     marks: &mut Marks,
+     endgame: u16,
+-    score: &mut i64,
+-    queries: &mut u64,
+-) {
++) -> (i64, u64) {
++    let mut score = 0;
++    let mut queries = 0;
+     let kind = PieceKind::ALL[KIND];
+     for &source in position.piece_squares(color, kind) {
+         let values = piece_destination_values::<KIND>(position, color, values);
+         let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
+         let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+-        *score += piece;
+-        *queries += work;
+-    }
++        score += piece;
++        queries += work;
++    }
++    (score, queries)
+ }
+ 
+ #[inline]
+@@ -828,3 +829,98 @@
+         }
+     }
+ }
++
++
++#[cfg(test)]
++mod experiment60_tests {
++    use super::*;
++
++    // The old aggregation boundary: write each completed source directly into
++    // the side total/work total. Expected state never calls accumulate_kind.
++    fn old_piecewise(
++        position: &Position,
++        influence: &Influence,
++        material: i32,
++        weights: [i32; 2],
++    ) -> (Activity, [i64; 2], [i32; 2]) {
++        let phase = position.phase();
++        let mut marks = [[0u8; 64]; 2];
++        let mut raw = [0i64; 2];
++        let mut rounded_per_piece = [0i32; 2];
++        let mut queries = 0u64;
++        for color in [Color::White, Color::Black] {
++            for kind in [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++                for &source in position.piece_squares(color, kind) {
++                    let mobility = destinations(position, influence, color, kind, source, &mut marks);
++                    let (piece, work) = piece_score(influence, color, kind, source, mobility, phase.endgame);
++                    raw[color.index()] += piece;
++                    queries += work;
++                    rounded_per_piece[color.index()] += (276 * piece + 128).div_euclid(256) as i32;
++                }
++            }
++        }
++        let pieces = raw.map(|score| (276 * score + 128).div_euclid(256) as i32);
++        (Activity {
++            pieces,
++            pressure: [king_pressure(position, Color::White, &marks),
++                       king_pressure(position, Color::Black, &marks)],
++            weighted: weighted(pieces, material, weights, phase),
++            relation_queries: queries,
++        }, raw, rounded_per_piece)
++    }
++
++    fn pos(placement: &str) -> Position {
++        Position::from_fen(&format!("{placement} w - - 0 1")).unwrap()
++    }
++
++    #[test]
++    fn experiment60_complete_activity_matches_old_piecewise_across_byte_strata() {
++        for placement in [
++            "7k/8/8/8/8/8/8/K7", // Every activity group empty.
++            "7k/8/8/8/3NN3/8/8/K7", // Multiple sources in one group; one color empty.
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R",
++            "6qk/5rr1/4bb2/3nn3/3NN3/4BB2/5RR1/K5QQ",
++        ] {
++            let position = pos(placement);
++            let built = Influence::build(&position);
++            assert_eq!(compute(&position, &built, 217, [10_240, 8192]),
++                       old_piecewise(&position, &built, 217, [10_240, 8192]).0);
++            // At every square/color all256 supplied byte values occur. Also
++            // retain literal zero/all255 maps; never rebuild these supplied maps.
++            for pattern in 0..258u16 {
++                let influence = Influence { profiles: std::array::from_fn(|color| {
++                    std::array::from_fn(|square| match pattern {
++                        256 => 0,
++                        257 => 255,
++                        _ => (pattern as u8).wrapping_add((square as u8)
++                            .wrapping_mul(if color == 0 { 1 } else { 17 })),
++                    })
++                }) };
++                let material = [-100_000, 217, 100_000][pattern as usize % 3];
++                let weights = [[0, 0], [1024, 1024], [10_240, 8192]][pattern as usize % 3];
++                let wanted = old_piecewise(&position, &influence, material, weights).0;
++                assert_eq!(compute(&position, &influence, material, weights), wanted,
++                           "placement={placement} pattern={pattern}");
++            }
++        }
++    }
++
++    #[test]
++    fn experiment60_signed_sources_round_once_after_all_same_kind_pieces() {
++        let position = pos("7k/8/8/8/3NN3/8/8/K7");
++        let pressured = Influence { profiles: [[255; 64]; 2] };
++        let (wanted, raw, individually_rounded) = old_piecewise(&position, &pressured, 0, [1024, 1024]);
++        // Central pawn-supported knights are exempt from the low-mobility
++        // penalty. All255 opposed profiles make each mobility category zero,
++        // so each raw score is -57; two sources must round together.
++        assert_eq!(raw, [-114, 0]);
++        assert_eq!(wanted.pieces, [-123, 0]);
++        assert_eq!(individually_rounded, [-122, 0]);
++        assert_eq!(compute(&position, &pressured, 0, [1024, 1024]), wanted);
++        let unopposed = Influence { profiles: [[0; 64]; 2] };
++        let (positive, positive_raw, _) = old_piecewise(&position, &unopposed, 0, [1024, 1024]);
++        assert!(positive_raw[0] > 0 && positive.pieces[0] > 0);
++        assert_eq!(compute(&position, &unopposed, 0, [1024, 1024]), positive);
++    }
++}

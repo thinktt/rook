@@ -1,0 +1,38 @@
+--- a/src/host.rs
++++ b/src/host.rs
+@@ -4,13 +4,6 @@
+ use crate::session::GameResult;
+ use crate::types::{Color, Move};
+ use std::io;
+-
+-/// Seed arithmetic shared by native session preparation and actual host acquisition.
+-/// Callers own the seconds sample and its existing timing/error boundary.
+-#[inline]
+-pub fn seed_from_seconds(seconds: u32, entry: u32) -> u32 {
+-    seconds.wrapping_add(entry)
+-}
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub enum Command {
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -454,7 +454,7 @@
+                 .allowance(self.game_ply(), self.parameters.values[23], false, entry)?;
+         let seed = self
+             .seed_override
+-            .unwrap_or(crate::host::seed_from_seconds(system_seconds, entry));
++            .unwrap_or(system_seconds.wrapping_add(entry));
+         self.clock.begin(entry);
+         self.ledger.reset();
+         self.work = Work::default();
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -23,7 +23,7 @@
+             .duration_since(UNIX_EPOCH)
+             .map_err(io::Error::other)?
+             .as_secs() as u32;
+-        Ok(rook2::host::seed_from_seconds(seconds, entry))
++        Ok(seconds.wrapping_add(entry))
+     }
+     fn started(&mut self, seed: u32) -> io::Result<()> {
+         if self.diagnostic_seed {

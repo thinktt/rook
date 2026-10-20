@@ -1,0 +1,1042 @@
+//! Compact placement and chronology kernel. Move geometry is caller-validated.
+use crate::attacks::AttackBits;
+use crate::identity::{self, Fingerprints};
+use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
+
+pub const NO_SQUARE: u8 = 64;
+pub const WHITE_QUEENSIDE: u8 = 1;
+pub const WHITE_KINGSIDE: u8 = 2;
+pub const BLACK_QUEENSIDE: u8 = 4;
+pub const BLACK_KINGSIDE: u8 = 8;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Phase {
+    pub opening: u16,
+    pub middlegame: u16,
+    pub endgame: u16,
+}
+
+/// Lists are grouped P,N,B,R,Q,K; order inside each group is semantic state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct Position {
+    pub board: [Piece; 64],
+    pub squares: [[Square; 16]; 2],
+    pub counts: [[u8; 6]; 2],
+    pub primary: u32,
+    pub secondary: u32,
+    pub pawn: u32,
+    pub side: Color,
+    pub rights: u8,
+    pub ep: u8,
+    pub halfmove: u8,
+    /// Raw starting-square occupancy measure, before the phase M<=32 gate.
+    pub starting_units: u8,
+    attack_bits: AttackBits,
+}
+
+const KINDS: [PieceKind; 6] = [
+    PieceKind::Pawn,
+    PieceKind::Knight,
+    PieceKind::Bishop,
+    PieceKind::Rook,
+    PieceKind::Queen,
+    PieceKind::King,
+];
+
+impl Position {
+    pub fn from_fen(fen: &str) -> Result<Self, String> {
+        let fields: Vec<&str> = fen.split(' ').collect();
+        if fields.len() != 6
+            || fields.iter().any(|f| {
+                f.is_empty() || !f.is_ascii() || f.bytes().any(|b| b.is_ascii_whitespace())
+            })
+        {
+            return Err("FEN requires six fields separated by one ASCII space".into());
+        }
+        let side = match fields[1] {
+            "w" => Color::White,
+            "b" => Color::Black,
+            _ => return Err("invalid FEN side".into()),
+        };
+        let mut pos = Self {
+            board: [Piece::EMPTY; 64],
+            squares: [[Square(NO_SQUARE); 16]; 2],
+            counts: [[0; 6]; 2],
+            primary: 0,
+            secondary: 0,
+            pawn: 0,
+            side,
+            rights: 0,
+            ep: NO_SQUARE,
+            halfmove: parse_number(fields[4], 0, 255)? as u8,
+            starting_units: 0,
+            attack_bits: AttackBits::empty(),
+        };
+        parse_number(fields[5], 1, 1_000_000)?;
+        let ranks: Vec<&str> = fields[0].split('/').collect();
+        if ranks.len() != 8 {
+            return Err("placement requires eight ranks".into());
+        }
+        for (row, rank) in ranks.iter().enumerate() {
+            let mut file = 0usize;
+            for byte in rank.bytes() {
+                if (b'1'..=b'8').contains(&byte) {
+                    file += (byte - b'0') as usize;
+                } else {
+                    let piece = Piece::from_fen(byte as char).ok_or("invalid placement piece")?;
+                    let color = piece.color();
+                    let kind = piece.kind();
+                    if file >= 8 {
+                        return Err("placement rank exceeds eight squares".into());
+                    }
+                    let square = (7 - row) * 8 + file;
+                    if kind == PieceKind::Pawn && (row == 0 || row == 7) {
+                        return Err("pawn on promotion rank".into());
+                    }
+                    pos.board[square] = Piece::new(color, kind);
+                    pos.counts[color.index()][kind.index()] += 1;
+                    file += 1;
+                }
+                if file > 8 {
+                    return Err("placement rank exceeds eight squares".into());
+                }
+            }
+            if file != 8 {
+                return Err("placement rank does not contain eight squares".into());
+            }
+        }
+        for color in [Color::White, Color::Black] {
+            let counts = pos.counts[color.index()];
+            if counts[PieceKind::King.index()] != 1
+                || counts[PieceKind::Pawn.index()] > 8
+                || counts.iter().map(|&n| n as usize).sum::<usize>() > 16
+            {
+                return Err(
+                    "placement exceeds piece capacity or lacks exactly one king per color".into(),
+                );
+            }
+            let mut index = 0;
+            for kind in KINDS {
+                for square in 0..64 {
+                    if pos.board[square] == Piece::new(color, kind) {
+                        pos.squares[color.index()][index] = Square(square as u8);
+                        index += 1;
+                    }
+                }
+            }
+        }
+        pos.rights = parse_rights(fields[2])?;
+        for (right, king, rook, color) in [
+            (WHITE_QUEENSIDE, 4, 0, Color::White),
+            (WHITE_KINGSIDE, 4, 7, Color::White),
+            (BLACK_QUEENSIDE, 60, 56, Color::Black),
+            (BLACK_KINGSIDE, 60, 63, Color::Black),
+        ] {
+            if pos.board[king] != Piece::new(color, PieceKind::King)
+                || pos.board[rook] != Piece::new(color, PieceKind::Rook)
+            {
+                pos.rights &= !right;
+            }
+        }
+        if fields[3] != "-" {
+            let bytes = fields[3].as_bytes();
+            if bytes.len() != 2
+                || !(b'a'..=b'h').contains(&bytes[0])
+                || (bytes[1] != b'3' && bytes[1] != b'6')
+            {
+                return Err("invalid en-passant target".into());
+            }
+            let square = (bytes[1] - b'1') * 8 + bytes[0] - b'a';
+            if !pos.board[square as usize].is_empty() {
+                return Err("occupied en-passant target".into());
+            }
+            let source_rank = square as i16 / 8 + if side == Color::White { -1 } else { 1 };
+            for file_delta in [-1i16, 1] {
+                let file = square as i16 % 8 + file_delta;
+                if (0..8).contains(&file)
+                    && (0..8).contains(&source_rank)
+                    && pos.board[(source_rank * 8 + file) as usize]
+                        == Piece::new(side, PieceKind::Pawn)
+                {
+                    pos.ep = square;
+                }
+            }
+        }
+        pos.recompute_derived();
+        Ok(pos)
+    }
+
+    #[inline]
+    pub(crate) fn attack_view(&self) -> AttackBits {
+        self.attack_bits
+    }
+
+    /// Borrow actual maintained planes; the caller owns placement coherence.
+    #[inline]
+    pub(crate) fn attack_planes(&self) -> &[u64; 4] {
+        self.attack_bits.planes()
+    }
+
+    #[inline]
+    fn group_start(&self, color: Color, kind: PieceKind) -> usize {
+        self.counts[color.index()][..kind.index()]
+            .iter()
+            .map(|&n| n as usize)
+            .sum()
+    }
+
+    #[inline]
+    pub fn piece_squares(&self, color: Color, kind: PieceKind) -> &[Square] {
+        let start = self.group_start(color, kind);
+        &self.squares[color.index()]
+            [start..start + self.counts[color.index()][kind.index()] as usize]
+    }
+
+    #[inline]
+    fn piece_count(&self, color: Color) -> usize {
+        self.counts[color.index()].iter().map(|&n| n as usize).sum()
+    }
+
+    fn locate(&self, piece: Piece, square: Square) -> usize {
+        self.group_start(piece.color(), piece.kind())
+            + self
+                .piece_squares(piece.color(), piece.kind())
+                .iter()
+                .position(|&s| s == square)
+                .expect("source absent from ordered list")
+    }
+
+    fn remove_ordered(&mut self, piece: Piece, square: Square) {
+        let color = piece.color();
+        let index = self.locate(piece, square);
+        let len = self.piece_count(color);
+        self.squares[color.index()].copy_within(index + 1..len, index);
+        self.squares[color.index()][len - 1] = Square(NO_SQUARE);
+        self.counts[color.index()][piece.kind().index()] -= 1;
+    }
+
+    fn append_ordered(&mut self, piece: Piece, square: Square) {
+        let color = piece.color();
+        let len = self.piece_count(color);
+        assert!(len < 16, "piece-list capacity exceeded");
+        let index = self.group_start(color, piece.kind())
+            + self.counts[color.index()][piece.kind().index()] as usize;
+        self.squares[color.index()].copy_within(index..len, index + 1);
+        self.squares[color.index()][index] = square;
+        self.counts[color.index()][piece.kind().index()] += 1;
+    }
+
+    #[inline]
+    fn set_square(&mut self, square: Square, piece: Piece) {
+        let old = self.board[square.0 as usize];
+        for value in [old, piece] {
+            if value.is_empty() {
+                continue;
+            }
+            let keys = identity::piece_keys(value, square);
+            self.primary ^= keys[0];
+            self.secondary ^= keys[1];
+            if value.kind() == PieceKind::Pawn {
+                self.pawn ^= keys[0];
+            }
+        }
+        self.starting_units =
+            self.starting_units - starting_credit(square, old) + starting_credit(square, piece);
+        self.attack_bits.replace(square, old, piece);
+        self.board[square.0 as usize] = piece;
+    }
+
+    #[inline]
+    pub fn played_unchecked(&self, movement: Move) -> Self {
+        let mut child = *self;
+        child.apply_unchecked(movement);
+        child
+    }
+
+    /// Cold ingress primitive, used only for the specified constructed king-victim continuation.
+    pub(crate) fn exceptional_en_passant(&self, movement: Move) -> Self {
+        assert_eq!(movement.kind(), MoveKind::EnPassant);
+        let behind = Square(if self.side == Color::White {
+            movement.to().0 - 8
+        } else {
+            movement.to().0 + 8
+        });
+        let victim = self.board[behind.0 as usize];
+        assert_eq!(victim, Piece::new(self.side.opponent(), PieceKind::King));
+        let mut next = *self;
+        next.remove_ordered(victim, behind);
+        next.set_square(behind, Piece::EMPTY);
+        next.apply_unchecked(movement);
+        next
+    }
+
+    /// Caller guarantees geometry, king safety and promotion/castling admission.
+    pub fn apply_unchecked(&mut self, movement: Move) {
+        let from = movement.from();
+        let to = movement.to();
+        let piece = self.board[from.0 as usize];
+        debug_assert!(!piece.is_empty() && piece.color() == self.side);
+        let kind = piece.kind();
+        let color = piece.color();
+        let victim_square = if movement.kind() == MoveKind::EnPassant {
+            Square(if color == Color::White {
+                to.0 - 8
+            } else {
+                to.0 + 8
+            })
+        } else {
+            to
+        };
+        let victim = self.board[victim_square.0 as usize];
+        if !victim.is_empty() {
+            debug_assert_ne!(victim.color(), color);
+            assert_ne!(
+                victim.kind(),
+                PieceKind::King,
+                "king-victim continuation requires the cold ingress path"
+            );
+            self.remove_ordered(victim, victim_square);
+            if victim_square != to {
+                self.set_square(victim_square, Piece::EMPTY);
+            }
+        }
+        let resulting_piece = match movement.kind() {
+            MoveKind::Promotion(promoted) => {
+                debug_assert_eq!(kind, PieceKind::Pawn);
+                debug_assert!(matches!(
+                    promoted,
+                    PieceKind::Knight | PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen
+                ));
+                self.remove_ordered(piece, from);
+                let result = Piece::new(color, promoted);
+                self.append_ordered(result, to);
+                result
+            }
+            _ => {
+                let index = self.locate(piece, from);
+                self.squares[color.index()][index] = to;
+                piece
+            }
+        };
+        self.set_square(from, Piece::EMPTY);
+        self.set_square(to, resulting_piece);
+        if movement.kind() == MoveKind::Castle {
+            debug_assert_eq!(kind, PieceKind::King);
+            let base = if color == Color::White { 0 } else { 56 };
+            let (rook_from, rook_to) = if to.0 > from.0 {
+                (Square(base + 7), Square(base + 5))
+            } else {
+                (Square(base), Square(base + 3))
+            };
+            let rook = Piece::new(color, PieceKind::Rook);
+            let index = self.locate(rook, rook_from);
+            self.squares[color.index()][index] = rook_to;
+            self.set_square(rook_from, Piece::EMPTY);
+            self.set_square(rook_to, rook);
+        }
+        self.rights &= !(rights_mask(from) | rights_mask(to));
+        self.ep = NO_SQUARE;
+        if kind == PieceKind::Pawn && from.0.abs_diff(to.0) == 16 {
+            let enemy_pawn = Piece::new(color.opponent(), PieceKind::Pawn);
+            if (to.file() != 0 && self.board[to.0 as usize - 1] == enemy_pawn)
+                || (to.file() != 7 && self.board[to.0 as usize + 1] == enemy_pawn)
+            {
+                self.ep = (from.0 + to.0) / 2;
+            }
+        }
+        self.halfmove = if kind == PieceKind::Pawn || !victim.is_empty() {
+            0
+        } else {
+            self.halfmove.wrapping_add(1)
+        };
+        self.side = color.opponent();
+    }
+
+    pub fn null_child(&self) -> Self {
+        let mut child = *self;
+        child.side = self.side.opponent();
+        child.ep = NO_SQUARE;
+        child.halfmove = self.halfmove.wrapping_add(1);
+        child
+    }
+
+    pub fn phase(&self) -> Phase {
+        let mut totals = [0i32; 5];
+        for (kind, total) in totals.iter_mut().enumerate() {
+            *total = self.counts[0][kind] as i32 + self.counts[1][kind] as i32;
+        }
+        for kind in 1..4 {
+            totals[kind + 1] += totals[kind] / 16;
+            totals[kind] %= 16;
+        }
+        totals[4] %= 16;
+        let material = totals[0] + 3 * totals[1] + 3 * totals[2] + 4 * totals[3] + 8 * totals[4];
+        let starting = if material > 32 {
+            self.starting_units as i32
+        } else {
+            0
+        };
+        let opening = (16 * (starting - 4)).clamp(0, 256);
+        let endgame = (256 - opening) * (8 * (48 - material)).clamp(0, 256) / 256;
+        Phase {
+            opening: opening as u16,
+            middlegame: (256 - opening - endgame) as u16,
+            endgame: endgame as u16,
+        }
+    }
+
+    pub fn placement(&self) -> String {
+        let mut result = String::with_capacity(72);
+        for rank in (0..8).rev() {
+            if rank != 7 {
+                result.push('/');
+            }
+            let mut empty = 0;
+            for file in 0..8 {
+                let piece = self.board[rank * 8 + file];
+                if piece.is_empty() {
+                    empty += 1;
+                    continue;
+                }
+                if empty != 0 {
+                    result.push((b'0' + empty) as char);
+                    empty = 0;
+                }
+                result.push(piece.fen_char());
+            }
+            if empty != 0 {
+                result.push((b'0' + empty) as char);
+            }
+        }
+        result
+    }
+
+    pub fn recomputed_identity(&self) -> Fingerprints {
+        identity::fingerprints(&self.board)
+    }
+    pub fn recomputed_starting_units(&self) -> u8 {
+        self.board
+            .iter()
+            .enumerate()
+            .map(|(square, &piece)| starting_credit(Square(square as u8), piece))
+            .sum()
+    }
+    pub fn recompute_derived(&mut self) {
+        let identity = self.recomputed_identity();
+        self.primary = identity.primary;
+        self.secondary = identity.secondary;
+        self.pawn = identity.pawn;
+        self.starting_units = self.recomputed_starting_units();
+        self.attack_bits = AttackBits::from_board(&self.board);
+    }
+    pub fn validate(&self) -> Result<(), String> {
+        let mut board = [Piece::EMPTY; 64];
+        for color in [Color::White, Color::Black] {
+            if self.piece_count(color) > 16
+                || self.counts[color.index()][PieceKind::Pawn.index()] > 8
+                || self.counts[color.index()][PieceKind::King.index()] != 1
+            {
+                return Err("invalid population".into());
+            }
+            for kind in KINDS {
+                for &square in self.piece_squares(color, kind) {
+                    if square.0 >= 64 || !board[square.0 as usize].is_empty() {
+                        return Err("invalid or duplicate list square".into());
+                    }
+                    if kind == PieceKind::Pawn && (square.rank() == 0 || square.rank() == 7) {
+                        return Err("pawn on promotion rank".into());
+                    }
+                    board[square.0 as usize] = Piece::new(color, kind);
+                }
+            }
+            if self.squares[color.index()][self.piece_count(color)..]
+                .iter()
+                .any(|s| s.0 != NO_SQUARE)
+            {
+                return Err("nonempty list tail".into());
+            }
+        }
+        if board != self.board {
+            return Err("mailbox/list disagreement".into());
+        }
+        if !self.attack_bits.matches_board(&self.board) {
+            return Err("attack planes/mailbox disagreement".into());
+        }
+        let hashes = self.recomputed_identity();
+        if [self.primary, self.secondary, self.pawn]
+            != [hashes.primary, hashes.secondary, hashes.pawn]
+        {
+            return Err("fingerprint disagreement".into());
+        }
+        if self.starting_units != self.recomputed_starting_units() {
+            return Err("starting-square disagreement".into());
+        }
+        if self.rights & !15 != 0
+            || (self.ep != NO_SQUARE
+                && (self.ep >= 64
+                    || !matches!(self.ep / 8, 2 | 5)
+                    || !self.board[self.ep as usize].is_empty()))
+        {
+            return Err("invalid rule flags".into());
+        }
+        Ok(())
+    }
+}
+
+fn parse_number(text: &str, min: u32, max: u32) -> Result<u32, String> {
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("invalid FEN counter".into());
+    }
+    let value: u32 = text.parse().map_err(|_| "invalid FEN counter")?;
+    if value < min || value > max {
+        return Err("FEN counter out of range".into());
+    }
+    Ok(value)
+}
+fn parse_rights(text: &str) -> Result<u8, String> {
+    if text == "-" {
+        return Ok(0);
+    }
+    if text.is_empty() {
+        return Err("empty castling rights".into());
+    }
+    let mut previous = 0;
+    let mut result = 0;
+    for byte in text.bytes() {
+        let (order, bit) = match byte {
+            b'K' => (1, WHITE_KINGSIDE),
+            b'Q' => (2, WHITE_QUEENSIDE),
+            b'k' => (3, BLACK_KINGSIDE),
+            b'q' => (4, BLACK_QUEENSIDE),
+            _ => return Err("invalid castling rights".into()),
+        };
+        if order <= previous {
+            return Err("noncanonical castling rights".into());
+        }
+        previous = order;
+        result |= bit;
+    }
+    Ok(result)
+}
+#[inline]
+fn rights_mask(square: Square) -> u8 {
+    match square.0 {
+        0 => WHITE_QUEENSIDE,
+        4 => WHITE_QUEENSIDE | WHITE_KINGSIDE,
+        7 => WHITE_KINGSIDE,
+        56 => BLACK_QUEENSIDE,
+        60 => BLACK_QUEENSIDE | BLACK_KINGSIDE,
+        63 => BLACK_KINGSIDE,
+        _ => 0,
+    }
+}
+#[inline]
+fn starting_credit(square: Square, piece: Piece) -> u8 {
+    if piece.is_empty() {
+        return 0;
+    }
+    let kind = piece.kind();
+    let rank = square.rank();
+    let file = square.file();
+    let home = if piece.color() == Color::White { 0 } else { 7 };
+    if rank == home {
+        return match (kind, file) {
+            (PieceKind::Rook, 0 | 7)
+            | (PieceKind::Knight, 1 | 6)
+            | (PieceKind::Bishop, 2 | 5)
+            | (PieceKind::Queen, 3) => 2,
+            _ => 0,
+        };
+    }
+    if kind == PieceKind::Pawn && rank == if home == 0 { 1 } else { 6 } && (file == 3 || file == 4)
+    {
+        1
+    } else {
+        0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sq(name: &str) -> Square {
+        Square::parse(name).unwrap()
+    }
+    fn movement(from: &str, to: &str, kind: MoveKind) -> Move {
+        Move::new(sq(from), sq(to), kind)
+    }
+    fn assert_consistent(pos: &Position) {
+        pos.validate().unwrap();
+        let mut rebuilt = *pos;
+        rebuilt.recompute_derived();
+        assert_eq!(*pos, rebuilt);
+        let phase = pos.phase();
+        assert_eq!(phase.opening + phase.middlegame + phase.endgame, 256);
+    }
+
+    #[test]
+    fn compact_layout_and_broad_setup_capacity() {
+        assert_eq!(std::mem::size_of::<Position>(), 160);
+        assert_eq!(std::mem::align_of::<Position>(), 8);
+        for letter in ['N', 'B', 'R', 'Q'] {
+            let placement = "7k/8/8/8/8/QQQQQQQ1/QQQQQQQQ/K7".replace('Q', &letter.to_string());
+            let pos = Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();
+            let kind = Piece::from_fen(letter).unwrap().kind();
+            assert_eq!(pos.piece_squares(Color::White, kind).len(), 15);
+            assert_eq!(pos.piece_count(Color::White), 16);
+            assert_consistent(&pos);
+        }
+        assert!(Position::from_fen("7k/8/8/8/8/QQQQQQQQ/QQQQQQQQ/K7 w - - 0 1").is_err());
+    }
+
+    #[test]
+    fn setup_normalizes_requests_and_retains_counter() {
+        let pos = Position::from_fen("r3k3/8/8/3P4/8/8/8/4K2R w KQkq e6 27 17").unwrap();
+        assert_eq!(pos.rights, WHITE_KINGSIDE | BLACK_QUEENSIDE);
+        assert_eq!(pos.ep, sq("e6").0); // Geometry retains the target without an opposing pawn.
+        assert_eq!(pos.halfmove, 27);
+        assert_consistent(&pos);
+        let unavailable = Position::from_fen("4k3/8/8/8/8/8/8/4K3 b KQkq a3 0 1").unwrap();
+        assert_eq!((unavailable.rights, unavailable.ep), (0, NO_SQUARE));
+        for fen in [
+            "4k3/8/8/8/8/8/8/4K3  w - - 0 1",
+            "4k3/8/8/8/8/8/8/4K3 w QK - 0 1",
+            "4k3/8/8/8/8/8/8/4K3 w - - 256 1",
+            "4k3/8/8/8/8/8/8/4K3 w - - 0 0",
+            "4k3/8/4P3/8/8/8/8/4K3 w - e6 0 1",
+            "P3k3/8/8/8/8/8/8/4K3 w - - 0 1",
+        ] {
+            assert!(Position::from_fen(fen).is_err(), "{fen}");
+        }
+    }
+
+    #[test]
+    fn quiet_slot_capture_survivor_order_and_parent_copy() {
+        let mut pos = Position::from_fen("4k3/p2p3p/2B5/8/8/8/8/1N2K1N1 w - - 255 1").unwrap();
+        pos.squares[0][..2].copy_from_slice(&[sq("g1"), sq("b1")]);
+        pos.squares[1][..3].copy_from_slice(&[sq("h7"), sq("d7"), sq("a7")]);
+        let saved = pos;
+        let quiet = pos.played_unchecked(movement("b1", "c3", MoveKind::Ordinary));
+        assert_eq!(
+            quiet.piece_squares(Color::White, PieceKind::Knight),
+            [sq("g1"), sq("c3")]
+        );
+        assert_eq!(quiet.halfmove, 0);
+        assert_eq!(pos, saved);
+        assert_consistent(&quiet);
+        let captured = pos.played_unchecked(movement("c6", "d7", MoveKind::Ordinary));
+        assert_eq!(
+            captured.piece_squares(Color::Black, PieceKind::Pawn),
+            [sq("h7"), sq("a7")]
+        );
+        assert_eq!(captured.halfmove, 0);
+        assert_eq!(captured.counts[1][PieceKind::Pawn.index()], 2);
+        assert_consistent(&captured);
+    }
+
+    #[test]
+    fn both_color_promotions_append_all_choices_with_and_without_capture() {
+        for (fen, from, quiet, capture, color) in [
+            (
+                "1r2k3/P7/8/8/3Q4/8/7Q/4K3 w - - 21 1",
+                "a7",
+                "a8",
+                "b8",
+                Color::White,
+            ),
+            (
+                "4k3/7q/8/3q4/8/8/p7/1R2K3 b - - 21 1",
+                "a2",
+                "a1",
+                "b1",
+                Color::Black,
+            ),
+        ] {
+            let parent = Position::from_fen(fen).unwrap();
+            for kind in [
+                PieceKind::Knight,
+                PieceKind::Bishop,
+                PieceKind::Rook,
+                PieceKind::Queen,
+            ] {
+                let old = parent.piece_squares(color, kind);
+                for to in [quiet, capture] {
+                    let child =
+                        parent.played_unchecked(movement(from, to, MoveKind::Promotion(kind)));
+                    let pieces = child.piece_squares(color, kind);
+                    assert_eq!(&pieces[..old.len()], old);
+                    assert_eq!(pieces.last(), Some(&sq(to)));
+                    assert!(child.piece_squares(color, PieceKind::Pawn).is_empty());
+                    assert_eq!(child.board[sq(to).0 as usize], Piece::new(color, kind));
+                    assert_eq!(child.halfmove, 0);
+                    assert_consistent(&child);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn both_castling_directions_preserve_rook_chronology_and_wrap_counter() {
+        for color in [Color::White, Color::Black] {
+            let side = if color == Color::White { 'w' } else { 'b' };
+            let mut parent =
+                Position::from_fen(&format!("r3k2r/8/8/8/8/8/8/R3K2R {side} KQkq - 255 1"))
+                    .unwrap();
+            let base = if color == Color::White { 0 } else { 56 };
+            let start = parent.group_start(color, PieceKind::Rook);
+            parent.squares[color.index()][start..start + 2]
+                .copy_from_slice(&[Square(base + 7), Square(base)]);
+            for (king_to, expected_rooks) in [
+                (base + 6, [Square(base + 5), Square(base)]),
+                (base + 2, [Square(base + 7), Square(base + 3)]),
+            ] {
+                let child = parent.played_unchecked(Move::new(
+                    Square(base + 4),
+                    Square(king_to),
+                    MoveKind::Castle,
+                ));
+                assert_eq!(child.piece_squares(color, PieceKind::Rook), expected_rooks);
+                assert_eq!(child.halfmove, 0);
+                assert_eq!(child.rights, if color == Color::White { 12 } else { 3 });
+                assert_consistent(&child);
+            }
+        }
+    }
+
+    #[test]
+    fn ep_removes_actual_victim_and_accepts_joined_nonpawn_geometry() {
+        for (fen, from, to, victim) in [
+            ("7k/8/8/3pP3/8/8/8/K7 w - d6 13 1", "e5", "d6", "d5"),
+            ("7k/8/8/8/3pP3/8/8/K7 b - e3 13 1", "d4", "e3", "e4"),
+            ("6k1/8/8/3rP3/8/8/8/K7 w - d6 13 1", "e5", "d6", "d5"),
+            // Joined ingress retains this wrong-direction target and allows a non-pawn victim.
+            ("7k/8/8/8/8/8/3rP3/K7 w - d3 13 1", "e2", "d3", "d2"),
+        ] {
+            let parent = Position::from_fen(fen).unwrap();
+            assert_eq!(parent.ep, sq(to).0);
+            let child = parent.played_unchecked(movement(from, to, MoveKind::EnPassant));
+            assert!(child.board[sq(victim).0 as usize].is_empty());
+            assert_eq!(
+                child.board[sq(to).0 as usize],
+                Piece::new(parent.side, PieceKind::Pawn)
+            );
+            assert_eq!((child.ep, child.halfmove), (NO_SQUARE, 0));
+            assert_consistent(&child);
+        }
+    }
+
+    #[test]
+    fn ep_creation_expiry_null_and_rights_do_not_reappear() {
+        for (fen, expected) in [
+            ("7k/8/8/8/3p4/8/4P3/K7 w - - 0 1", sq("e3").0),
+            ("7k/8/8/8/8/8/4P3/K7 w - - 0 1", NO_SQUARE),
+        ] {
+            let parent = Position::from_fen(fen).unwrap();
+            let child = parent.played_unchecked(movement("e2", "e4", MoveKind::Ordinary));
+            assert_eq!(child.ep, expected);
+            assert_consistent(&child);
+            let null = child.null_child();
+            assert_eq!(null.ep, NO_SQUARE);
+            assert_eq!(null.halfmove, 1);
+            assert_eq!(null.board, child.board);
+            assert_eq!(null.squares, child.squares);
+            assert_eq!(
+                [null.primary, null.secondary, null.pawn],
+                [child.primary, child.secondary, child.pawn]
+            );
+            assert_consistent(&null);
+        }
+        let parent = Position::from_fen("4k3/8/8/8/8/8/8/R3K3 w Q - 255 1").unwrap();
+        let moved = parent.played_unchecked(movement("a1", "a2", MoveKind::Ordinary));
+        assert_eq!(moved.rights, 0);
+        let returned =
+            moved
+                .null_child()
+                .played_unchecked(movement("a2", "a1", MoveKind::Ordinary));
+        assert_eq!(returned.rights, 0);
+        assert_eq!(returned.placement(), parent.placement());
+        assert_eq!(
+            [returned.primary, returned.secondary, returned.pawn],
+            [parent.primary, parent.secondary, parent.pawn]
+        );
+        assert_consistent(&returned);
+        let wrap = parent.null_child();
+        assert_eq!(wrap.halfmove, 0);
+        assert_consistent(&wrap);
+        let capture = Position::from_fen("r3k2r/1Q6/8/8/8/8/8/4K3 w kq - 0 1")
+            .unwrap()
+            .played_unchecked(movement("b7", "a8", MoveKind::Ordinary));
+        assert_eq!(capture.rights, BLACK_KINGSIDE);
+        assert_consistent(&capture);
+    }
+
+    #[test]
+    fn raw_starting_measure_survives_material_gate_and_promotion_carries() {
+        let parent = Position::from_fen("4k3/P7/8/8/8/8/1P1PP3/RNBQKBNR w KQ - 0 1").unwrap();
+        assert_eq!(parent.starting_units, 16);
+        assert_eq!(parent.phase().opening, 0);
+        let promoted =
+            parent.played_unchecked(movement("a7", "a8", MoveKind::Promotion(PieceKind::Queen)));
+        assert_eq!(promoted.starting_units, 16);
+        assert_eq!(promoted.phase().opening, 192);
+        assert_consistent(&promoted);
+        for (lower, endgame) in [('n', 24), ('b', 16), ('r', 0), ('q', 0)] {
+            let placement = "7k/nnnnnnnn/nnnnnnn1/8/8/NNNNNNN1/NNNNNNNN/K7"
+                .replace('n', &lower.to_string())
+                .replace('N', &lower.to_ascii_uppercase().to_string());
+            let pos = Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();
+            assert_eq!(pos.phase().endgame, endgame);
+            assert_consistent(&pos);
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod experiment59_tests {
+    use super::*;
+
+    fn sq(name: &str) -> Square { Square::parse(name).unwrap() }
+
+    // Initial parsing is shared; the expected transition never calls a native
+    // transition, setter, ordered-list updater or derived-state recomputation.
+    fn placement(pieces: &[(Square, Piece)], side: Color, rights: &str) -> Position {
+        let mut board = [Piece::EMPTY; 64];
+        for &(square, piece) in pieces {
+            assert!(board[square.0 as usize].is_empty());
+            board[square.0 as usize] = piece;
+        }
+        let mut fen = String::new();
+        for rank in (0..8).rev() {
+            if rank != 7 { fen.push('/'); }
+            let mut empty = 0;
+            for file in 0..8 {
+                let piece = board[rank * 8 + file];
+                if piece.is_empty() { empty += 1; }
+                else {
+                    if empty != 0 { fen.push(char::from(b'0' + empty)); empty = 0; }
+                    fen.push(piece.fen());
+                }
+            }
+            if empty != 0 { fen.push(char::from(b'0' + empty)); }
+        }
+        let side = if side == Color::White { "w" } else { "b" };
+        let mut result = Position::from_fen(&format!("{fen} {side} {rights} - 255 1")).unwrap();
+        // Deliberately non-coordinate chronology, without changing placement.
+        for color in 0..2 {
+            let mut start = 0;
+            for kind in 0..6 {
+                let end = start + result.counts[color][kind] as usize;
+                result.squares[color][start..end].reverse();
+                start = end;
+            }
+        }
+        result
+    }
+
+    fn reflected(square: Square, side: Color) -> Square {
+        Square(square.0 ^ if side == Color::Black { 56 } else { 0 })
+    }
+
+    fn expected(parent: &Position, from: Square, to: Square, kind: MoveKind) -> Position {
+        let mover = parent.board[from.0 as usize];
+        let side = mover.color();
+        let victim_square = if kind == MoveKind::EnPassant {
+            Square(if side == Color::White { to.0 - 8 } else { to.0 + 8 })
+        } else { to };
+        let victim = parent.board[victim_square.0 as usize];
+        let mut groups: [[Vec<Square>; 6]; 2] = std::array::from_fn(|color| {
+            let mut start = 0;
+            std::array::from_fn(|k| {
+                let end = start + parent.counts[color][k] as usize;
+                let group = parent.squares[color][start..end].to_vec();
+                start = end;
+                group
+            })
+        });
+        if !victim.is_empty() {
+            groups[victim.color().index()][victim.kind().index()]
+                .retain(|&square| square != victim_square);
+        }
+        let result_piece = if let MoveKind::Promotion(promoted) = kind {
+            groups[side.index()][PieceKind::Pawn.index()].retain(|&square| square != from);
+            groups[side.index()][promoted.index()].push(to);
+            Piece::new(side, promoted)
+        } else {
+            let group = &mut groups[side.index()][mover.kind().index()];
+            for square in group { if *square == from { *square = to; } }
+            mover
+        };
+        let mut board = parent.board;
+        board[from.0 as usize] = Piece::EMPTY;
+        board[victim_square.0 as usize] = Piece::EMPTY;
+        board[to.0 as usize] = result_piece;
+        if kind == MoveKind::Castle {
+            let (rook_from, rook_to) = match (side, to.file()) {
+                (Color::White, 6) => (sq("h1"), sq("f1")),
+                (Color::White, 2) => (sq("a1"), sq("d1")),
+                (Color::Black, 6) => (sq("h8"), sq("f8")),
+                (Color::Black, 2) => (sq("a8"), sq("d8")),
+                _ => panic!("invalid test castle"),
+            };
+            board[rook_from.0 as usize] = Piece::EMPTY;
+            board[rook_to.0 as usize] = Piece::new(side, PieceKind::Rook);
+            for square in &mut groups[side.index()][PieceKind::Rook.index()] {
+                if *square == rook_from { *square = rook_to; }
+            }
+        }
+        let mut counts = [[0; 6]; 2];
+        let mut squares = [[Square(NO_SQUARE); 16]; 2];
+        for color in 0..2 {
+            let mut index = 0;
+            for k in 0..6 {
+                counts[color][k] = groups[color][k].len() as u8;
+                for &square in &groups[color][k] {
+                    squares[color][index] = square;
+                    index += 1;
+                }
+            }
+        }
+        // Literal released corner/king rights map, not rights_mask().
+        let mut rights = parent.rights;
+        for square in [from.0, to.0] {
+            rights &= !match square { 0 => 1, 4 => 3, 7 => 2, 56 => 4, 60 => 12, 63 => 8, _ => 0 };
+        }
+        let mut ep = NO_SQUARE;
+        if mover.kind() == PieceKind::Pawn && from.0.abs_diff(to.0) == 16 {
+            let adjacent = [-1i16, 1].iter().any(|&df| {
+                let file = i16::from(to.file()) + df;
+                (0..8).contains(&file)
+                    && board[(i16::from(to.0) + df) as usize]
+                        == Piece::new(side.opponent(), PieceKind::Pawn)
+            });
+            if adjacent { ep = (from.0 + to.0) / 2; }
+        }
+        // Reconstruct total credit from the final mailbox, not by deltas.
+        let mut starting_units = 0;
+        for (index, &piece) in board.iter().enumerate() {
+            if piece.is_empty() { continue; }
+            let relative = index ^ if piece.color() == Color::Black { 56 } else { 0 };
+            starting_units += match (piece.kind(), relative) {
+                (PieceKind::Rook, 0 | 7) | (PieceKind::Knight, 1 | 6)
+                | (PieceKind::Bishop, 2 | 5) | (PieceKind::Queen, 3) => 2,
+                (PieceKind::Pawn, 11 | 12) => 1,
+                _ => 0,
+            };
+        }
+        // These independent from-board owners share only immutable tag/key
+        // definitions with the incremental transition under test.
+        let keys = identity::fingerprints(&board);
+        Position {
+            board, squares, counts, primary: keys.primary, secondary: keys.secondary,
+            pawn: keys.pawn, side: side.opponent(), rights, ep,
+            halfmove: if mover.kind() == PieceKind::Pawn || !victim.is_empty() {
+                0
+            } else { (u16::from(parent.halfmove) + 1) as u8 },
+            starting_units, attack_bits: AttackBits::from_board(&board),
+        }
+    }
+
+    fn check(parent: &Position, from: Square, to: Square, kind: MoveKind) -> Position {
+        let wanted = expected(parent, from, to, kind);
+        let mut actual = *parent;
+        actual.apply_unchecked(Move::new(from, to, kind));
+        assert_eq!(actual, wanted, "{from:?}->{to:?} {kind:?}");
+        actual.validate().unwrap();
+        actual
+    }
+
+    #[test]
+    fn experiment59_all_ordinary_kinds_match_independent_final_state() {
+        for side in [Color::White, Color::Black] {
+            for (kind, quiet, capture) in [
+                (PieceKind::Pawn, "d5", "e5"),
+                (PieceKind::Knight, "f5", "f5"),
+                (PieceKind::Bishop, "f6", "f6"),
+                (PieceKind::Rook, "d6", "d6"),
+                (PieceKind::Queen, "f6", "f6"),
+                (PieceKind::King, "e5", "e5"),
+            ] {
+                for victim_kind in [None, Some(PieceKind::Pawn), Some(PieceKind::Knight),
+                    Some(PieceKind::Bishop), Some(PieceKind::Rook), Some(PieceKind::Queen)] {
+                    let from = reflected(sq("d4"), side);
+                    let to = reflected(sq(if victim_kind.is_some() { capture } else { quiet }), side);
+                    let mut pieces = vec![(from, Piece::new(side, kind)),
+                        (reflected(sq("a8"), side), Piece::new(side.opponent(), PieceKind::King)),
+                        (reflected(sq("a7"), side), Piece::new(side.opponent(), PieceKind::Pawn)),
+                        (reflected(sq("b7"), side), Piece::new(side.opponent(), PieceKind::Pawn))];
+                    if kind != PieceKind::King {
+                        pieces.push((reflected(sq("h1"), side), Piece::new(side, PieceKind::King)));
+                        for square in ["b2", "f2"] {
+                            pieces.push((reflected(sq(square), side), Piece::new(side, kind)));
+                        }
+                    }
+                    if let Some(victim) = victim_kind { pieces.push((to, Piece::new(side.opponent(), victim))); }
+                    let parent = placement(&pieces, side, "-");
+                    let child = check(&parent, from, to, MoveKind::Ordinary);
+                    assert_eq!(child.halfmove, 0); // Pawn/capture reset, or noncapture255 wrap.
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn experiment59_promotion_capture_and_quiet_keep_append_chronology() {
+        for side in [Color::White, Color::Black] {
+            for promoted in [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
+                for capture in [false, true] {
+                    let from = reflected(sq("a7"), side);
+                    let to = reflected(sq(if capture { "b8" } else { "a8" }), side);
+                    let mut pieces = vec![(from, Piece::new(side, PieceKind::Pawn)),
+                        (reflected(sq("h1"), side), Piece::new(side, PieceKind::King)),
+                        (reflected(sq("h8"), side), Piece::new(side.opponent(), PieceKind::King)),
+                        (reflected(sq("d4"), side), Piece::new(side, promoted)),
+                        (reflected(sq("f2"), side), Piece::new(side, promoted))];
+                    if capture { pieces.push((to, Piece::new(side.opponent(), PieceKind::Rook))); }
+                    let parent = placement(&pieces, side, "-");
+                    let child = check(&parent, from, to, MoveKind::Promotion(promoted));
+                    assert_eq!(child.piece_squares(side, promoted).last(), Some(&to));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn experiment59_rights_credit_wrap_and_special_fallbacks_match_model() {
+        for side in [Color::White, Color::Black] {
+            let mut pieces = Vec::new();
+            for (square, owner, kind) in [
+                ("e1", side, PieceKind::King), ("a1", side, PieceKind::Rook),
+                ("h1", side, PieceKind::Rook), ("b7", side, PieceKind::Queen),
+                ("e8", side.opponent(), PieceKind::King),
+                ("a8", side.opponent(), PieceKind::Rook), ("h8", side.opponent(), PieceKind::Rook),
+            ] { pieces.push((reflected(sq(square), side), Piece::new(owner, kind))); }
+            let parent = placement(&pieces, side, "KQkq");
+            let captured = check(&parent, reflected(sq("b7"), side), reflected(sq("a8"), side), MoveKind::Ordinary);
+            assert_eq!(captured.starting_units, parent.starting_units - 2);
+            for to in ["c1", "g1"] {
+                check(&parent, reflected(sq("e1"), side), reflected(sq(to), side), MoveKind::Castle);
+            }
+            let quiet = check(&parent, reflected(sq("h1"), side), reflected(sq("h2"), side), MoveKind::Ordinary);
+            assert_eq!(quiet.halfmove, 0); // 255 wraps; a rook move is not a capture.
+            let pawn = placement(&[
+                (reflected(sq("h1"), side), Piece::new(side, PieceKind::King)),
+                (reflected(sq("d8"), side), Piece::new(side.opponent(), PieceKind::King)),
+                (reflected(sq("d1"), side), Piece::new(side, PieceKind::Rook)),
+                (reflected(sq("e2"), side), Piece::new(side, PieceKind::Pawn)),
+                (reflected(sq("d4"), side), Piece::new(side.opponent(), PieceKind::Pawn)),
+            ], side, "-");
+            let pushed = check(&pawn, reflected(sq("e2"), side), reflected(sq("e4"), side), MoveKind::Ordinary);
+            assert_eq!(pushed.ep, reflected(sq("e3"), side).0); // Adjacent pawn is pinned to d8.
+            let ep = placement(&[
+                (reflected(sq("a1"), side), Piece::new(side, PieceKind::King)),
+                (reflected(sq("h8"), side), Piece::new(side.opponent(), PieceKind::King)),
+                (reflected(sq("e5"), side), Piece::new(side, PieceKind::Pawn)),
+                (reflected(sq("d5"), side), Piece::new(side.opponent(), PieceKind::Pawn)),
+            ], side, "-");
+            check(&ep, reflected(sq("e5"), side), reflected(sq("d6"), side), MoveKind::EnPassant);
+        }
+    }
+}

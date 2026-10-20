@@ -1,0 +1,460 @@
+//! Cold clock schemas; actual native adaptive, terminal and idle-session owners.
+use super::{array, boolean, integer, object, positions, text, unsigned32, Result};
+use rook2::{
+    parameters,
+    session::{Action, Session},
+    timing::{Adaptive, Stage, Terminal},
+};
+use serde_json::{json, Value};
+
+struct Event {
+    stage: Stage,
+    clock: u32,
+    depth: i32,
+    previous: i32,
+    best: i32,
+    second: i32,
+}
+struct Sequence {
+    average: u32,
+    maximum: u32,
+    checked: bool,
+    start: u32,
+    events: Vec<Event>,
+}
+
+impl Sequence {
+    fn parse(value: &Value) -> Result<Self> {
+        object(value, &["average", "maximum", "inCheck", "start", "events"])?;
+        let average = integer(&value["average"], 0, 1_000_000)? as u32;
+        let maximum = integer(&value["maximum"], 0, 1_000_000)? as u32;
+        if maximum < average {
+            return Err("maximum allowance must be at least average".into());
+        }
+        let checked = boolean(&value["inCheck"])?;
+        let start = unsigned32(&value["start"])?;
+        let mut previous_elapsed = 0;
+        let mut previous_depth = 1;
+        let mut events = Vec::new();
+        for event in array(&value["events"], 1, 64)? {
+            object(
+                event,
+                &[
+                    "stage",
+                    "clock",
+                    "depth",
+                    "previousScore",
+                    "bestScore",
+                    "secondScore",
+                ],
+            )?;
+            let stage = match text(&event["stage"])? {
+                "best-change" => Stage::BestChange,
+                "score-drop" => Stage::ScoreDrop,
+                "root-check" => Stage::Root,
+                "iteration-check" => Stage::Iteration,
+                "easy-iteration-check" => Stage::EasyIteration,
+                "poll-check" => Stage::Poll,
+                _ => return Err("unknown adaptive event stage".into()),
+            };
+            let clock = unsigned32(&event["clock"])?;
+            let elapsed = clock.wrapping_sub(start);
+            let depth = integer(&event["depth"], 1, 30)?;
+            if elapsed > i32::MAX as u32 || elapsed < previous_elapsed || depth < previous_depth {
+                return Err("adaptive elapsed/depth sequence is outside its ordered domain".into());
+            }
+            previous_elapsed = elapsed;
+            previous_depth = depth;
+            events.push(Event {
+                stage,
+                clock,
+                depth,
+                previous: integer(&event["previousScore"], -7900, 7900)?,
+                best: integer(&event["bestScore"], -7900, 7900)?,
+                second: integer(&event["secondScore"], -7900, 7900)?,
+            });
+        }
+        Ok(Self {
+            average,
+            maximum,
+            checked,
+            start,
+            events,
+        })
+    }
+
+    fn observe(self) -> Value {
+        let mut state = Adaptive::new(self.average, self.maximum, self.checked, self.start);
+        let snapshot = |state: &Adaptive, stop| {
+            json!({
+                "limits":state.limits, "stop":stop, "clockReads":state.clock_reads, "changes":state.changes
+            })
+        };
+        let initial = snapshot(&state, false);
+        let mut after = Vec::new();
+        for event in self.events {
+            let stop = state.apply(
+                event.stage,
+                event.depth,
+                event.previous,
+                event.best,
+                event.second,
+                || event.clock,
+            );
+            after.push(snapshot(&state, stop));
+            if stop {
+                break;
+            }
+        }
+        json!({"initial":initial,"afterEach":after})
+    }
+}
+
+fn adaptive(input: &Value) -> Result<Value> {
+    object(input, &["queries"])?;
+    let sequences = array(&input["queries"], 1, 256)?
+        .iter()
+        .map(Sequence::parse)
+        .collect::<Result<Vec<_>>>()?;
+    if sequences.iter().map(|s| s.events.len()).sum::<usize>() > 4096 {
+        return Err("adaptive request exceeds4096 supplied events".into());
+    }
+    Ok(json!({"sequences":sequences.into_iter().map(Sequence::observe).collect::<Vec<_>>()}))
+}
+
+fn terminal(input: &Value) -> Result<Value> {
+    object(input, &["queries"])?;
+    // This contract states no batching ceiling or nonempty restriction.
+    let queries = input["queries"]
+        .as_array()
+        .ok_or("expected queries array")?;
+    let mut parsed = Vec::new();
+    for query in queries {
+        object(
+            query,
+            &[
+                "rootPlacement",
+                "iterationDepth",
+                "selectivity",
+                "maximumDepth",
+                "analysisMode",
+                "averageCentiseconds",
+                "bestScore",
+                "secondBestScore",
+                "previousBestScore",
+                "startClock",
+                "currentClock",
+                "iterationLimitSeconds",
+            ],
+        )?;
+        let position = positions::placement(&query["rootPlacement"], false)?;
+        let limit = query["iterationLimitSeconds"]
+            .as_f64()
+            .ok_or("expected iteration allowance")?;
+        if !limit.is_finite() || limit < 0.0 {
+            return Err("iteration allowance must be finite and nonnegative".into());
+        }
+        parsed.push(Terminal {
+            depth: integer(&query["iterationDepth"], 1, 64)?,
+            selectivity: integer(&query["selectivity"], i32::MIN, i32::MAX)?,
+            root_endgame: position.phase().endgame,
+            maximum_depth: integer(&query["maximumDepth"], 1, 999)? as usize,
+            analysis: integer(&query["analysisMode"], 0, i32::MAX)?,
+            average_cs: integer(&query["averageCentiseconds"], 0, i32::MAX)? as u32,
+            best: integer(&query["bestScore"], -10000, 10000)?,
+            second: integer(&query["secondBestScore"], -10000, 10000)?,
+            previous: integer(&query["previousBestScore"], -10000, 10000)?,
+            start: unsigned32(&query["startClock"])?,
+            clock: unsigned32(&query["currentClock"])?,
+            iteration_limit: limit,
+        });
+    }
+    Ok(json!({"results":parsed.into_iter().map(|state| {
+        let reason = state.reason();
+        json!({"stop":reason.is_some(),"reason":reason,"elapsedCentiseconds":state.elapsed_cs(),
+               "rootEndgameWeight":state.root_endgame,"mateMargin":state.mate_margin()})
+    }).collect::<Vec<_>>()}))
+}
+
+fn validate_record(line: &str) -> Result<()> {
+    if line.len() > 1022
+        || !line.is_ascii()
+        || line.bytes().any(|b| {
+            b == 0
+                || b == b'\r'
+                || b == b'\n'
+                || (b.is_ascii_whitespace() && b != b' ' && b != b'\t')
+        })
+    {
+        return Err("setup command is outside ordinary record syntax".into());
+    }
+    let words: Vec<_> = line.split_ascii_whitespace().collect();
+    if words.len() > 40 {
+        return Err("too many ordinary record tokens".into());
+    }
+    if words.first() == Some(&"level") {
+        let args = &words[1..];
+        if args.is_empty() || args.len() % 3 != 0 || args.len() > 30 {
+            return Err("level requires one through ten stage triples".into());
+        }
+        // Ignored stages must still be syntactically valid triples. Native
+        // Session owns normalization, effective-stage truncation and replacement.
+        for triple in args.chunks_exact(3) {
+            parameters::integer(triple[0]).map_err(|e| format!("invalid moves: {e:?}"))?;
+            parameters::integer(triple[2]).map_err(|e| format!("invalid increment: {e:?}"))?;
+            if let Some((minutes, seconds)) = triple[1].split_once(':') {
+                parameters::integer(minutes).map_err(|e| format!("invalid minutes: {e:?}"))?;
+                parameters::integer(seconds).map_err(|e| format!("invalid seconds: {e:?}"))?;
+            } else {
+                parameters::integer(triple[1]).map_err(|e| format!("invalid base: {e:?}"))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn setup(input: &Value) -> Result<Value> {
+    object(input, &["commands"])?;
+    let commands = input["commands"]
+        .as_array()
+        .ok_or("expected commands array")?
+        .iter()
+        .map(|value| {
+            let line = text(value)?;
+            validate_record(line)?;
+            Ok(line)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut session = Session::<true>::default();
+    for line in commands {
+        let words: Vec<_> = line.split_ascii_whitespace().collect();
+        if words.first() == Some(&"time") && words.len() == 2 {
+            // Admission only: the bounded idle profile excludes wrapped
+            // adjustment arithmetic. The actual update is still Session::idle.
+            let remaining = parameters::integer(words[1])
+                .map_err(|e| format!("invalid remaining time: {e:?}"))?;
+            let index = (session.game_ply() as u64
+                + u64::from(session.states[0].side == session.clock_color))
+                / 2;
+            let seconds = session
+                .clock
+                .schedule
+                .seconds(index)
+                .map_err(|e| format!("schedule domain: {e:?}"))?;
+            let credit = seconds
+                .checked_mul(100)
+                .and_then(|x| i32::try_from(x).ok())
+                .ok_or("setup synchronization credit outside signed32 domain")?;
+            credit
+                .checked_sub(remaining)
+                .ok_or("setup adjustment outside signed32 domain")?;
+        }
+        match session
+            .idle(line)
+            .map_err(|e| format!("idle setup: {e:?}"))?
+        {
+            Action::Reply(lines)
+                if !lines.iter().any(|line| {
+                    line.starts_with("Illegal move:")
+                        || line.starts_with("Error (unknown command):")
+                }) => {}
+            Action::Reply(_) => return Err("setup command was not accepted".into()),
+            Action::Search | Action::Quit => return Err("setup sequence must remain idle".into()),
+        }
+    }
+    if !(0..=100).contains(&session.parameters.values[23]) {
+        return Err("consumed setup optimism outside0..100".into());
+    }
+    let allowance = session
+        .allowance()
+        .map_err(|e| format!("allowance domain: {e:?}"))?;
+    Ok(
+        json!({"gamePly":session.game_ply(),"adjustmentCs":session.clock.adjustment_cs,
+              "averageCs":allowance.average_cs,"maximumCs":allowance.maximum_cs,
+              "stages":session.clock.schedule.stages.iter().map(|s| json!({
+                  "moves":s.moves,"baseSeconds":s.base_seconds,"incrementSeconds":s.increment_seconds
+              })).collect::<Vec<_>>()}),
+    )
+}
+
+pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+    match operation {
+        "time.adaptiveSequence" => adaptive(input),
+        "search.iterationTerminalStop" => terminal(input),
+        "session.timeSetup" => setup(input),
+        _ => Err("unknown clock-boundary operation".into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn event(stage: &str, clock: u32, depth: i32) -> Value {
+        json!({"stage":stage,"clock":clock,"depth":depth,
+               "previousScore":0,"bestScore":0,"secondScore":0})
+    }
+    fn sequence(start: u32, events: Vec<Value>) -> Value {
+        json!({"average":100,"maximum":500,"inCheck":false,"start":start,"events":events})
+    }
+    fn query() -> Value {
+        json!({"rootPlacement":"7k/8/8/8/8/8/8/K7","iterationDepth":2,"selectivity":0,
+               "maximumDepth":999,"analysisMode":0,"averageCentiseconds":0,"bestScore":0,
+               "secondBestScore":0,"previousBestScore":0,"startClock":0,"currentClock":0,
+               "iterationLimitSeconds":1.0})
+    }
+    #[test]
+    fn adaptive_validates_stopped_suffix_and_entire_batch_before_observation() {
+        let good = sequence(
+            0,
+            vec![event("poll-check", 500, 1), event("best-change", 501, 2)],
+        );
+        let observed = adaptive(&json!({"queries":[good.clone()]})).unwrap();
+        assert_eq!(
+            observed["sequences"][0]["afterEach"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        let mut bad = good.clone();
+        bad["events"][1]["bestScore"] = json!(7901);
+        assert!(adaptive(&json!({"queries":[good,bad]})).is_err());
+        let mut bad = sequence(
+            0,
+            vec![event("root-check", 0, 3), event("poll-check", 1, 2)],
+        );
+        assert!(adaptive(&json!({"queries":[bad.clone()]})).is_err());
+        bad["events"][1]["depth"] = json!(4);
+        bad["events"][1]["clock"] = json!(u32::MAX);
+        assert!(adaptive(&json!({"queries":[bad]})).is_err());
+        let full = sequence(0, (0..64).map(|_| event("poll-check", 0, 1)).collect());
+        assert!(adaptive(&json!({"queries":vec![full;65]})).is_err());
+    }
+    #[test]
+    fn adaptive_skipped_reads_depth_jumps_and_modular_shifts_keep_native_state() {
+        let stages = [
+            "root-check",
+            "best-change",
+            "best-change",
+            "iteration-check",
+            "poll-check",
+        ];
+        let depths = [1, 3, 7, 7, 7];
+        let clocks = [0, 10, 30, 40, 500];
+        let make = |start: u32| {
+            sequence(
+                start,
+                stages
+                    .iter()
+                    .zip(depths)
+                    .zip(clocks)
+                    .map(|((&stage, depth), clock)| event(stage, start.wrapping_add(clock), depth))
+                    .collect(),
+            )
+        };
+        let output = adaptive(&json!({"queries":[make(0),make(u32::MAX-20)]})).unwrap();
+        assert_eq!(output["sequences"][0], output["sequences"][1]);
+        let after = &output["sequences"][0]["afterEach"];
+        assert_eq!(after[0]["clockReads"], 1);
+        assert_eq!(after[1]["clockReads"], 1);
+        assert_eq!(after[2]["changes"], json!([1, 1, 0]));
+        assert_eq!(after[4]["clockReads"], 4);
+    }
+    #[test]
+    fn terminal_uses_signed_clock_wrap_priority_and_unbounded_query_batch() {
+        let mut elapsed = query();
+        elapsed["currentClock"] = json!(100);
+        elapsed["bestScore"] = json!(-10000);
+        elapsed["maximumDepth"] = json!(1);
+        let mut wrapped = query();
+        wrapped["currentClock"] = json!(u32::MAX);
+        let result = terminal(&json!({"queries":[elapsed,wrapped.clone()]})).unwrap();
+        assert_eq!(result["results"][0]["reason"], "elapsed52");
+        assert_eq!(result["results"][1]["elapsedCentiseconds"], -1);
+        assert_eq!(result["results"][1]["stop"], false);
+        assert_eq!(
+            terminal(&json!({"queries":[]})).unwrap(),
+            json!({"results":[]})
+        );
+        assert_eq!(
+            terminal(&json!({"queries":vec![wrapped;4097]})).unwrap()["results"]
+                .as_array()
+                .unwrap()
+                .len(),
+            4097
+        );
+    }
+    #[test]
+    fn terminal_phase_domain_does_not_import_bounded_piece_types_or_ignore_late_fields() {
+        let mut q = query();
+        q["rootPlacement"] = json!("7k/8/8/8/8/NNNNNNNN/NNN5/K7");
+        assert!(terminal(&json!({"queries":[q.clone()]})).is_ok());
+        q["iterationLimitSeconds"] = json!(-0.1);
+        assert!(terminal(&json!({"queries":[query(),q]})).is_err());
+    }
+    #[test]
+    fn idle_setup_keeps_ordered_adjustment_and_reset_lifetimes() {
+        let run = |commands: Vec<&str>| setup(&json!({"commands":commands})).unwrap();
+        let a = run(vec!["new", "force", "time 1000", "level 0 10 0"]);
+        let b = run(vec!["new", "force", "level 0 10 0", "time 1000"]);
+        assert_eq!(a["adjustmentCs"], 29000);
+        assert_eq!(b["adjustmentCs"], 59000);
+        let rewound = run(vec!["new", "force", "time -1", "e2e4", "e7e5", "remove"]);
+        assert_eq!(rewound["gamePly"], 0);
+        assert_eq!(rewound["adjustmentCs"], 30001);
+        let reset = run(vec![
+            "new",
+            "force",
+            "level 40 5 2",
+            "cm_parm sop=20",
+            "time 1000",
+            "new",
+            "force",
+        ]);
+        assert_eq!(reset["adjustmentCs"], 0);
+        assert_eq!(reset["stages"][0]["moves"], 40);
+    }
+    #[test]
+    fn idle_setup_clock_selection_uses_initial_side_and_ignores_fen_counters() {
+        let run = |color| {
+            setup(&json!({"commands":["new","force","level 40 5 2","e2e4",color,"time 30000"]}))
+                .unwrap()
+        };
+        assert_eq!(run("white")["adjustmentCs"], 0);
+        assert_eq!(run("black")["adjustmentCs"], 200);
+        let start = "setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 87 42";
+        let run = |color| {
+            setup(&json!({"commands":[start,"force","level 40 5 2","e7e5",color,"time 30000"]}))
+                .unwrap()
+        };
+        assert_eq!(run("white")["adjustmentCs"], 200);
+        assert_eq!(run("black")["adjustmentCs"], 0);
+        assert_eq!(run("white")["gamePly"], 1);
+    }
+    #[test]
+    fn idle_setup_accepts_ten_stages_but_validates_ignored_stage_syntax() {
+        let level = format!("level{}", " 1 1 0".repeat(10));
+        let result = setup(&json!({"commands":[level]})).unwrap();
+        assert_eq!(result["stages"].as_array().unwrap().len(), 10);
+        let ignored = setup(&json!({"commands":["level 0 1 0 2 -1 -2"]})).unwrap();
+        assert_eq!(ignored["stages"].as_array().unwrap().len(), 1);
+        assert!(setup(&json!({"commands":["level 0 1 0 2 notAnInteger 0"]})).is_err());
+        assert!(setup(&json!({"commands":[format!("level{}", " 1 1 0".repeat(11))]})).is_err());
+    }
+    #[test]
+    fn idle_setup_rejects_actual_search_illegal_or_unknown_commands_and_late_bad_schema() {
+        for commands in [
+            vec!["new", "e2e4"],
+            vec!["force", "e2e5"],
+            vec!["time 1000", "unknown"],
+            vec!["quit"],
+        ] {
+            assert!(setup(&json!({"commands":commands})).is_err());
+        }
+        assert!(setup(&json!({"commands":["new",17]})).is_err());
+        assert!(setup(&json!({"commands":[],"extra":0})).is_err());
+        assert!(setup(&json!({"commands":["cm_parm sop=-2147483648"]})).is_err());
+        assert!(setup(&json!({"commands":["time -2147483648"]})).is_err());
+    }
+}

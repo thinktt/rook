@@ -1,0 +1,47 @@
+--- experiment27/validate.py
++++ experiment28/validate.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Separate reviewed experiment27 build/native/strict stages; no timing."""
++"""Separate reviewed experiment28 build/native/strict stages; no timing."""
+ from pathlib import Path
+ import hashlib
+ import json
+@@ -11,8 +11,8 @@
+ HERE = Path(__file__).resolve().parent
+ ROOT = Path('/home/legolas/rook2')
+ E = ROOT / 'evidence'
+-TRIAL = Path('/home/legolas/rook2-work/imp2-pressure-pair-sum-20261019-01')
+-BUILD = E / 'full-pressure-pair-sum-generic-build-20261019-01'
++TRIAL = Path('/home/legolas/rook2-work/imp2-direct-child-construction-20261019-01')
++BUILD = E / 'direct-child-construction-generic-build-20261019-01'
+ HELPERS = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13]
+ 
+ 
+@@ -42,7 +42,7 @@
+     pins = {TRIAL / name: digest for name, digest in binding['source69'].items()}
+     pins.update({Path(name): digest for name, digest in binding['helpers_and_inputs'].items()})
+     assert all(sha(p) == digest for p, digest in pins.items())
+-    output = E / f'full-pressure-pair-sum-{stage}-validation-20261019-01'
++    output = E / f'direct-child-construction-{stage}-validation-20261019-01'
+     output.mkdir()
+     records = []
+ 
+@@ -88,7 +88,7 @@
+             identities = {}
+             for artifact in artifacts:
+                 kind = artifact['target']['kind']
+-                name, count = ('lib', 177) if kind == ['lib'] else ('dev', 2)
++                name, count = ('lib', 176) if kind == ['lib'] else ('dev', 2)
+                 assert kind in [['lib'], ['bin']] and name not in identities
+                 source = Path(artifact['executable'])
+                 frozen = output / ('rook2-' + name + '-tests-exact')
+@@ -102,7 +102,7 @@
+                 text = (output / (name + '-tests.stdout')).read_text()
+                 assert f'test result: ok. {count} passed; 0 failed;' in text
+             assert set(identities) == {'lib', 'dev'}
+-            save(output / 'native-identities.json', dict(total_tests=179, tests=identities,
++            save(output / 'native-identities.json', dict(total_tests=178, tests=identities,
+                  frozen_before_first_test_execution=True, repeated_cargo_test_execution=False))
+         else:
+             image = BUILD / 'rook2-exact'

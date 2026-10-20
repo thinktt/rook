@@ -1,0 +1,294 @@
+--- a/diagnostic/src/actual_timed.rs
++++ b/diagnostic/src/actual_timed.rs
+@@ -1,11 +1,11 @@
+ //! Cold, distinct admitted transports over actual native timed/session owners.
+ use super::{boolean, integer, moves, object, text, unsigned32, Result};
+-use rook2::{engine::Search, history::SearchHistory, movegen::{self, MoveList},
+-    output::{self, Event, Post}, parameters::{self, Parameters, NAMES},
++use rook2::{host::{self, Host, Record}, engine::Search, history::SearchHistory, movegen::{self, MoveList},
++    output::{self, Event, Post}, parameters::{Parameters, NAMES},
+     position::Position, quiescence::{Limits, Work}, session::{self, Action, Session},
+     timed::{self, Controls, Point}, types::Move};
+ use serde_json::{json, Value};
+-use std::time::{SystemTime, UNIX_EPOCH};
++use std::{io, time::{SystemTime, UNIX_EPOCH}};
+ 
+ // Exact released ordinary neutral vector, in native NAMES order. Request
+ // controls only: not startup defaults or a fixture-derived search answer.
+@@ -172,15 +172,28 @@
+     Ok(())
+ }
+ 
++// Cold natural host: native timed preparation owns the acquisition boundary.
++#[derive(Default)]
++struct GoHost { records:Vec<Record>, acquisitions:Vec<(u32,u32,u32)>, started:Vec<u32> }
++impl Host for GoHost {
++    fn acquire_seed(&mut self,_supplied:u32,entry:u32)->io::Result<u32> {
++        let seconds=SystemTime::now().duration_since(UNIX_EPOCH)
++            .map_err(io::Error::other)?.as_secs() as u32;
++        let seed=host::seed_from_seconds(seconds,entry);
++        self.acquisitions.push((seconds,entry,seed));Ok(seed)
++    }
++    fn started(&mut self,seed:u32)->io::Result<()> {self.started.push(seed);Ok(())}
++    fn publish(&mut self,record:Record)->io::Result<()> {self.records.push(record);Ok(())}
++}
+ struct Go { commands:Vec<String> }
+ impl Go {
+     fn parse(input:&Value)->Result<Self> {
+         object(input,&["commands","remainingTimeCs"])?;
+         integer(&input["remainingTimeCs"],60000,60000)?;
+-        // No invented per-request command-count bound. The native ordinary
+-        // per-record byte/token limits still apply to every setup command.
++        // Eagerly validate every record before applying any native setup command.
++        // Native Session::idle owns command arguments and ordered state changes.
+         let supplied=input["commands"].as_array().ok_or("expected setup command array")?;
+-        let mut commands=Vec::new();let mut setboards=0;let mut post=false;let mut easy=false;
++        let mut commands=Vec::new();
+         for value in supplied {
+             let line=text(value)?;
+             if line.len()>1022||!line.is_ascii()||line.bytes().any(|b|b==0||b==b'\r'||b==b'\n'
+@@ -189,63 +202,59 @@
+             }
+             let words=line.split_ascii_whitespace().collect::<Vec<_>>();
+             if words.len()>40 { return Err("too many ordinary setup tokens".into()); }
+-            match words.as_slice() {
+-                ["post"]=>post=true,
+-                ["easy"]=>easy=true,
+-                ["setboard",rest @ ..] if rest.len()==6=>{
+-                    // Actual Session::setboard owns semantic normalization;
+-                    // full FEN counters must not be narrowed to Position's u8.
+-                    for (field,min) in [(rest[4],0),(rest[5],1)] {
+-                        if !field.bytes().all(|b|b.is_ascii_digit())
+-                            ||parameters::integer(field).map_err(|e|format!("FEN counter: {e:?}"))?<min {
+-                            return Err("invalid public setboard counter".into());
+-                        }
+-                    }
+-                    setboards+=1;
+-                },
+-                ["cm_parm",args @ ..] if !args.is_empty()=>{
+-                    for arg in args {
+-                        if *arg=="default" { continue; }
+-                        let (name,value)=arg.split_once('=').ok_or("setup parameters require assignments or default")?;
+-                        if !NAMES.contains(&name)&&!["cc","mob","ks","pp","pw"].contains(&name) {
+-                            return Err("unknown setup parameter".into());
+-                        }
+-                        parameters::integer(value).map_err(|e|format!("setup integer: {e:?}"))?;
+-                    }
+-                },
+-                _=>return Err("command is outside fresh goOutcome setup".into()),
++            if words.first().is_some_and(|word|["sd","go","quit","hard"].contains(word)) {
++                return Err("command is outside goOutcome setup admission".into());
+             }
+             commands.push(line.to_owned());
+         }
+-        if setboards!=1||!post||!easy { return Err("goOutcome requires one setboard, post and easy".into()); }
+         Ok(Self{commands})
+     }
+     fn setup(&self)->Result<Session<true>> {
+         let mut state=Session::<true>::default();
+         idle(&mut state,"xboard")?;
+-        for command in &self.commands { idle(&mut state,command)?; }
+-        if state.parameters!=profile(1,0)||!state.post||state.pondering||!state.force||!state.moves.is_empty() {
+-            return Err("goOutcome requires the complete neutral md1/rnd0 empty-history state".into());
++        let mut fen6_baseline=false;let mut post=false;let mut easy=false;
++        for command in &self.commands {
++            idle(&mut state,command)?;
++            let words=command.split_ascii_whitespace().collect::<Vec<_>>();
++            match words.as_slice() {
++                ["setboard",fields @ ..]=>fen6_baseline=fields.len()==6,
++                ["new"]=>fen6_baseline=false,
++                ["post"]=>post=true,["easy"]=>easy=true,
++                _=>{},
++            }
++        }
++        if !fen6_baseline||!post||!easy||state.parameters!=profile(1,0)||!state.post
++            ||state.pondering||!state.force||!state.moves.is_empty() {
++            return Err("goOutcome requires a FEN6 baseline, post/easy and the final neutral md1/rnd0 force/empty-history state".into());
+         }
+         idle(&mut state,"time 60000")?;idle(&mut state,"otim 60000")?;
+         Ok(state)
+     }
+-    fn observe(self)->Result<Value> {
++    fn observe(self)->Result<Value> {self.observe_with_host().map(|(value,_)|value)}
++    fn observe_with_host(self)->Result<(Value,GoHost)> {
+         let mut state=self.setup()?;
+         let root=state.position();
+         let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
+         if legal.len!=0&&!movegen::in_check(&root,root.side) {
+             return Err("nonempty goOutcome root must actually be checked".into());
+         }
+-        let seconds=SystemTime::now().duration_since(UNIX_EPOCH)
+-            .map_err(|_|"ordinary system clock precedes POSIX epoch")?.as_secs() as u32;
+-        let result=state.go(seconds,Limits{nodes:Some(4095)},1);
++        // The placeholder is ignored by GoHost. No system-clock sample occurs
++        // until actual timed preparation reaches Host::acquire_seed.
++        let (result,host)=state.go_live(GoHost::default(),0,Limits{nodes:Some(4095)},1,false);
+         match result {
+-            Err(session::Error::FatalEmptyRoot) if legal.len==0=>
+-                Ok(json!({"kind":"fatalExit","exit":{"code":1,"signal":Value::Null},"posts":[],"move":Value::Null})),
++            Err(session::Error::FatalEmptyRoot) if legal.len==0=>{
++                if !host.records.is_empty()||!host.acquisitions.is_empty()||!host.started.is_empty() {
++                    return Err("fatal empty-root preparation must not acquire or publish".into());
++                }
++                Ok((json!({"kind":"fatalExit","exit":{"code":1,"signal":Value::Null},"posts":[],"move":Value::Null}),host))
++            },
+             Err(error)=>Err(format!("goOutcome did not produce its admitted native outcome: {error:?}")),
+             Ok(result)=>{
+                 if legal.len==0 { return Err("native result disagrees with empty generated roots".into()); }
++                if host.acquisitions.len()!=1||host.started.as_slice()!=[result.seed]
++                    ||host.acquisitions[0].1!=result.entry_clock||host.acquisitions[0].2!=result.seed {
++                    return Err("ordinary result must retain its one actual late acquired seed".into());
++                }
+                 let out=&result.outcome;validate_records(out,4095)?;
+                 if out.stop.point!=Point::Iteration||out.stop.depth!=1||out.iterations.len()!=1
+                     ||!out.iterations[0].complete||out.iterations[0].steps.len()!=legal.len
+@@ -253,23 +262,26 @@
+                     return Err("goOutcome did not complete its actual first root iteration".into());
+                 }
+                 let mut posts=Vec::new();let mut selected=None;
+-                for e in &result.events { match e {
+-                    Event::Post(p) if selected.is_none()=>posts.push(post(p)),
+-                    Event::Move(m) if selected.is_none()=>selected=Some(*m),
++                for record in &host.records {match record {
++                    Record::Post(p) if selected.is_none()=>posts.push(post(p)),
++                    Record::Move(m) if selected.is_none()=>selected=Some(*m),
++                    Record::Result(_) if selected.is_some()=>{},
+                     _=>return Err("invalid native goOutcome event order".into()),
+-                } }
++                }}
+                 let selected=selected.ok_or("native goOutcome has no selected move")?;
+                 if out.result.as_ref().and_then(|c|c.pv.first()).copied()!=Some(selected) {
+                     return Err("native selected move disagrees with retained capture".into());
+                 }
+-                Ok(json!({"kind":"move","posts":posts,"move":selected.to_string()}))
++                Ok((json!({"kind":"move","posts":posts,"move":selected.to_string()}),host))
+             },
+         }
+     }
+ }
+ fn idle(state:&mut Session<true>,line:&str)->Result<()> {
+     match state.idle(line).map_err(|e|format!("native setup: {e:?}"))? {
+-        Action::Reply(_)=>Ok(()),_=>Err("fresh setup must remain idle".into()),
++        Action::Reply(lines) if !lines.iter().any(|line|line.starts_with("Illegal move:")||line.starts_with("Error"))=>Ok(()),
++        Action::Reply(_)=>Err("native rejected setup command or move".into()),
++        _=>Err("fresh setup must remain idle".into()),
+     }
+ }
+ pub(super) fn dispatch(operation:&str,input:&Value)->Result<Value> {
+@@ -346,47 +358,94 @@
+         assert_eq!(high["stop"]["point"],json!("root"));assert!(high["stop"]["pendingRoot"].is_null());
+     }
+     #[test]
+-    fn go_schema_has_no_fixture_count_limit_and_rejects_nonsetup_records() {
++    fn go_schema_has_no_fixture_recipe_and_validates_all_records_before_setup() {
+         let valid=go(CHECKED);assert!(Go::parse(&valid).is_ok());
+         let mut many=valid.clone();
+         many["commands"].as_array_mut().unwrap().extend((0..300).map(|_|json!("post")));
+-        assert!(Go::parse(&many).is_ok());
+-        for line in ["go","quit","sd 1","a2a4","nopost","hard","cm_parm bad=1","cm_parm rnd",
+-            "post\ngo","cm_parm rnd=0.5","setboard 8/8/8/8/8/8/8/8 w - -"] {
++        assert!(Go::parse(&many).unwrap().setup().is_ok());
++        for line in ["force","xboard","cm_parm unknown=7","cm_parm rnd unknown","cm_parm", "", " \t ",
++            "cm_parm md=20 rnd=1000 cc=1001 default md=1 rnd=0 tts=67108864"] {
++            let mut input=valid.clone();input["commands"].as_array_mut().unwrap().push(json!(line));
++            let state=Go::parse(&input).unwrap().setup().unwrap();
++            assert_eq!(state.position(),Position::from_fen(CHECKED).unwrap());
++            assert_eq!(state.parameters,profile(1,0));assert!(state.force&&state.moves.is_empty());
++        }
++        for line in ["go","quit","sd 1","sd","hard","post\ngo", "force\r", "force\u{0}"] {
+             let mut input=valid.clone();input["commands"].as_array_mut().unwrap().push(json!(line));
+             assert!(Go::parse(&input).is_err());
+         }
++        let mut wide=valid.clone();wide["commands"].as_array_mut().unwrap().push(json!(" ".repeat(1023)));
++        assert!(Go::parse(&wide).is_err());
++        let mut tokens=valid.clone();tokens["commands"].as_array_mut().unwrap().push(json!(format!("cm_parm {}", "rnd ".repeat(40))));
++        assert!(Go::parse(&tokens).is_err());
++        let mut malformed=valid.clone();malformed["commands"].as_array_mut().unwrap().push(json!(false));
++        assert!(Go::parse(&malformed).is_err());
+         let mut input=valid.clone();input["remainingTimeCs"]=json!(59999);assert!(Go::parse(&input).is_err());
+         input=valid;input["expected"]=json!("move");assert!(Go::parse(&input).is_err());
+     }
+     #[test]
+-    fn public_setboard_normalization_preserves_wide_text_counters_without_history() {
++    fn public_setboard_and_native_rewinds_qualify_the_latest_fen6_baseline() {
+         let input=go("4k3/8/8/8/1b6/P7/2P4P/4K3 w - - 2147483647 2147483647");
+         let state=Go::parse(&input).unwrap().setup().unwrap();
+         assert_eq!(state.position().halfmove,0);assert!(state.moves.is_empty());
+         assert_eq!(state.states.len(),1);assert_eq!(state.parameters,profile(1,0));
+         assert!(state.post&&!state.pondering&&state.force);
+-    }
+-    #[test]
+-    fn actual_go_distinguishes_completed_checked_root_and_generated_empty_union() {
+-        let normal=dispatch("session.goOutcome",&go(CHECKED)).unwrap();
++        for tail in [vec!["c2c3".to_owned(),"undo".to_owned()],vec!["c2c3".to_owned(),"remove".to_owned()],
++            vec![format!("setboard {}",session::START),format!("setboard {CHECKED}")],
++            vec!["new".to_owned(),"force".to_owned(),format!("setboard {CHECKED}")],
++            vec!["setboard 4k3/8/8/8/1b6/P7/2P4P/4K3 w - -".to_owned(),format!("setboard {CHECKED}")]] {
++            let mut changed=go(CHECKED);changed["commands"].as_array_mut().unwrap().extend(tail.into_iter().map(Value::String));
++            let restored=Go::parse(&changed).unwrap().setup().unwrap();
++            assert_eq!(restored.position(),state.position());assert_eq!(restored.states.len(),1);
++            assert!(restored.moves.is_empty());assert_eq!(restored.ledger.last(),0);
++        }
++        for tail in [vec!["new","force"],vec!["setboard 4k3/8/8/8/1b6/P7/2P4P/4K3 w - -"],vec!["c2c3"]] {
++            let mut changed=go(CHECKED);changed["commands"].as_array_mut().unwrap().extend(tail.into_iter().map(|s|json!(s)));
++            assert!(Go::parse(&changed).unwrap().setup().is_err());
++        }
++    }
++    #[test]
++    fn actual_live_go_preserves_output_and_acquires_once_only_after_nonempty_preparation() {
++        let (normal,host)=Go::parse(&go(CHECKED)).unwrap().observe_with_host().unwrap();
+         assert_eq!(normal["kind"],json!("move"));assert_eq!(normal.as_object().unwrap().len(),3);
+         assert!(!normal["posts"].as_array().unwrap().is_empty());
+         assert_eq!(normal["move"].as_str().unwrap().len(),4);
++        assert_eq!(host.acquisitions.len(),1);let (seconds,entry,seed)=host.acquisitions[0];
++        assert_eq!(seed,host::seed_from_seconds(seconds,entry));assert_eq!(host.started,[seed]);
++        assert_eq!(entry,0);assert!(matches!(host.records.last(),Some(Record::Move(_)|Record::Result(_))));
++        // Same actual native owner with harmless setup and discarded echoes.
++        let mut changed=go(CHECKED);
++        changed["commands"].as_array_mut().unwrap().extend([json!("force"),json!("xboard"),json!("cm_parm unknown=7 rnd"),
++            json!("cm_parm"),json!("nopost"),json!("post"),json!("c2c3"),json!("undo")]);
++        assert_eq!(Go::parse(&changed).unwrap().observe().unwrap(),normal);
++        // Compare actual live publication to the original offline native owner,
++        // with the same admitted inputs; rnd0 makes natural seconds immaterial.
++        let mut offline=Go::parse(&go(CHECKED)).unwrap().setup().unwrap();
++        let old=offline.go(0,Limits{nodes:Some(4095)},1).unwrap();
++        let old_posts=old.events.iter().filter_map(|e|if let Event::Post(p)=e{Some(post(p))}else{None}).collect::<Vec<_>>();
++        let old_move=old.events.iter().find_map(|e|if let Event::Move(m)=e{Some(m.to_string())}else{None}).unwrap();
++        assert_eq!(normal,json!({"kind":"move","posts":old_posts,"move":old_move}));
+         for fen in ["7k/6Q1/6K1/8/8/8/8/8 b - - 0 1","7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"] {
+             let state=Go::parse(&go(fen)).unwrap().setup().unwrap();
+-            let mut roots=MoveList::new();movegen::generate_legal(&state.position(),&mut roots);
+-            assert_eq!(roots.len,0);
+-            let fatal=dispatch("session.goOutcome",&go(fen)).unwrap();
++            let mut roots=MoveList::new();movegen::generate_legal(&state.position(),&mut roots);assert_eq!(roots.len,0);
++            let (fatal,host)=Go::parse(&go(fen)).unwrap().observe_with_host().unwrap();
+             assert_eq!(fatal,json!({"kind":"fatalExit","exit":{"code":1,"signal":Value::Null},"posts":[],"move":Value::Null}));
+-        }
+-    }
+-    #[test]
+-    fn go_produced_domain_rejects_unchecked_nonempty_and_late_profile_reset() {
++            assert!(host.acquisitions.is_empty()&&host.started.is_empty()&&host.records.is_empty());
++        }
++    }
++    #[test]
++    fn go_final_qualification_and_actual_native_command_errors_remain_failures() {
+         assert!(dispatch("session.goOutcome",&go(session::START)).is_err());
+-        let mut input=go(CHECKED);input["commands"].as_array_mut().unwrap().push(json!("cm_parm default"));
+-        assert!(Go::parse(&input).unwrap().setup().is_err());
+-        input=go(CHECKED);input["commands"].as_array_mut().unwrap().push(json!("cm_parm md=2"));
+-        assert!(Go::parse(&input).unwrap().setup().is_err());
+-    }
+-}
++        for line in ["cm_parm default","cm_parm md=2","nopost","new", "nonsense", "a2a4",
++            "cm_parm rnd=0.5","cm_parm 2bad=1","setboard 8/8/8/8/8/8/8/8 w - -"] {
++            let mut input=go(CHECKED);input["commands"].as_array_mut().unwrap().push(json!(line));
++            assert!(Go::parse(&input).unwrap().setup().is_err());
++        }
++        for omitted in ["post","easy"] {
++            let mut input=go(CHECKED);input["commands"].as_array_mut().unwrap().retain(|v|v.as_str()!=Some(omitted));
++            assert!(Go::parse(&input).unwrap().setup().is_err());
++        }
++        let mut noforce=go(CHECKED);noforce["commands"].as_array_mut().unwrap().insert(0,json!("new"));
++        assert!(Go::parse(&noforce).unwrap().setup().is_err());
++    }
++}

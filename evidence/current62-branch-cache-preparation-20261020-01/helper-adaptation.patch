@@ -1,0 +1,126 @@
+--- /home/legolas/rook2/evidence/current57-callgrind-preparation-20261020-01/profile.py
++++ /home/legolas/rook2/evidence/current62-branch-cache-preparation-20261020-01/profile.py
+@@ -2,6 +2,7 @@
+ from pathlib import Path
+ import argparse,hashlib,json,os,sys,tarfile
+ from bounded_run import BoundedRunner
++from vector_summary import inspect_profile,inspect_annotator_totals
+ HERE=Path(__file__).resolve().parent
+ PLAN=json.loads((HERE/'plan.json').read_text())
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+@@ -10,7 +11,12 @@
+  with Path(path).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
+ def main():
+  a=argparse.ArgumentParser();a.add_argument('--clearance',type=Path,default=HERE/'execution-clearance.json');args=a.parse_args()
+- clearance=load(args.clearance);assert clearance['profile'] is True and clearance['all_native_and_CPU_windows_closed'] is True
++ clearance=load(args.clearance);assert clearance['profile'] is True and clearance['recording'] is True and clearance['all_native_and_CPU_windows_closed'] is True
++ assert PLAN['execution_authorized'] is True and PLAN['recording_authorized'] is True
++ assert PLAN['cases']==['profile-35'] and PLAN['native_lifetimes']==1 and PLAN['warmups']==PLAN['repeats']==PLAN['controls']==PLAN['retries']==0 and len(PLAN['annotations'])<=2
++ parser_review=clearance['vector_parser_review'];assert parser_review and sha(parser_review['path'])==parser_review['sha256']
++ assert PLAN['vector_parser_sha256'] and sha(PLAN['vector_parser'])==PLAN['vector_parser_sha256']
++ parser_validation=PLAN['vector_parser_validation'];assert parser_validation and sha(parser_validation['path'])==parser_validation['sha256']
+  review=clearance['parent_review'];assert review and sha(review['path'])==review['sha256']
+  canaries=clearance['supervision_canaries'];assert canaries and sha(canaries['path'])==canaries['sha256']
+  canary_proof=load(canaries['path']);assert canary_proof['complete'] is True and canary_proof['failure'] is None and len(canary_proof['cases'])==6
+@@ -32,8 +38,9 @@
+  inputs.update({compiled/path:digest for path,digest in (PLAN['source_sha256']|PLAN['tool_source_sha256']).items()})
+  inputs.update({Path(path):h for path,h in PLAN['expected_runtime_sha256'].items()})
+  inputs.update({Path(path):h for path,h in load(HERE/'input-pins.json').items()})
+- inputs.update({Path(PLAN[key]):PLAN[key+'_sha256'] for key in ['pgo_proof','strict_recheck','current_semantic_acceptance']})
++ inputs.update({Path(PLAN[key]):PLAN[key+'_sha256'] for key in ['pgo_proof','reference_native_receipt','current_semantic_acceptance']})
+  inputs.update({Path(path):h for path,h in PLAN['pgo_input_sha256'].items()})
++ inputs[Path(PLAN['vector_parser'])]=PLAN['vector_parser_sha256'];inputs[Path(parser_review['path'])]=parser_review['sha256'];inputs[Path(parser_validation['path'])]=parser_validation['sha256']
+  assert all(sha(path)==digest for path,digest in inputs.items())
+  assert build['binary_output']['sha256']==PLAN['engine_sha256'] and build['pgo']['mode']=='profile-use' and build['source_sha256_before']==build['source_sha256_after']==PLAN['source_sha256']
+  assert build['tool_sha256_before']==build['tool_sha256_after']==PLAN['tool_source_sha256']
+@@ -43,8 +50,10 @@
+  training_path=Path(build['pgo']['training_record']);training=load(training_path)
+  assert sha(training_path)==proof['training_record_sha256'] and training['engine_source_sha256']==PLAN['source_sha256'] and training['profile_sha256']==PLAN['pgo_profile_sha256']
+  assert training['schema']=='rook2-pgo-training-v1' and training['complete'] is True and len(training['raw_profiles_sha256'])==54
+- check=load(PLAN['strict_recheck']);assert check['complete'] is True and check['exact_artifact_sha256']==PLAN['engine_sha256']
+- assert (check['strict54'],check['original_checkReplay_calls'],check['wire_fixtures'],check['wire_searches'])==(54,54,8,24)
++ native_ref=load(PLAN['reference_native_receipt']);assert native_ref['schema']=='rook2-native-wait4-v1'
++ assert native_ref['engine_sha256_before']==native_ref['engine_sha256_after']==PLAN['engine_sha256'] and native_ref['native_exit_code']==0 and native_ref['failure'] is None
++ promotion=load(PLAN['current_semantic_acceptance']);assert promotion['complete'] is True and promotion['ordinary_image_sha256']==PLAN['engine_sha256']
++ assert promotion['source_graph_sha256']==PLAN['source117_graph_sha256'] and promotion['native_source_graph_sha256']==PLAN['source74_graph_sha256']
+  assert build['pgo']['input_sha256_before']==build['pgo']['input_sha256_after']==PLAN['pgo_input_sha256'] and build['pgo']['inputs_unchanged']
+  with tarfile.open(PLAN['source_archive'],'r:gz') as tar:
+   members={m.name:hashlib.sha256(tar.extractfile(m).read()).hexdigest() for m in tar}
+@@ -52,7 +61,7 @@
+  tools=[prefix/'bin/valgrind',prefix/'bin/callgrind_annotate',prefix/'libexec/valgrind/callgrind-amd64-linux']
+  tools+=sorted((prefix/'libexec/valgrind').glob('vgpreload*callgrind*'))+sorted((prefix/'libexec/valgrind').glob('vgpreload_core*'))
+  assert len(tools)>=4 and all(p.is_file() for p in tools)
+- for p in tools+[HERE/'bounded_run.py',HERE/'profile.py',HERE/'verify.py',HERE/'recheck.mjs',HERE/'plan.json',args.clearance,HERE/'helper-pins.json',HERE/'input-pins.json',Path(review['path']),Path(canaries['path']),Path(canaries['terminal_path']),Path(PLAN['node']).resolve()]:inputs[p]=sha(p)
++ for p in tools+[HERE/'bounded_run.py',HERE/'profile.py',HERE/'verify.py',HERE/'recheck.mjs',HERE/'vector_summary.py',HERE/'plan.json',args.clearance,HERE/'helper-pins.json',HERE/'input-pins.json',Path(review['path']),Path(canaries['path']),Path(canaries['terminal_path']),Path(PLAN['node']).resolve()]:inputs[p]=sha(p)
+  before={str(p):digest for p,digest in inputs.items()};out.mkdir()
+  runner=BoundedRunner(out,PLAN)
+  env=dict(os.environ,VALGRIND_LIB=str(prefix/'libexec/valgrind'))
+@@ -73,7 +82,7 @@
+   expected_inputs=load(spec/'workloads.json');expected_outputs=load(spec/'replay-oracle.json')
+   write(out/'input-closure.json',before)
+   for case in PLAN['cases']:
+-   command=[PLAN['node'],str(spec/'replay-check.mjs'),'--case',case,'--','/usr/bin/taskset','-c','14','/usr/bin/env','VALGRIND_LIB='+env['VALGRIND_LIB'],str(prefix/'bin/valgrind'),'--tool=callgrind','--cache-sim=no','--branch-sim=no','--callgrind-out-file='+str(out/(case+'.callgrind')),'--log-file='+str(out/(case+'.log')),str(engine)]
++   command=[PLAN['node'],str(spec/'replay-check.mjs'),'--case',case,'--','/usr/bin/taskset','-c','14','/usr/bin/env','VALGRIND_LIB='+env['VALGRIND_LIB'],str(prefix/'bin/valgrind'),'--tool=callgrind',*PLAN['callgrind_simulation_options'],'--callgrind-out-file='+str(out/(case+'.callgrind')),'--log-file='+str(out/(case+'.log')),str(engine)]
+    report=run(command,case+'-oracle');assert report['status']=='pass' and report['selectedCases']==[case] and len(report['results'])==1
+    row=report['results'][0];ref=next(x for x in reference['results'] if x['case']==case)
+    assert row['status']=='pass' and row['complete'] and not row['truncated'] and row['error'] is None and row['exit']==dict(code=0,signal=None) and not row.get('cleanupUnconfirmed',False) and row['discardedObservedBytes']==0
+@@ -82,17 +91,17 @@
+    (out/(case+'-stdout.raw')).write_bytes(row['stdout'].encode());(out/(case+'-stderr.raw')).write_bytes(row['stderr'].encode())
+    write(out/(case+'-input-expected.json'),dict(input=next(x for x in expected_inputs['cases'] if x['id']==case),expected=next(x for x in expected_outputs['cases'] if x['id']==case)))
+    data=out/(case+'.callgrind');assert data.stat().st_size<=PLAN['profile_postrun_size_cap_bytes']
+-   lines=data.read_text().splitlines();assert [s for s in lines if s.startswith('events:')]==['events: Ir']
+-   totals=[int(s.split(':',1)[1]) for s in lines if s.startswith('summary:')];assert len(totals)==1 and totals[0]>0
++   vector=inspect_profile(data,PLAN);assert vector['profile_pid']==row['pid']
+    # Archived cwd/include only; never annotate mutable root source.
+-   run([str(prefix/'bin/callgrind_annotate'),'--auto=no','--inclusive=no','--threshold='+str(PLAN['function_threshold']),'--include='+str(source),str(data)],case+'-functions')
++   display=run([str(prefix/'bin/callgrind_annotate'),'--auto=no','--inclusive=no','--show='+','.join(PLAN['event_names']),'--sort=Ir','--show-percs=no','--threshold='+str(PLAN['function_threshold']),'--include='+str(source),str(data)],case+'-functions')
++   annotator_totals=inspect_annotator_totals(display,PLAN['event_names']);assert annotator_totals==vector['summary']
+    annotation_records={}
+    for name in PLAN['annotations']:
+     absolute=compiled/name
+-    display=run([str(prefix/'bin/callgrind_annotate'),'--auto=no','--inclusive=no','--context=0','--threshold='+str(PLAN['source_threshold']),'--include='+str(source),str(data),str(absolute)],case+'-'+Path(name).stem+'-lines')
++    display=run([str(prefix/'bin/callgrind_annotate'),'--auto=no','--inclusive=no','--context=0','--show='+','.join(PLAN['event_names']),'--sort=Ir','--show-percs=no','--threshold='+str(PLAN['source_threshold']),'--include='+str(source),str(data),str(absolute)],case+'-'+Path(name).stem+'-lines')
+     assert '-- User-annotated source: '+str(absolute) in display
+     annotation_records[name]=dict(compiled_source=str(absolute),source_sha256=PLAN['source_sha256'][name],has_information=('No information has been collected for '+str(absolute)) not in display,threshold=PLAN['source_threshold'])
+-   result['cases'][case]=dict(annotations=annotation_records,total_simulated_Ir=totals[0],original_strict_replay_pass=True,exact_raw_bytes_equal_current_own_pgo_reference=True,normal_exit=True,pid=row['pid'],profile_sha256=sha(data),log_sha256=sha(out/(case+'.log')))
++   result['cases'][case]=dict(annotations=annotation_records,simulated_event_vector=vector,independent_named_annotator_totals=annotator_totals,total_simulated_Ir=vector['summary']['Ir'],original_strict_replay_pass=True,exact_raw_bytes_equal_current_own_pgo_reference=True,normal_exit=True,pid=row['pid'],profile_sha256=sha(data),log_sha256=sha(out/(case+'.log')))
+   assert list(result['cases'])==PLAN['cases'] and all(sha(Path(p))==digest for p,digest in before.items())
+   result.update(complete=True,input_sha256=before,commands=commands,engine_sha256=PLAN['engine_sha256'],source_archive_sha256=PLAN['source_archive_sha256'],annotation_source_root=str(source),compiled_source_root=str(compiled),one_fixed_lifetime_per_case=True,performance_claim=False,outer_actual_terminal_required=True)
+  except BaseException as error:result['failure']=f'{type(error).__name__}: {error}'
+--- /home/legolas/rook2/evidence/current57-callgrind-preparation-20261020-01/verify.py
++++ /home/legolas/rook2/evidence/current62-branch-cache-preparation-20261020-01/verify.py
+@@ -2,6 +2,7 @@
+ from pathlib import Path
+ import hashlib,json,sys,os
+ from bounded_run import BoundedRunner
++from vector_summary import inspect_profile,inspect_annotator_totals
+ HERE=Path(__file__).resolve().parent
+ load=lambda p:json.loads(Path(p).read_text())
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+@@ -36,12 +37,14 @@
+   owned=load(out/(case+'-oracle-supervision.json'))
+   assert row['pid'] in [x['pid'] for x in owned['seen_owned_processes']], 'detached native PID not observed by supervisor'
+   profile=out/(case+'.callgrind');lines=profile.read_text().splitlines()
+-  assert [x for x in lines if x.startswith('events:')]==['events: Ir']
+-  totals=[int(x.split(':',1)[1]) for x in lines if x.startswith('summary:')]
+-  assert totals==[record['cases'][case]['total_simulated_Ir']] and totals[0]>0
++  vector=inspect_profile(profile,plan);assert vector==record['cases'][case]['simulated_event_vector'] and vector['profile_pid']==row['pid']
++  assert vector['summary']['Ir']==record['cases'][case]['total_simulated_Ir']
+   assert sha(profile)==record['cases'][case]['profile_sha256'] and sha(out/(case+'.log'))==record['cases'][case]['log_sha256']
+   function=next(x for x in record['commands'] if x['stem']==case+'-functions')
+   assert '--threshold=100' in function['argv'] and '--inclusive=no' in function['argv']
++  assert '--show='+','.join(plan['event_names']) in function['argv'] and '--sort=Ir' in function['argv'] and '--show-percs=no' in function['argv']
++  annotator_totals=inspect_annotator_totals((out/(case+'-functions.stdout')).read_text(),plan['event_names'])
++  assert annotator_totals==vector['summary']==record['cases'][case]['independent_named_annotator_totals']
+   for name in plan['annotations']:
+    stem=case+'-'+Path(name).stem+'-lines';cmd=next(x for x in record['commands'] if x['stem']==stem)
+    absolute=str(Path(plan['compiled_source_root'])/name);display=(out/(stem+'.stdout')).read_text()
+@@ -49,7 +52,7 @@
+    assert '-- User-annotated source: '+absolute in display
+    expected=dict(compiled_source=absolute,source_sha256=plan['source_sha256'][name],has_information=('No information has been collected for '+absolute) not in display,threshold=0)
+    assert record['cases'][case]['annotations'][name]==expected
+-  details[case]=dict(total_simulated_Ir=totals[0],native_exit=row['exit'],raw_bytes_equal_reference=True,source_annotations=record['cases'][case]['annotations'])
++  details[case]=dict(simulated_event_vector=vector,total_simulated_Ir=vector['summary']['Ir'],native_exit=row['exit'],raw_bytes_equal_reference=True,source_annotations=record['cases'][case]['annotations'])
+  argv=['/usr/bin/taskset','-c','0-5,8-13',plan['node'],str(HERE/'recheck.mjs'),str(out)]
+  runner=BoundedRunner(out,plan,started=record['study_started_monotonic'],boot_id=record['study_boot_id'])
+  r=runner.run(argv,'independent-checkReplay',plan['supervision']['offline_checker_wall_ms'])

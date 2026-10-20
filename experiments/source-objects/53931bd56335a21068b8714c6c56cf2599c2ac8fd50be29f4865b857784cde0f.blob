@@ -1,0 +1,351 @@
+--- audited-ledger/guard.py
++++ activity-full117/guard.py
+@@ -1,28 +1,54 @@
++"""Activity-only complete117 guard; no native launch from this module."""
+ from pathlib import Path
+ import hashlib,json,os
+ HERE=Path(__file__).resolve().parent
+-load=lambda p:json.loads(p.read_text())
+-sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
++load=lambda p:json.loads(Path(p).read_text())
++sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(path,value):
+- with path.open('x') as f:json.dump(value,f,indent=2);f.write('\n')
++ with Path(path).open('x') as f:json.dump(value,f,indent=2);f.write('\n')
++def terminal(path):
++ t=load(path);assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['initial_chunk_id'] and t['terminal_chunk_id']
++ return t
+ def clearance(kind='execution'):
+  assert kind in ['freeze','execution']
+  c=load(HERE/'execution-clearance.json');plan=load(HERE/'validation-plan.json')
+- assert c['authorized'] is True and c['scope']=='complete117-ledger-test-untimed-validation'
+- assert c['functional_execution_authorized'] is True and c['conflicting_cpu_windows_closed'] is True
+- assert c['source_graph_sha256']==plan['source_graph_sha256'] and c['prepared_sha256']==plan['prepared_sha256']
+- assert plan['status']=='EXACT_COMPLETE117_PARENT_AUTHORIZED_UNTIMED'
+- a=plan['execution_authority'];assert sha(Path(a['path']))==a['sha256']
+- original=load(Path(a['path']));assert original['authorized'] and original['source_sha256']==plan['source_sha256']
+- assert not c.get('timing_pgo_profiler_authorized',False)
++ assert c['authorized'] is True,'HOLD: explicit parent execution clearance absent'
++ assert c['scope']=='activity-value-inputs-complete117-untimed-diagnostic'
++ assert c['source_graph_sha256']==plan['source_graph_sha256'] and c['plan_sha256']==sha(HERE/'validation-plan.json')
++ assert c['conflicting_cpu_windows_closed'] is True and not c.get('timing_pgo_profiler_authorized',False)
++ a=c['parent_advancement_acceptance'];assert a and sha(a['path'])==a['sha256']
++ decision=load(a['path']);assert decision['accepted_for_complete117_diagnostic'] is True
++ assert decision['source_graph_sha256']==plan['source_graph_sha256'] and decision['generic_image_sha256']==plan['native_reference']['image_sha256']
++ assert decision['pgo_pilot_independent_reconciliation_sha256']==plan['pgo_advancement_reference']['independent_sha256']
++ pilot=load(plan['pgo_advancement_reference']['independent']);assert pilot['complete'] and pilot['advance_rule_satisfied']
+  assert sorted(os.sched_getaffinity(0))==plan['affinity']==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ.get('TMPDIR')==plan['TMPDIR']=='/home/legolas/rook2-build-tmp'
++ check_dependencies(plan)
+  return plan
+-def terminal(path):
+- t=load(path);assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['initial_chunk_id'] and t['terminal_chunk_id']
+- return t
+ def check_sources(plan):
+- for root in [Path(plan['home_source']),Path(plan['frozen_source'])]:
+-  assert all(sha(root/name)==h for name,h in plan['source_sha256'].items())
++ roots=[Path(plan['frozen_source'])]
++ if Path(plan['home_source']).exists():roots.append(Path(plan['home_source']))
++ for root in roots:
++  assert all(sha(root/name)==h for name,h in plan['source_sha256'].items()),str(root)
++ for name,h in plan['native_sha256'].items():assert sha(Path(plan['native_reference']['crate_source'])/name)==h
++ for name,h in plan['tools_sha256'].items():assert sha(Path(plan['native_reference']['crate_source'])/name)==h
++ for name,h in plan['diagnostic_sha256'].items():assert sha(Path(plan['root_cold_source'])/name.removeprefix('diagnostic/'))==h
++ for name,h in plan['harness_sha256'].items():assert sha(HERE/name)==h
++ check_native_reuse(plan)
+ def check_dependencies(plan):
+- before=load(Path(plan['output']['freeze'])/'dependencies.json');assert all(sha(Path(path))==h for path,h in before.items())
++ for path,h in plan['immutable_dependencies'].items():assert sha(path)==h,path
++ for path,h in plan['fixtures'].items():assert sha(path)==h,path
++ for name,h in plan['harness_sha256'].items():assert sha(HERE/name)==h,name
++
++def check_native_reuse(plan):
++ ref=plan['native_reference'];receipt=load(ref['build_receipt']);assert receipt['source_sha256_before']==receipt['source_sha256_after']==plan['native_sha256']
++ assert receipt['tool_sha256_before']==receipt['tool_sha256_after']==plan['tools_sha256']
++ assert receipt['mode']=='generic' and receipt['rust_flags']==['-C','target-cpu=x86-64'] and receipt['pgo']['mode']=='none'
++ assert sha(ref['image'])==ref['image_sha256']==receipt['binary_output']['sha256']
++ result=load(ref['native_result']);assert result['complete'] and result['failure'] is None and result['source_and_tools_unchanged']
++ assert result['total_tests']==178 and result['tests']['lib']['passed']==176 and result['tests']['dev']['passed']==2
++ assert all(row['actual_child_return_observed'] and row['exit_code']==0 for row in result['commands'])
++ for name,row in result['tests'].items():assert sha(ref['frozen_unit_images'][name])==row['sha256']
++ independent=load(ref['independent']);assert independent['complete'] and independent['native_tests']==178 and independent['strict54_original_checkReplay'] and independent['source46_tools23_archive69_equal']
++ assert independent['engine_sha256']==ref['image_sha256'] and len(independent['wire8_searches24_raw_protocol'])==8
++ for path in ref['actual_terminals']:terminal(path)
+--- audited-ledger/stage.py
++++ activity-full117/stage.py
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env python3
+-"""Future exact complete117 validation; gated before every mutation/native job."""
+-import argparse,json,os,re,shutil,subprocess,sys,tarfile,time
++"""Future activity-only complete117 freeze/DIAG; blocked until parent clearance."""
++import argparse,json,os,re,shutil,subprocess,sys,tarfile
+ from pathlib import Path
+ sys.dont_write_bytecode=True
+ from guard import HERE,load,sha,write,clearance,terminal,check_sources,check_dependencies
+@@ -8,21 +8,9 @@
+ def run(argv,stem,out,env,cwd,stages):
+  with (out/(stem+'.stdout')).open('xb') as a,(out/(stem+'.stderr')).open('xb') as b:
+   child=subprocess.Popen(argv,cwd=cwd,env=env,stdout=a,stderr=b)
+-  if stem in ['strict54','wire']:
+-   engine=Path(clearance()['output']['generic-build'])/'rook2-exact';seen={}
+-   while child.poll() is None:
+-    for entry in Path('/proc').iterdir():
+-     if not entry.name.isdigit():continue
+-     try:
+-      if Path(os.readlink(entry/'exe'))!=engine:continue
+-      mask=sorted(os.sched_getaffinity(int(entry.name)));assert mask==sorted(os.sched_getaffinity(0))
+-      seen[entry.name]=mask
+-     except (FileNotFoundError,ProcessLookupError,PermissionError):continue
+-    time.sleep(0.01)
+-   write(out/(stem+'-actual-engine-affinity.json'),dict(actual_observed_pids=seen,expected_inherited_mask=sorted(os.sched_getaffinity(0)),scope='Observed actual executable PIDs; coverage count stated literally, no unobserved PID assumption'))
+-  child.wait()
+- record=dict(command=argv,exit_code=child.returncode,actual_child_return_observed=True,stdout_sha256=sha(out/(stem+'.stdout')),stderr_sha256=sha(out/(stem+'.stderr')))
+- stages.append(record);assert child.returncode==0,stem+' failed'
++  code=child.wait()
++ record=dict(command=argv,pid=child.pid,exit_code=code,actual_child_return_observed=True,stdout_sha256=sha(out/(stem+'.stdout')),stderr_sha256=sha(out/(stem+'.stderr')))
++ stages.append(record);assert code==0,stem+' failed'
+  return record
+ 
+ def units(source,crate,counts,target,out,env,stages):
+@@ -52,69 +40,40 @@
+  return sha(frozen)
+ 
+ def main():
+- parser=argparse.ArgumentParser();parser.add_argument('stage',choices=['freeze','diag']);args=parser.parse_args();plan=clearance('freeze' if args.stage=='freeze' else 'execution')
++ parser=argparse.ArgumentParser();parser.add_argument('stage',choices=['freeze','diag']);args=parser.parse_args()
++ plan=clearance('freeze' if args.stage=='freeze' else 'execution')
+  source=Path(plan['home_source']);frozen=Path(plan['frozen_source']);paths={k:Path(v) for k,v in plan['output'].items()}
+- key={'freeze':'freeze','generic':'generic-build','native':'native-validation','strict':'strict-check','diag':'diagnostic'}[args.stage];out=paths[key];assert not out.exists(), 'fresh stage output required'
+- previous={'generic':'freeze','native':'generic-build','strict':'native-validation','diag':'strict-check'}
+- if args.stage in previous:
+-  terminal(paths[previous[args.stage]]/'tool-terminal.json');check_sources(plan);check_dependencies(plan)
+- if args.stage=='diag':terminal(paths['generic-build']/'tool-terminal.json')
+- if args.stage=='generic':assert not (source/'target').exists(),'generic build precedes all native/unit compilation'
+- if args.stage=='freeze':assert not source.exists() and not source.is_symlink(),'fresh absent HOME source required'
+- # build.py requires an absent output directory; generic stage logs live separately.
+- logs=out if args.stage!='generic' else HERE/'generic-stage-logs'
+- if args.stage!='generic':out.mkdir()
+- else:logs.mkdir()
+- stages=[];result=dict(complete=False,stage=args.stage,failure=None,stages=stages,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR'])
+- env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',RUSTC='/usr/bin/rustc',RUSTFLAGS='-C target-cpu=x86-64',CARGO_ENCODED_RUSTFLAGS='-Ctarget-cpu=x86-64',RUSTC_WRAPPER='',RUSTC_WORKSPACE_WRAPPER='',CARGO_NET_OFFLINE='true',CARGO_BUILD_JOBS='4');env.pop('LLVM_PROFILE_FILE',None)
++ out=paths['freeze' if args.stage=='freeze' else 'diagnostic'];assert not out.exists(),'fresh absent stage output required'
++ check_sources(plan);check_dependencies(plan)
++ if args.stage=='freeze':assert not source.exists() and not source.is_symlink(),'fresh absent HOME execution copy required'
++ else:terminal(paths['freeze']/'tool-terminal.json');assert source.exists()
++ out.mkdir();stages=[];result=dict(complete=False,stage=args.stage,failure=None,stages=stages,affinity=sorted(os.sched_getaffinity(0)),TMPDIR=os.environ['TMPDIR'],native178_strict54_wire8_reused=True)
++ env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',RUSTC='/usr/bin/rustc',RUSTFLAGS='-C target-cpu=x86-64',CARGO_ENCODED_RUSTFLAGS='-C\x1ftarget-cpu=x86-64',RUSTC_WRAPPER='',RUSTC_WORKSPACE_WRAPPER='',CARGO_NET_OFFLINE='true',CARGO_BUILD_JOBS='4');env.pop('LLVM_PROFILE_FILE',None)
+  try:
+   if args.stage=='freeze':
+-   assert all(sha(frozen/name)==h for name,h in plan['source_sha256'].items())
+-   source.parent.mkdir(parents=True,exist_ok=True);source.mkdir()
++   source.mkdir()
+    for name,h in plan['source_sha256'].items():
+     dest=source/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(frozen/name,dest);assert sha(dest)==h
+-   check_sources(plan)
+    assert {str(q.relative_to(source)) for q in source.rglob('*') if q.is_file()}==set(plan['source_sha256'])
+    with tarfile.open(out/'source-frozen.tar.gz','w:gz') as t:
+     for name in plan['source_sha256']:t.add(source/name,arcname=name,recursive=False)
+-   proposal=Path(plan['proposal']);spec=Path('/home/legolas/king-spec/conformance')
+-   dependencies=[Path(path) for path in plan['immutable_dependencies']]
+-   dependencies += [Path(path) for path in plan['fixtures']]
+-   for name in plan['fixtures']:
+-    document=load(Path(name));assert len(document['cases'])==plan['fixture_counts'][name] and {k:v for k,v in document.items() if k!='cases'}==plan['fixture_headers'][name]
+-   assert all(sha(Path(path))==h for path,h in plan['fixtures'].items())
+-   dep={str(path):sha(path) for path in dependencies};write(out/'dependencies.json',dep);copy=out/'input-closure';copy.mkdir()
+-   for path,h in dep.items():
+-    dest=copy/path.lstrip('/');dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(path,dest);assert sha(dest)==h
+-   with tarfile.open(out/'input-closure.tar.gz','w:gz') as t:
+-    for q in sorted(copy.rglob('*')):
+-     if q.is_file():t.add(q,arcname=str(q.relative_to(copy)),recursive=False)
+-   result.update(source_sha256=plan['source_sha256'],source_archive_sha256=sha(out/'source-frozen.tar.gz'),input_archive_sha256=sha(out/'input-closure.tar.gz'),dependencies_sha256=sha(out/'dependencies.json'))
+-  elif args.stage=='generic':
+-   result['artifact_sha256']=build(source,source,'rook2',out,logs,env,stages,plan['native_sha256']);assert load(out/'receipt.json')['tool_sha256_before']==load(out/'receipt.json')['tool_sha256_after']==plan['tools_sha256']
+-  elif args.stage=='native':
+-   result['units']=units(source,source,{'rook2':175,'rook2-dev':2},source/'target/complete117-native-unit',out,env,stages)
+-  elif args.stage=='strict':
+-   engine=paths['generic-build']/'rook2-exact';identity=sha(engine);assert identity==load(paths['generic-build']/'receipt.json')['binary_output']['sha256']
+-   run(['/usr/bin/node','/home/legolas/king-spec/conformance/profiling/replay-check.mjs','--',str(engine)],'strict54',out,env,source,stages)
+-   report=load(out/'strict54.stdout');assert report['status']=='pass' and len(report['results'])==54 and not (out/'strict54.stderr').stat().st_size
+-   for row in report['results']:assert row['status']=='pass' and row['complete'] and not row['truncated'] and row['exit']==dict(code=0,signal=None) and row['error'] is None and row['stderr']=='' and row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
+-   run([sys.executable,str(source/'tools/check_live.py'),'--engine',str(engine),'--output',str(paths['interruption-wire'])],'wire',out,env,source,stages)
+-   wr=load(paths['interruption-wire']/'receipt.json');assert wr['pass'] and len(wr['results'])==8 and sum(len(row['searches']) for row in wr['results'])==24 and all(row['complete_streams'] and row['exit_code']==row['observed_exit_code']==0 for row in wr['results'])
+-   assert wr['engine_sha256_before']==wr['engine_sha256_after']==sha(engine)==identity;result.update(artifact_sha256=identity,strict_replays=54,wire_fixtures=8,wire_searches=24)
++   result['source_archive_sha256']=sha(out/'source-frozen.tar.gz')
+   else:
+-   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/complete117-diag-unit',out,env,stages)
++   # No generic ordinary build/native tests/strict replay branch exists here.
++   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/activity-value-inputs-complete117-diag-unit',out,env,stages)
++   assert not paths['diagnostic-build'].exists(),'build.py output must be absent'
+    result['artifact_sha256']=build(source,source/'diagnostic','rook2-diag',paths['diagnostic-build'],out,env,stages,{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})
++   br=load(paths['diagnostic-build']/'receipt.json');nr=load(plan['native_reference']['build_receipt'])
++   for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
++   assert br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
+    raw=out/'raw-cases';raw.mkdir();command=['/usr/bin/node','/home/legolas/king-spec/conformance/run.mjs']
+    for path in plan['fixtures']:command+=['--fixtures',path]
+    command+=['--',sys.executable,str(HERE/'record_case.py'),'--adapter',str(paths['diagnostic-build']/'rook2-diag-exact'),'--records',str(raw)]
+-   run(command,'conformance',out,env,source,stages);report=load(out/'conformance.stdout');assert report['pass'] and len(report['results'])==7673 and not (out/'conformance.stderr').stat().st_size
++   run(command,'conformance',out,env,source,stages)
++   report=load(out/'conformance.stdout');assert report['pass'] and len(report['results'])==7673 and not (out/'conformance.stderr').stat().st_size
+    assert sha(paths['diagnostic-build']/'rook2-diag-exact')==result['artifact_sha256'];result.update(cases=7673,operations=117,whole_files=115)
+-  check_sources(plan)
+-  if args.stage!='freeze':check_dependencies(plan)
+-  result['complete']=True
++  check_sources(plan);check_dependencies(plan);result['complete']=True
+  except BaseException as error:result['failure']=f'{type(error).__name__}: {error}'
+- finally:
+-  write(logs/'verification.json',result)
+- print(json.dumps({k:v for k,v in result.items() if k not in ['source_sha256','stages']}));return 0 if result['complete'] else 1
++ finally:write(out/'verification.json',result)
++ print(json.dumps({k:v for k,v in result.items() if k!='stages'}));return 0 if result['complete'] else 1
+ if __name__=='__main__':sys.exit(main())
+--- audited-ledger/reconcile.py
++++ activity-full117/reconcile.py
+@@ -1,8 +1,7 @@
+ #!/usr/bin/env python3
+-"""Independent original raw/expected/exit/source reconciliation; no native jobs."""
++"""Future independent complete117 original raw/expected/exit reconciliation."""
+ from pathlib import Path
+-import collections,json,re,tarfile
+-import sys
++import collections,json,re,tarfile,sys
+ sys.dont_write_bytecode=True
+ from guard import HERE,load,sha,write,clearance,terminal,check_sources,check_dependencies
+ SPEC=Path('/home/legolas/king-spec/conformance')
+@@ -27,26 +26,28 @@
+ 
+ def main():
+  plan=clearance();paths={k:Path(v) for k,v in plan['output'].items()};source=Path(plan['home_source']);out=paths['reconciliation'];assert not out.exists();out.mkdir()
+- for key in ['freeze','generic-build','native-validation','strict-check','diagnostic']:terminal(paths[key]/'tool-terminal.json')
++ for key in ['freeze','diagnostic']:terminal(paths[key]/'tool-terminal.json')
+  check_sources(plan);check_dependencies(plan)
+  assert archive(paths['freeze']/'source-frozen.tar.gz')==plan['source_sha256']
+- deps=load(paths['freeze']/'dependencies.json');assert archive(paths['freeze']/'input-closure.tar.gz')=={path.lstrip('/'):h for path,h in deps.items()}
+- for key,receipt_root,expected in [('generic-build',Path(plan['native_reference']['crate_source']),plan['native_sha256']),('diagnostic-build',source/'diagnostic',{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})]:
+-  br=load(paths[key]/'receipt.json');assert br['source_sha256_before']==br['source_sha256_after']==expected and br['source_identity_unchanged']
+-  assert br['rust_flags']==['-C','target-cpu=x86-64'] and br['pgo']['mode']=='none' and br['crate']==str(receipt_root)
+-  ar=load(paths[key]/'archive-receipt.json');assert ar['verified_against_build_before_hashes'] and sha(paths[key]/ar['archive'])==ar['sha256'] and archive(paths[key]/ar['archive'])==expected|br['tool_sha256_before']
+-  binary='rook2' if key=='generic-build' else 'rook2-diag';assert sha(paths[key]/(binary+'-exact'))==br['binary_output']['sha256']==ar['binary_sha256']
+- generic=load(paths['generic-build']/'receipt.json');assert generic['tool_sha256_before']==generic['tool_sha256_after']==plan['tools_sha256']
+- for directory,expected in [(paths['native-validation'],{'rook2':175,'rook2-dev':2}),(paths['diagnostic'],{'rook2-diag':209})]:
+-  vr=load(directory/'verification.json');assert vr['complete'] and vr['failure'] is None and all(s['exit_code']==0 and s['actual_child_return_observed'] for s in vr['stages'])
+-  for name,count in expected.items():
+-   text=(directory/(name+'-tests.stdout')).read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==count and f'test result: ok. {count} passed; 0 failed;' in text
+-   assert vr['units'][name]['passed']==count and sha(directory/'unit-bin'/name/'unit-exact')==vr['units'][name]['binary_sha256']
+-   if name=='rook2':assert 'test ordinary::tests::recursive_iio_defaults_true_and_false_initial_tail_errors_unwind_without_phase_subtrees ... ok' in text
++ assert archive(HERE/'source-112.tar.gz')==plan['source_sha256']
++ assert archive(HERE/'official-inputs-115.tar.gz')=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
++ br=load(paths['diagnostic-build']/'receipt.json');expected={k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()}
++ assert br['source_sha256_before']==br['source_sha256_after']==expected and br['source_identity_unchanged'] and br['crate']==str(source/'diagnostic')
++ nr=load(plan['native_reference']['build_receipt'])
++ for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert br[key]==nr[key]
++ assert br['mode']=='generic' and br['pgo']['mode']=='none' and br['tool_sha256_before']==br['tool_sha256_after']==plan['tools_sha256']
++ ar=load(paths['diagnostic-build']/'archive-receipt.json');assert ar['verified_against_build_before_hashes'] and sha(paths['diagnostic-build']/ar['archive'])==ar['sha256'] and archive(paths['diagnostic-build']/ar['archive'])==expected|br['tool_sha256_before']
++ assert sha(paths['diagnostic-build']/'rook2-diag-exact')==br['binary_output']['sha256']==ar['binary_sha256']
++ diag=paths['diagnostic'];vr=load(diag/'verification.json');assert vr['complete'] and vr['failure'] is None and all(s['exit_code']==0 and s['actual_child_return_observed'] for s in vr['stages'])
++ text=(diag/'rook2-diag-tests.stdout').read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==209 and 'test result: ok. 209 passed; 0 failed;' in text
++ assert vr['units']['rook2-diag']['passed']==209 and sha(diag/'unit-bin/rook2-diag/unit-exact')==vr['units']['rook2-diag']['binary_sha256']
++ n=Path(plan['native_reference']['native_result']).parent
++ for stem,count in [('lib',176),('dev',2)]:
++  t=(n/(stem+'-tests.stdout')).read_text();assert len(re.findall(r'^test .* \.\.\. ok$',t,re.M))==count and f'test result: ok. {count} passed; 0 failed;' in t
+  # Strict54 original checker stdout contains the exact retained native streams.
+  strict=paths['strict-check'];report=load(strict/'strict54.stdout');work=load(SPEC/'profiling/workloads.json');oracle=load(SPEC/'profiling/replay-oracle.json');raw=out/'strict-raw'
+  assert report['status']=='pass' and len(report['results'])==len(work['cases'])==len(oracle['cases'])==54 and report['selectedCases']==[c['id'] for c in work['cases']]
+- engine=paths['generic-build']/'rook2-exact'
++ engine=Path(plan['native_reference']['image'])
+  for row,c in zip(report['results'],work['cases']):
+   answer=next(a for a in oracle['cases'] if a['id']==c['id']);assert row['case']==c['id'] and row['status']=='pass' and row['command']==[str(engine),'--work-clock=kingwcr','--work-clock-post=work'] and row['exit']==answer['exit']==dict(code=0,signal=None)
+   assert row['complete'] and not row['truncated'] and not row.get('cleanupUnconfirmed',False) and row['discardedObservedBytes']==0 and row['error'] is None and row['stderr']==answer['stderr']=='' and row['stdout'].endswith('\n')
+@@ -70,11 +71,11 @@
+    searches+=1
+   assert list(lines)==[] and (wire/c['id']/'stdin.raw').read_text()=='\n'.join(stdin+['quit'])+'\n'
+  assert searches==24
+- # All106 original files, each complete and byte-bound; no supplied expected data in runtime.
++ # All115 original files, each complete and byte-bound; no supplied expected data in runtime.
+  diag=paths['diagnostic'];official=load(diag/'conformance.stdout');assert official['pass'] and official['completeEngineQualification'] is False and len(official['results'])==7673
+  expected=[];files=[];ids=set();ops=collections.Counter()
+  for name,h in plan['fixtures'].items():
+-  f=Path(name);assert sha(f)==h;doc=load(f);assert doc['version']==1 and len(doc['cases'])==plan['fixture_counts'][name];files.append(dict(path=name,sha256=h,count=len(doc['cases'])))
++  f=Path(name);assert sha(f)==h;doc=load(f);assert doc['version']==1 and len(doc['cases'])==plan['fixture_counts'][name] and {k:v for k,v in doc.items() if k!='cases'}==plan['fixture_headers'][name];files.append(dict(path=name,sha256=h,count=len(doc['cases'])))
+   for index,c in enumerate(doc['cases']):
+    assert c['id'] not in ids;ids.add(c['id']);expected.append((name,index,c));ops[c['request']['operation']]+=1
+  assert len(files)==115 and len(expected)==len(ids)==7673 and len(ops)==117 and dict(ops)==plan['operation_case_counts'] and official['files']==files
+@@ -89,6 +90,6 @@
+   rows.append(dict(ordinal=ordinal,fixture=name,case_index=index,id=c['id'],operation=c['request']['operation'],raw_output_sha256=sha(stem.with_suffix('.stdout')),actual_child_exit_code=0))
+  check_sources(plan);check_dependencies(plan)
+  write(out/'raw-case-sha256.json',hashes);write(out/'case-reconciliation.json',dict(cases=7673,whole_files=115,partial_files=0,duplicate_ids=0,all_original_expected_raw_and_official_actual_equal=True,rows=rows))
+- result=dict(status='pass',native_reused=True,fresh_native_runs=0,native_units=177,diagnostic_units=209,strict_replays=54,interruption_fixtures=8,interruption_searches=24,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_artifact_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Untimed exact complete117 only; no CPU/PGO/codegen/profile/adoption claim')
++ result=dict(status='pass',native_reused=True,fresh_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict_replays_reused=54,interruption_fixtures_reused=8,interruption_searches_reused=24,diagnostic_cases=7673,diagnostic_operations=117,whole_fixture_files=115,native_artifact_sha256=sha(engine),diagnostic_artifact_sha256=sha(adapter),source_graph_sha256=plan['source_graph_sha256'],source_sha256=plan['source_sha256'],source_stable=True,all_raw_expected_and_actual_equal=True,all_native_child_exits_confirmed=True,raw_case_manifest_sha256=sha(out/'raw-case-sha256.json'),case_reconciliation_sha256=sha(out/'case-reconciliation.json'),reconciler_sha256=sha(Path(__file__)),scope='Fresh complete117 DIAG, exact reused178native/54strict/eightwire; no promotion/full-game/CPU qualification claim')
+  write(out/'independent-verification.json',result);print(json.dumps({k:v for k,v in result.items() if k!='source_sha256'}))
+ if __name__=='__main__':main()
+--- audited-ledger/finalize.py
++++ activity-full117/finalize.py
+@@ -1,33 +1,50 @@
+-"""Future complete117 FUNCTIONAL-only finalizer. Inert/unparsed/unrun."""
++"""Future functional-only metadata finalizer; no engine or compiler invocation."""
+ from pathlib import Path
+-import json,os
++import json,os,tarfile
+ from guard import HERE,clearance,load,sha,write,terminal,check_sources,check_dependencies
++
++EVIDENCE_ROOT=Path('/home/legolas/rook2/evidence')
++def archive_member(path, root=EVIDENCE_ROOT):
++ relative=Path(path).resolve().relative_to(Path(root).resolve())
++ assert relative.parts and not relative.is_absolute() and all(part not in ['.','..'] for part in relative.parts)
++ return relative.as_posix()
++
++def package_metadata(path, entries, root=EVIDENCE_ROOT):
++ members={archive_member(p,root):Path(p) for p in entries}
++ assert len(members)==len(entries) and not path.exists()
++ expected={name:sha(p) for name,p in members.items()}
++ with tarfile.open(path,'w:gz') as t:
++  for name,p in members.items():
++   assert p.is_file() and not p.is_symlink()
++   t.add(p,arcname=name,recursive=False)
++ with tarfile.open(path,'r:gz') as t:
++  rows=t.getmembers();assert len(rows)==len(members) and all(m.isfile() for m in rows)
++  actual={m.name:__import__('hashlib').sha256(t.extractfile(m).read()).hexdigest() for m in rows}
++ assert actual==expected
++ return dict(path=str(path),sha256=sha(path),members=actual,reopened_members_exact=True)
+ 
+ def main():
+  plan=clearance();paths={k:Path(v) for k,v in plan['output'].items()}
+- keys=['freeze','generic-build','native-validation','strict-check','diagnostic','reconciliation']
+- for k in keys:terminal(paths[k]/'tool-terminal.json')
++ for key in ['freeze','diagnostic','reconciliation']:terminal(paths[key]/'tool-terminal.json')
+  check_sources(plan);check_dependencies(plan)
+  ind=load(paths['reconciliation']/'independent-verification.json')
+  assert ind['status']=='pass' and ind['source_stable'] and ind['all_raw_expected_and_actual_equal'] and ind['all_native_child_exits_confirmed']
+- assert tuple(ind[k] for k in ['native_units','diagnostic_units','strict_replays','interruption_fixtures','interruption_searches','diagnostic_cases','diagnostic_operations','whole_fixture_files'])==(177,209,54,8,24,7673,117,115)
+- tests=(paths['native-validation']/'rook2-tests.stdout').read_text()
+- assert 'test ordinary::tests::recursive_iio_defaults_true_and_false_initial_tail_errors_unwind_without_phase_subtrees ... ok' in tests
+- g=load(paths['generic-build']/'receipt.json');d=load(paths['diagnostic-build']/'receipt.json')
+- for key in ['toolchain','mode','target_triple','target_cpu','rust_flags']:assert g[key]==d[key]
+- assert g['mode']=='generic' and g['pgo']['mode']==d['pgo']['mode']=='none'
+- assert sha(paths['generic-build']/'rook2-exact')==g['binary_output']['sha256']==ind['native_artifact_sha256']
+- assert sha(paths['diagnostic-build']/'rook2-diag-exact')==d['binary_output']['sha256']==ind['diagnostic_artifact_sha256']
+- observed={n:load(paths['strict-check']/(n+'-actual-engine-affinity.json')) for n in ['strict54','wire']}
+- assert len(observed['strict54']['actual_observed_pids'])==54 and len(observed['wire']['actual_observed_pids'])==8
+- assert all(mask==plan['affinity'] for x in observed.values() for mask in x['actual_observed_pids'].values())
+- exe_prefixes=[str(Path(plan['home_source']))+'/',str(paths['diagnostic-build']/'rook2-diag-exact'),str(paths['diagnostic']/'unit-bin')+'/'];live=[]
++ assert tuple(ind[k] for k in ['native_units','diagnostic_units','strict_replays_reused','interruption_fixtures_reused','interruption_searches_reused','diagnostic_cases','diagnostic_operations','whole_fixture_files'])==(178,209,54,8,24,7673,117,115)
++ assert sha(plan['native_reference']['image'])==ind['native_artifact_sha256']==plan['native_reference']['image_sha256']
++ assert sha(paths['diagnostic-build']/'rook2-diag-exact')==ind['diagnostic_artifact_sha256']
++ prefixes=[plan['home_source']+'/',str(paths['diagnostic-build']/'rook2-diag-exact'),str(paths['diagnostic']/'unit-bin')+'/'];live=[]
+  for p in Path('/proc').iterdir():
+   if not p.name.isdigit() or int(p.name) in [os.getpid(),os.getppid()]:continue
+   try:exe=os.readlink(p/'exe');argv=[v.decode(errors='replace') for v in (p/'cmdline').read_bytes().split(b'\0') if v]
+   except OSError:continue
+-  if any(exe.startswith(x) for x in exe_prefixes) or ('python' in Path(exe).name and len(argv)>1 and argv[1].endswith('.py') and argv[1].startswith(str(HERE)+'/')):live.append({'pid':int(p.name),'exe':exe,'argv':argv})
++  if any(exe.startswith(x) for x in prefixes) or ('python' in Path(exe).name and len(argv)>1 and argv[1].endswith('.py') and argv[1].startswith(str(HERE)+'/')):live.append({'pid':int(p.name),'exe':exe,'argv':argv})
+  assert not live,live
+- result={'status':'COMPLETE117_CORRECTED_LEDGER_FUNCTIONAL_PASS','native_reused':True,'fresh_native_runs':0,'source':plan['home_source'],'source_graph_sha256':plan['source_graph_sha256'],'native_units':177,'native_lib_units':175,'native_dev_units':2,'corrected_tail_witness_executed':True,'diagnostic_units':209,'strict54':54,'wire_fixtures':8,'wire_searches':24,'operations':117,'cases':7673,'whole_files':115,'native_sha256':ind['native_artifact_sha256'],'adapter_sha256':ind['diagnostic_artifact_sha256'],'live_owned_processes':live,'all_owned_native_jobs_terminal':True,'actual_terminals':{k:load(paths[k]/'tool-terminal.json') for k in keys},'canonical_domain_audit_limit':plan['canonical_domain_audit_limit'],'backend_review_separate_owner':True,'local_full3288_gate_separate':True,'cpu_pgo_profiler':False,'promotion_authorized':False,'final_packaging_outer_terminal_required':True}
+- write(HERE/'validation-summary.json',result);print(json.dumps(result))
++ result=dict(status='ACTIVITY_ONLY_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native_reused=True,fresh_ordinary_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict54_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,operations=117,cases=7673,whole_files=115,native_sha256=ind['native_artifact_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
++ write(HERE/'validation-summary.json',result)
++ entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','source-proof.json','archive-verification.json','validation-summary.json','guard.py','stage.py','record_case.py','reconcile.py','finalize.py']]
++ entries += [paths['reconciliation']/name for name in ['independent-verification.json','case-reconciliation.json','raw-case-sha256.json','tool-terminal.json']]
++ manifest={str(p):sha(p) for p in entries};write(HERE/'final-metadata-manifest.json',manifest)
++ packaged=package_metadata(HERE/'final-metadata.tar.gz',entries)
++ write(HERE/'final-metadata-archive.json',packaged)
++ print(json.dumps(result))
+ if __name__=='__main__':main()

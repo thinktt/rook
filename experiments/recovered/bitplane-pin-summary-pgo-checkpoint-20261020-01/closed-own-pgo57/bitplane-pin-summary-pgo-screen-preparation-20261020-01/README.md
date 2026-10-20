@@ -1,0 +1,7 @@
+INERT57 own-source PGO fixed70 only. Three accepted56ownPGO helpers byte-identical; copied from preserved inert plan, not active expanded inputunion. Cases01/02/04/05/29/35/08,70fresh14warmups excluded/56measured, original raw/direct-exit/wait4/live+offline replay unchanged. Advance aggregate<=.995 AND>=5lower ANDworst<=1.02 elsePARK; no retry/outliers.
+
+Control51ownPGO48ee57b1/profile1ce0e391. Exact57 source74graphb845e921,51native23tools,195declarations and generic193library pass/2devunrun are past facts only. Candidate future own57use-image/profile/training/remerge/backend/actuals null; launch/review/quiet/allotherjobsflagsfalse, no realclearance. No56 mechanism/source/result authority, genericgain transfer or controlprofile reuse. No candidate liveoutputs read or activated fourstage-prep modified.
+
+Existing root lane-clock is pinned and must retain its original1800s deadline across stages/gaps/backend/screen. Root owns remaining-time launch bound and quiet/input-union review; copied helpers do not enforce/reset this parentclock. No newclock/restart/retry. No postuse54/wire/full195/full117/games/adoption authority.
+
+Preparation-failure-01 preserves metadata-only820b04/1: active56plan rather than preservedinertplan caused falseflag assertion; no plan/native/helper run. Corrected to preservedinert basis and explicitfalse flags. No original inputs changed. All preparationH0-5,8-13/TMPDIR; future native14/noowned15. No helperparse/import/execute/build/binutils/profile/Git/archive. Runtime speed switch/readback unavailable, not claimed.

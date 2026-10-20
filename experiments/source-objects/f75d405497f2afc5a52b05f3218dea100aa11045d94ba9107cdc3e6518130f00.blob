@@ -1,0 +1,678 @@
+//! Non-check pseudo-legal tactical production and shared quiescence ordering.
+use crate::evaluation::RootContext;
+use crate::movegen::{MoveList, MOVE_CAPACITY};
+use crate::position::Position;
+use crate::types::{Color, Move, MoveKind, PieceKind, Square};
+
+mod check_masks;
+#[cfg(test)]
+#[path = "tactical/check_mask_tests.rs"]
+mod check_mask_tests;
+
+const KNIGHT: [(i8, i8); 8] = [
+    (1, 2),
+    (-1, -2),
+    (-1, 2),
+    (1, -2),
+    (2, 1),
+    (-2, -1),
+    (-2, 1),
+    (2, -1),
+];
+const DIRECTIONS: [(i8, i8); 8] = [
+    (1, 1),
+    (-1, -1),
+    (-1, 1),
+    (1, -1),
+    (0, 1),
+    (0, -1),
+    (1, 0),
+    (-1, 0),
+];
+
+/// Caller selects the non-check tactical continuation. No own-king safety filter.
+pub fn generate(position: &Position, out: &mut MoveList) {
+    out.clear();
+    let side = position.side;
+    let enemy_king = position.piece_squares(side.opponent(), PieceKind::King)[0];
+    pawn_candidates(position, out, side, enemy_king);
+    for kind in [
+        PieceKind::Knight,
+        PieceKind::Bishop,
+        PieceKind::Rook,
+        PieceKind::Queen,
+        PieceKind::King,
+    ] {
+        let directions: &[(i8, i8)] = match kind {
+            PieceKind::Knight => &KNIGHT,
+            PieceKind::Bishop => &DIRECTIONS[..4],
+            PieceKind::Rook => &DIRECTIONS[4..],
+            _ => &DIRECTIONS,
+        };
+        let sliding = matches!(kind, PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen);
+        for &source in position.piece_squares(side, kind) {
+            for &(df, dr) in directions {
+                let mut cursor = source;
+                while let Some(target) = cursor.offset(df, dr) {
+                    let victim = position.board[target.0 as usize];
+                    if !victim.is_empty() {
+                        if victim.color() != side && victim.kind() != PieceKind::King {
+                            out.push(Move::new(source, target, MoveKind::Ordinary));
+                        }
+                        break;
+                    }
+                    if kind != PieceKind::King
+                        && direct_check(position, source, target, kind, enemy_king)
+                    {
+                        out.push(Move::new(source, target, MoveKind::Ordinary));
+                    }
+                    if !sliding {
+                        break;
+                    }
+                    cursor = target;
+                }
+            }
+        }
+    }
+}
+
+/// Private native route: placement planes must describe this exact Position.
+/// Public/custom callers retain the legacy scalar generation above.
+pub(crate) fn generate_for_search(position: &Position, out: &mut MoveList,
+    coherent_geometry: bool) {
+    if !coherent_geometry {
+        generate(position, out);
+        return;
+    }
+    out.clear();
+    let side = position.side;
+    let enemy_king = position.piece_squares(side.opponent(), PieceKind::King)[0];
+    pawn_candidates(position, out, side, enemy_king);
+    check_masks::generate_nonpawns(position, out, side, enemy_king);
+}
+
+// One numerical/order owner for EP, pawn prefixes, captures and queen promotions.
+fn pawn_candidates(position: &Position, out: &mut MoveList, side: Color, enemy_king: Square) {
+    let forward = if side == Color::White { 1 } else { -1 };
+    let source_rank = -forward;
+    let prefix_files = if side == Color::White {
+        [-1, 1]
+    } else {
+        [1, -1]
+    };
+    if position.ep < 64 {
+        let target = Square(position.ep);
+        if position.board[target.0 as usize].is_empty() {
+            if let Some(victim_square) = target.offset(0, source_rank) {
+                let victim = position.board[victim_square.0 as usize];
+                // Joined setups can retain a non-pawn victim; king removal is a cold path.
+                if !victim.is_empty() && victim.color() != side && victim.kind() != PieceKind::King
+                {
+                    for file in prefix_files {
+                        if let Some(source) = target.offset(file, source_rank) {
+                            let piece = position.board[source.0 as usize];
+                            if !piece.is_empty()
+                                && piece.color() == side
+                                && piece.kind() == PieceKind::Pawn
+                            {
+                                out.push(Move::new(source, target, MoveKind::EnPassant));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Quiet pawn checks precede other pawn moves in fixed target geometry.
+    for file in prefix_files {
+        if let Some(target) = enemy_king.offset(file, source_rank) {
+            if !position.board[target.0 as usize].is_empty() {
+                continue;
+            }
+            if let Some(source) = target.offset(0, source_rank) {
+                let piece = position.board[source.0 as usize];
+                if !piece.is_empty() && piece.color() == side && piece.kind() == PieceKind::Pawn {
+                    out.push(Move::new(source, target, MoveKind::Ordinary));
+                }
+            }
+        }
+    }
+    let prefix_len = out.len;
+    let capture_files = if side == Color::White {
+        [1, -1]
+    } else {
+        [-1, 1]
+    };
+    for &source in position.piece_squares(side, PieceKind::Pawn) {
+        let quiet = source
+            .offset(0, forward)
+            .filter(|to| position.board[to.0 as usize].is_empty());
+        let promotes = quiet.is_some_and(|to| to.rank() == 0 || to.rank() == 7);
+        // For one pawn, quiet queen promotion precedes its capture promotions.
+        if promotes {
+            out.push(Move::new(
+                source,
+                quiet.unwrap(),
+                MoveKind::Promotion(PieceKind::Queen),
+            ));
+        }
+        for file in capture_files {
+            let Some(target) = source.offset(file, forward) else {
+                continue;
+            };
+            let victim = position.board[target.0 as usize];
+            if victim.is_empty() || victim.color() == side || victim.kind() == PieceKind::King {
+                continue;
+            }
+            let kind = if target.rank() == 0 || target.rank() == 7 {
+                MoveKind::Promotion(PieceKind::Queen)
+            } else {
+                MoveKind::Ordinary
+            };
+            out.push(Move::new(source, target, kind));
+        }
+        if !promotes {
+            if let Some(target) = quiet {
+                let movement = Move::new(source, target, MoveKind::Ordinary);
+                if !out.moves[..prefix_len].contains(&movement)
+                    && direct_check(position, source, target, PieceKind::Pawn, enemy_king)
+                {
+                    out.push(movement);
+                }
+            }
+        }
+    }
+}
+
+/// Only the moved piece is considered; other pieces' discovered checks do not qualify.
+fn direct_check(
+    position: &Position,
+    source: Square,
+    target: Square,
+    kind: PieceKind,
+    enemy_king: Square,
+) -> bool {
+    let df = enemy_king.file() as i8 - target.file() as i8;
+    let dr = enemy_king.rank() as i8 - target.rank() as i8;
+    match kind {
+        PieceKind::Pawn => {
+            return df.abs() == 1 && dr == if position.side == Color::White { 1 } else { -1 }
+        }
+        PieceKind::Knight => return df.abs() * dr.abs() == 2,
+        PieceKind::Bishop if df.abs() != dr.abs() => return false,
+        PieceKind::Rook if df != 0 && dr != 0 => return false,
+        PieceKind::Queen if df != 0 && dr != 0 && df.abs() != dr.abs() => return false,
+        PieceKind::King => return false,
+        _ => {}
+    }
+    if df == 0 && dr == 0 {
+        return false;
+    }
+    let step = (df.signum(), dr.signum());
+    let mut cursor = target;
+    while let Some(square) = cursor.offset(step.0, step.1) {
+        if square == enemy_king {
+            return true;
+        }
+        if square != source && !position.board[square.0 as usize].is_empty() {
+            return false;
+        }
+        cursor = square;
+    }
+    false
+}
+
+fn preference(
+    position: &Position,
+    context: &RootContext,
+    history: &[[[u32; 64]; 6]; 2],
+    movement: Move,
+) -> u32 {
+    if movement.kind() == MoveKind::EnPassant {
+        return 0xe000_0800;
+    }
+    let attacker = position.board[movement.from().0 as usize];
+    let victim = position.board[movement.to().0 as usize];
+    if !victim.is_empty() {
+        debug_assert_ne!(victim.kind(), PieceKind::King);
+        let victim_value = context.values[victim.color().index()][victim.kind().index()]
+            + context.squares[victim.color().index()][victim.kind().index()]
+                [movement.to().0 as usize] as i32;
+        let attacker_value = if attacker.kind() == PieceKind::King {
+            1500
+        } else {
+            let value = context.values[attacker.color().index()][attacker.kind().index()];
+            value + if value < 200 { 300 } else { 0 }
+        };
+        let band: u32 = if victim_value > 150 {
+            0xe000_0000
+        } else {
+            0xd000_0000
+        };
+        return band
+            .wrapping_add((victim_value as u32).wrapping_mul(65_536))
+            .wrapping_sub(attacker_value as u32);
+    }
+    if let MoveKind::Promotion(kind) = movement.kind() {
+        let bonus = match kind {
+            PieceKind::Knight => 256,
+            PieceKind::Bishop => 512,
+            PieceKind::Rook => 768,
+            PieceKind::Queen => 1024,
+            _ => unreachable!("invalid promotion"),
+        };
+        return 0xe000_0000 + bonus;
+    }
+    history[attacker.color().index()][attacker.kind().index()][movement.to().0 as usize]
+}
+
+/// ORDER-PRIORITY-SEQUENCE: stable descending within modulo-six classes,
+/// restored to those positions, then stable descending over the resulting list.
+pub fn priority_sequence(moves: &mut [Move], priorities: &mut [u32]) {
+    for gap in [6, 1] {
+        for index in gap..moves.len() {
+            let movement = moves[index];
+            let priority = priorities[index];
+            let mut cursor = index;
+            while cursor >= gap && priorities[cursor - gap] < priority {
+                moves[cursor] = moves[cursor - gap];
+                priorities[cursor] = priorities[cursor - gap];
+                cursor -= gap;
+            }
+            moves[cursor] = movement;
+            priorities[cursor] = priority;
+        }
+    }
+}
+
+fn preferred_into(moves: &mut [Move], priorities: &mut [u32], output: &mut [Move]) {
+    let n = moves.len();
+    debug_assert_eq!(priorities.len(), n);
+    debug_assert_eq!(output.len(), n);
+    debug_assert!(n <= MOVE_CAPACITY);
+    if n <= 6 {
+        priority_sequence(moves, priorities);
+        output.copy_from_slice(moves);
+        return;
+    }
+
+    let gap = 6;
+    for index in gap..moves.len() {
+        let movement = moves[index];
+        let priority = priorities[index];
+        let mut cursor = index;
+        while cursor >= gap && priorities[cursor - gap] < priority {
+            moves[cursor] = moves[cursor - gap];
+            priorities[cursor] = priorities[cursor - gap];
+            cursor -= gap;
+        }
+        moves[cursor] = movement;
+        priorities[cursor] = priority;
+    }
+
+    let mut heads = [0u64; 6];
+    for stream in 0..6 {
+        heads[stream] = (((priorities[stream] as u64) << 9) | (511 - stream) as u64) + 1;
+    }
+    for destination in output {
+        let mut rank = heads[0];
+        let mut winning_stream = 0;
+        for stream in 1..6 {
+            if heads[stream] > rank {
+                rank = heads[stream];
+                winning_stream = stream;
+            }
+        }
+        let index = 511 - ((rank - 1) & 511) as usize;
+        *destination = moves[index];
+        let next = index + 6;
+        heads[winning_stream] = if next < n {
+            (((priorities[next] as u64) << 9) | (511 - next) as u64) + 1
+        } else {
+            0
+        };
+    }
+}
+
+/// Shared quiescence ranking also accepts quiet evasions and underpromotions.
+pub fn order(
+    position: &Position,
+    context: &RootContext,
+    history: &[[[u32; 64]; 6]; 2],
+    list: &mut MoveList,
+) {
+    order_with_scratch(
+        position,
+        context,
+        history,
+        list,
+        &mut OrderingScratch::new(),
+    );
+}
+
+/// Reused across nodes: ordering finishes before recursion, so these arrays
+/// have search-wide ownership rather than a freshly initialized copy per ply.
+pub struct OrderingScratch {
+    moves: [Move; MOVE_CAPACITY],
+    priorities: [u32; MOVE_CAPACITY],
+}
+
+impl OrderingScratch {
+    pub const fn new() -> Self {
+        Self {
+            moves: [Move::NONE; MOVE_CAPACITY],
+            priorities: [0; MOVE_CAPACITY],
+        }
+    }
+}
+
+impl Default for OrderingScratch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn order_with_scratch(
+    position: &Position,
+    context: &RootContext,
+    history: &[[[u32; 64]; 6]; 2],
+    list: &mut MoveList,
+    workspace: &mut OrderingScratch,
+) {
+    order_by(list, workspace, |movement| {
+        preference(position, context, history, movement)
+    });
+}
+
+pub fn order_by(
+    list: &mut MoveList,
+    workspace: &mut OrderingScratch,
+    mut priority_for: impl FnMut(Move) -> u32,
+) {
+    let scratch = &mut workspace.moves;
+    let priorities = &mut workspace.priorities;
+    let mut low = 0;
+    let mut first = MOVE_CAPACITY;
+    for &movement in list.as_slice() {
+        let priority = priority_for(movement);
+        if priority > 1 {
+            first -= 1;
+            scratch[first] = movement;
+            priorities[first] = priority;
+        } else {
+            scratch[low] = movement;
+            low += 1;
+        }
+    }
+    let preferred = MOVE_CAPACITY - first;
+    if preferred <= 6 {
+        priority_sequence(&mut scratch[first..], &mut priorities[first..]);
+        list.moves[..preferred].copy_from_slice(&scratch[first..]);
+    } else {
+        preferred_into(
+            &mut scratch[first..],
+            &mut priorities[first..],
+            &mut list.moves[..preferred],
+        );
+    }
+    list.moves[preferred..preferred + low].copy_from_slice(&scratch[..low]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::movegen::{generate_legal, in_check};
+
+    fn sq(name: &str) -> Square {
+        Square::parse(name).unwrap()
+    }
+    fn pos(fen: &str) -> Position {
+        Position::from_fen(fen).unwrap()
+    }
+    fn names(list: &MoveList) -> Vec<String> {
+        list.as_slice().iter().map(ToString::to_string).collect()
+    }
+    fn reference_permutation(values: &[u32]) -> Vec<usize> {
+        let mut result: Vec<usize> = (0..values.len()).collect();
+        for residue in 0..6 {
+            let positions: Vec<usize> = (residue..values.len()).step_by(6).collect();
+            let mut items: Vec<usize> = positions.iter().map(|&index| result[index]).collect();
+            items.sort_by_key(|&index| std::cmp::Reverse(values[index]));
+            for (&position, &item) in positions.iter().zip(&items) {
+                result[position] = item;
+            }
+        }
+        result.sort_by_key(|&index| std::cmp::Reverse(values[index]));
+        result
+    }
+
+    #[test]
+    fn priority_permutation_matches_definition_for_ternary_and_long_sequences() {
+        for len in 0..=9 {
+            for mut encoding in 0..3usize.pow(len as u32) {
+                let mut values = vec![0; len];
+                for value in &mut values {
+                    *value = (encoding % 3) as u32;
+                    encoding /= 3;
+                }
+                let expected = reference_permutation(&values);
+                let mut moves: Vec<Move> = (0..len).map(|index| Move(index as u16 + 1)).collect();
+                priority_sequence(&mut moves, &mut values);
+                assert_eq!(
+                    moves
+                        .iter()
+                        .map(|movement| movement.0 as usize - 1)
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+            }
+        }
+        let mut values: Vec<u32> = (0..MOVE_CAPACITY)
+            .map(|i| {
+                if i % 17 == 0 {
+                    u32::MAX
+                } else {
+                    (i % 7) as u32
+                }
+            })
+            .collect();
+        let expected = reference_permutation(&values);
+        let mut moves: Vec<Move> = (0..MOVE_CAPACITY).map(|i| Move(i as u16 + 1)).collect();
+        priority_sequence(&mut moves, &mut values);
+        assert_eq!(
+            moves
+                .iter()
+                .map(|movement| movement.0 as usize - 1)
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    #[test]
+    fn pinned_captures_remain_and_quiet_discovered_checks_are_excluded() {
+        let pinned = pos("k3r3/8/8/8/8/8/4Rn2/4K3 w - - 0 1");
+        let mut list = MoveList::new();
+        generate(&pinned, &mut list);
+        let capture = Move::new(sq("e2"), sq("f2"), MoveKind::Ordinary);
+        assert!(list.as_slice().contains(&capture));
+        assert!(in_check(&pinned.played_unchecked(capture), Color::White));
+        let ep = pos("k7/8/8/4KPpr/8/8/8/8 w - g6 0 1");
+        generate(&ep, &mut list);
+        let ep_capture = Move::new(sq("f5"), sq("g6"), MoveKind::EnPassant);
+        assert!(list.as_slice().contains(&ep_capture));
+        assert!(in_check(&ep.played_unchecked(ep_capture), Color::White));
+        let discovered = pos("k7/8/8/8/8/8/N7/R6K w - - 0 1");
+        generate(&discovered, &mut list);
+        assert!(!names(&list).iter().any(|name| name == "a2b4"));
+        let checking = pos("8/k7/8/8/8/2N5/8/7K w - - 0 1");
+        generate(&checking, &mut list);
+        assert!(names(&list).iter().any(|name| name == "c3b5"));
+    }
+
+    #[test]
+    fn promotions_are_queen_only_quiet_before_captures_without_quiet_king_or_double_push() {
+        let position = pos("1r2k3/P7/8/8/8/8/4P3/4K3 w - - 0 1");
+        let mut list = MoveList::new();
+        generate(&position, &mut list);
+        assert_eq!(&names(&list)[..2], ["a7a8q", "a7b8q"]);
+        assert!(list.as_slice().iter().all(|movement| !matches!(
+            movement.kind(),
+            MoveKind::Promotion(PieceKind::Knight | PieceKind::Bishop | PieceKind::Rook)
+        )));
+        assert!(!names(&list).iter().any(|name| name == "e2e4"));
+        assert!(!list
+            .as_slice()
+            .iter()
+            .any(|movement| movement.from() == sq("e1")));
+        let double_check = pos("8/8/8/3k4/8/8/4P3/7K w - - 0 1");
+        generate(&double_check, &mut list);
+        assert!(!names(&list).iter().any(|name| name == "e2e4")); // A checking two-square push stays excluded.
+        let king_capture = pos("7k/8/8/8/8/8/5r2/4K3 w - - 0 1");
+        generate(&king_capture, &mut list);
+        assert!(names(&list).contains(&"e1f2".to_owned()));
+        assert!(list
+            .as_slice()
+            .iter()
+            .all(|movement| !king_capture.board[movement.to().0 as usize].is_empty()));
+    }
+
+    #[test]
+    fn black_ep_and_pawn_check_prefixes_use_higher_file_first() {
+        let position = pos("7k/8/8/8/2pPp3/8/8/K7 b - d3 0 1");
+        let mut list = MoveList::new();
+        generate(&position, &mut list);
+        assert_eq!(&names(&list)[..2], ["e4d3", "c4d3"]);
+        assert_eq!(list.moves[0].kind(), MoveKind::EnPassant);
+        let checks = pos("k7/8/8/8/8/2p1p3/8/3K4 b - - 0 1");
+        generate(&checks, &mut list);
+        assert_eq!(&names(&list)[..2], ["e3e2", "c3c2"]);
+        let mut white = pos("8/1k6/8/P1P5/8/8/8/7K w - - 0 1");
+        white.squares[0].swap(0, 1);
+        generate(&white, &mut list);
+        assert_eq!(&names(&list)[..2], ["a5a6", "c5c6"]);
+    }
+
+    #[test]
+    fn capture_preferences_use_strict_thresholds_original_attacker_and_wrapping() {
+        let position = pos("7k/1r6/P7/8/8/8/8/K7 w - - 0 1");
+        let mut context = RootContext::neutral(&position);
+        let history = [[[0; 64]; 6]; 2];
+        let movement = Move::new(sq("a6"), sq("b7"), MoveKind::Ordinary);
+        context.values[0][0] = 199;
+        context.values[1][3] = 150;
+        context.squares[1][3][sq("b7").0 as usize] = 0;
+        assert_eq!(
+            preference(&position, &context, &history, movement),
+            0xd000_0000u32.wrapping_add(65_536 * 150).wrapping_sub(499)
+        );
+        context.values[1][3] = 151;
+        context.values[0][0] = 200;
+        assert_eq!(
+            preference(&position, &context, &history, movement),
+            0xe000_0000u32.wrapping_add(65_536 * 151).wrapping_sub(200)
+        );
+        context.values[1][3] = 0;
+        context.squares[1][3][sq("b7").0 as usize] = -128;
+        assert_eq!(
+            preference(&position, &context, &history, movement),
+            (0xd000_0000i64 - 65_536 * 128 - 200) as u32
+        );
+        let king = pos("7k/8/8/8/8/8/1p6/K7 w - - 0 1");
+        let mut king_context = RootContext::neutral(&king);
+        king_context.values[1][0] = 150;
+        king_context.squares[1][0][sq("b2").0 as usize] = 0;
+        assert_eq!(
+            preference(
+                &king,
+                &king_context,
+                &history,
+                Move::new(sq("a1"), sq("b2"), MoveKind::Ordinary)
+            ),
+            0xd000_0000 + 65_536 * 150 - 1500
+        );
+        let promotion = pos("1r5k/P7/8/8/8/8/8/K7 w - - 0 1");
+        let context = RootContext::neutral(&promotion);
+        let capture = |kind| {
+            preference(
+                &promotion,
+                &context,
+                &history,
+                Move::new(sq("a7"), sq("b8"), MoveKind::Promotion(kind)),
+            )
+        };
+        assert_eq!(capture(PieceKind::Queen), capture(PieceKind::Knight));
+        for (kind, bonus) in [
+            (PieceKind::Knight, 256),
+            (PieceKind::Bishop, 512),
+            (PieceKind::Rook, 768),
+            (PieceKind::Queen, 1024),
+        ] {
+            assert_eq!(
+                preference(
+                    &promotion,
+                    &context,
+                    &history,
+                    Move::new(sq("a7"), sq("a8"), MoveKind::Promotion(kind))
+                ),
+                0xe000_0000 + bonus
+            );
+        }
+    }
+
+    #[test]
+    fn preferred_reverse_and_low_partition_preserve_exact_shared_evasion_order() {
+        let position = pos("7k/8/8/8/3N4/8/8/K7 w - - 0 1");
+        let context = RootContext::neutral(&position);
+        let mut history = [[[0; 64]; 6]; 2];
+        let values = [0, 1, 1, 2, u32::MAX, 2, 1, 2];
+        let mut list = MoveList::new();
+        for ((df, dr), value) in KNIGHT.into_iter().zip(values) {
+            let target = sq("d4").offset(df, dr).unwrap();
+            history[0][1][target.0 as usize] = value;
+            list.push(Move::new(sq("d4"), target, MoveKind::Ordinary));
+        }
+        let original = list.as_slice().to_vec();
+        let preferred: Vec<usize> = (0..original.len())
+            .rev()
+            .filter(|&i| values[i] > 1)
+            .collect();
+        let preferred_values: Vec<u32> = preferred.iter().map(|&i| values[i]).collect();
+        let mut expected: Vec<Move> = reference_permutation(&preferred_values)
+            .iter()
+            .map(|&i| original[preferred[i]])
+            .collect();
+        expected.extend(
+            (0..original.len())
+                .filter(|&i| values[i] <= 1)
+                .map(|i| original[i]),
+        );
+        order(&position, &context, &history, &mut list);
+        assert_eq!(list.as_slice(), expected);
+        assert_eq!(
+            &list.as_slice()[4..],
+            [original[0], original[1], original[2], original[6]]
+        );
+    }
+
+    #[test]
+    fn slider_direct_check_uses_projected_source_and_capture_set_is_pseudo_legal() {
+        let position = pos("2k5/8/8/8/2R5/8/8/7K w - - 0 1");
+        assert!(direct_check(
+            &position,
+            sq("c4"),
+            sq("c1"),
+            PieceKind::Rook,
+            sq("c8")
+        ));
+        let starting = pos("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        let mut tactical = MoveList::new();
+        generate(&starting, &mut tactical);
+        assert_eq!(tactical.len, 0);
+        let mut legal = MoveList::new();
+        generate_legal(&starting, &mut legal);
+        assert_eq!(legal.len, 20);
+    }
+}
+
+#[cfg(test)]
+mod six_stream_tests;

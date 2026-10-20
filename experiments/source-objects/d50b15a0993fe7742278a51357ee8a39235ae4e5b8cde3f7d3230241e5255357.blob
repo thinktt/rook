@@ -1,0 +1,667 @@
+//! Search-shared remembered results: three depth priorities plus recent.
+//!
+//! These operations add no semantic search/relation charge. Query is mutable:
+//! a usable mate bound can raise its record's depth after reporting metadata.
+
+use crate::position::Position;
+use crate::types::{Color, Move};
+
+const LOWER: u8 = 1;
+const UPPER: u8 = 2;
+const QUIET_CHECKED: u8 = 4;
+const MARKED_DEPTH: u8 = 8;
+const RECENT: usize = 3;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Bound {
+    #[default]
+    None,
+    Upper,
+    Exact,
+    Lower,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Query {
+    pub group: usize,
+    pub identity: u32,
+    pub ply: i32,
+    pub target: i32,
+    pub lower: i32,
+    pub upper: i32,
+}
+
+impl Query {
+    #[inline]
+    fn remaining_depth(self) -> i16 {
+        i16::try_from(self.target as i64 - self.ply as i64)
+            .expect("remembered remaining depth exceeds native representation")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Store {
+    pub query: Query,
+    pub score: i32,
+    pub move_hint: Option<Move>,
+    pub quiet_mate_checked: bool,
+    pub mark_depth: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ProbeResult {
+    pub score: Option<i32>,
+    pub bound: Bound,
+    pub move_hint: Option<Move>,
+    pub marked_depth: Option<i32>,
+    pub quiet_mate_checked: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+#[repr(C)]
+struct Record {
+    identity: u32,
+    score: i16,
+    depth: i16,
+    endpoints: u16,
+    flags: u8,
+    generation: u8,
+}
+
+impl Record {
+    fn from_store(store: Store, generation: u8) -> Self {
+        let score = store.score as i64;
+        let normalized = if score >= 9000 {
+            score + store.query.ply as i64
+        } else if score <= -9000 {
+            score - store.query.ply as i64
+        } else {
+            score
+        };
+        let mut flags = 0;
+        if store.score > store.query.lower {
+            flags |= LOWER;
+        }
+        if store.score < store.query.upper {
+            flags |= UPPER;
+        }
+        if store.quiet_mate_checked {
+            flags |= QUIET_CHECKED;
+        }
+        if store.mark_depth {
+            flags |= MARKED_DEPTH;
+        }
+        Self {
+            identity: store.query.identity,
+            score: i16::try_from(normalized)
+                .expect("remembered score exceeds native representation"),
+            depth: store.query.remaining_depth(),
+            endpoints: store.move_hint.map_or(0, |mv| mv.0 & 0x0fff),
+            flags,
+            generation,
+        }
+    }
+
+    #[inline]
+    fn matches(self, generation: u8, identity: u32) -> bool {
+        self.generation == generation && self.identity == identity
+    }
+
+    #[inline]
+    fn bound(self) -> Bound {
+        match self.flags & (LOWER | UPPER) {
+            LOWER => Bound::Lower,
+            UPPER => Bound::Upper,
+            3 => Bound::Exact,
+            _ => Bound::None,
+        }
+    }
+
+    /// Metadata observes the depth before a successful mate query raises it.
+    #[inline]
+    fn consider(&mut self, query: Query, required: i16, result: &mut ProbeResult) -> bool {
+        result.bound = self.bound();
+        if self.endpoints != 0 {
+            result.move_hint = Some(Move(self.endpoints));
+        }
+        result.quiet_mate_checked |= self.flags & QUIET_CHECKED != 0;
+        if self.flags & MARKED_DEPTH != 0 {
+            let depth = self.depth as i32;
+            result.marked_depth = Some(result.marked_depth.map_or(depth, |old| old.max(depth)));
+        }
+
+        let normalized = self.score as i32;
+        let score = if normalized >= 9000 {
+            normalized - query.ply
+        } else if normalized <= -9000 {
+            normalized + query.ply
+        } else {
+            normalized
+        };
+        let lower_cutoff = self.flags & LOWER != 0 && score >= query.upper;
+        let upper_cutoff = self.flags & UPPER != 0 && score <= query.lower;
+        let mate_cutoff =
+            (normalized >= 9000 && lower_cutoff) || (normalized <= -9000 && upper_cutoff);
+        if mate_cutoff {
+            self.depth = self.depth.max(required);
+            result.score = Some(score);
+            return true;
+        }
+        if self.depth >= required && (lower_cutoff || upper_cutoff) {
+            result.score = Some(score);
+            return true;
+        }
+        false
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+#[repr(C)]
+struct Group {
+    records: [Record; 4],
+}
+
+const _: () = assert!(std::mem::size_of::<Record>() == 12);
+const _: () = assert!(std::mem::size_of::<Group>() == 48);
+
+pub struct RememberedTable {
+    groups: Vec<Group>,
+    // Zero always denotes an invalid record. Reuse of a live byte value is
+    // preceded by a physical clear so old identities cannot become valid.
+    generation: u8,
+}
+
+impl RememberedTable {
+    pub fn with_groups(count: usize) -> Self {
+        assert!(count >= 1, "remembered table needs at least one group");
+        Self {
+            groups: vec![Group::default(); count],
+            generation: 1,
+        }
+    }
+
+    pub fn from_tts(tts: usize) -> Result<Self, String> {
+        let count = largest_prime(tts / 48).ok_or("tts is too small for a prime group count")?;
+        let mut groups = Vec::new();
+        groups
+            .try_reserve_exact(count)
+            .map_err(|e| format!("cannot allocate remembered groups: {e}"))?;
+        groups.resize(count, Group::default());
+        Ok(Self {
+            groups,
+            generation: 1,
+        })
+    }
+
+    #[inline]
+    pub fn group_count(&self) -> usize {
+        self.groups.len()
+    }
+
+    pub fn clear(&mut self) {
+        if self.generation == u8::MAX {
+            self.groups.fill(Group::default());
+            self.generation = 1;
+        } else {
+            self.generation += 1;
+        }
+    }
+
+    #[inline]
+    pub fn group_for(&self, position: &Position) -> usize {
+        let ep = if position.ep < 64 {
+            10 * (position.ep as u32 / 8) + position.ep as u32 % 8 + 1
+        } else {
+            0
+        };
+        let flags = position.rights as u32 | if position.side == Color::White { 16 } else { 0 };
+        let key = position.primary ^ ((ep * 256) | (flags * 65536));
+        key as usize % self.groups.len()
+    }
+
+    pub fn store(&mut self, store: Store) {
+        let record = Record::from_store(store, self.generation);
+        let group = &mut self.groups[store.query.group];
+
+        // Only retained slots participate in the identity match. Recent may
+        // duplicate an identity and is deliberately ignored during storage.
+        if let Some(index) = group.records[..RECENT]
+            .iter()
+            .position(|r| r.matches(self.generation, record.identity))
+        {
+            if record.depth < group.records[index].depth {
+                group.records[RECENT] = record;
+            } else {
+                group.records[index] = record;
+            }
+            return;
+        }
+
+        // An empty priority is less valuable than every valid signed depth.
+        if let Some(index) = group.records[..RECENT]
+            .iter()
+            .position(|r| r.generation != self.generation)
+        {
+            group.records[index] = record;
+            group.records[RECENT] = Record::default();
+            return;
+        }
+
+        let mut least = 0;
+        for index in 1..RECENT {
+            if group.records[index].depth < group.records[least].depth {
+                least = index;
+            }
+        }
+        if record.depth >= group.records[least].depth {
+            group.records[RECENT] = group.records[least];
+            group.records[least] = record;
+        } else {
+            group.records[RECENT] = record;
+        }
+    }
+
+    pub fn probe(&mut self, query: Query) -> ProbeResult {
+        let required = query.remaining_depth();
+        let group = &mut self.groups[query.group];
+        let mut result = ProbeResult::default();
+        let recent = &mut group.records[RECENT];
+        if recent.matches(self.generation, query.identity)
+            && recent.consider(query, required, &mut result)
+        {
+            return result;
+        }
+        for record in &mut group.records[..RECENT] {
+            if record.matches(self.generation, query.identity) {
+                record.consider(query, required, &mut result);
+                break;
+            }
+        }
+        result
+    }
+}
+
+fn largest_prime(limit: usize) -> Option<usize> {
+    if limit < 2 {
+        return None;
+    }
+    if limit == 2 {
+        return Some(2);
+    }
+    let mut candidate = if limit & 1 == 0 { limit - 1 } else { limit };
+    while candidate >= 3 {
+        if is_prime(candidate) {
+            return Some(candidate);
+        }
+        candidate -= 2;
+    }
+    Some(2)
+}
+
+fn is_prime(value: usize) -> bool {
+    if value % 3 == 0 {
+        return value == 3;
+    }
+    let mut divisor = 5;
+    while divisor <= value / divisor {
+        if value % divisor == 0 || value % (divisor + 2) == 0 {
+            return false;
+        }
+        divisor += 6;
+    }
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{MoveKind, PieceKind, Square};
+
+    fn query(identity: u32, depth: i32, lower: i32, upper: i32) -> Query {
+        Query {
+            group: 0,
+            identity,
+            ply: 0,
+            target: depth,
+            lower,
+            upper,
+        }
+    }
+
+    fn store(identity: u32, depth: i32, score: i32) -> Store {
+        Store {
+            query: query(identity, depth, -200, 200),
+            score,
+            move_hint: None,
+            quiet_mate_checked: false,
+            mark_depth: true,
+        }
+    }
+
+    fn movement(from: &str, to: &str, kind: MoveKind) -> Move {
+        Move::new(
+            Square::parse(from).unwrap(),
+            Square::parse(to).unwrap(),
+            kind,
+        )
+    }
+
+    #[test]
+    fn exact_interior_is_metadata_only_and_permissions_use_strict_store_bounds() {
+        let mut table = RememberedTable::with_groups(1);
+        let mut entry = store(7, 4, 42);
+        entry.query.lower = 0;
+        entry.query.upper = 100;
+        entry.move_hint = Some(movement("e7", "e8", MoveKind::Promotion(PieceKind::Queen)));
+        entry.quiet_mate_checked = true;
+        table.store(entry);
+        assert_eq!(
+            table.probe(query(7, 4, 0, 100)),
+            ProbeResult {
+                score: None,
+                bound: Bound::Exact,
+                move_hint: Some(movement("e7", "e8", MoveKind::Ordinary)),
+                marked_depth: Some(4),
+                quiet_mate_checked: true,
+            }
+        );
+        assert_eq!(table.probe(query(7, 4, 0, 42)).score, Some(42));
+        assert_eq!(table.probe(query(7, 4, 42, 100)).score, Some(42));
+
+        let mut lower_equal = store(8, 4, 0);
+        lower_equal.query.lower = 0;
+        lower_equal.query.upper = 10;
+        table.store(lower_equal);
+        let upper = table.probe(query(8, 4, 0, 1));
+        assert_eq!((upper.bound, upper.score), (Bound::Upper, Some(0)));
+        assert_eq!(table.probe(query(8, 4, -1, 0)).score, None);
+
+        let mut upper_equal = store(9, 4, 10);
+        upper_equal.query.lower = 0;
+        upper_equal.query.upper = 10;
+        table.store(upper_equal);
+        let lower = table.probe(query(9, 4, 0, 10));
+        assert_eq!((lower.bound, lower.score), (Bound::Lower, Some(10)));
+        assert_eq!(table.probe(query(9, 4, 10, 11)).score, None);
+    }
+
+    #[test]
+    fn recent_and_retained_combine_metadata_but_last_bound_wins() {
+        let mut table = RememberedTable::with_groups(1);
+        let mut retained = store(1, 10, -100);
+        retained.query.lower = -50;
+        retained.query.upper = 50;
+        table.store(retained);
+        let mut recent = store(1, 2, 100);
+        recent.query.lower = -50;
+        recent.query.upper = 50;
+        recent.move_hint = Some(movement("e1", "g1", MoveKind::Castle));
+        recent.quiet_mate_checked = true;
+        recent.mark_depth = false;
+        table.store(recent);
+        assert_eq!(
+            table.probe(query(1, 11, -200, 200)),
+            ProbeResult {
+                score: None,
+                bound: Bound::Upper,
+                move_hint: Some(movement("e1", "g1", MoveKind::Ordinary)),
+                marked_depth: Some(10),
+                quiet_mate_checked: true,
+            }
+        );
+
+        // Equal-depth replacement leaves the older recent duplicate alive.
+        table.store(store(1, 10, 0));
+        let preferred_recent = table.probe(query(1, 2, -100, 100));
+        assert_eq!(preferred_recent.score, Some(100));
+        assert_eq!(preferred_recent.bound, Bound::Lower);
+        assert_eq!(preferred_recent.marked_depth, None);
+        assert!(preferred_recent.quiet_mate_checked);
+
+        // With no usable recent score, the retained exact kind replaces lower.
+        assert_eq!(table.probe(query(1, 11, -200, 200)).bound, Bound::Exact);
+    }
+
+    #[test]
+    fn fixed_priority_ties_and_recent_only_identity_do_not_gain_insertion_age() {
+        let mut table = RememberedTable::with_groups(1);
+        for id in 1..=3 {
+            table.store(store(id, 5, id as i32 * 10));
+        }
+        table.store(store(4, 5, 40));
+        assert_eq!(table.probe(query(1, 5, -100, 0)).score, Some(10));
+        table.store(store(5, 5, 50));
+        assert_eq!(table.probe(query(1, 5, -100, 0)).bound, Bound::None);
+        assert_eq!(table.probe(query(4, 5, -100, 0)).score, Some(40));
+        assert_eq!(table.probe(query(2, 5, -100, 0)).score, Some(20));
+        assert_eq!(table.probe(query(3, 5, -100, 0)).score, Some(30));
+
+        table.store(store(6, 4, 60)); // Too shallow: recent only.
+        assert_eq!(table.probe(query(4, 5, -100, 0)).bound, Bound::None);
+        assert_eq!(table.probe(query(5, 5, -100, 0)).score, Some(50));
+        table.store(store(6, 6, 61)); // Search retained slots, not recent identity.
+        assert_eq!(table.probe(query(6, 6, -100, 0)).score, Some(61));
+        assert_eq!(table.probe(query(5, 5, -100, 0)).score, Some(50));
+        assert_eq!(table.probe(query(2, 5, -100, 0)).score, Some(20));
+    }
+
+    #[test]
+    fn filling_an_empty_priority_discards_recent_even_for_negative_depth() {
+        let mut table = RememberedTable::with_groups(1);
+        table.store(store(1, 10, 100));
+        table.store(store(1, 1, 50));
+        assert_eq!(table.probe(query(1, 1, -100, 0)).score, Some(50));
+        let mut negative = store(2, 0, 0);
+        negative.query.ply = 63; // Remaining depth -63 still fills an empty slot.
+        table.store(negative);
+        assert_eq!(table.probe(query(1, 1, -100, 0)).score, Some(100));
+        let q = Query {
+            group: 0,
+            identity: 2,
+            ply: 63,
+            target: 0,
+            lower: -1,
+            upper: 0,
+        };
+        let result = table.probe(q);
+        assert_eq!((result.marked_depth, result.score), (Some(-63), Some(0)));
+    }
+
+    #[test]
+    fn inclusive_mate_thresholds_normalize_and_upgrade_depth_after_observation() {
+        for (id, score) in [(1, 9000), (2, -9000)] {
+            let mut table = RememberedTable::with_groups(1);
+            let mut entry = store(id, 4, score);
+            entry.query.ply = 3; // Stored remaining depth one.
+            entry.query.lower = -10000;
+            entry.query.upper = 10000;
+            table.store(entry);
+            let adjusted = if score > 0 { 9002 } else { -9002 };
+            let mut q = Query {
+                group: 0,
+                identity: id,
+                ply: 1,
+                target: 20,
+                lower: if score > 0 { 0 } else { adjusted },
+                upper: if score > 0 { adjusted } else { 0 },
+            };
+            let first = table.probe(q);
+            assert_eq!(first.score, Some(adjusted));
+            assert_eq!(first.marked_depth, Some(1));
+            assert_eq!(table.probe(q).marked_depth, Some(19));
+
+            // Mate admission uses the normalized threshold, even when the
+            // adjusted value crosses back into the ordinary score range.
+            q.ply = 4;
+            q.target = 30;
+            q.lower = if score > 0 { 0 } else { -8999 };
+            q.upper = if score > 0 { 8999 } else { 0 };
+            let crossed = table.probe(q);
+            assert_eq!(crossed.score, Some(if score > 0 { 8999 } else { -8999 }));
+            assert_eq!(crossed.marked_depth, Some(19));
+            assert_eq!(table.probe(q).marked_depth, Some(26));
+        }
+
+        let mut table = RememberedTable::with_groups(1);
+        let mut ordinary = store(3, 4, 8999);
+        ordinary.query.ply = 3;
+        ordinary.query.lower = -10000;
+        ordinary.query.upper = 10000;
+        table.store(ordinary);
+        assert_eq!(
+            table
+                .probe(Query {
+                    group: 0,
+                    identity: 3,
+                    ply: 1,
+                    target: 20,
+                    lower: 0,
+                    upper: 8999
+                })
+                .score,
+            None
+        );
+
+        // A positive mate with only upper permission cannot bypass depth.
+        let mut upper_only = store(4, 4, 9000);
+        upper_only.query.ply = 3;
+        upper_only.query.lower = 9000;
+        upper_only.query.upper = 10000;
+        table.store(upper_only);
+        assert_eq!(
+            table
+                .probe(Query {
+                    group: 0,
+                    identity: 4,
+                    ply: 1,
+                    target: 20,
+                    lower: 9002,
+                    upper: 10000
+                })
+                .score,
+            None
+        );
+    }
+
+    #[test]
+    fn recent_mate_mutation_affects_its_next_observation_without_promoting_it() {
+        let mut table = RememberedTable::with_groups(1);
+        table.store(store(1, 10, 0));
+        let mut mate = store(1, 1, 9000);
+        mate.query.lower = 0;
+        mate.query.upper = 9000;
+        table.store(mate);
+        assert_eq!(table.probe(query(1, 20, 0, 9000)).marked_depth, Some(1));
+        assert_eq!(table.probe(query(1, 20, 0, 9000)).marked_depth, Some(20));
+        // A retained replacement still leaves that upgraded recent record.
+        table.store(store(1, 11, 25));
+        assert_eq!(table.probe(query(1, 20, 0, 9000)).score, Some(9000));
+    }
+
+    #[test]
+    fn mate_depth_upgrade_changes_the_next_displacement_choice() {
+        let mut table = RememberedTable::with_groups(1);
+        let mut mate = store(1, 1, 9000);
+        mate.query.lower = 0;
+        mate.query.upper = 9000;
+        table.store(mate);
+        table.store(store(2, 2, 20));
+        table.store(store(3, 3, 30));
+        assert_eq!(table.probe(query(1, 10, 0, 9000)).marked_depth, Some(1));
+        table.store(store(4, 2, 40)); // The raised mate depth protects slot one.
+        table.store(store(5, 0, 50)); // Replace recent so it cannot mask retention.
+        assert_eq!(table.probe(query(2, 2, -100, 0)).bound, Bound::None);
+        let retained_mate = table.probe(query(1, 10, 0, 9000));
+        assert_eq!(
+            (retained_mate.marked_depth, retained_mate.score),
+            (Some(10), Some(9000))
+        );
+        assert_eq!(table.probe(query(4, 2, -100, 0)).score, Some(40));
+    }
+
+    #[test]
+    fn groups_zero_identity_logical_clear_and_generation_wrap() {
+        let mut table = RememberedTable::with_groups(2);
+        table.store(store(0, 1, 0));
+        assert_eq!(table.probe(query(0, 1, -1, 0)).score, Some(0));
+        let other = Query {
+            group: 1,
+            ..query(0, 1, -1, 0)
+        };
+        assert_eq!(table.probe(other), ProbeResult::default());
+        table.clear();
+        assert_eq!(table.probe(query(0, 1, -1, 0)), ProbeResult::default());
+        // The normal clear changed validity, not the record's bytes.
+        assert_eq!(table.groups[0].records[0].generation, 1);
+        for _ in 1..255 {
+            table.clear();
+        }
+        assert_eq!(table.generation, 1);
+        assert_eq!(table.probe(query(0, 1, -1, 0)), ProbeResult::default());
+        table.store(store(0, 1, 17));
+        assert_eq!(table.probe(query(0, 1, -1, 0)).score, Some(17));
+    }
+
+    #[test]
+    fn extended_depth_fits_record_and_group_key_uses_unsigned_composition() {
+        let mut table = RememberedTable::with_groups(101);
+        let entry = Store {
+            query: Query {
+                group: 0,
+                identity: 7,
+                ply: 62,
+                target: 428,
+                lower: 0,
+                upper: 100,
+            },
+            score: 42,
+            move_hint: None,
+            quiet_mate_checked: false,
+            mark_depth: true,
+        };
+        table.store(entry);
+        let result = table.probe(Query {
+            upper: 42,
+            ..entry.query
+        });
+        assert_eq!((result.marked_depth, result.score), (Some(366), Some(42)));
+        assert_eq!(
+            table
+                .probe(Query {
+                    target: 429,
+                    upper: 42,
+                    ..entry.query
+                })
+                .score,
+            None
+        );
+
+        let mut position = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
+        position.primary = 0x80000000;
+        position.rights = 1 | 8;
+        position.ep = Square::parse("d6").unwrap().0;
+        // E=54, F=25: unsigned key 0x80193600 has remainder 100 mod101.
+        assert_eq!(table.group_for(&position), 100);
+        position.side = Color::Black;
+        assert_eq!(table.group_for(&position), 5);
+    }
+
+    #[test]
+    fn prime_capacity_and_concrete_layout() {
+        assert!(RememberedTable::from_tts(95).is_err());
+        assert_eq!(RememberedTable::from_tts(96).unwrap().group_count(), 2);
+        assert_eq!(
+            RememberedTable::from_tts(48 * 100).unwrap().group_count(),
+            97
+        );
+        assert_eq!(std::mem::size_of::<Record>(), 12);
+        assert_eq!(std::mem::align_of::<Record>(), 4);
+        assert_eq!(std::mem::offset_of!(Record, identity), 0);
+        assert_eq!(std::mem::offset_of!(Record, score), 4);
+        assert_eq!(std::mem::offset_of!(Record, depth), 6);
+        assert_eq!(std::mem::offset_of!(Record, endpoints), 8);
+        assert_eq!(std::mem::offset_of!(Record, flags), 10);
+        assert_eq!(std::mem::offset_of!(Record, generation), 11);
+        assert_eq!(std::mem::size_of::<Group>(), 48);
+    }
+}

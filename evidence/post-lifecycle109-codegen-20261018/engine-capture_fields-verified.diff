@@ -1,0 +1,208 @@
+--- control
++++ candidate
+@@ -4,91 +4,95 @@
+ push %r13
+ push %r12
+ push %rbx
++mov %r8d,-0x24(%rsp)
+ mov %rdi,-0x10(%rsp)
+-movzbl 0x69(%rsi),%r12d
+-movzbl 0x63(%rsi),%ebp
+-movzbl 0x68(%rsi),%r13d
+-movzbl 0x62(%rsi),%r15d
+-movzbl 0x67(%rsi),%ebx
+-movzbl 0x61(%rsi),%r11d
++movzbl 0x69(%rsi),%r13d
++movzbl 0x63(%rsi),%r14d
++movzbl 0x68(%rsi),%ebp
++movzbl 0x62(%rsi),%r12d
++movzbl 0x67(%rsi),%r8d
++movzbl 0x61(%rsi),%ebx
+ movzbl 0x66(%rsi),%eax
+-mov %eax,-0x1c(%rsp)
+-movzbl 0x60(%rsi),%r10d
+-movzbl 0x64(%rsi),%edi
+-movzbl 0x6a(%rsi),%r14d
+-movzbl 0x7c(%rsi),%r9d
+-movzbl 0x30(%rdx),%eax
+-mov %rdx,-0x8(%rsp)
+-mov 0x28(%rdx),%edx
+-lea -0x2328(%rdx),%esi
+-cmp $0xffffb9b1,%esi
+-jb LOCAL+0x8b
+-movslq %edx,%rsi
++mov %eax,-0x20(%rsp)
++movzbl 0x60(%rsi),%r11d
++movzbl 0x64(%rsi),%r9d
++movzbl 0x6a(%rsi),%r15d
++movzbl 0x7c(%rsi),%r10d
++movzbl 0x30(%rdx),%edi
++mov 0x28(%rdx),%eax
++mov 0x20(%rdx),%rsi
++mov %rsi,-0x8(%rsp)
++mov 0x2c(%rdx),%edx
++mov %edx,-0x1c(%rsp)
++lea -0x2328(%rax),%edx
++cmp $0xffffb9b1,%edx
++jb LOCAL+0x9c
++movslq %eax,%rdx
+ movslq %ecx,%rcx
+-sub %rcx,%rsi
+-cmp $0x1edc,%rsi
++sub %rcx,%rdx
++cmp $0x1edc,%rdx
+ mov $0x1edc,%ecx
+-cmovl %rsi,%rcx
++cmovl %rdx,%rcx
+ cmp $0xffffffffffffe125,%rcx
+-mov $0xffffffffffffe124,%rdx
+-cmovge %rcx,%rdx
+-mov %rdx,-0x18(%rsp)
+-mov %eax,%ecx
+-sub %r8d,%ecx
+-add %edi,%r14d
+-add %r12d,%ebp
+-add %r13d,%r15d
+-add %ebx,%r11d
+-mov %r11d,%edx
++mov $0xffffffffffffe124,%rax
++cmovge %rcx,%rax
++mov %rax,-0x18(%rsp)
++mov %edi,%esi
++mov %edi,%ecx
++sub -0x24(%rsp),%ecx
++add %r9d,%r15d
++add %r13d,%r14d
++add %ebp,%r12d
++add %r8d,%ebx
++mov %ebx,%edx
+ shr $0x4,%edx
+-add %r15d,%edx
+-mov %edx,%esi
+-shr $0x4,%esi
+-add %ebp,%esi
+-mov %esi,%ebx
+-shr $0x4,%ebx
+-add %r14d,%ebx
+-add -0x1c(%rsp),%r10d
++add %r12d,%edx
++mov %edx,%edi
++shr $0x4,%edi
++add %r14d,%edi
++mov %edi,%r8d
++shr $0x4,%r8d
++add %r15d,%r8d
++add -0x20(%rsp),%r11d
+ and $0xf,%edx
+-and $0xf,%r11d
+-add %edx,%r11d
+-imul $0x3e8,%eax,%r8d
+ and $0xf,%ebx
+-and $0xf,%esi
+-lea (%r11,%r11,2),%edx
+-add %r10d,%edx
+-lea (%rdx,%rsi,4),%edx
+-lea (%rdx,%rbx,8),%edx
+-shl $0x4,%r9d
+-cmp $0x140,%r9d
+-mov $0x140,%esi
+-cmovb %r9d,%esi
+-cmp $0x41,%esi
+-mov $0x40,%r9d
+-cmovae %esi,%r9d
+-add $0xffffffc0,%r9d
+-xor %esi,%esi
++add %edx,%ebx
++and $0xf,%r8d
++and $0xf,%edi
++lea (%rbx,%rbx,2),%edx
++add %r11d,%edx
++lea (%rdx,%rdi,4),%edx
++lea (%rdx,%r8,8),%edx
++shl $0x4,%r10d
++cmp $0x140,%r10d
++mov $0x140,%edi
++cmovb %r10d,%edi
++cmp $0x41,%edi
++mov $0x40,%r8d
++cmovae %edi,%r8d
++add $0xffffffc0,%r8d
++xor %edi,%edi
+ cmp $0x21,%edx
+-cmovb %esi,%r9d
+-mov $0x100,%r10d
++cmovb %edi,%r8d
++mov $0x100,%r9d
+ shl $0x3,%edx
+-mov $0x180,%r11d
+-sub %edx,%r11d
++mov $0x180,%r10d
++sub %edx,%r10d
+ mov $0x100,%edx
+-sub %r9d,%edx
+-cmp $0x100,%r11d
+-cmovge %r10d,%r11d
+-test %r11d,%r11d
+-cmovle %esi,%r11d
+-imul %edx,%r11d
+-shr $0x8,%r11d
+-sub %r11d,%edx
+-shl $0x20,%r11
+-or %r11,%r9
++sub %r8d,%edx
++cmp $0x100,%r10d
++cmovge %r9d,%r10d
++test %r10d,%r10d
++cmovle %edi,%r10d
++imul %edx,%r10d
++shr $0x8,%r10d
++sub %r10d,%edx
++shl $0x20,%r10
++or %r10,%r8
+ shl $0x10,%edx
+-add %rdx,%r9
+-shr $0x20,%r9
+-movzwl %r9w,%edx
++add %rdx,%r8
++shr $0x20,%r8
++movzwl %r8w,%edx
+ cmp $0x3d,%dx
+ sbb $0xffffffff,%ecx
+ cmp $0x1,%rdx
+@@ -108,26 +112,26 @@
+ lea 0x8(%rcx),%edx
+ movslq %edx,%rdx
+ imul $0x55555556,%rdx,%rdx
+-mov %rdx,%rsi
+-shr $0x3f,%rsi
++mov %rdx,%rdi
++shr $0x3f,%rdi
+ shr $0x20,%rdx
+-add %esi,%edx
++add %edi,%edx
+ cmp %edx,%ecx
+ cmovg %ecx,%edx
+ cmp $0x2,%edx
+ mov $0x1,%ecx
+ cmovge %edx,%ecx
+-cmp %ecx,%eax
+-cmovb %eax,%ecx
+-add %r8d,%ecx
++cmp %ecx,%esi
++cmovb %esi,%ecx
++imul $0x3e8,%esi,%edx
++add %ecx,%edx
+ mov -0x10(%rsp),%rax
+-mov %ecx,0x8(%rax)
++mov %edx,0x8(%rax)
+ mov -0x18(%rsp),%rcx
+ mov %ecx,0xc(%rax)
+-mov -0x8(%rsp),%rdx
+-mov 0x2c(%rdx),%ecx
++mov -0x1c(%rsp),%ecx
+ mov %ecx,0x10(%rax)
+-mov 0x20(%rdx),%rcx
++mov -0x8(%rsp),%rcx
+ mov %rcx,(%rax)
+ pop %rbx
+ pop %r12

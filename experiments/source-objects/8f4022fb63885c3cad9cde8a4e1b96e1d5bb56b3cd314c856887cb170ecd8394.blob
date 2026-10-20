@@ -1,0 +1,811 @@
+//! Persistent ordinary state and idle commands. Live wire polling is a separate caller.
+use crate::clock::{self, Allowance, GameClock, Schedule, Stage};
+use crate::engine::Search;
+use crate::history::SearchHistory;
+use crate::movegen::{self, MoveList};
+use crate::ordinary;
+use crate::output::{self, Event};
+use crate::parameters::{self, Parameters};
+use crate::position::Position;
+use crate::quiescence::{Limits, Work};
+use crate::timed::{self, Controls};
+use crate::types::{Color, Move, MoveKind, PieceKind, Square};
+use crate::work_clock::Ledger;
+
+pub const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameResult {
+    Checkmate(Color),
+    Stalemate,
+    FiftyMoves,
+    Repetition,
+    LackWood,
+    MoveListFull,
+}
+impl GameResult {
+    pub fn wire(self) -> String {
+        let (result, reason) = match self {
+            Self::Checkmate(Color::White) => ("1-0", "Checkmate"),
+            Self::Checkmate(Color::Black) => ("0-1", "Checkmate"),
+            Self::Stalemate => ("1/2-1/2", "Stalemate"),
+            Self::FiftyMoves => ("1/2-1/2", "Draw 50 moves"),
+            Self::Repetition => ("1/2-1/2", "Draw 3 x position"),
+            Self::LackWood => ("1/2-1/2", "Draw lack of wood"),
+            Self::MoveListFull => ("1/2-1/2", "Movelist full"),
+        };
+        format!("{result} {{{reason}}}\n")
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Record,
+    Arguments,
+    Position(String),
+    Parameters(parameters::Error),
+    Clock(clock::Error),
+    Search(ordinary::Error),
+    Rendering(output::InvalidPv),
+    FatalEmptyRoot,
+    FatalKingVictim,
+    Pondering,
+    Host(std::io::Error),
+}
+impl From<parameters::Error> for Error {
+    fn from(e: parameters::Error) -> Self {
+        Self::Parameters(e)
+    }
+}
+impl From<clock::Error> for Error {
+    fn from(e: clock::Error) -> Self {
+        Self::Clock(e)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    Reply(Vec<String>),
+    Search,
+    Quit,
+}
+
+pub struct SearchResult {
+    pub seed: u32,
+    pub entry_clock: u32,
+    pub allowance: Allowance,
+    pub outcome: timed::Outcome,
+    pub events: Vec<Event>,
+    pub game_result: Option<GameResult>,
+}
+
+struct Prepared {
+    root: Position,
+    history: SearchHistory,
+    controls: Controls,
+    allowance: Allowance,
+    entry: u32,
+}
+
+pub struct Session<const D: bool = true> {
+    pub parameters: Parameters,
+    pub clock: GameClock,
+    pub ledger: Ledger,
+    pub states: Vec<Position>,
+    pub moves: Vec<Move>,
+    pub force: bool,
+    pub engine_color: Color,
+    pub clock_color: Color,
+    pub post: bool,
+    pub pondering: bool,
+    pub recorded_depth: i32,
+    pub recorded_time: i32,
+    pub result: Option<GameResult>,
+    pub seed_override: Option<u32>,
+    search: Option<Search<D>>,
+    work: Work,
+    king_victim: bool,
+}
+
+impl<const D: bool> Default for Session<D> {
+    fn default() -> Self {
+        let position = Position::from_fen(START).unwrap();
+        let mut states = Vec::with_capacity(801);
+        states.push(position);
+        Self {
+            parameters: Parameters::default(),
+            clock: GameClock::default(),
+            ledger: Ledger::default(),
+            states,
+            moves: Vec::with_capacity(800),
+            force: true,
+            engine_color: Color::Black,
+            clock_color: Color::Black,
+            post: false,
+            pondering: false,
+            recorded_depth: 0,
+            recorded_time: 0,
+            result: None,
+            seed_override: None,
+            search: Some(Search::new(&position)),
+            work: Work::default(),
+            king_victim: false,
+        }
+    }
+}
+
+impl<const D: bool> Session<D> {
+    /// Private diagnostic wrapper transport; counts for the last search segment.
+    pub fn diagnostic_material_allowance_census(
+        &self,
+    ) -> Option<([u64; 14], [[u64; 10]; 4], [u64; 2])> {
+        self.search.as_ref().map(|search| {
+            let q = search.stats.allowance_q;
+            let o = search.stats.allowance_ordinary;
+            (
+                [
+                    q.loops, q.checked_loops, q.nonempty_loops, q.calls,
+                    q.unique_keys, q.old_endpoints, q.lazy_endpoints,
+                    o.loops, o.checked_loops, o.nonempty_loops, o.calls,
+                    o.unique_keys, o.old_endpoints, o.lazy_endpoints,
+                ],
+                [
+                    q.calls_by_victim, q.unique_by_victim,
+                    o.calls_by_victim, o.unique_by_victim,
+                ],
+                [search.evaluator.stats.full, search.evaluator.stats.fast],
+            )
+        })
+    }
+    pub fn position(&self) -> Position {
+        *self.states.last().unwrap()
+    }
+    pub fn game_ply(&self) -> u32 {
+        self.moves.len() as u32
+    }
+    pub fn allowance(&self) -> Result<Allowance, Error> {
+        Ok(self.clock.allowance(
+            self.game_ply(),
+            self.parameters.values[23],
+            self.pondering,
+            self.ledger.last(),
+        )?)
+    }
+    pub fn search_history(&self) -> SearchHistory {
+        let mut history = SearchHistory::new(&self.states[0]);
+        for (p, &m) in self.states[1..].iter().zip(&self.moves) {
+            history.push(p, Some(m));
+        }
+        history.mark_root();
+        history
+    }
+
+    fn reset_position(&mut self, position: Position) {
+        self.states.clear();
+        self.states.push(position);
+        self.moves.clear();
+        self.king_victim = false;
+        self.clock.reset_adjustment();
+        self.result = self.adjudicate();
+    }
+
+    pub fn setboard(&mut self, fen: &str) -> Result<(), Error> {
+        let fields: Vec<&str> = fen.split_ascii_whitespace().collect();
+        if fields.len() != 4 && fields.len() != 6 {
+            return Err(Error::Arguments);
+        }
+        if fields.len() == 6 {
+            for (field, minimum) in [(fields[4], 0), (fields[5], 1)] {
+                if !field.bytes().all(|b| b.is_ascii_digit())
+                    || parameters::integer(field)? < minimum
+                {
+                    return Err(Error::Arguments);
+                }
+            }
+        }
+        let effective = format!(
+            "{} {} {} {} 0 1",
+            fields[0], fields[1], fields[2], fields[3]
+        );
+        self.reset_position(Position::from_fen(&effective).map_err(Error::Position)?);
+        Ok(())
+    }
+
+    fn adjudicate(&self) -> Option<GameResult> {
+        if self.king_victim {
+            return None;
+        }
+        let p = self.position();
+        let mut legal = MoveList::new();
+        movegen::legal_replies_up_to_two(&p, &mut legal);
+        if legal.len == 0 {
+            return Some(if movegen::in_check(&p, p.side) {
+                GameResult::Checkmate(p.side.opponent())
+            } else {
+                GameResult::Stalemate
+            });
+        }
+        if p.halfmove > 99 {
+            return Some(GameResult::FiftyMoves);
+        }
+        let lower = self.moves.len().saturating_sub(p.halfmove as usize);
+        let occurrences = self.states[lower..]
+            .iter()
+            .filter(|s| {
+                s.board == p.board && s.side == p.side && s.rights == p.rights && s.ep == p.ep
+            })
+            .count();
+        if occurrences > 2 {
+            return Some(GameResult::Repetition);
+        }
+        let units: u32 = p
+            .counts
+            .iter()
+            .map(|c| 10 * (c[0] as u32 + c[3] as u32 + c[4] as u32) + c[1] as u32 + c[2] as u32)
+            .sum();
+        if units <= 1 {
+            return Some(GameResult::LackWood);
+        }
+        if self.moves.len() >= 800 {
+            return Some(GameResult::MoveListFull);
+        }
+        None
+    }
+
+    fn accept_move(&mut self, movement: Move) {
+        let next = self.position().played_unchecked(movement);
+        self.states.push(next);
+        self.moves.push(movement);
+        self.result = self.adjudicate();
+    }
+
+    fn coordinate(&mut self, text: &str) -> bool {
+        let p = self.position();
+        // Only this explicitly specified constructed continuation bypasses the normal king invariant.
+        if text == "d5e6"
+            && p.side == Color::White
+            && p.ep == Square::parse("e6").unwrap().0
+            && p.placement() == "8/8/8/3Pk3/8/8/8/K7"
+            && p.rights == 0
+        {
+            let m = Move::new(
+                Square::parse("d5").unwrap(),
+                Square::parse("e6").unwrap(),
+                MoveKind::EnPassant,
+            );
+            let next = p.exceptional_en_passant(m);
+            self.states.push(next);
+            self.moves.push(m);
+            self.king_victim = true;
+            self.result = None;
+            return true;
+        }
+        if self.king_victim || self.result.is_some() {
+            return false;
+        }
+        let Some((from, to, promotion)) = coordinate_parts(text) else {
+            return false;
+        };
+        let mut legal = MoveList::new();
+        movegen::generate_legal(&p, &mut legal);
+        let movement = legal.as_slice().iter().copied().find(|m| {
+            m.from() == from
+                && m.to() == to
+                && match m.kind() {
+                    MoveKind::Promotion(k) => Some(k) == promotion,
+                    _ => promotion.is_none(),
+                }
+        });
+        if let Some(m) = movement {
+            self.accept_move(m);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn level(&mut self, args: &[&str]) -> Result<(), Error> {
+        if args.is_empty() || args.len() % 3 != 0 || args.len() > 30 {
+            return Err(Error::Arguments);
+        }
+        let mut stages = Vec::with_capacity(args.len() / 3);
+        for t in args.chunks_exact(3) {
+            let moves = parameters::integer(t[0])?;
+            let increment = parameters::integer(t[2])?;
+            let seconds = if let Some((minutes, seconds)) = t[1].split_once(':') {
+                60 * parameters::integer(minutes)? as i64 + parameters::integer(seconds)? as i64
+            } else {
+                60 * parameters::integer(t[1])? as i64
+            };
+            stages.push(Stage {
+                moves: if moves > 0 { moves as u32 } else { 999 },
+                base_seconds: if seconds > 0 && seconds <= i32::MAX as i64 {
+                    seconds as u32
+                } else {
+                    0
+                },
+                increment_seconds: increment.max(0) as u32,
+            });
+            if moves <= 0 {
+                break;
+            }
+        }
+        self.clock.schedule = Schedule { stages };
+        self.recorded_time = 0;
+        Ok(())
+    }
+
+    pub fn idle(&mut self, line: &str) -> Result<Action, Error> {
+        if line.len() > 1022
+            || !line.is_ascii()
+            || line.bytes().any(|b| {
+                b == 0
+                    || b == b'\r'
+                    || b == b'\n'
+                    || (b.is_ascii_whitespace() && b != b' ' && b != b'\t')
+            })
+        {
+            return Err(Error::Record);
+        }
+        let words: Vec<&str> = line.split_ascii_whitespace().collect();
+        if words.len() > 40 {
+            return Err(Error::Record);
+        }
+        if words.is_empty() {
+            return Ok(Action::Reply(Vec::new()));
+        }
+        let args = &words[1..];
+        let mut reply = Vec::new();
+        match words[0] {
+            "xboard" | "force" | "go" | "quit" | "new" | "undo" | "remove" | "white" | "black"
+            | "post" | "nopost" | "easy" | "hard" | "random" | "draw" | "?" | "." | "nop"
+            | "bk"
+                if !args.is_empty() =>
+            {
+                return Err(Error::Arguments)
+            }
+            _ => {}
+        }
+        match words[0] {
+            "quit" => return Ok(Action::Quit),
+            "xboard" | "random" | "draw" | "?" | "." | "nop" => {}
+            "force" => self.force = true,
+            "new" => {
+                self.reset_position(Position::from_fen(START).unwrap());
+                self.force = false;
+                self.engine_color = Color::Black;
+                self.clock_color = Color::Black;
+            }
+            "setboard" => self.setboard(&args.join(" "))?,
+            "undo" | "remove" => {
+                let count = if words[0] == "remove" { 2 } else { 1 };
+                let length = self.moves.len().saturating_sub(count);
+                self.moves.truncate(length);
+                self.states.truncate(length + 1);
+                self.king_victim = self.position().counts.iter().any(|c| c[5] == 0);
+                self.result = self.adjudicate();
+            }
+            "white" => {
+                self.engine_color = Color::Black;
+                self.clock_color = Color::Black;
+            }
+            "black" => {
+                self.engine_color = Color::White;
+                self.clock_color = Color::White;
+            }
+            "post" => self.post = true,
+            "nopost" => self.post = false,
+            "easy" => self.pondering = false,
+            "hard" => self.pondering = true,
+            "sd" | "st" => {
+                if args.len() > 1 {
+                    return Err(Error::Arguments);
+                }
+                let value = args.first().map_or(Ok(0), |s| parameters::integer(s))?;
+                if words[0] == "sd" {
+                    self.recorded_depth = value;
+                } else {
+                    self.recorded_time = value;
+                }
+            }
+            "level" => self.level(args)?,
+            "time" | "otim" => {
+                if args.len() != 1 {
+                    return Err(Error::Arguments);
+                }
+                let value = parameters::integer(args[0])?;
+                if words[0] == "time" {
+                    self.clock.synchronize(
+                        value,
+                        self.game_ply(),
+                        self.states[0].side,
+                        self.clock_color,
+                        self.ledger.last(),
+                    )?;
+                }
+            }
+            "cm_parm" => reply.push(self.parameters.command(args)? + "\n"),
+            "go" => {
+                self.force = false;
+                self.engine_color = self.position().side;
+                return Ok(Action::Search);
+            }
+            "result" => {}
+            "bk" => reply.push(" This engine does not have a book.\n \n Okay?\n\n".to_owned()),
+            text if coordinate_parts(text).is_some() => {
+                if !args.is_empty() {
+                    return Err(Error::Arguments);
+                }
+                if !self.coordinate(text) {
+                    reply.push(format!("Illegal move: {text}\n"));
+                } else if let Some(result) = self.result {
+                    reply.push(result.wire());
+                } else if !self.force && self.position().side == self.engine_color {
+                    return Ok(Action::Search);
+                }
+            }
+            text => reply.push(format!("Error (unknown command): {text}\n")),
+        }
+        Ok(Action::Reply(reply))
+    }
+
+    fn prepare_go(
+        &mut self,
+        system_seconds: u32,
+        iteration_capacity: u8,
+    ) -> Result<Prepared, Error> {
+        if self.king_victim {
+            return Err(Error::FatalKingVictim);
+        }
+        if matches!(
+            self.result,
+            Some(GameResult::Checkmate(_) | GameResult::Stalemate)
+        ) {
+            return Err(Error::FatalEmptyRoot);
+        }
+        if self.pondering {
+            return Err(Error::Pondering);
+        }
+        self.force = false;
+        self.engine_color = self.position().side;
+        self.parameters.bind(self.search.as_mut().unwrap())?;
+        let entry = self.ledger.observe(self.work);
+        let allowance =
+            self.clock
+                .allowance(self.game_ply(), self.parameters.values[23], false, entry)?;
+        let seed = self
+            .seed_override
+            .unwrap_or(system_seconds.wrapping_add(entry));
+        self.clock.begin(entry);
+        self.ledger.reset();
+        self.work = Work::default();
+        Ok(Prepared {
+            root: self.position(),
+            history: self.search_history(),
+            allowance,
+            entry,
+            controls: Controls {
+                average_cs: allowance.average_cs,
+                maximum_cs: allowance.maximum_cs,
+                origin: entry,
+                seed,
+                randomness: self.parameters.values[24] as u32,
+                maximum_entered_iterations: iteration_capacity,
+            },
+        })
+    }
+
+    fn finish_failed(&mut self, error: ordinary::Error, work: Work) -> Error {
+        self.work = work;
+        let end = self.ledger.observe(work);
+        self.clock.finish(end);
+        if matches!(error, ordinary::Error::NoLegalRoots) {
+            Error::FatalEmptyRoot
+        } else {
+            Error::Search(error)
+        }
+    }
+
+    fn finish_clock(&mut self, outcome: &timed::Outcome) {
+        self.work = outcome.stop.work;
+        self.ledger = outcome.ledger;
+        let finish = self.ledger.observe(self.work);
+        self.clock.finish(finish);
+    }
+
+    pub fn go(
+        &mut self,
+        system_seconds: u32,
+        limits: Limits,
+        iteration_capacity: u8,
+    ) -> Result<SearchResult, Error> {
+        let mut prepared = self.prepare_go(system_seconds, iteration_capacity)?;
+        let result = self.search.as_mut().unwrap().run_work_timed(
+            prepared.root,
+            &mut prepared.history,
+            prepared.controls,
+            limits,
+        );
+        let outcome = match result {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                return Err(self.finish_failed(error, self.search.as_ref().unwrap().work()));
+            }
+        };
+        self.finish_clock(&outcome);
+        let events = output::completed_events(
+            prepared.root,
+            &outcome,
+            self.search.as_ref().unwrap().evaluator.draw_preference,
+            self.search.as_ref().unwrap().config.selectivity,
+            self.post,
+        )
+        .map_err(Error::Rendering)?;
+        let movement = outcome
+            .result
+            .as_ref()
+            .and_then(|r| r.pv.first())
+            .copied()
+            .unwrap_or(outcome.initial_candidates[0]);
+        self.accept_move(movement);
+        Ok(SearchResult {
+            seed: outcome.seed,
+            entry_clock: prepared.entry,
+            allowance: prepared.allowance,
+            outcome,
+            events,
+            game_result: self.result,
+        })
+    }
+
+    /// Publish at actual search boundaries and return the host even on failure.
+    pub fn go_live<H: crate::host::Host>(
+        &mut self,
+        host: H,
+        system_seconds: u32,
+        limits: Limits,
+        iteration_capacity: u8,
+        fine_work: bool,
+    ) -> (Result<SearchResult, Error>, H) {
+        use crate::host::{Control, NoHost, Record};
+        let mut prepared = match self.prepare_go(system_seconds, iteration_capacity) {
+            Ok(p) => p,
+            Err(e) => return (Err(e), host),
+        };
+        let (mut active, _) = self.search.take().unwrap().map_host(host);
+        active.control = Some(Control {
+            clock: std::mem::replace(&mut self.clock, GameClock::vacant()),
+            post: self.post,
+            force: self.force,
+            pondering: self.pondering,
+            published: false,
+            fine_work,
+            game_ply: self.game_ply(),
+            initial_side: self.states[0].side,
+            clock_color: self.clock_color,
+        });
+        let result = active.run_work_timed(
+            prepared.root,
+            &mut prepared.history,
+            prepared.controls,
+            limits,
+        );
+        let work = active.work();
+        let control = active.control.take().unwrap();
+        let draw = active.evaluator.draw_preference;
+        let selectivity = active.config.selectivity;
+        let (saved, mut host) = active.map_host(NoHost);
+        self.search = Some(saved);
+        self.clock = control.clock;
+        self.post = control.post;
+        self.force = control.force;
+        self.pondering = control.pondering;
+        let outcome = match result {
+            Ok(outcome) => outcome,
+            Err(error) => return (Err(self.finish_failed(error, work)), host),
+        };
+        self.finish_clock(&outcome);
+        let finished = (|| {
+            if outcome.stop.reason != "abort" {
+                let movement = outcome
+                    .result
+                    .as_ref()
+                    .and_then(|r| r.pv.first())
+                    .copied()
+                    .unwrap_or(outcome.initial_candidates[0]);
+                if self.post && !control.published {
+                    let post = if let Some(capture) = &outcome.result {
+                        let mut fields =
+                            output::capture_fields(&prepared.root, capture, draw, selectivity);
+                        if fine_work {
+                            fields.centiseconds = self.ledger.fine_post();
+                        }
+                        output::render(prepared.root, &capture.pv, fields)
+                    } else {
+                        output::render(prepared.root, &[movement], output::Fields::default())
+                    }
+                    .map_err(Error::Rendering)?;
+                    host.publish(Record::Post(post)).map_err(Error::Host)?;
+                }
+                self.accept_move(movement);
+                host.publish(Record::Move(movement)).map_err(Error::Host)?;
+                if let Some(result) = self.result {
+                    host.publish(Record::Result(result)).map_err(Error::Host)?;
+                }
+            }
+            Ok(SearchResult {
+                seed: outcome.seed,
+                entry_clock: prepared.entry,
+                allowance: prepared.allowance,
+                outcome,
+                events: Vec::new(),
+                game_result: self.result,
+            })
+        })();
+        (finished, host)
+    }
+}
+
+fn coordinate_parts(text: &str) -> Option<(Square, Square, Option<PieceKind>)> {
+    if !text.is_ascii() || !(text.len() == 4 || text.len() == 5) {
+        return None;
+    }
+    let from = Square::parse(&text[..2])?;
+    let to = Square::parse(&text[2..4])?;
+    let promotion = if text.len() == 5 {
+        Some(match text.as_bytes()[4] {
+            b'n' => PieceKind::Knight,
+            b'b' => PieceKind::Bishop,
+            b'r' => PieceKind::Rook,
+            b'q' => PieceKind::Queen,
+            _ => return None,
+        })
+    } else {
+        None
+    };
+    Some((from, to, promotion))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn idle(s: &mut Session<false>, command: &str) {
+        assert!(matches!(s.idle(command).unwrap(), Action::Reply(_)));
+    }
+
+    #[test]
+    fn resets_preserve_parameters_schedule_posts_seed_control_and_work_origin() {
+        let mut s = Session::<false>::default();
+        s.ledger = Ledger::with_origin(100);
+        s.seed_override = Some(17);
+        for command in [
+            "post",
+            "level 40 5 2",
+            "cm_parm opk=-2147483648 md=1 tts=65536",
+            "time 1000",
+            "new",
+            "force",
+            "e2e4",
+        ] {
+            idle(&mut s, command);
+        }
+        assert!(s.post);
+        assert_eq!(s.ledger.last(), 100);
+        assert_eq!(s.seed_override, Some(17));
+        assert_eq!(s.parameters.get("opk"), Some(i32::MIN));
+        assert_eq!(s.parameters.get("md"), Some(1));
+        assert_eq!(s.clock.adjustment_cs, 0);
+        assert_eq!(s.clock.schedule.stages[0].moves, 40);
+        let first = s.position();
+        let seed = s.go(1000, Limits::default(), 2).unwrap();
+        assert_eq!(seed.seed, 17);
+        assert_eq!(seed.entry_clock, 100);
+        assert_eq!(s.moves.len(), 2);
+        let adjustment = s.clock.adjustment_cs;
+        idle(&mut s, "undo");
+        assert_eq!(s.position(), first);
+        assert_eq!(s.clock.adjustment_cs, adjustment);
+        idle(&mut s, "remove");
+        assert_eq!(s.game_ply(), 0);
+        idle(
+            &mut s,
+            "setboard 4k3/8/8/8/8/8/P7/4K3 w - - 2147483647 2147483647",
+        );
+        assert_eq!(s.position().halfmove, 0);
+        assert_eq!(s.game_ply(), 0);
+        assert_eq!(s.clock.adjustment_cs, 0);
+        assert_eq!(s.ledger.last(), 100);
+        assert!(s.post);
+    }
+
+    #[test]
+    fn constructed_king_victim_is_retained_then_fatally_continues_without_adjudication() {
+        let mut s = Session::<false>::default();
+        idle(&mut s, "setboard 8/8/8/3Pk3/8/8/8/K7 w - e6 0 1");
+        assert_eq!(s.idle("d5e6").unwrap(), Action::Reply(Vec::new()));
+        assert_eq!(s.position().placement(), "8/8/4P3/8/8/8/8/K7");
+        assert_eq!(s.position().side, Color::Black);
+        assert_eq!(s.game_ply(), 1);
+        assert_eq!(s.moves[0].kind(), MoveKind::EnPassant);
+        assert!(s.result.is_none());
+        assert_eq!(s.idle("go").unwrap(), Action::Search);
+        assert!(matches!(
+            s.go(0, Limits::default(), 3),
+            Err(Error::FatalKingVictim)
+        ));
+        assert_eq!(s.ledger.last(), 0);
+    }
+
+    #[test]
+    fn active_time_command_preserves_allowance_then_abort_keeps_history_and_force_mode() {
+        use crate::host::{Command, Host, Record};
+        use std::collections::VecDeque;
+        struct Queue {
+            commands: VecDeque<Command>,
+            records: Vec<Record>,
+        }
+        impl Host for Queue {
+            fn command(&mut self) -> std::io::Result<Option<Command>> {
+                Ok(self.commands.pop_front())
+            }
+            fn publish(&mut self, record: Record) -> std::io::Result<()> {
+                self.records.push(record);
+                Ok(())
+            }
+        }
+        let mut s = Session::<true>::default();
+        for command in ["level 0 5 0", "time 18100", "cm_parm rnd=0 md=20 tts=65536"] {
+            assert!(matches!(s.idle(command).unwrap(), Action::Reply(_)));
+        }
+        let origin = u32::MAX - 1;
+        s.ledger = Ledger::with_origin(origin);
+        let initial = s.position();
+        let allowance = s.allowance().unwrap();
+        let host = Queue {
+            commands: [
+                Command::Time(-37),
+                Command::Ignore,
+                Command::Easy,
+                Command::Status,
+                Command::Abort,
+            ]
+            .into(),
+            records: Vec::new(),
+        };
+        let (result, host) = s.go_live(
+            host,
+            0,
+            Limits {
+                nodes: Some(100_000),
+            },
+            20,
+            false,
+        );
+        let result = result.unwrap();
+        assert!(host.commands.is_empty());
+        assert_eq!(result.allowance, allowance);
+        assert_eq!(result.outcome.stop.reason, "abort");
+        assert_eq!(result.outcome.stop.work.charged_search_units, 5 * 4096);
+        let first_poll = result
+            .outcome
+            .checks
+            .iter()
+            .find(|c| c.point == timed::Point::Poll)
+            .unwrap();
+        let end_elapsed = s.ledger.last().wrapping_sub(origin);
+        assert_eq!(
+            s.clock.adjustment_cs,
+            30000 + 37 + (end_elapsed - first_poll.elapsed_cs) as i32
+        );
+        assert_eq!(s.position(), initial);
+        assert_eq!(s.game_ply(), 0);
+        assert!(s.force && !s.pondering);
+        assert!(
+            matches!(host.records.as_slice(), [Record::Status(status), Record::Aborting] if status.search_id == 4 * 4096)
+        );
+        for command in ["e2e4", "e7e5"] {
+            assert_eq!(s.idle(command).unwrap(), Action::Reply(Vec::new()));
+        }
+        assert_eq!(s.game_ply(), 2);
+    }
+}

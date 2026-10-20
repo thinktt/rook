@@ -1,0 +1,591 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -481,7 +481,7 @@
+     (pressure - 12).max(0)
+ }
+ 
+-pub(crate) fn weighted(pieces: [i32; 2], material_score: i32, weights: [i32; 2], phase: Phase) -> i32 {
++fn weighted(pieces: [i32; 2], material_score: i32, weights: [i32; 2], phase: Phase) -> i32 {
+     let material = material_score.clamp(-256, 256) as i64;
+     let white = ((1024 - material) * weights[0] as i64 + 512).div_euclid(1024);
+     let black = ((1024 + material) * weights[1] as i64 + 512).div_euclid(1024);
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -258,67 +258,6 @@
+     pub finished: endgame::Finished,
+ }
+ 
+-// This cache has a deliberately narrower domain than public evaluation: only
+-// coherent, nonempty Search placements with the native Influence for that board.
+-// Four tag planes are an exact placement witness; fingerprints select a slot only.
+-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+-struct PureComponents {
+-    pieces: [i32; 2],
+-    pressure: [i32; 2],
+-    shelter: [i32; 2],
+-    relation_queries: u64,
+-}
+-impl PureComponents {
+-    const ZERO: Self = Self { pieces: [0; 2], pressure: [0; 2],
+-        shelter: [0; 2], relation_queries: 0 };
+-    fn weighted(self, position: &Position, material: i32, weights: Weights)
+-        -> (activity::Activity, shelter::Shelter)
+-    {
+-        (activity::Activity { pieces: self.pieces, pressure: self.pressure,
+-            relation_queries: self.relation_queries,
+-            weighted: activity::weighted(self.pieces, material, weights.mobility, position.phase()) },
+-         shelter::Shelter { terms: self.shelter,
+-            weighted: shelter::combine(self.shelter, material, weights.shelter) })
+-    }
+-}
+-
+-#[repr(C, align(64))]
+-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+-struct PureEntry {
+-    key: crate::attacks::AttackBits,
+-    value: PureComponents,
+-}
+-impl PureEntry {
+-    const EMPTY: Self = Self { key: crate::attacks::AttackBits::empty(),
+-        value: PureComponents::ZERO };
+-}
+-struct PureCache {
+-    entries: Box<[PureEntry]>,
+-}
+-impl PureCache {
+-    fn new() -> Self {
+-        // Initialize one entry at a time on the heap; no 64KiB array temporary.
+-        let mut entries = Vec::with_capacity(1024);
+-        entries.resize_with(1024, || PureEntry::EMPTY);
+-        Self { entries: entries.into_boxed_slice() }
+-    }
+-    fn clear(&mut self) { self.entries.fill(PureEntry::EMPTY); }
+-    fn index(position: &Position) -> usize {
+-        ((position.primary ^ position.secondary.rotate_left(16)) & 1023) as usize
+-    }
+-    fn get(&self, position: &Position) -> Option<PureComponents> {
+-        let key = position.attack_view();
+-        debug_assert_ne!(key, crate::attacks::AttackBits::empty());
+-        let entry = &self.entries[Self::index(position)];
+-        (entry.key == key).then_some(entry.value)
+-    }
+-    fn insert(&mut self, position: &Position, value: PureComponents) {
+-        let key = position.attack_view();
+-        debug_assert_ne!(key, crate::attacks::AttackBits::empty());
+-        self.entries[Self::index(position)] = PureEntry { key, value };
+-    }
+-}
+-
+ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
+     pub root: RootContext,
+     pub parameters: Parameters,
+@@ -326,7 +265,6 @@
+     pub variation_range: u32,
+     weights: Weights,
+     pawns: PawnCache,
+-    pure: PureCache,
+     pub stats: EvalStats,
+ }
+ 
+@@ -341,7 +279,6 @@
+             draw_preference,
+             variation_range,
+             pawns: PawnCache::new(),
+-            pure: PureCache::new(),
+             stats: EvalStats::default(),
+         }
+     }
+@@ -353,7 +290,6 @@
+             self.variation_range,
+         ) = self.parameters.bind(position);
+         self.pawns.clear();
+-        self.pure.clear();
+         self.stats = EvalStats::default();
+     }
+ 
+@@ -372,7 +308,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, false, _, _>(node, influence, in_check, |_| {}, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -382,7 +318,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, false, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -391,7 +327,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, false, _, _>(node, influence, in_check, observer, |_| {})
++        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -402,7 +338,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, false, _, _>(node, influence, in_check, |_| {}, observer)
++        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -412,16 +348,9 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, false, _, _>(node, influence, in_check, |_| {}, observer)
+-    }
+-    /// Search-only boundary: caller supplies this coherent, nonempty placement's
+-    /// native Influence. Public full/observed/fresh routes never use this cache.
+-    pub(crate) fn full_search(&mut self, node: &mut Node, influence: &Influence,
+-        checked: bool) -> Evaluation
+-    {
+-        self.full_impl::<false, true, _, _>(node, influence, checked, |_| {}, |_| {})
+-    }
+-    fn full_impl<const FRESH: bool, const CACHE: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
++    }
++    fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+@@ -441,27 +370,14 @@
+             self.pawns.select(position, influence)
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        // PawnCache selection and pawn terms above remain live on every hit.
+-        let cached = if CACHE { self.pure.get(position) } else { None };
+-        let (activity, shelter) = if let Some(value) = cached {
+-            value.weighted(position, material, self.weights)
+-        } else {
+-            let activity = activity::compute(position, influence, material, self.weights.mobility);
+-            let shelter = shelter::compute(
+-                position,
+-                influence,
+-                activity.pressure,
+-                material,
+-                self.weights.shelter,
+-            );
+-            if CACHE {
+-                self.pure.insert(position, PureComponents {
+-                    pieces: activity.pieces, pressure: activity.pressure,
+-                    shelter: shelter.terms, relation_queries: activity.relation_queries,
+-                });
+-            }
+-            (activity, shelter)
+-        };
++        let activity = activity::compute(position, influence, material, self.weights.mobility);
++        let shelter = shelter::compute(
++            position,
++            influence,
++            activity.pressure,
++            material,
++            self.weights.shelter,
++        );
+         let structure = pawn_progress::structure_weighted(
+             phase,
+             pawn.structure,
+@@ -617,7 +533,7 @@
+         capture_exception: bool,
+         scratch: &mut Option<Influence>,
+     ) -> Selection {
+-        self.select_noncheck_impl::<false, false, false, _, _, _>(
++        self.select_noncheck_impl::<false, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {},
+         )
+     }
+@@ -639,7 +555,7 @@
+         F: FnMut(FullDetails),
+         G: FnMut(FastDetails),
+     {
+-        self.select_noncheck_impl::<true, false, false, _, _, _>(
++        self.select_noncheck_impl::<true, false, _, _, _>(
+             node, lower, upper, capture_exception, scratch, full_observer, fast_observer, |_| {},
+         )
+     }
+@@ -654,26 +570,9 @@
+         scratch: &mut Option<Influence>,
+         observer: F,
+     ) -> Selection {
+-        self.select_noncheck_impl::<false, true, false, _, _, _>(
++        self.select_noncheck_impl::<false, true, _, _, _>(
+             node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer,
+         )
+-    }
+-
+-    /// Search-only selector. Scratch starts empty in the caller and is filled
+-    /// only by ensure_influence for this exact placement; never a public map.
+-    pub(crate) fn select_noncheck_search(&mut self, node: &mut Node, lower: i32,
+-        upper: i32, capture_exception: bool, scratch: &mut Option<Influence>) -> Selection
+-    {
+-        self.select_noncheck_impl::<false, false, true, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, |_| {})
+-    }
+-    /// The observed Search route has the same native-map provenance contract.
+-    pub(crate) fn select_noncheck_search_stages<F: FnMut(EvaluationStage)>(
+-        &mut self, node: &mut Node, lower: i32, upper: i32, capture_exception: bool,
+-        scratch: &mut Option<Influence>, observer: F) -> Selection
+-    {
+-        self.select_noncheck_impl::<false, true, true, _, _, _>(
+-            node, lower, upper, capture_exception, scratch, |_| {}, |_| {}, observer)
+     }
+ 
+     /// Terminal Q leaves also observe one actual fast call without a refresh.
+@@ -687,12 +586,11 @@
+         evaluation
+     }
+ 
+-    fn full_stage_observed<const CACHE: bool, F: FnOnce(EvaluationStage)>(
++    fn full_stage_observed<F: FnOnce(EvaluationStage)>(
+         &mut self, node: &mut Node, influence: &Influence, observer: F,
+     ) -> Evaluation {
+         let before = node.retained;
+-        let evaluation = if CACHE { self.full_search(node, influence, false) }
+-            else { self.full(node, influence, false) };
++        let evaluation = self.full(node, influence, false);
+         observer(EvaluationStage { kind: StageKind::Full, before,
+             after: node.retained, evaluation });
+         evaluation
+@@ -700,7 +598,7 @@
+ 
+     // Only stage call wrappers differ. The ordinary instantiation retains its
+     // original full/fast call sites; every selection condition stays shared.
+-    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, const CACHE: bool, F, G, S>(
++    fn select_noncheck_impl<const OBSERVE: bool, const STAGES: bool, F, G, S>(
+         &mut self,
+         node: &mut Node,
+         lower: i32,
+@@ -729,11 +627,9 @@
+             let influence = self.ensure_influence(&node.position, scratch);
+             return Selection {
+                 evaluation: if STAGES {
+-                    self.full_stage_observed::<CACHE, _>(node, influence, |stage| stage_observer(stage))
++                    self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+                 } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+-                } else if CACHE {
+-                    self.full_search(node, influence, false)
+                 } else {
+                     self.full(node, influence, false)
+                 },
+@@ -753,11 +649,9 @@
+         let evaluation = if refresh {
+             let influence = self.ensure_influence(&node.position, scratch);
+             if STAGES {
+-                self.full_stage_observed::<CACHE, _>(node, influence, |stage| stage_observer(stage))
++                self.full_stage_observed(node, influence, |stage| stage_observer(stage))
+             } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+-            } else if CACHE {
+-                self.full_search(node, influence, false)
+             } else {
+                 self.full(node, influence, false)
+             }
+@@ -778,249 +672,6 @@
+     use super::*;
+     use crate::movegen::{generate_legal, in_check, MoveList};
+     const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+-
+-    fn pure_public_call(which: usize, evaluator: &mut Evaluator, node: &mut Node,
+-        map: &Influence) -> Evaluation
+-    {
+-        match which {
+-            0 => evaluator.full(node, map, false),
+-            1 => evaluator.full_observed(node, map, false, |_| {}),
+-            2 => evaluator.fresh_observed(node, map, false, |_| {}),
+-            3 => evaluator.full_detailed_observed(node, map, false, |_| {}),
+-            4 => evaluator.fresh_detailed_observed(node, map, false, |_| {}),
+-            5 => evaluator.select_noncheck(node, -10000, 10000, true,
+-                &mut Some(*map)).evaluation,
+-            6 => evaluator.select_noncheck_detailed_observed(node, -10000, 10000, true,
+-                &mut Some(*map), |_| {}, |_| {}).evaluation,
+-            7 => evaluator.select_noncheck_stages_observed(node, -10000, 10000, true,
+-                &mut Some(*map), |_| {}).evaluation,
+-            _ => unreachable!(),
+-        }
+-    }
+-
+-    #[test]
+-    fn pure_cache_exact_collision_clear_and_heap_entry_layout() {
+-        assert_eq!(std::mem::size_of::<PureComponents>(), 32);
+-        assert_eq!(std::mem::size_of::<PureEntry>(), 64);
+-        assert_eq!(std::mem::align_of::<PureEntry>(), 64);
+-        let mut cache = PureCache::new();
+-        assert_eq!(cache.entries.len(), 1024);
+-        assert_eq!(cache.entries.as_ptr() as usize % 64, 0);
+-        assert_eq!((&cache.entries[1] as *const PureEntry as usize)
+-            - (&cache.entries[0] as *const PureEntry as usize), 64);
+-        // More than 1024 distinct coherent boards force a real fingerprint-slot
+-        // collision. No synthetic hash or stale-plane mutation supplies it.
+-        let mut seen = vec![None; 1024];
+-        let mut collision = None;
+-        'outer: for a in 1..63 {
+-            for b in a + 1..63 {
+-                let mut fen = String::new();
+-                for rank in (0..8).rev() {
+-                    let mut empty = 0;
+-                    for file in 0..8 {
+-                        let square = rank * 8 + file;
+-                        let tag = if square == 0 { Some('K') }
+-                            else if square == 63 { Some('k') }
+-                            else if square == a || square == b { Some('N') } else { None };
+-                        if let Some(tag) = tag {
+-                            if empty != 0 { fen.push(char::from(b'0' + empty)); empty = 0; }
+-                            fen.push(tag);
+-                        } else { empty += 1; }
+-                    }
+-                    if empty != 0 { fen.push(char::from(b'0' + empty)); }
+-                    if rank != 0 { fen.push('/'); }
+-                }
+-                fen.push_str(" w - - 0 1");
+-                if let Ok(position) = Position::from_fen(&fen) {
+-                    let slot = PureCache::index(&position);
+-                    if let Some(first) = seen[slot] {
+-                        collision = Some((first, position)); break 'outer;
+-                    }
+-                    seen[slot] = Some(position);
+-                }
+-            }
+-        }
+-        let (first, second) = collision.expect("1024-slot collision among constructed boards");
+-        assert_ne!(first.attack_view(), second.attack_view());
+-        assert_eq!(PureCache::index(&first), PureCache::index(&second));
+-        let a = PureComponents { pieces: [3, 5], pressure: [7, 11],
+-            shelter: [13, 17], relation_queries: 19 };
+-        let b = PureComponents { relation_queries: 23, ..a };
+-        assert_eq!(cache.get(&first), None);
+-        cache.insert(&first, a);
+-        assert_eq!(cache.get(&first), Some(a));
+-        assert_eq!(cache.get(&second), None);
+-        cache.insert(&second, b);
+-        assert_eq!(cache.get(&first), None);
+-        assert_eq!(cache.get(&second), Some(b));
+-        cache.clear();
+-        assert!(cache.entries.iter().all(|entry| *entry == PureEntry::EMPTY));
+-        assert_eq!(cache.get(&second), None);
+-    }
+-
+-    #[test]
+-    fn pure_cache_placement_reuse_ignores_chronology_rules_and_reweights_live() {
+-        let position = Position::from_fen(START).unwrap();
+-        let mut cached = Evaluator::<true>::new(&position);
+-        let mut plain = Evaluator::<true>::new(&position);
+-        let map = Influence::build(&position);
+-        let mut a = Node::root(position, &cached.root);
+-        let mut b = Node::root(position, &plain.root);
+-        assert_eq!(cached.full_search(&mut a, &map, false), plain.full(&mut b, &map, false));
+-        let payload = cached.pure.get(&position).unwrap();
+-        assert!(payload.relation_queries > 0, "constructed activity-R replay witness");
+-        let mut changed = position;
+-        for color in [Color::White, Color::Black] {
+-            let base = color.index();
+-            changed.squares[base][..8].reverse();
+-            changed.squares[base][8..10].reverse();
+-            changed.squares[base][10..12].reverse();
+-            changed.squares[base][12..14].reverse();
+-        }
+-        changed.side = Color::Black;
+-        changed.rights = 0;
+-        changed.ep = 20; // e3: a distinct raw rule state, with an empty target.
+-        changed.halfmove = 83;
+-        changed.validate().unwrap();
+-        assert_eq!(changed.attack_view(), position.attack_view());
+-        assert_ne!(changed.squares, position.squares);
+-        assert_eq!(Influence::build(&changed), map);
+-        // Controlled rebind without clearing proves the cached payload excludes
+-        // both root phase/material ownership and current personality weighting.
+-        for root in [position, Position::from_fen("7k/8/8/8/8/8/P7/K7 w - - 0 1").unwrap()] {
+-            for evaluator in [&mut cached, &mut plain] {
+-                evaluator.parameters.own[7] = 271;
+-                evaluator.parameters.opponent[7] = 43;
+-                evaluator.parameters.own[8] = 377;
+-                evaluator.parameters.opponent[8] = 17;
+-                evaluator.parameters.average_depth = 9;
+-                (evaluator.root, evaluator.weights, evaluator.draw_preference,
+-                    evaluator.variation_range) = evaluator.parameters.bind(&root);
+-            }
+-            let mut a = Node::root(changed, &cached.root);
+-            let mut b = Node::root(changed, &plain.root);
+-            assert_eq!(cached.pure.get(&changed), Some(payload));
+-            let map = Influence::build(&changed);
+-            assert_eq!(cached.full_search(&mut a, &map, false), plain.full(&mut b, &map, false));
+-            assert_eq!(a, b);
+-            assert_eq!(cached.stats, plain.stats);
+-            assert_eq!(cached.pure.get(&changed), Some(payload));
+-        }
+-        cached.begin_search(&changed);
+-        assert!(cached.pure.entries.iter().all(|entry| *entry == PureEntry::EMPTY));
+-    }
+-
+-    #[test]
+-    fn pure_cache_hit_still_replaces_interfering_pawn_cache_and_charges_all_work() {
+-        let first = Position::from_fen("7k/8/8/8/6P1/3P4/8/K7 w - - 0 1").unwrap();
+-        let other = Position::from_fen("7k/8/6P1/8/8/3P4/8/K7 w - - 0 1").unwrap();
+-        assert_eq!(first.pawn % 128, other.pawn % 128);
+-        assert_ne!(first.pawn, other.pawn);
+-        let mut cached = Evaluator::<true>::new(&first);
+-        let mut plain = Evaluator::<true>::new(&first);
+-        for (i, position) in [first, first, other, first].into_iter().enumerate() {
+-            let map = Influence::build(&position);
+-            let mut a = Node::root(position, &cached.root);
+-            let mut b = Node::root(position, &plain.root);
+-            let before = cached.stats;
+-            // The intervening public evaluation must disturb only PawnCache.
+-            let actual = if i == 2 { cached.full(&mut a, &map, false) }
+-                else { cached.full_search(&mut a, &map, false) };
+-            let expected = plain.full(&mut b, &map, false);
+-            assert_eq!((actual, a.retained, cached.stats), (expected, b.retained, plain.stats));
+-            if i == 3 {
+-                assert_eq!(cached.stats.pawn_replacements, before.pawn_replacements + 1);
+-                assert!(cached.pure.get(&first).is_some());
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn pure_cache_all_public_custom_map_paths_bypass_reads_and_writes() {
+-        let position = Position::from_fen(START).unwrap();
+-        let custom = Influence { profiles: [[255; 64]; 2] };
+-        let poison = PureComponents { pieces: [-76543; 2], pressure: [250; 2],
+-            shelter: [7777; 2], relation_queries: 99999 };
+-        for populated in [false, true] {
+-            for which in 0..8 {
+-                let mut cached = Evaluator::<true>::new(&position);
+-                let mut plain = Evaluator::<true>::new(&position);
+-                if populated { cached.pure.insert(&position, poison); }
+-                let before = cached.pure.entries.to_vec();
+-                let mut a = Node::root(position, &cached.root);
+-                let mut b = Node::root(position, &plain.root);
+-                let actual = pure_public_call(which, &mut cached, &mut a, &custom);
+-                let expected = pure_public_call(which, &mut plain, &mut b, &custom);
+-                assert_eq!((actual, a.retained, cached.stats), (expected, b.retained, plain.stats));
+-                assert_eq!(&*cached.pure.entries, before.as_slice(), "public route {which}");
+-                assert!(plain.pure.entries.iter().all(|entry| *entry == PureEntry::EMPTY));
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn pure_cache_trusted_default_and_observed_selectors_keep_native_stages() {
+-        for fen in [START, "7k/8/8/8/6P1/3P4/8/K7 w - - 0 1"] {
+-            let position = Position::from_fen(fen).unwrap();
+-            let mut cached = Evaluator::<true>::new(&position);
+-            let mut plain = Evaluator::<true>::new(&position);
+-            let map = Influence::build(&position);
+-            let mut a = Node::root(position, &cached.root);
+-            let mut b = Node::root(position, &plain.root);
+-            cached.full_search(&mut a, &map, false);
+-            plain.full(&mut b, &map, false);
+-            for observed in [false, true] {
+-                a.retained.age = 19; b.retained.age = 19;
+-                let (mut sa, mut sb) = (None, None);
+-                let (mut stages_a, mut stages_b) = (Vec::new(), Vec::new());
+-                let actual = if observed {
+-                    cached.select_noncheck_search_stages(&mut a, -10000, 10000, true,
+-                        &mut sa, |stage| stages_a.push(stage))
+-                } else { cached.select_noncheck_search(&mut a, -10000, 10000, true, &mut sa) };
+-                let expected = if observed {
+-                    plain.select_noncheck_stages_observed(&mut b, -10000, 10000, true,
+-                        &mut sb, |stage| stages_b.push(stage))
+-                } else { plain.select_noncheck(&mut b, -10000, 10000, true, &mut sb) };
+-                assert_eq!(actual, expected);
+-                assert_eq!((a, cached.stats, stages_a), (b, plain.stats, stages_b));
+-                assert_eq!(sa, Some(map)); assert_eq!(sa, sb);
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn pure_cache_matches_uncached_whole_evaluation_through_special_children() {
+-        fn verify<const D: bool>() {
+-            for fen in [START, "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+-                "7k/P7/8/8/8/8/7p/K7 w - - 0 1",
+-                "7k/8/8/3pP3/8/8/8/K7 w - d6 0 1",
+-                "7k/8/8/3rP3/8/8/8/K7 w - d6 0 1",
+-                "7k/P7/8/8/8/8/7p/K7 b - - 0 1",
+-                "7k/8/8/8/3Pp3/8/8/K7 b - d3 0 1",
+-                "7k/8/8/8/3Rp3/8/8/K7 b - d3 0 1"] {
+-                let position = Position::from_fen(fen).unwrap();
+-                let mut cached = Evaluator::<D>::new(&position);
+-                let mut plain = Evaluator::<D>::new(&position);
+-                cached.begin_search(&position); plain.begin_search(&position);
+-                let mut moves = MoveList::new(); generate_legal(&position, &mut moves);
+-                let parent_a = Node::root(position, &cached.root);
+-                let parent_b = Node::root(position, &plain.root);
+-                for &movement in moves.as_slice() {
+-                    let mut a = parent_a.child(&cached.root, movement);
+-                    let mut b = parent_b.child(&plain.root, movement);
+-                    let map = Influence::build(&a.position);
+-                    let checked = in_check(&a.position, a.position.side);
+-                    for _ in 0..2 {
+-                        let actual = cached.full_search(&mut a, &map, checked);
+-                        let expected = plain.full(&mut b, &map, checked);
+-                        assert_eq!((actual, a.retained, cached.stats),
+-                            (expected, b.retained, plain.stats));
+-                    }
+-                }
+-            }
+-        }
+-        verify::<false>(); verify::<true>();
+-    }
+ 
+     fn initialized() -> (Evaluator, Node) {
+         let position = Position::from_fen(START).unwrap();
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -793,7 +793,7 @@
+             }
+         }
+         let map = self.evaluator.ensure_influence(&position, &mut scratch);
+-        let evaluation = self.evaluator.full_search(node, map, checked);
++        let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -146,7 +146,7 @@
+         let mut root = Node::root(position, &self.evaluator.root);
+         let mut scratch = None;
+         let influence = self.evaluator.ensure_influence(&position, &mut scratch);
+-        self.evaluator.full_search(
++        self.evaluator.full(
+             &mut root,
+             influence,
+             movegen::in_check(&position, position.side),
+@@ -258,12 +258,12 @@
+                 (-10000, -10000, 10000)
+             } else {
+                 let value = if O::ENABLED {
+-                    self.evaluator.select_noncheck_search_stages(
++                    self.evaluator.select_noncheck_stages_observed(
+                         node, lower, entry.upper, entry.capture_exception, &mut influence,
+                         |stage| observer.stage(stage),
+                     )
+                 } else {
+-                    self.evaluator.select_noncheck_search(
++                    self.evaluator.select_noncheck(
+                         node, lower, entry.upper, entry.capture_exception, &mut influence,
+                     )
+                 }.evaluation;
+--- a/src/shelter.rs
++++ b/src/shelter.rs
+@@ -297,7 +297,7 @@
+         .div_euclid(256) as i32
+ }
+ 
+-pub(crate) fn combine(terms: [i32; 2], material_score: i32, weights: [i32; 2]) -> i32 {
++fn combine(terms: [i32; 2], material_score: i32, weights: [i32; 2]) -> i32 {
+     let material = material_score.clamp(-256, 256) as i64;
+     let white = ((1024 + material) * weights[0] as i64 + 512).div_euclid(1024);
+     let black = ((1024 - material) * weights[1] as i64 + 512).div_euclid(1024);

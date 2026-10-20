@@ -1,0 +1,20 @@
+INERT47 own-source PGO recipe
+
+Accepted generic47 c1342846..., source72 graph55face79844c4cabb03ff0ebfec8f7da8afa1487718d6340735bc755758bbc87, frozen only evaluator.rs+ordinary.rs delta. Closed generic70 actualafac86/0 and independent6b84f4/0 plus rootdecisionc49cc7/0 advance own-source PGO only. Existing13 focused pass; full189 has NOT run. Canonical43 unchanged. All future instrumented/profile/use hashes and stage actuals are null, no launch authority.
+
+Exact accepted43 six-helper method: namespace influence-bitsliced-sum→ordinary-position-borrow in guard/train/verify, focused_native11_accepted→focused_native13_accepted only; build_stage.py/raw_model.py/recheck.mjs byte-identical. Full diffs and method-src preserve every original helper. Settings remain generic x86-64 O3/thinLTO/1CGU/panicabort/debug1, same recorded rustc1.85.1/LLVM19.1.7. Source72 and actual generic source49/tools23/receipt/settings are bound. No source/tool clone or edit.
+
+Exactly four SERIAL stages, each with actual outer terminal recorded before next stage. Parent supplies ONE stable execution-clearance.json matching plan/script/source and actual prerequisite evidence, leaves it byte-identical across stages (train pins its hash, verify rechecks it). No per-stage clearance rewrite. Guard admission is common; stage-specific actual prerequisite files enforce ordering:
+
+    taskset -c 0-5,8-13 env PYTHONDONTWRITEBYTECODE=1 TMPDIR=/home/legolas/rook2-build-tmp /usr/bin/python3 build_stage.py instrumented
+    taskset -c 0-5,8-13 env PYTHONDONTWRITEBYTECODE=1 TMPDIR=/home/legolas/rook2-build-tmp /usr/bin/python3 train.py
+    taskset -c 0-5,8-13 env PYTHONDONTWRITEBYTECODE=1 TMPDIR=/home/legolas/rook2-build-tmp /usr/bin/python3 verify.py
+    taskset -c 0-5,8-13 env PYTHONDONTWRITEBYTECODE=1 TMPDIR=/home/legolas/rook2-build-tmp /usr/bin/python3 build_stage.py use
+
+Run from this preparation directory only after parent activation. Do not precreate build outputs or training/raw. Instrumented generic build archives its source and freezes its image, then actual instrumented-build/tool-terminal.json is required by train. Train runs the ORIGINAL54 stored order once under original replay-check, retains all raw/stdout/stderr/exits, requires54 distinct PIDs and matching fresh raw files, merges ONLY these47 profiles. Actual training/tool-terminal.json required by verify. Offline verify independently checks all54 original raw/checkReplay, profile/PID/source/compiler/input identities and byte-identical independent remerge; actual training/verify-tool-terminal.json is required before use-build. Use build requires complete training+verification,54original/raw counts and matching merged profile SHA; explicit missing/stale warnings fail. No43 or any other profile is reused. Failures are preserved; stop, no retry.
+
+Training engines14 only after parent explicit quiet/interference clearance; helpers0-5,8-13, sibling15 no owned tasks. This is UNTIMED compiler input, not production CPU evidence. Retained43 ownPGO36251ecf.../profile132fc... is comparison-only. pilot-predeclaration.json freezes a possible ownPGO7/70/.995+5of7+worst1.02 gate before training, with candidate image/profile null, no retry or generic gain transfer; contains no timing runner or timing authority. No use54/wire/full189/full117/game/pre-gate authority here.
+
+Training.json/verification.json/build receipts and stage schemas exactly preserved. Stage record paths are ordinary-position-borrow-pgo-{instrumented-build,training,use-build}-20261019-01; actual build terminals in each build/tool-terminal.json, training/tool-terminal.json and training/verify-tool-terminal.json. Preparation instrumented-stage.json/use-stage.json are produced by their actual future stages, not prefilled. Only execution-clearance.template.json exists; authorized/all-conflicting-terminal false and quiet review null.
+
+Preparation: small source/metadata hash and Python AST-only checks, no helper import/run, tool versions, compiler/native/build/train/merge/profile/binutils/archive/Git. Original43 helpers/artifacts/source and working47 source remain unchanged.

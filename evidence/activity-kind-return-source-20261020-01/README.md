@@ -1,0 +1,3 @@
+Closed source-only experiment60 preparation. Only isolated src/activity.rs changed from exact57baseline74. Sourcegraphbd5b9c9f9d27a533abab48513738ac35d264bd0d8cf89959ccfc668085bc8d9f; Activity1d99243631a08e7bf0bce95719b6094ebc45bcd68716b634dab64677915cda84. Original file/map, exact full patch, inverse and literal-owner/test checks are retained. Source is immutable; final files here are metadata only.
+
+Two new experiment60_tests declarations give197total expected (195lib+2dev) from195baseline; no test/compiler outcome is claimed. No native/runtime authority follows. Parent must inspect actual return/call boundary and empty-group/frame costs before deciding fixed70. One design only; no source retuning. See proof.md for algebra, ownership, test scope and limits.

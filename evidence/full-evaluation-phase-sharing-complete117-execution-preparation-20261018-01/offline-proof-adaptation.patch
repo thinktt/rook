@@ -1,0 +1,230 @@
+--- accepted-activity-independent/verify.py
++++ phase-sharing-independent/verify.py
+@@ -1,25 +1,24 @@
+ #!/usr/bin/env python3
+-"""Bounded readonly offline verification of exact activity7cf398; no engines."""
++"""Bounded offline phase-sharing native/strict/wire identity proof; no engines."""
+ from pathlib import Path
+ import hashlib,json,os,re,subprocess,sys,tarfile
+ P=Path(__file__).resolve().parent
+ E=Path('/home/legolas/rook2/evidence')
+-PRE=E/'activity-value-inputs-validation-preparation-20261018-01'
+-B=E/'activity-value-inputs-generic-build-20261018-01'
+-N=E/'activity-value-inputs-native-validation-20261018-01'
+-R=E/'activity-value-inputs-regression-20261018-01'
+-REF=E/'complete117-pgo-use-build-20261018'
++PRE=E/'full-evaluation-phase-sharing-preparation-20261018-01'
++B=E/'full-evaluation-phase-sharing-generic-build-20261018-01'
++N=E/'full-evaluation-phase-sharing-native-frozen-validation-20261018-01'
++OLD=E/'full-evaluation-phase-sharing-native-validation-20261018-01'
++R=E/'full-evaluation-phase-sharing-regression-validation-20261018-01'
+ KIT=Path('/home/legolas/king-spec/conformance')
+-EXPECTED='7cf3980014506970ba8aaf885bcc1c983823307005aaae7efc5d0fdc7a43cd16'
++EXPECTED='a26e8bef2fc8e0a39112d38c68c0b23c7efa964eb30cb899bb50935bc55c1a65'
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+ def load(p):return json.loads(Path(p).read_text())
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(name,d):
+  with (P/name).open('x') as f:json.dump(d,f,indent=2);f.write('\n')
+-def command_receipt(path):
+- d=load(path);assert d['exit_code']==0 and d['actual_child_return_observed'],path
++def outer(path,session,final):
++ d=load(path);assert d['actual_tool_terminal_observed'] and d['exit_code']==0 and d['session_id']==session and d['terminal_chunk_id']==final,path
+  return d
+-
+ def event(line):
+  if line.startswith('move '):
+   assert re.fullmatch(r'move [a-h][1-8][a-h][1-8][qrbn]?',line),line
+@@ -33,78 +32,73 @@
+  return dict(type='post',depthToken=depth,evaluation=score,engineCentiseconds=cs,searchId=sid,pv=(m[5] or '').replace('0','O'))
+ 
+ def main():
+- assert os.sched_getaffinity(0)==H
+- clearance=load(P/'launch-clearance.json')
+- assert clearance['session_id']==47314 and clearance['exit_code']==0 and clearance['actual_terminal_chunk']
+- for required in [PRE/'source-manifest.json',B/'receipt.json',B/'archive-receipt.json',N/'result.json',N/'tool-terminal.json',R/'result.json',R/'tool-terminal.json',REF/'receipt.json']:
+-  assert str(required) in clearance['dependencies'],required
+- for path,h in clearance['dependencies'].items():assert sha(path)==h,path
+- m=load(PRE/'source-manifest.json');s=Path(m['source_root']);b=load(B/'receipt.json');reference=load(REF/'receipt.json')
+- # Snapshot the complete bounded input closure before any source/raw checks.
+- dependencies={Path(path) for path in clearance['dependencies']}
+- dependencies.update(s/name for name in [*m['source_sha256'],*m['tool_sha256']])
+- for tree in [B,N,R]:dependencies.update(x for x in tree.rglob('*') if x.is_file())
+- dependencies.update(Path(x['executable']) for x in load(N/'result.json')['tests'].values())
+- dependencies.update(Path(path) for path in load(R/'result.json')['input_sha256_before'])
+- dependencies.update(Path(b['toolchain'][name]['argv'][0]) for name in ['rustc','cargo'])
+- dependencies.update([REF/'verified-source-before.tar.gz',Path(b['binary_output']['path']),P/'verify.py',P/'original-replay54.mjs',P/'launch-clearance.json'])
++ assert os.sched_getaffinity(0)==H and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
++ binding=load(PRE/'execution-binding.json');m=binding['source69'];b=load(B/'receipt.json');s=Path(b['crate'])
++ assert binding['parent_source_review_complete'] and len(m)==69
++ dependencies={PRE/name for name in ['execution-binding.json','parent-source-review.json','validate.py','selection.json']}
++ dependencies.update(Path(path) for path in binding['helpers_and_inputs'])
++ for tree in [B,N,OLD,R]:dependencies.update(x for x in tree.rglob('*') if x.is_file())
++ dependencies.update(s/name for name in m)
++ dependencies.add(Path(b['binary_output']['path']))
++ dependencies.update(Path(row['original_executable']) for row in load(N/'result.json')['tests'].values())
++ dependencies.update([P/'verify.py',P/'original-replay54.mjs',Path('/usr/bin/node'),Path('/usr/bin/python3'),Path('/usr/bin/taskset')])
++ for name in ['rustc','cargo']:dependencies.add(Path(b['toolchain'][name]['argv'][0]))
++ dependencies.update([KIT/'profiling/workloads.json',KIT/'profiling/replay-oracle.json',KIT/'fixtures/interrupted-sessions-v1.json',KIT/'run.mjs'])
++ # Recursive closure of actual relative imports, including parsePost's benchmark.mjs.
++ queue=[KIT/'profiling/replay-check.mjs',KIT/'run.mjs'];js=set()
++ while queue:
++  path=queue.pop().resolve()
++  if path in js:continue
++  js.add(path)
++  for rel in re.findall(r"(?:from\s*|import\s*\(?\s*)['\"](\.[^'\"]+)['\"]",path.read_text()):queue.append((path.parent/rel).resolve())
++ dependencies.update(js)
+  before={str(path):sha(path) for path in sorted(dependencies)}
+- assert before[str(PRE/'source-manifest.json')]==clearance['dependencies'][str(PRE/'source-manifest.json')]
+- rt=load(R/'tool-terminal.json');assert rt['session_id']==47314 and rt['terminal_chunk_id']==clearance['actual_terminal_chunk'] and rt['exit_code']==0
+- assert len(m['source_sha256'])==46 and len(m['tool_sha256'])==23
+- assert m['changed_native']==['src/activity.rs'] and m['unchanged_native']==45 and m['unchanged_tools']==23
+- assert m['basis_source_archive_sha256']=='ea8963b2f5d082e2d12f026f9a14e84df9d38a8f9b3bfb78014cbb3dea555652'
+- assert sha(REF/'verified-source-before.tar.gz')==m['basis_source_archive_sha256']
+- assert b['source_sha256_before']==b['source_sha256_after']==m['source_sha256']
+- assert b['tool_sha256_before']==b['tool_sha256_after']==m['tool_sha256']==reference['tool_sha256_before']
+- assert [k for k,h in m['source_sha256'].items() if reference['source_sha256_before'][k]!=h]==['src/activity.rs']
++ write('input-sha256-before.json',before);write('public-js-import-closure.json',{str(p):sha(p) for p in sorted(js)})
++ for path,h in binding['helpers_and_inputs'].items():assert sha(path)==h,path
++ outer(B/'tool-terminal.json',24846,'1ca8e8');outer(OLD/'tool-terminal.json',74138,'529558');outer(N/'tool-terminal.json',None,'e4d2b4');outer(R/'tool-terminal.json',33995,'cc7219')
++ native_map={k:v for k,v in m.items() if not k.startswith('tools/')};tool_map={k:v for k,v in m.items() if k.startswith('tools/')}
++ assert len(native_map)==46 and len(tool_map)==23
++ assert b['source_sha256_before']==b['source_sha256_after']==native_map
++ assert b['tool_sha256_before']==b['tool_sha256_after']==tool_map
+  assert b['cargo_config_sha256_before']==b['cargo_config_sha256_after']=={}
+- assert b['crate']==str(s) and b['mode']=='generic' and b['pgo']['mode']=='none'
+- assert b['rust_flags']==['-C','target-cpu=x86-64'] and b['engine_runs']==0
+- assert b['toolchain']==reference['toolchain']
+- assert b['outcome']=='build-succeeded-with-stable-input-snapshot' and b['cargo_exit_code']==0
+- assert b['binary_output']['sha256']==EXPECTED==sha(B/'rook2-exact')==sha(Path(b['binary_output']['path']))
+- assert b['build_affinity']==sorted(H)
++ assert b['mode']=='generic' and b['pgo']['mode']=='none' and b['rust_flags']==['-C','target-cpu=x86-64'] and b['engine_runs']==0
++ assert b['outcome']=='build-succeeded-with-stable-input-snapshot' and b['cargo_exit_code']==0 and b['build_affinity']==sorted(H)
++ assert b['binary_output']['sha256']==EXPECTED==sha(B/'rook2-exact')==sha(b['binary_output']['path'])
+  for name in ['rustc','cargo']:
+-  t=b['toolchain'][name];assert t['exit_code']==0
+-  assert sha(t['argv'][0])==b['toolchain'][name+'_executable_sha256']
+- allmap={**m['source_sha256'],**m['tool_sha256']}
++  assert b['toolchain'][name]['exit_code']==0 and sha(b['toolchain'][name]['argv'][0])==b['toolchain'][name+'_executable_sha256']
+  actual={'Cargo.toml','Cargo.lock'}|{str(x.relative_to(s)) for root in [s/'src',s/'tools'] for x in root.rglob('*') if x.is_file() and '__pycache__' not in x.parts}
+- assert actual==set(allmap)
+- for name,h in allmap.items():
+-  for path in [s/name,B/'source-before'/name]:assert sha(path)==h,name;dependencies.add(path)
+- for row in b['logs'].values():
+-  path=B/row['path'];assert path.stat().st_size==row['bytes'] and sha(path)==row['sha256'];dependencies.add(path)
+- archive=load(B/'archive-receipt.json');assert archive['files']==69 and archive['binary_sha256']==EXPECTED
+- assert archive['helper_sha256']==m['tool_sha256']['tools/archive_build.py']
+- assert sha(B/archive['archive'])==archive['sha256'];dependencies.add(B/archive['archive'])
+- with tarfile.open(B/archive['archive'],'r:gz') as tar:
+-  entries=tar.getmembers();assert len(entries)==69 and {x.name for x in entries}==set(allmap)
+-  for entry in entries:
+-   assert entry.isfile();assert hashlib.sha256(tar.extractfile(entry).read()).hexdigest()==allmap[entry.name]
+- native=load(N/'result.json');assert native['complete'] and native['failure'] is None and native['total_tests']==178 and native['engine_sha256']==EXPECTED
+- nt=load(N/'tool-terminal.json');assert nt['session_id']==40196 and nt['terminal_chunk_id']=='63c139' and nt['exit_code']==0
+- artifacts=[json.loads(line) for line in (N/'cargo-tests.stdout').read_text().splitlines()]
+- assert len([d for d in artifacts if d.get('reason')=='build-finished' and d['success']])==1
+- test_paths={d['executable'] for d in artifacts if d.get('reason')=='compiler-artifact' and d.get('profile',{}).get('test') and d.get('executable')}
+- assert test_paths=={d['executable'] for d in native['tests'].values()}
+- for key,count in [('lib',176),('dev',2)]:
+-  row=native['tests'][key];path=Path(row['executable']);assert row['passed']==count and sha(path)==row['sha256'];dependencies.add(path)
+-  terminal=command_receipt(N/(key+'-tests-terminal.json'));assert terminal['argv']==[str(path),'--test-threads=1']
+-  assert terminal in native['commands']
+-  stdout=(N/(key+'-tests.stdout')).read_text();assert (N/(key+'-tests.stderr')).read_bytes()==b''
+-  assert len(re.findall(r'^test .+ \.\.\. ok$',stdout,re.M))==count
+-  assert re.search(rf'test result: ok\. {count} passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;',stdout)
+- cargo=command_receipt(N/'cargo-tests-terminal.json');assert cargo in native['commands']
+- assert cargo['argv']==['/usr/bin/cargo','test','--offline','--locked','--release','--target','x86_64-unknown-linux-gnu','--manifest-path',str(s/'Cargo.toml'),'--target-dir',str(s/'target/native-tests-generic-01'),'--jobs','4','--lib','--bin','rook2-dev','--no-run','--message-format=json-render-diagnostics']
+- assert len(native['commands'])==3
+- regression=load(R/'result.json');assert regression['complete'] and regression['failure'] is None and regression['engine_sha256']==EXPECTED
+- assert regression['input_sha256_before']==regression['input_sha256_after']
+- for path,h in regression['input_sha256_before'].items():assert sha(path)==h,path;dependencies.add(Path(path))
+- strict=command_receipt(R/'strict54-terminal.json');live=command_receipt(R/'wire-driver-terminal.json')
+- assert strict['argv']==['/usr/bin/node',str(KIT/'profiling/replay-check.mjs'),'--',str(B/'rook2-exact')]
+- assert live['argv']==['/usr/bin/python3','/home/legolas/rook2/tools/check_live.py','--engine',str(B/'rook2-exact'),'--output',str(R/'wire')]
+- assert regression['commands']==[strict,live]
++ assert actual==set(m)
++ for name,h in m.items():assert sha(s/name)==sha(B/'source-before'/name)==h
++ for row in b['logs'].values():assert (B/row['path']).stat().st_size==row['bytes'] and sha(B/row['path'])==row['sha256']
++ ar=load(B/'archive-receipt.json');assert ar['files']==69 and ar['binary_sha256']==EXPECTED and ar['verified_against_build_before_hashes']
++ assert ar['helper_sha256']==tool_map['tools/archive_build.py'] and sha(B/ar['archive'])==ar['sha256']
++ with tarfile.open(B/ar['archive'],'r:gz') as tar:
++  entries=tar.getmembers();assert len(entries)==69 and {x.name for x in entries}==set(m)
++  for entry in entries:assert entry.isfile() and hashlib.sha256(tar.extractfile(entry).read()).hexdigest()==m[entry.name]
++ native=load(N/'result.json');assert native['complete'] and native['failure'] is None and native['total_tests']==178 and native['source_and_tools_unchanged']
++ assert native['source69_sha256']==m and native['generic_image_sha256']==EXPECTED and native['original_inputs_unchanged']
++ assert load(N/'source69-before.json')==load(N/'source69-after.json')==m
++ assert load(N/'input-pins-before.json')==load(N/'input-pins-after.json')
++ for path,h in load(N/'input-pins-before.json').items():assert str(Path(path)) in before and sha(path)==h
++ provenance=load(N/'frozen-image-provenance.json');assert len(native['commands'])==2
++ for kind,count in [('lib',176),('dev',2)]:
++  row=native['tests'][kind];image=Path(row['frozen_executable']);origin=Path(row['original_executable']);record=load(N/(kind+'-terminal.json'));launch=load(N/(kind+'-launch.json'))
++  assert row['passed']==count and row['actual_exit_code']==0 and sha(image)==sha(origin)==row['sha256']==provenance[kind]['sha256']
++  assert record in native['commands'] and record['actual_child_return_observed'] and record['exit_code']==0 and record['command']==[str(image),'--test-threads=1']
++  assert record['pid']==launch['pid']==row['pid']>0 and record['affinity']==launch['affinity']==sorted(H)
++  assert record['stdout_sha256']==sha(N/(kind+'-tests.stdout')) and record['stderr_sha256']==sha(N/(kind+'-tests.stderr'))
++  assert record['image_sha256_before']==record['image_sha256_after']==record['original_image_sha256_after']==row['sha256']
++  assert (N/(kind+'-tests.stderr')).read_bytes()==b''
++  text=(N/(kind+'-tests.stdout')).read_text();assert len(re.findall(r'^test .* \.\.\. ok$',text,re.M))==count and f'test result: ok. {count} passed; 0 failed;' in text
++ old=load(OLD/'result.json');assert old['complete'] and old['stable_source_and_inputs']
++ assert len(re.findall(r'^test .* \.\.\. ok$',(OLD/'native-tests.stdout').read_text(),re.M))==178
++ regression=load(R/'result.json');assert regression['complete'] and regression['stable_source_and_inputs'] and len(regression['records'])==2
++ for record,stem in zip(regression['records'],['strict54','wire']):
++  assert record['exit_code']==0 and record['pid']>0
++  assert record['stdout_sha256']==sha(R/(stem+'.stdout')) and record['stderr_sha256']==sha(R/(stem+'.stderr'))
++ assert regression['records'][0]['command']==['/usr/bin/node',str(KIT/'profiling/replay-check.mjs'),'--','/usr/bin/taskset','-c','14',str(B/'rook2-exact')]
++ assert regression['records'][1]['command']==['/usr/bin/python3','/home/legolas/rook2/tools/check_live.py','--engine',str(B/'rook2-exact'),'--output',str(R/'wire')]
++ assert (R/'strict54.stderr').read_bytes()==(R/'wire.stderr').read_bytes()==b''
+  fixture=load(KIT/'fixtures/interrupted-sessions-v1.json');wire=load(R/'wire/receipt.json')
+  assert wire['engine']==str(B/'rook2-exact') and wire['engine_sha256_before']==wire['engine_sha256_after']==EXPECTED
+  assert wire['effective_affinity']==sorted(H) and wire['fixture_sha256']==sha(KIT/'fixtures/interrupted-sessions-v1.json')
+@@ -135,19 +129,16 @@
+   for got,recorded in zip(searches,row['searches']):assert got['events']==recorded['events'] and got['abort']==recorded['abort']
+   checked.append({'id':case['id'],'searches':3,'all_stdin_stdout_stderr_bytes_consumed':True,'normal_exit':0})
+  assert total_searches==24
+- # All dynamically consumed inputs must already belong to the start snapshot.
++
+  assert {str(path) for path in dependencies}==set(before)
+- assert all(sha(Path(path))==h for path,h in before.items())
++ assert all(sha(path)==h for path,h in before.items())
+  with (P/'original-replay54.stdout').open('xb') as stdout,(P/'original-replay54.stderr').open('xb') as stderr:
+-  argv=['/usr/bin/node',str(P/'original-replay54.mjs')]
+-  done=subprocess.run(argv,stdout=stdout,stderr=stderr)
+- write('original-replay54-terminal.json',{'argv':argv,'exit_code':done.returncode,'engine_runs':0})
+- assert done.returncode==0 and (P/'original-replay54.stderr').read_bytes()==b''
+- assert load(P/'original-replay54-result.json')['original_checkReplay_calls']==54
+- after={path:sha(Path(path)) for path in before};assert before==after
+- write('independent-verification.json',{'complete':True,'engine_sha256':EXPECTED,'native_tests':178,'strict54_original_checkReplay':True,'wire8_searches24_raw_protocol':checked,'source46_tools23_archive69_equal':True,'compiler_cargo_generic_bound':True,'all_dependencies_stable':True,'dependencies':before,'new_native_engine_runs':0,'limits':['Strict stdin is bound via original runner/workloads; no separate native stdin byte stream was retained by that original strict runner','Wire receipt has observed direct native exit codes but no individual native PID field','Cross-stream wall ordering is not reconstructed; exact streams and unchanged original scheduler are bound','No timing/PGO/adoption or whole-component/full-game qualification claim']})
+- print(json.dumps({'complete':True,'native':178,'strict':54,'wire_cases':8,'wire_searches':24,'new_engine_runs':0}))
++  argv=['/usr/bin/node',str(P/'original-replay54.mjs')];child=subprocess.Popen(argv,stdout=stdout,stderr=stderr);code=child.wait()
++ write('original-replay54-terminal.json',dict(argv=argv,pid=child.pid,exit_code=code,actual_child_return_observed=True,engine_runs=0))
++ assert code==0 and (P/'original-replay54.stderr').read_bytes()==b'' and load(P/'original-replay54-result.json')['original_checkReplay_calls']==54
++ after={path:sha(path) for path in before};assert before==after;write('input-sha256-after.json',after)
++ write('independent-verification.json',dict(complete=True,engine_sha256=EXPECTED,native_tests=178,strict54_original_checkReplay=True,wire8_searches24_raw_protocol=checked,source46_tools23_archive69_equal=True,compiler_cargo_generic_bound=True,all_dependencies_stable=True,dependencies=before,new_native_engine_runs=0,limits=['Original178 Cargo pass and copied-image178 repeat are the same unique tests','Strict stored argv includes taskset -c14; this offline review makes no measured CPU claim','Strict stdin is bound runner/workloads reconstruction, not separately captured strict native stdin','Wire direct native exits retained but no per-native PID field; driver PID and original raw command/reply streams are bound','No timing/PGO/promotion/whole-game qualification claim']))
++ print(json.dumps(dict(complete=True,native=178,strict=54,wire_cases=8,wire_searches=24,new_engine_runs=0,dependencies=len(before))))
+ if __name__=='__main__':
+  try:main()
+- except BaseException as error:
+-  write('failure.json',{'error':repr(error),'new_engine_runs':0});raise
++ except BaseException as error:write('failure.json',dict(error=repr(error),new_engine_runs=0));raise
+--- accepted-activity-independent/original-replay54.mjs
++++ phase-sharing-independent/original-replay54.mjs
+@@ -2,8 +2,8 @@
+ import assert from 'node:assert/strict';
+ import {readFileSync,writeFileSync} from 'node:fs';
+ import {checkReplay,workloads,oracle} from '/home/legolas/king-spec/conformance/profiling/replay-check.mjs';
+-const base='/home/legolas/rook2/evidence/activity-value-inputs-regression-20261018-01';
+-const image='/home/legolas/rook2/evidence/activity-value-inputs-generic-build-20261018-01/rook2-exact';
++const base='/home/legolas/rook2/evidence/full-evaluation-phase-sharing-regression-validation-20261018-01';
++const image='/home/legolas/rook2/evidence/full-evaluation-phase-sharing-generic-build-20261018-01/rook2-exact';
+ const report=JSON.parse(readFileSync(base+'/strict54.stdout'));
+ assert.equal(workloads.cases.length,54);assert.equal(oracle.cases.length,54);
+ assert.deepEqual(report.selectedCases,workloads.cases.map(x=>x.id));
+@@ -12,7 +12,7 @@
+ for(const [index,input] of workloads.cases.entries()){
+  const row=report.results[index],expected=oracle.cases.find(x=>x.id===input.id);
+  assert(expected);assert.equal(row.case,input.id);assert.equal(row.status,'pass');
+- assert.deepEqual(row.command,[image,...oracle.mode]);
++ assert.deepEqual(row.command,['/usr/bin/taskset','-c','14',image,...oracle.mode]);
+  assert(Number.isSafeInteger(row.pid)&&row.pid>0);assert(!pids.has(row.pid));pids.add(row.pid);
+  assert.equal(row.truncated,false);assert.equal(row.discardedObservedBytes,0);assert(!row.cleanupUnconfirmed);
+  assert.equal(row.retainedBytes,Buffer.byteLength(row.stdout)+Buffer.byteLength(row.stderr));

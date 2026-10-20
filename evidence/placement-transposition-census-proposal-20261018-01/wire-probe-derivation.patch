@@ -1,0 +1,36 @@
+--- current-fullbyte/src/bin/rook2.rs
++++ diagnostic/src/bin/rook2-placement-census.rs
+@@ -1,4 +1,4 @@
+-//! Ordinary King XBoard wire profile. No diagnostic JSON is accepted here.
++//! D=true logging-only placement census. Ordinary wire behavior is retained.
+ use rook2::host::{Command, Host, Record};
+ use rook2::quiescence::Limits;
+ use rook2::session::{Action, Error, Session};
+@@ -80,8 +80,7 @@
+     let mut input = Input::stdin()?;
+     let mut output = io::stdout().lock();
+     let mut errors = io::stderr().lock();
+-    // Disable development counters and root traces in the ordinary binary.
+-    let mut session = Session::<false>::default();
++    let mut session = Session::<true>::default();
+     while let Some(line) = input.line()? {
+         if diagnostic_seed {
+             if let Some(assignment) = wire::seed_assignment(&line) {
+@@ -119,7 +118,16 @@
+ }
+ 
+ fn main() -> ExitCode {
+-    match run() {
++    if let Err(error) = rook2::placement_census::initialize() {
++        let _ = writeln!(io::stderr(), "census initialize: {error}");
++        return ExitCode::from(1);
++    }
++    let result = run();
++    if let Err(error) = rook2::placement_census::finish() {
++        let _ = writeln!(io::stderr(), "census finish: {error}");
++        return ExitCode::from(1);
++    }
++    match result {
+         Ok(()) => ExitCode::SUCCESS,
+         Err(Failure::Fatal) => ExitCode::from(1),
+         Err(Failure::Message(message)) => {

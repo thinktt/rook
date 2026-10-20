@@ -1,0 +1,11 @@
+# Experiment26 own-PGO preparation — PARKED, UNUSED
+
+Parent reports the closed generic seven-case pilot at14.114962s baseline versus14.0856475s experiment26,0.2076838747% lower,5/7 lower medians and worst ratio1.000950957. It fails the preset0.5% aggregate floor. **PARK26: no own-PGO build or training.** These numbers are the parent's reported independent result; this preparation did not reconcile that CPU trial.
+
+Eight small accepted candidate25 workflow helpers were already textually adapted before the decision. build_stage.py, check.py, raw_model.py and recheck.mjs remain byte-identical; the other changes are paths/scope/variant labels, visible in helper-adaptation.patch. plan.json has source69 graph8226198a52d02664cc062504f5198781dd577d09d63dd23f74da300adc5c9687 and generic a26e8bef..., with own-PGO baseline51529ce... retained solely as comparison identity. No baseline profile is consumed. The historical plan's unknown-pilot status predates this PARK disposition; its bytes are preserved.
+
+execution-clearance.json remains explicitly false. All future instrumented/training/use/check/wire/reconciliation outputs are absent. No helper AST/Node parse, import, runtime entry point, engine, native test, build, profile merge, archive or Git operation was performed. Large image/archive/runtime identities were imported from closed receipts/prior accepted pins without bulk rehashing during the live CPU window; the unused runtime guard would have rechecked them before any future launch. No previous trial authority transfers.
+
+The unused commands.md describes the six established stages only: own-source instrumented build/freeze/archive, original54 training/raw-PID/profile merge, independent54/remerge verification, own-source use build with missing/stale warnings forbidden, original54+eightwire24 checks, and independent source/artifact/profile/raw closure. Old offline mirror controls were omitted. It is retained as a source preparation, not an authorized workflow or a performance/qualification claim.
+
+Preparation write actual sessionless277f0b/0. All owned jobs are closed. No further work is scheduled; parent retains the parked disposition and production decisions. Normal speed policy was followed; tools expose no runtime speed readback and no verified speed setting is claimed.

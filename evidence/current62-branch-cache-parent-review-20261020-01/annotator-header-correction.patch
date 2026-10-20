@@ -1,0 +1,11 @@
+--- sealed-preparation/vector_summary.py
++++ execution/vector_summary.py
+@@ -27,7 +27,7 @@
+  headers=[];totals=[]
+  for line in text.splitlines():
+   words=line.split();names=[x for x in words if x in events]
+-  if len(names)==len(events) and len(set(names))==len(events):headers.append(names)
++  if len(words) in (len(events),len(events)+1) and words[:len(events)]==names and set(names)==set(events) and (len(words)==len(events) or words[-1]=='file:function'):headers.append(names)
+   if line.rstrip().endswith('PROGRAM TOTALS'):
+    values=line.rsplit('PROGRAM TOTALS',1)[0].split();assert len(values)==len(events)
+    assert all(re.fullmatch(r'[0-9][0-9,]*',x) for x in values);totals.append([int(x.replace(',','')) for x in values])

@@ -1,0 +1,685 @@
+{
+  "build_receipt_sha256": "4d6cb9680c95b028699c0414cb3af3c8923b89568d7b53008b9c8fa9db0f8eee",
+  "build_record": "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/receipt.json",
+  "commands_serial": [
+    [
+      "taskset",
+      "-c",
+      "0-5,8-13",
+      "/usr/bin/python3",
+      "/home/legolas/rook2/tools/collect_games.py",
+      "--engine",
+      "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/rook2-exact",
+      "--build-record",
+      "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/receipt.json",
+      "--output",
+      "/home/legolas/rook2/evidence/exttsp-profiled-games12-preparation-20261020-01/games12"
+    ]
+  ],
+  "compiler_and_build": {
+    "pgo": {
+      "mode": "profile-use",
+      "training_runs_by_build_helper": 0,
+      "code_layout": {
+        "algorithm": "ext-tsp",
+        "profiled_functions_only": true,
+        "application": "use-only",
+        "fresh_training": false,
+        "llvm_args": [
+          "-pgo-warn-missing-function",
+          "-enable-ext-tsp-block-placement=true",
+          "-ext-tsp-apply-without-profile=false"
+        ]
+      },
+      "input_sha256_before": {
+        "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/merged.profdata": "b4806420937681c8228903507018233d7176be0333ef98881a73d34c66df3a5c",
+        "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/training.json": "bd876da38bc812d43fa2e475b9582cd8d60c6e2a32354521f8c6999c6749ad05"
+      },
+      "profile": "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/merged.profdata",
+      "training_record": "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/training.json",
+      "input_sha256_after": {
+        "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/merged.profdata": "b4806420937681c8228903507018233d7176be0333ef98881a73d34c66df3a5c",
+        "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/training.json": "bd876da38bc812d43fa2e475b9582cd8d60c6e2a32354521f8c6999c6749ad05"
+      },
+      "inputs_unchanged": true
+    },
+    "rust_flags": [
+      "-C",
+      "target-cpu=x86-64",
+      "-C",
+      "profile-use=/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/merged.profdata",
+      "-C",
+      "llvm-args=-pgo-warn-missing-function -enable-ext-tsp-block-placement=true -ext-tsp-apply-without-profile=false"
+    ],
+    "target_cpu": "x86-64",
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "toolchain": {
+      "rustc": {
+        "argv": [
+          "/usr/bin/rustc",
+          "-vV"
+        ],
+        "exit_code": 0,
+        "stdout": "rustc 1.85.1 (4eb161250 2025-03-15) (built from a source tarball)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: x86_64-unknown-linux-gnu\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+        "stderr": ""
+      },
+      "cargo": {
+        "argv": [
+          "/usr/bin/cargo",
+          "--version"
+        ],
+        "exit_code": 0,
+        "stdout": "cargo 1.85.1 (d73d2caf9 2024-12-31)\n",
+        "stderr": ""
+      },
+      "rustc_executable_sha256": "b4e139165f4f075f9a3fb4b20e7e4898472f08304961706072752d4aa11522b1",
+      "cargo_executable_sha256": "3feb6f7da827ce1fbc6a188db4e365465b0819f5f7c54ead984dc3a329a19412"
+    }
+  },
+  "dependency_sha256": {
+    "/home/legolas/king-spec/MANIFEST.sha256": "b8ce317fa5577c28bc35f0cbadad61cd984bdd4824c59f2c37d4ebef55335e0d",
+    "/home/legolas/king-spec/SOURCE.yaml": "8e00449a18c99eb016224d3dbb4f91a974d00b619099289526bb9b82f67d4fad",
+    "/home/legolas/king-spec/conformance/gate-replay/accepted-games-v1.json": "e837789fcd4a801abe4cb48793a3711c29062ed425c5f4a923f554b9835b883e",
+    "/home/legolas/king-spec/conformance/gate-replay/run.mjs": "99c7bb91caabfebd35a210fc2b42b406443d64aa2c696da8d841911f062be0a4",
+    "/home/legolas/king-spec/conformance/profiling/benchmark.mjs": "f475222044c9e8fb60a60a12333f3c9e774546c07d62327f08132634df71fc5f",
+    "/home/legolas/king-spec/conformance/profiling/replay-check.mjs": "f25d63ad547505d1b2ade6b294d0b4a4a3cdb7c29000634373521ca3dbaa88cd",
+    "/home/legolas/king-spec/conformance/profiling/replay-oracle.json": "6719db738383dae810d49db96575dc981e5d83b57bd52acf7c5a23c1b22e09dc",
+    "/home/legolas/king-spec/conformance/profiling/workloads.json": "5fd3117420ce7a9813268dc0db322f339739061868395324c36ff3cebce6126e",
+    "/home/legolas/king-spec/performance/acceptance-policy.md": "50af0bc23f08d30582b5745956d16b1097f340bc5239f415f4c48a4e084f968f",
+    "/home/legolas/king-spec/performance/attribution-method.md": "190de9a52095d71810907d931371f36dd7ee2f9a355ad2d870d3808a022d2c65",
+    "/home/legolas/king-spec/performance/environment.json": "b198dac3df433a2d4b540ac604ce4e9e8134fa4ecca7d228fb82cf3dad8f53a7",
+    "/home/legolas/king-spec/performance/inventory.json": "0adb7713a059555eb1f73152e559d9a4d79b308d3c7efa3794909017f2328aef",
+    "/home/legolas/king-spec/performance/measurement-policy.md": "12f239e51a4a34d25517e9d0568e4d21af845f1735608e320e0798eb6aa729c7",
+    "/home/legolas/king-spec/performance/reference54.json": "9d83793221fdc8b9f1a165138888bc8011e443af783d3dd1b16d825726d1a87c",
+    "/home/legolas/king-spec/performance/selected-games-protocol.md": "d43beca57b683e4f0a2097bce104540fc0bfc37436c381fedf6963fb92525913",
+    "/home/legolas/king-spec/performance/selected-games-reference.json": "02d8863c742a6e5f3ca7533984a8b8fdf967a754e85a5ed8e128c36acb3003d7",
+    "/home/legolas/king-spec/performance/statistics.md": "e11929eab9fc4106bbdf4d6ed2da1c5092d9aa36a8238aa764a81e54ba775526",
+    "/home/legolas/rook2/tools/README.md": "f440d5aaa77de9ad8f53bab524364578420103b2373bbbf5f2bc70629d8f4ae6",
+    "/home/legolas/rook2/tools/account_native.py": "f98132f3947a2320ebf6ae5d86f4abaa907650a6eb30f992d580e8290dbcb1fb",
+    "/home/legolas/rook2/tools/archive_build.py": "ea3944cf7ce09a3e6c4476644083324ac8fabec12cd7436f8536a872f3ff4b86",
+    "/home/legolas/rook2/tools/build.py": "97a2b3181b7a029c34ec0f2606faabd5c6d034586dbd54a12bc88461db3af1fa",
+    "/home/legolas/rook2/tools/check_core.py": "07bacfb310c50cf3770c9b644b33bb356f4a320cdd2ec72db02146682b540f34",
+    "/home/legolas/rook2/tools/check_evaluation.py": "ff1e685f5d678bd47c2edd81dda9a6eb3e32d73aea899ac5d82583eb74d55ff1",
+    "/home/legolas/rook2/tools/check_live.py": "eb8b3ef49a4acf7f41ea8d45308ae5ae501d607ecca89196ff0a553e2600a2c0",
+    "/home/legolas/rook2/tools/check_policies.py": "dbe4f2d7f93eb3f4fd7fb02bff0a5e9a9984f79827cb49e49e4d53d26ef37a1b",
+    "/home/legolas/rook2/tools/check_timing.py": "36d10917098ce67c4f6eda7f0886d55a90ca92a65ad7566fdd89b3b8cca8a5d5",
+    "/home/legolas/rook2/tools/clock_profile.py": "58c75d8a82a4e5eb17db559cd8d5aaca70419a988b66ce03d3cdfc9dcaa0310b",
+    "/home/legolas/rook2/tools/collect_games.py": "1fdae0d6e5cce440887c296a36386f8c62acef61cc824250cc0427120e84c39d",
+    "/home/legolas/rook2/tools/collect_ordinary.py": "755a3c61a97dd8bb6af3b219214456119c45da8115ce507d2e634424f9f4dc61",
+    "/home/legolas/rook2/tools/compare_ordinary.py": "814c39847f07cc1d50aa45c759e515af8a4dc55b16673d6278f2df2bd3d2ae53",
+    "/home/legolas/rook2/tools/evaluation_probe.rs": "49f6a1c57f12df3f3721f7f67d57af2ac322ce70af2d2989533c7673d4a1c5b7",
+    "/home/legolas/rook2/tools/generate_spec_tables.py": "4f4f2ac6c36e26f32eeb3a4de4f29239522e402c3a83c3fecefebab53ffc5de3",
+    "/home/legolas/rook2/tools/generate_time_powers.py": "795a100bd7a32893fef6d946a2fef9a15cb86672841bed51d633f67e0f14261a",
+    "/home/legolas/rook2/tools/measure.py": "a7aef2142b0aab59b2bfb62f78ccb589f9915e180f990f1be1e59ec3b9e86224",
+    "/home/legolas/rook2/tools/runner-control.c": "48ecf2dbcce382ba468c8f14e4d66211b691eeba6ea78b2870f94cc4f49dbfc8",
+    "/home/legolas/rook2/tools/tap_wire.mjs": "059679c485201568545b3eb12ed663403c3c2d3776edcf3b92a1dc1fd6ab9271",
+    "/home/legolas/rook2/tools/test_account_native.py": "248830e0bb69bb3f72372c138528b8085b7dc77fcb0270e5f535c4ba7fe2b353",
+    "/home/legolas/rook2/tools/test_measure.py": "7a7448ba95878beae6331c25ea0d3fee98fbccaebd2d5617a9c68189af24846b",
+    "/home/legolas/rook2/tools/test_tap_wire.py": "1d7122edf2fadfb18390c3e239742176cbdad26f70e3e2ea6a63979fd18b07a4",
+    "/home/legolas/rook2/tools/timing_probe.rs": "fe1f56db1564687383439df1edc1d81ab2fe419a76a50efcc521bd005b069442",
+    "/usr/bin/node": "ca0728526aa1cc4e3056decec848ecc6d2c5391cecdd4e21a0ebd221d665c84e",
+    "/usr/bin/python3.13": "889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9",
+    "/home/legolas/rook2/evidence/exttsp-profiled-games12-preparation-20261020-01/reconcile.py": "be1e69cc85a30ff0fcecbb85f6c82b9325da29762d23b17453a40eb347df01f4",
+    "/home/legolas/rook2/evidence/exttsp-profiled-games12-preparation-20261020-01/observe_placement.py": "1b5f4913458d411de04efc1650a9af115cfd9873180342137d59d305dd3f7f6d",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/Cargo.toml": "6199772414ef5972898842d76472301d256e42f9dd2181fa421ff5cbc21c85d1",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/Cargo.lock": "d34b5888f77c0319fb614ba5701a4a1177af31b803054ad3a8251926ba237c97",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/activity.rs": "81cd2ff5ecd7125cbf2993031c57db97b02fa3877d314fc5f06350c6019024f5",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/attacks.rs": "00d4d2a89c32626be5ef501bc377d427a90588f28b2913e59438a1772e4494f3",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/bin/rook2-dev.rs": "1eea8e56f268a3fd943d1dc2d2ccd0c7607c80793c1a8f41eb464bdc53853c34",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/bin/rook2.rs": "ccc0809b7c2f7c709097660fdc62d06c79f0c7563ec79753214afe8be185046e",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/clock.rs": "4b1d6f18e94d3161cefa8b4a5daafddffd1aba5d3d4ade182a03eed3ee493a79",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/development.rs": "e25b082c342df61b2aa8c30e2970e65007ad3e99750807724bda42ab59a3045f",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/endgame.rs": "4f382e7b5359f1956a0e155328aad08f35dab74252ee0794d61dafcd1cd2214a",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/engine/geometry_tests.rs": "4677760cbf58f0aaeec901b21cfb6dc3a797fdbe128afbad34fe20e9c4e5e921",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/engine.rs": "c17cfcf136d2b37f94d8c5c30b3a0a76d5c533ab3d6dc1103a7b724c68033995",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/eval_basis.rs": "5b369b122dc69aa40e5f8b81c3153173e633c9cfec89f160cef49886b5c36647",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/evaluation.rs": "767b1ef83fea5d30d1b5a6edaa259fa718c666cfdb568fb9ad7b2aca2e9f33f7",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/evaluator.rs": "0ea2af3606dfb20409b8c15d46a0c745bf3204c22bccee6e00d3493615a55c61",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/first_iteration.rs": "713830b62783a81033e1355687534783647b243c51e10f829546d080ce157722",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/geometry.rs": "582a2e8ad2672a937062ae829ae596ee263b69c6ec52103c55c658a6ecc225f1",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/history.rs": "f6b2a5073307d655e33e774900c9fea26f4bdfefbdd2cd9848ff0758c4b34fde",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/host.rs": "cc694d926fb1c1bc3063c3c9a20a8399abc92019f4927b2b79850e7a706924ac",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/identity.rs": "761779f7f2e0186dfbe28e162bf5fc8c8461d9f9c342787ebe2becfd0914a376",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/influence/coherent.rs": "b4155e4b65beb0eb9aea822bae714b1222accde3b7be574d50ecf56da980ef64",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/influence/coherent_tests.rs": "999c4d015a447d4847de4f11d98175271e3c5a630ea5ae8b5fe6378767ebd8b0",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/influence.rs": "fa01b22dc312b5e9161ce405571172b5d272c8ecc2bcca1ce3de1cf7f66eb7fa",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/lib.rs": "6f09459cb36d8e8e0dfc0d473f3b91fcd19feed4c8220888b83af37124abc0c4",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/movegen.rs": "2665dfbc957191b06f82c35412f72be94943944cffd0c04851bdcdc91086dcc8",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/ordinary.rs": "e5dae89f6bcc6651ac4e8aeb943b3f559b882232f2cf571c79fd0f3d463ecbfb",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/ordinary_policy.rs": "5a796d4f7b11c1818a7dbdfe34080d9502d7c517217b521315534a318e9301a6",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/output.rs": "90c1f45a9d907dcb85ed97a0b9d45828196d17a381bd84f09f8f49e1872eef6d",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/parameters.rs": "30dd03e5ead3df289b25929c7bea81e72d1e2b9a2250916883107f0cfaf7f42e",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/pawn_progress.rs": "0bca6bb9678657b2efadc023c07d1ffcc9ff91c1c97553b84e2131c6ce30d9dc",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/pawn_structure.rs": "b9d0921514c5ba7ba7532f07501fae7dc38b707f6c2f2f0bb01787be5263be13",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/pawn_terms.rs": "a2081196fb0bfdbd1ac7830d2f668009b267e77d3e56b92c249af709cd99fff3",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/position.rs": "e85eb42304bb010ea199160568b215958f9de966cc71d398e8e0e42553054d82",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/positional_terms.rs": "053b04b8f434db2ddadda71686831b40baf3c59d09be6cde5895af1b7d430260",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/post_lifecycle.rs": "1c429549a023d67b68304375a1b40d2a1228c104579b53659db5595df0d82bb6",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/quiescence.rs": "9ff56aefef807d7df53f446abef404dba90150572116c0cae09057556bb39e6a",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/quiescence_policy.rs": "baeb3f40c47f119481f0040b1c9bb15f9af25ee39376cf0c01d1a06091011468",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/relation_table.rs": "8b559327e7fe433750ab30add4e172570a4a0a80d10b3b3b63bd475dd731de49",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/remembered.rs": "af2eb6046fd7e58b1a35e7ed3051936559b7f739224ed698b54c49317faec293",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/root_schedule.rs": "550146f895ef9a43b8ecdc6fce5e26fb973602e6f5d5b17add1a4920768a72d8",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/session.rs": "e3585bdf5fabb45eff8f3a48ea75da8e414b8b9dc2fbcbc4a44f51a30cc87d7f",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/shelter.rs": "d6012e72cda2502538c215e074b2ebcba396342b903d9d431cc257eb3f9e5811",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/tactical/check_mask_tests.rs": "136d904829288e54c9efee9a107c95dfad651182d99800bf69e483174ffe85b3",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/tactical/check_masks.rs": "8468db1a066e1e6983271e3b54d6023c20d3b55386a775098f0db48472cec626",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/tactical.rs": "22fb473a0c3288a1ce392833e1dd09749bc77d795d3b697ba1071f21b58d3d4d",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/time_powers.rs": "8332a3c4516496ebfb77ab9426e35ae1c94108f21dbd071b8baf9ac3c4c2215e",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/timed.rs": "f62d6ea5591fc23515da241ee3dfefd30d500c79e0349068ca595076f8044d2e",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/timed_sequence.rs": "3089985b5b23dc397770cbf4e228219a27c71db1c01a8a553305e4adb3e3f08f",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/timing.rs": "a950ca151dbdbc026f7c11eff98d1f67985f932dd949d2872436c3271972f934",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/types.rs": "2a202da079b16b3becb6651427701ec8e40aed88bd19550854c800b842b22feb",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/wire.rs": "f851e0b386db01debc0107e01be64ebef0454934673bece463ecd39d0d984841",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/src/work_clock.rs": "946c1e40e29254e4d98f642fe051f4a4b337bb401f5f00d8b0e275539e71ab02",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/README.md": "f440d5aaa77de9ad8f53bab524364578420103b2373bbbf5f2bc70629d8f4ae6",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/account_native.py": "f98132f3947a2320ebf6ae5d86f4abaa907650a6eb30f992d580e8290dbcb1fb",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/archive_build.py": "ea3944cf7ce09a3e6c4476644083324ac8fabec12cd7436f8536a872f3ff4b86",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/build.py": "9ec72da0c15c07eee8c5ef1a63729ffdef6fc048baa37c58d9eed1bbe3d4df4e",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/check_core.py": "07bacfb310c50cf3770c9b644b33bb356f4a320cdd2ec72db02146682b540f34",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/check_evaluation.py": "ff1e685f5d678bd47c2edd81dda9a6eb3e32d73aea899ac5d82583eb74d55ff1",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/check_live.py": "eb8b3ef49a4acf7f41ea8d45308ae5ae501d607ecca89196ff0a553e2600a2c0",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/check_policies.py": "dbe4f2d7f93eb3f4fd7fb02bff0a5e9a9984f79827cb49e49e4d53d26ef37a1b",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/check_timing.py": "36d10917098ce67c4f6eda7f0886d55a90ca92a65ad7566fdd89b3b8cca8a5d5",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/clock_profile.py": "58c75d8a82a4e5eb17db559cd8d5aaca70419a988b66ce03d3cdfc9dcaa0310b",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/collect_games.py": "1fdae0d6e5cce440887c296a36386f8c62acef61cc824250cc0427120e84c39d",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/collect_ordinary.py": "755a3c61a97dd8bb6af3b219214456119c45da8115ce507d2e634424f9f4dc61",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/compare_ordinary.py": "814c39847f07cc1d50aa45c759e515af8a4dc55b16673d6278f2df2bd3d2ae53",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/evaluation_probe.rs": "49f6a1c57f12df3f3721f7f67d57af2ac322ce70af2d2989533c7673d4a1c5b7",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/generate_spec_tables.py": "4f4f2ac6c36e26f32eeb3a4de4f29239522e402c3a83c3fecefebab53ffc5de3",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/generate_time_powers.py": "795a100bd7a32893fef6d946a2fef9a15cb86672841bed51d633f67e0f14261a",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/measure.py": "a7aef2142b0aab59b2bfb62f78ccb589f9915e180f990f1be1e59ec3b9e86224",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/runner-control.c": "48ecf2dbcce382ba468c8f14e4d66211b691eeba6ea78b2870f94cc4f49dbfc8",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/tap_wire.mjs": "059679c485201568545b3eb12ed663403c3c2d3776edcf3b92a1dc1fd6ab9271",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/test_account_native.py": "248830e0bb69bb3f72372c138528b8085b7dc77fcb0270e5f535c4ba7fe2b353",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/test_measure.py": "7a7448ba95878beae6331c25ea0d3fee98fbccaebd2d5617a9c68189af24846b",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/test_tap_wire.py": "1d7122edf2fadfb18390c3e239742176cbdad26f70e3e2ea6a63979fd18b07a4",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/source-before/tools/timing_probe.rs": "fe1f56db1564687383439df1edc1d81ab2fe419a76a50efcc521bd005b069442",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-parent-review-20261020-01/source-freeze.json": "d6ea9cf6caf59cd1360e144cc8b9e579fe727f547211ac43f2a4c1f44f587896",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-decision-20261020-01/decision.json": "bf2832891966c00bbd8280cea43632e58a05e9fa969d6ded1599bb0409963baf",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-use-build-20261020-01/receipt.json": "f4f3f69639e4f0d330cf966098e3eced05ede97fce471639ca8109364f720117",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-use-build-20261020-01/archive-receipt.json": "a0f18a69b06de165d941010799a106ece31aa4ce1596445d4a81d0212a67ddc2",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-use-build-20261020-01/frozen-image.json": "700eec368cbdd8f17d26bc27f62ef98d1e968cb73cb39a4bbe30ae8cf0d4f208",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-use-build-20261020-01/tool-terminal.json": "0b327596138802ccf79d60c3f4252118863c4a03c86a03567bd5db1e9a8e36ea",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/input-closure.json": "10d3c0d8f64497fe3ec4f00964908572bab2edde2e68b97e0fd6f9fa7b814843",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/training.json": "bd876da38bc812d43fa2e475b9582cd8d60c6e2a32354521f8c6999c6749ad05",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/verification.json": "2f5d18ddddb6a2bedab5f1c37f2c18528d2e2d80bba631b184f18e3c1866d646",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/tool-terminal.json": "e1d08d1c7254e386bc407b238dbbf7a4202e2a94c273fae0e13af2613b3d1617",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/verify-tool-terminal.json": "d1d864ddda2be85edd685d47942872f94114cbd5bd6826a525965632ff68484b",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-parent-review-20261020-01/review.json": "c9d82970e23ca037f888da180c42a8a9ad33db1f26ed5ae49c618eefcf09849b",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-parent-review-20261020-01/use-verification.json": "0cc9dbd9c52a0629ccaf1037a58ff01fff0b78893f4a9e964f0aab895a5649b0",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-parent-review-20261020-01/backend-acceptance.json": "3e4ff8cb75c30398390a62d036f175c73bbc35be7ebfb97fea619df79deb4880",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-conformance-preparation-20261020-01/validation-summary.json": "b32f062b454c12b2af31129b3b7d91d7b759bebef9fe1b476260028fa38697d9",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-conformance-preparation-20261020-01/reconciliation/independent-verification.json": "a71659d630725553703ac3aae4ba28488e8c7219bca5fae0e3cfec322a761440",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-conformance-preparation-20261020-01/finalizer-tool-terminal.json": "8cc9f1d637375d0b74c9b4c7fa671bd617ca4f49dd79933b303e81329a333d10",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-use-build-20261020-01/rook2-exact": "af849f920897ec1f174b16718be5d6886158913ee4819f84273f15bd8c23e5b8",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-training-20261020-01/merged.profdata": "b4806420937681c8228903507018233d7176be0333ef98881a73d34c66df3a5c",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-use-build-20261020-01/verified-source-before.tar.gz": "d28dd812a528e52cec37c8972cf292fc34c2e64d8ed8170e39570c67819d244b",
+    "/home/legolas/rook2/evidence/exttsp-profiled-parent-review-20261020-01/source-freeze.json": "650f5ec3275ae56c9a9e6121159060e05dcd7c6e2862514a06573c0f44856677",
+    "/home/legolas/rook2/evidence/exttsp-profiled-parent-review-20261020-01/tool-terminal.json": "5efefe922dcff0263866142a9cbf6b5357e7820f56d6d562e001730847bc37af",
+    "/home/legolas/rook2/evidence/exttsp-profiled-parent-review-20261020-01/initial-build-tool-terminal.json": "b12afd95ff9aea6329bf9eac1b8bda1dd9e505f8d2f3db4214bf1c08c034ded1",
+    "/home/legolas/rook2/evidence/exttsp-profiled-parent-review-20261020-01/build-acceptance.json": "3a05b85c912b81f8ebbe1178b3bdde429ec16df23b6695d6046468a766684a45",
+    "/home/legolas/rook2/evidence/exttsp-profiled-parent-review-20261020-01/backend-parent-acceptance.json": "ff9a1caea752bc73670a09ee7bf7b7b43e428da785fe1522455c5240a3e8d779",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/receipt.json": "4d6cb9680c95b028699c0414cb3af3c8923b89568d7b53008b9c8fa9db0f8eee",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/frozen-image.json": "71ea704666669027f635d33708712ace4042ee658ad6c5b473a1a8f1515566ee",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/archive-receipt.json": "e2ecbe40d30ed0fd23852c406d19f5a897555de3cd5aaf195775212a3e23a9c0",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/rook2-exact": "01237e6dfe89822e540d0f07c7b70f7227537a846ce8c69ea9e91167b759e98d",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/verified-source-before.tar.gz": "0c462279b5cfe5d0404efe1b470116ffaeb6327b106e0010c2bd6508a494508a",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-screen-20261020-01/independent-reconciliation.json": "80c34d2632bb094359b9177323cdb572e1b19c593e3e19402549b52b801135ef",
+    "/home/legolas/rook2/evidence/exttsp-profiled-pgo-screen-20261020-01/tool-terminal.json": "82e6b84663b097b631db4b092ad031e65de86833f32276b180a0d806578526d6",
+    "/home/legolas/rook2/evidence/exttsp-profiled-selection-20261020-01/selection.json": "269b8f5633bd6a1da021315263f278b6b6692d8e81bb5b0bb2ef4ca7f1ea349d"
+  },
+  "engine": "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/rook2-exact",
+  "engine_sha256": "01237e6dfe89822e540d0f07c7b70f7227537a846ce8c69ea9e91167b759e98d",
+  "future_prerequisites": {
+    "all_broad_gates_closed": false,
+    "postuse54_wire24": null,
+    "regular12_pregate": null,
+    "source_promotion": null,
+    "current54_actual_terminal": null,
+    "current54_independent_closure": null,
+    "combined117_graph": null,
+    "note": "Future62proofs remain absent. Historical57source-exact facts do not assert62gate success; root owns validation reuse/adoption requirements."
+  },
+  "game_lifetimes": 48,
+  "game_searches": 2528,
+  "games_schedule": [
+    {
+      "game": "main-0000",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "main-0000",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "main-0000",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "main-0000",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "main-0048",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "main-0048",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "main-0048",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "main-0048",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "main-0072",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "main-0072",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "main-0072",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "main-0072",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "main-0168",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "main-0168",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "main-0168",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "main-0168",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "opening-000",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "opening-000",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "opening-000",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "opening-000",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "opening-024",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "opening-024",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "opening-024",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "opening-024",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "opening-048",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "opening-048",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "opening-048",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "opening-048",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "opening-072",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "opening-072",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "opening-072",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "opening-072",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "switching-000",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "switching-000",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "switching-000",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "switching-000",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "switching-024",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "switching-024",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "switching-024",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "switching-024",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "switching-048",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "switching-048",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "switching-048",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "switching-048",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "game": "switching-096",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "game": "switching-096",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "game": "switching-096",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "game": "switching-096",
+      "repeat": 3,
+      "warmup": false
+    }
+  ],
+  "helper_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "launch_authorized": false,
+  "launch_prerequisites": "PENDING/FALSE: root resolves62artifact validation/reuse/integration, current62whole54 actual+independent closure, final parent quiet admission/all conflicting jobs closed/no owned15. No inherited57 qualification/adoption.",
+  "limits": {
+    "aggregate_seconds": 43200,
+    "artifact_pool_bytes": 8589934592,
+    "cleanup_seconds": 5,
+    "comparator_raw_bytes": 8388608,
+    "game_seconds": 2700,
+    "native_raw_bytes": 33554432,
+    "native_receipt_bytes": 1048576,
+    "report_bytes": 4194304,
+    "search_ms": 300000,
+    "tap_receipt_bytes": 4194304
+  },
+  "measured_game_searches": 1896,
+  "measurement_scope": "Local informational whole-lifetime12 cost only;48 fresh lifetimes/2528 searches,12 excluded warmups/36 measured lifetimes/1896 measured searches. No external3288 or final same-hardware qualification, PMU, universal calibration or confidence interval.",
+  "native_affinity": [
+    14
+  ],
+  "ordered_games": [
+    "main-0000",
+    "main-0048",
+    "main-0072",
+    "main-0168",
+    "opening-000",
+    "opening-024",
+    "opening-048",
+    "opening-072",
+    "switching-000",
+    "switching-024",
+    "switching-048",
+    "switching-096"
+  ],
+  "own_profile_sha256": "b4806420937681c8228903507018233d7176be0333ef98881a73d34c66df3a5c",
+  "pins_provenance": "Accepted57 original/runtime/roottools/method closure retained; candidate62source74/use/sourcefreeze/screen/build/backend proof bound. Historical57functional/training records are context and the explicitly reused own57profile, not fresh62training or qualification. Future authorized pre/post checks must verify all bytes.",
+  "prospective_combined117_graph_not_qualification": null,
+  "public_runtime_closure": {
+    "games": [
+      "gate-replay/run.mjs",
+      "gate-replay/accepted-games-v1.json"
+    ],
+    "note": "benchmark relative import included; gate/tap only node builtins; all23 roottools plus exact runtime pinned"
+  },
+  "quiet_window_authorized": false,
+  "references": {
+    "endpoint": "E2E/full-lifetime wait4 user+system, including disclosed exec-child prefix",
+    "games": "/home/legolas/king-spec/performance/selected-games-reference.json",
+    "ratio_policy": "per-unit local/reference medians; descriptive triple min/max envelopes only; no universal calibration or acceptance threshold",
+    "reference_image": "bf71485c48e780e29f32813219e4283cc54c04015abce0bccda62c190e2ba080"
+  },
+  "runtime_estimate": {
+    "aggregate_cap_seconds": 43200,
+    "basis": "Historical complete117 same unchanged48-lifetime collector UTC2026-10-18T15:04:26.949627Z\u219215:59:53.154583Z =55m26.205s; total12 median CPU768.200873s. Not a current62 timing prediction or scaled gain.",
+    "delays_and_timeout_limits_retained": true,
+    "game_lifetime_cap_seconds": 2700,
+    "planning_minutes": [
+      45,
+      65
+    ]
+  },
+  "source74_graph": "9729230374cb947d3e469140f634b670edf4df6ae87d9af4ab394f5bbc4e9cd0",
+  "source_sha256": {
+    "Cargo.toml": "6199772414ef5972898842d76472301d256e42f9dd2181fa421ff5cbc21c85d1",
+    "Cargo.lock": "d34b5888f77c0319fb614ba5701a4a1177af31b803054ad3a8251926ba237c97",
+    "src/activity.rs": "81cd2ff5ecd7125cbf2993031c57db97b02fa3877d314fc5f06350c6019024f5",
+    "src/attacks.rs": "00d4d2a89c32626be5ef501bc377d427a90588f28b2913e59438a1772e4494f3",
+    "src/bin/rook2-dev.rs": "1eea8e56f268a3fd943d1dc2d2ccd0c7607c80793c1a8f41eb464bdc53853c34",
+    "src/bin/rook2.rs": "ccc0809b7c2f7c709097660fdc62d06c79f0c7563ec79753214afe8be185046e",
+    "src/clock.rs": "4b1d6f18e94d3161cefa8b4a5daafddffd1aba5d3d4ade182a03eed3ee493a79",
+    "src/development.rs": "e25b082c342df61b2aa8c30e2970e65007ad3e99750807724bda42ab59a3045f",
+    "src/endgame.rs": "4f382e7b5359f1956a0e155328aad08f35dab74252ee0794d61dafcd1cd2214a",
+    "src/engine/geometry_tests.rs": "4677760cbf58f0aaeec901b21cfb6dc3a797fdbe128afbad34fe20e9c4e5e921",
+    "src/engine.rs": "c17cfcf136d2b37f94d8c5c30b3a0a76d5c533ab3d6dc1103a7b724c68033995",
+    "src/eval_basis.rs": "5b369b122dc69aa40e5f8b81c3153173e633c9cfec89f160cef49886b5c36647",
+    "src/evaluation.rs": "767b1ef83fea5d30d1b5a6edaa259fa718c666cfdb568fb9ad7b2aca2e9f33f7",
+    "src/evaluator.rs": "0ea2af3606dfb20409b8c15d46a0c745bf3204c22bccee6e00d3493615a55c61",
+    "src/first_iteration.rs": "713830b62783a81033e1355687534783647b243c51e10f829546d080ce157722",
+    "src/geometry.rs": "582a2e8ad2672a937062ae829ae596ee263b69c6ec52103c55c658a6ecc225f1",
+    "src/history.rs": "f6b2a5073307d655e33e774900c9fea26f4bdfefbdd2cd9848ff0758c4b34fde",
+    "src/host.rs": "cc694d926fb1c1bc3063c3c9a20a8399abc92019f4927b2b79850e7a706924ac",
+    "src/identity.rs": "761779f7f2e0186dfbe28e162bf5fc8c8461d9f9c342787ebe2becfd0914a376",
+    "src/influence/coherent.rs": "b4155e4b65beb0eb9aea822bae714b1222accde3b7be574d50ecf56da980ef64",
+    "src/influence/coherent_tests.rs": "999c4d015a447d4847de4f11d98175271e3c5a630ea5ae8b5fe6378767ebd8b0",
+    "src/influence.rs": "fa01b22dc312b5e9161ce405571172b5d272c8ecc2bcca1ce3de1cf7f66eb7fa",
+    "src/lib.rs": "6f09459cb36d8e8e0dfc0d473f3b91fcd19feed4c8220888b83af37124abc0c4",
+    "src/movegen.rs": "2665dfbc957191b06f82c35412f72be94943944cffd0c04851bdcdc91086dcc8",
+    "src/ordinary.rs": "e5dae89f6bcc6651ac4e8aeb943b3f559b882232f2cf571c79fd0f3d463ecbfb",
+    "src/ordinary_policy.rs": "5a796d4f7b11c1818a7dbdfe34080d9502d7c517217b521315534a318e9301a6",
+    "src/output.rs": "90c1f45a9d907dcb85ed97a0b9d45828196d17a381bd84f09f8f49e1872eef6d",
+    "src/parameters.rs": "30dd03e5ead3df289b25929c7bea81e72d1e2b9a2250916883107f0cfaf7f42e",
+    "src/pawn_progress.rs": "0bca6bb9678657b2efadc023c07d1ffcc9ff91c1c97553b84e2131c6ce30d9dc",
+    "src/pawn_structure.rs": "b9d0921514c5ba7ba7532f07501fae7dc38b707f6c2f2f0bb01787be5263be13",
+    "src/pawn_terms.rs": "a2081196fb0bfdbd1ac7830d2f668009b267e77d3e56b92c249af709cd99fff3",
+    "src/position.rs": "e85eb42304bb010ea199160568b215958f9de966cc71d398e8e0e42553054d82",
+    "src/positional_terms.rs": "053b04b8f434db2ddadda71686831b40baf3c59d09be6cde5895af1b7d430260",
+    "src/post_lifecycle.rs": "1c429549a023d67b68304375a1b40d2a1228c104579b53659db5595df0d82bb6",
+    "src/quiescence.rs": "9ff56aefef807d7df53f446abef404dba90150572116c0cae09057556bb39e6a",
+    "src/quiescence_policy.rs": "baeb3f40c47f119481f0040b1c9bb15f9af25ee39376cf0c01d1a06091011468",
+    "src/relation_table.rs": "8b559327e7fe433750ab30add4e172570a4a0a80d10b3b3b63bd475dd731de49",
+    "src/remembered.rs": "af2eb6046fd7e58b1a35e7ed3051936559b7f739224ed698b54c49317faec293",
+    "src/root_schedule.rs": "550146f895ef9a43b8ecdc6fce5e26fb973602e6f5d5b17add1a4920768a72d8",
+    "src/session.rs": "e3585bdf5fabb45eff8f3a48ea75da8e414b8b9dc2fbcbc4a44f51a30cc87d7f",
+    "src/shelter.rs": "d6012e72cda2502538c215e074b2ebcba396342b903d9d431cc257eb3f9e5811",
+    "src/tactical/check_mask_tests.rs": "136d904829288e54c9efee9a107c95dfad651182d99800bf69e483174ffe85b3",
+    "src/tactical/check_masks.rs": "8468db1a066e1e6983271e3b54d6023c20d3b55386a775098f0db48472cec626",
+    "src/tactical.rs": "22fb473a0c3288a1ce392833e1dd09749bc77d795d3b697ba1071f21b58d3d4d",
+    "src/time_powers.rs": "8332a3c4516496ebfb77ab9426e35ae1c94108f21dbd071b8baf9ac3c4c2215e",
+    "src/timed.rs": "f62d6ea5591fc23515da241ee3dfefd30d500c79e0349068ca595076f8044d2e",
+    "src/timed_sequence.rs": "3089985b5b23dc397770cbf4e228219a27c71db1c01a8a553305e4adb3e3f08f",
+    "src/timing.rs": "a950ca151dbdbc026f7c11eff98d1f67985f932dd949d2872436c3271972f934",
+    "src/types.rs": "2a202da079b16b3becb6651427701ec8e40aed88bd19550854c800b842b22feb",
+    "src/wire.rs": "f851e0b386db01debc0107e01be64ebef0454934673bece463ecd39d0d984841",
+    "src/work_clock.rs": "946c1e40e29254e4d98f642fe051f4a4b337bb401f5f00d8b0e275539e71ab02"
+  },
+  "status": "INERT62_GAME12_ONLY_NO_LAUNCH",
+  "tools23_sha256": {
+    "tools/README.md": "f440d5aaa77de9ad8f53bab524364578420103b2373bbbf5f2bc70629d8f4ae6",
+    "tools/account_native.py": "f98132f3947a2320ebf6ae5d86f4abaa907650a6eb30f992d580e8290dbcb1fb",
+    "tools/archive_build.py": "ea3944cf7ce09a3e6c4476644083324ac8fabec12cd7436f8536a872f3ff4b86",
+    "tools/build.py": "97a2b3181b7a029c34ec0f2606faabd5c6d034586dbd54a12bc88461db3af1fa",
+    "tools/check_core.py": "07bacfb310c50cf3770c9b644b33bb356f4a320cdd2ec72db02146682b540f34",
+    "tools/check_evaluation.py": "ff1e685f5d678bd47c2edd81dda9a6eb3e32d73aea899ac5d82583eb74d55ff1",
+    "tools/check_live.py": "eb8b3ef49a4acf7f41ea8d45308ae5ae501d607ecca89196ff0a553e2600a2c0",
+    "tools/check_policies.py": "dbe4f2d7f93eb3f4fd7fb02bff0a5e9a9984f79827cb49e49e4d53d26ef37a1b",
+    "tools/check_timing.py": "36d10917098ce67c4f6eda7f0886d55a90ca92a65ad7566fdd89b3b8cca8a5d5",
+    "tools/clock_profile.py": "58c75d8a82a4e5eb17db559cd8d5aaca70419a988b66ce03d3cdfc9dcaa0310b",
+    "tools/collect_games.py": "1fdae0d6e5cce440887c296a36386f8c62acef61cc824250cc0427120e84c39d",
+    "tools/collect_ordinary.py": "755a3c61a97dd8bb6af3b219214456119c45da8115ce507d2e634424f9f4dc61",
+    "tools/compare_ordinary.py": "814c39847f07cc1d50aa45c759e515af8a4dc55b16673d6278f2df2bd3d2ae53",
+    "tools/evaluation_probe.rs": "49f6a1c57f12df3f3721f7f67d57af2ac322ce70af2d2989533c7673d4a1c5b7",
+    "tools/generate_spec_tables.py": "4f4f2ac6c36e26f32eeb3a4de4f29239522e402c3a83c3fecefebab53ffc5de3",
+    "tools/generate_time_powers.py": "795a100bd7a32893fef6d946a2fef9a15cb86672841bed51d633f67e0f14261a",
+    "tools/measure.py": "a7aef2142b0aab59b2bfb62f78ccb589f9915e180f990f1be1e59ec3b9e86224",
+    "tools/runner-control.c": "48ecf2dbcce382ba468c8f14e4d66211b691eeba6ea78b2870f94cc4f49dbfc8",
+    "tools/tap_wire.mjs": "059679c485201568545b3eb12ed663403c3c2d3776edcf3b92a1dc1fd6ab9271",
+    "tools/test_account_native.py": "248830e0bb69bb3f72372c138528b8085b7dc77fcb0270e5f535c4ba7fe2b353",
+    "tools/test_measure.py": "7a7448ba95878beae6331c25ea0d3fee98fbccaebd2d5617a9c68189af24846b",
+    "tools/test_tap_wire.py": "1d7122edf2fadfb18390c3e239742176cbdad26f70e3e2ea6a63979fd18b07a4",
+    "tools/timing_probe.rs": "fe1f56db1564687383439df1edc1d81ab2fe419a76a50efcc521bd005b069442"
+  },
+  "null_origin_policy": "Historical293 null per-search CPU values are prior-run observations only, not an expected count or threshold. Preserve each current positive or null value; unresolved zero-tick attribution stays unresolved; no division/imputation of whole-lifetime CPU into per-search costs.",
+  "candidate_tools23_sha256": {
+    "tools/README.md": "f440d5aaa77de9ad8f53bab524364578420103b2373bbbf5f2bc70629d8f4ae6",
+    "tools/account_native.py": "f98132f3947a2320ebf6ae5d86f4abaa907650a6eb30f992d580e8290dbcb1fb",
+    "tools/archive_build.py": "ea3944cf7ce09a3e6c4476644083324ac8fabec12cd7436f8536a872f3ff4b86",
+    "tools/build.py": "9ec72da0c15c07eee8c5ef1a63729ffdef6fc048baa37c58d9eed1bbe3d4df4e",
+    "tools/check_core.py": "07bacfb310c50cf3770c9b644b33bb356f4a320cdd2ec72db02146682b540f34",
+    "tools/check_evaluation.py": "ff1e685f5d678bd47c2edd81dda9a6eb3e32d73aea899ac5d82583eb74d55ff1",
+    "tools/check_live.py": "eb8b3ef49a4acf7f41ea8d45308ae5ae501d607ecca89196ff0a553e2600a2c0",
+    "tools/check_policies.py": "dbe4f2d7f93eb3f4fd7fb02bff0a5e9a9984f79827cb49e49e4d53d26ef37a1b",
+    "tools/check_timing.py": "36d10917098ce67c4f6eda7f0886d55a90ca92a65ad7566fdd89b3b8cca8a5d5",
+    "tools/clock_profile.py": "58c75d8a82a4e5eb17db559cd8d5aaca70419a988b66ce03d3cdfc9dcaa0310b",
+    "tools/collect_games.py": "1fdae0d6e5cce440887c296a36386f8c62acef61cc824250cc0427120e84c39d",
+    "tools/collect_ordinary.py": "755a3c61a97dd8bb6af3b219214456119c45da8115ce507d2e634424f9f4dc61",
+    "tools/compare_ordinary.py": "814c39847f07cc1d50aa45c759e515af8a4dc55b16673d6278f2df2bd3d2ae53",
+    "tools/evaluation_probe.rs": "49f6a1c57f12df3f3721f7f67d57af2ac322ce70af2d2989533c7673d4a1c5b7",
+    "tools/generate_spec_tables.py": "4f4f2ac6c36e26f32eeb3a4de4f29239522e402c3a83c3fecefebab53ffc5de3",
+    "tools/generate_time_powers.py": "795a100bd7a32893fef6d946a2fef9a15cb86672841bed51d633f67e0f14261a",
+    "tools/measure.py": "a7aef2142b0aab59b2bfb62f78ccb589f9915e180f990f1be1e59ec3b9e86224",
+    "tools/runner-control.c": "48ecf2dbcce382ba468c8f14e4d66211b691eeba6ea78b2870f94cc4f49dbfc8",
+    "tools/tap_wire.mjs": "059679c485201568545b3eb12ed663403c3c2d3776edcf3b92a1dc1fd6ab9271",
+    "tools/test_account_native.py": "248830e0bb69bb3f72372c138528b8085b7dc77fcb0270e5f535c4ba7fe2b353",
+    "tools/test_measure.py": "7a7448ba95878beae6331c25ea0d3fee98fbccaebd2d5617a9c68189af24846b",
+    "tools/test_tap_wire.py": "1d7122edf2fadfb18390c3e239742176cbdad26f70e3e2ea6a63979fd18b07a4",
+    "tools/timing_probe.rs": "fe1f56db1564687383439df1edc1d81ab2fe419a76a50efcc521bd005b069442"
+  },
+  "historical57_functional_proofs": {
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-conformance-preparation-20261020-01/validation-summary.json": "b32f062b454c12b2af31129b3b7d91d7b759bebef9fe1b476260028fa38697d9",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-conformance-preparation-20261020-01/reconciliation/independent-verification.json": "a71659d630725553703ac3aae4ba28488e8c7219bca5fae0e3cfec322a761440",
+    "/home/legolas/rook2/evidence/bitplane-pin-summary-conformance-preparation-20261020-01/finalizer-tool-terminal.json": "8cc9f1d637375d0b74c9b4c7fa671bd617ca4f49dd79933b303e81329a333d10"
+  },
+  "source_freeze": {
+    "path": "/home/legolas/rook2/evidence/exttsp-profiled-parent-review-20261020-01/source-freeze.json",
+    "sha256": "650f5ec3275ae56c9a9e6121159060e05dcd7c6e2862514a06573c0f44856677"
+  },
+  "selected62_screen": {
+    "path": "/home/legolas/rook2/evidence/exttsp-profiled-pgo-screen-20261020-01/independent-reconciliation.json",
+    "sha256": "80c34d2632bb094359b9177323cdb572e1b19c593e3e19402549b52b801135ef",
+    "collector_actual": "a480be/11862->03536e/0",
+    "independent_actual": "5618f0/0",
+    "passed_fixed70": true
+  },
+  "same_profile_use_only_no_new_training": true
+}

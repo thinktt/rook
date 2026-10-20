@@ -103,3 +103,6 @@ model; they do not establish live protocol timing or command polling.
 
 See [STATUS.md](STATUS.md) for the current milestones and
 [AGENTS.md](AGENTS.md) for contribution and clean-room boundaries.
+
+Performance history: [brief ideas and outcomes](docs/performance-experiments.md).
+Bulk evidence/history archive: [storage layout](docs/evidence-layout.md).

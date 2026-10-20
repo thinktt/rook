@@ -1,0 +1,58 @@
+--- a/src/tactical/six_stream_tests.rs
++++ b/src/tactical/six_stream_tests.rs
+@@ -180,3 +180,55 @@
+     native_case(&mut scratch, 512, 5, true);
+     native_case(&mut scratch, 1, 0, false);
+ }
++
++#[test]
++fn experiment55_native_entry_exact_preferred_zero_through_seven_and_scratch_reuse() {
++    let mut scratch = OrderingScratch::new();
++    // Prime the same workspace with a large merge before every small boundary
++    // and return to large work afterward; no route flags or counters needed.
++    native_case(&mut scratch, MOVE_CAPACITY, 4, false);
++    for preferred in 0usize..=7 {
++        for mixed in [false, true] {
++            let selected = [2u32, 9, u32::MAX, 9, 2, 17, 9];
++            let keys: Vec<u32> = if mixed {
++                let mut keys = Vec::new();
++                for slot in 0usize..7 {
++                    if slot < preferred { keys.push(selected[slot]); }
++                    keys.push((slot % 2) as u32);
++                }
++                keys
++            } else {
++                selected[..preferred].to_vec()
++            };
++            assert_eq!(keys.iter().filter(|&&key| key > 1).count(), preferred);
++            assert_eq!(keys.len(), preferred + if mixed { 7 } else { 0 });
++            if mixed {
++                assert!(keys.contains(&0) && keys.contains(&1));
++                // Even preferred0..6 has original length>=7: selection must
++                // depend on preferred count, not original candidate-list len.
++                assert!(keys.len() >= 7);
++            }
++            let original = payloads(keys.len(), mixed);
++            let expected: Vec<Move> = ordered_indices(&keys).into_iter()
++                .map(|index| original[index]).collect();
++            let tail = Move(0x55aa);
++            let mut list = MoveList { moves: [tail; MOVE_CAPACITY], len: keys.len() };
++            list.moves[..keys.len()].copy_from_slice(&original);
++            let mut seen = Vec::new();
++            let mut calls = 0;
++            order_by(&mut list, &mut scratch, |movement| {
++                seen.push(movement);
++                let key = keys[calls];
++                calls += 1;
++                key
++            });
++            assert_eq!(calls, original.len());
++            assert_eq!(seen, original);
++            assert_eq!(list.len, keys.len());
++            assert_eq!(list.as_slice(), expected.as_slice(),
++                "preferred={preferred} mixed={mixed}");
++            assert!(list.moves[keys.len()..].iter().all(|&movement| movement == tail));
++        }
++    }
++    native_case(&mut scratch, MOVE_CAPACITY, 7, true);
++}

@@ -1,0 +1,21 @@
+{
+  "schema": "rook2-activity-repeat-census-v1",
+  "fields": {
+    "schema": "literal",
+    "pid": "actual native u32",
+    "complete": "bool",
+    "overflow": "bool",
+    "epoch_allocations": "u64 nonnegative integer",
+    "full_calls": "u64 nonnegative integer",
+    "first_no_snapshot": "u64 nonnegative integer",
+    "first_new_epoch": "u64 nonnegative integer",
+    "exact_repeat": "u64 nonnegative integer",
+    "changed_input": "u64 nonnegative integer",
+    "equal_input_different_output": "u64 nonnegative integer",
+    "total_activity_r": "u64 nonnegative integer",
+    "exact_repeat_activity_r": "u64 nonnegative integer"
+  },
+  "body_limit_bytes": 4096,
+  "complete_requires": "!overflow && equal_input_different_output == 0",
+  "partition": "full_calls = first_no_snapshot + first_new_epoch + exact_repeat + changed_input + equal_input_different_output"
+}

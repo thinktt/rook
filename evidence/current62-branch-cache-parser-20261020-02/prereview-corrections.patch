@@ -1,0 +1,72 @@
+--- vector_parser.py.before-prereview
++++ vector_parser.py
+@@ -28,7 +28,9 @@
+     names={'file':{},'fn':{},'ob':{}}
+     def resolve(kind,value):
+         match=re.fullmatch(r'\((\d+)\)(?: (.*))?',value)
+-        if not match:return value
++        if not match:
++            require(not re.match(r'\(\d',value),'malformed compressed name')
++            return value
+         ident=int(match[1]);dictionary=names[kind]
+         if match[2] is not None:
+             require(ident not in dictionary or dictionary[ident]==match[2],'compressed name redefinition')
+@@ -42,7 +44,7 @@
+     object_explicit_since_function=False
+     def vector(tokens,pad):
+         require(events is not None,'events header absent')
+-        require((0<len(tokens)<=len(events)) if pad else len(tokens)==len(events),'counter width mismatch')
++        require((0<=len(tokens)<=len(events)) if pad else len(tokens)==len(events),'counter width mismatch')
+         require(all(re.fullmatch(r'\d+',value) for value in tokens),'invalid nonnegative counter')
+         values=[int(value) for value in tokens]
+         require(all(value<=U64 for value in values),'64-bit counter overflow')
+@@ -94,7 +96,7 @@
+             continue
+         require(totals is None,'cost after totals')
+         values=line.split()
+-        require(len(values)>=2 and POS.fullmatch(values[0]),'unsupported/malformed body row')
++        require(bool(values) and POS.fullmatch(values[0]),'unsupported/malformed body row')
+         token=values[0]
+         if token!='*':
+             value=int(token,16) if '0x' in token.lower() else int(token)
+@@ -119,7 +121,8 @@
+         descriptions=descriptions,event_descriptions=event_descriptions,summary=summary,totals=totals,
+         SELF_sum=sums,model_rates=model_rates(sums),raw_SELF_rows=rows,
+         raw_inclusive_call_arcs_NOT_ADDED=arcs,
+-        ownership_limit='Object/function/source labels are recorded context. Inherited callee_object is not physical ownership proof.')
++        ranking_identity='Coalesced object/function-NAME attribution, not unique physical function owners',
++        ownership_limit='Same-name functions within one object may coalesce. Raw defining/inline file and function-name tokens remain available. Inherited callee_object is not physical ownership proof.')
+ 
+ def rank(data):
+     grouped={};parts={}
+@@ -130,7 +133,7 @@
+         for event,value in row['events'].items():grouped[key][event]+=value;part[event]+=value
+     result=[]
+     for key,cost in grouped.items():
+-        result.append(dict(object=key[0],function=key[1],SELF_events=cost,file_partitions=parts[key],model_rates=model_rates(cost)))
++        result.append(dict(object=key[0],function=key[1],SELF_events=cost,file_partitions=parts[key],attribution='coalesced object/function-NAME',model_rates=model_rates(cost)))
+     require(all(sum(row['SELF_events'][event] for row in result)==data['SELF_sum'][event] for event in data['events']),'ranking vector mismatch')
+     return sorted(result,key=lambda row:(-row['SELF_events'].get('Ir',0),str((row['object'],row['function']))))
+ 
+--- offline_checks.py.before-prereview
++++ offline_checks.py
+@@ -40,8 +40,19 @@
+ # distinct recursion-suffix spellings assert any physical caller relationship.
+ clones="events: Ir\nsummary: 6\nob=A\nfl=x\nfn=f\n0 1\nfn=f'2\n* 2\nob=B\nfn=f\n* 3\ntotals: 6\n"
+ a=okay('object-and-clone-identity',clones,['Ir'],{'Ir':6});assert len(rank(a))==3
++# Grammar permits Costs? entirely absent; all event values are zero.
++okay('all-counters-omitted','events: Ir Dr\nsummary: 0 0\nfl=x\nfn=f\n5\n*\ntotals: 0 0\n',['Ir','Dr'],{'Ir':0,'Dr':0})
++# String aliases cannot prove distinct physical functions. Ranking explicitly
++# coalesces this same-label pair and keeps each raw file/name token unchanged.
++same='events: Ir\nsummary: 3\nob=A\nfl=a.rs\nfn=(1) helper\n0 1\nfl=b.rs\nfn=(2) helper\n0 2\ntotals: 3\n'
++a=okay('same-label-coalescing-explicit',same,['Ir'],{'Ir':3})
++assert len(rank(a))==1 and rank(a)[0]['attribution']=='coalesced object/function-NAME'
++assert [x['file'] for x in a['raw_SELF_rows']]==['a.rs','b.rs']
++assert [x['fn_name_token'] for x in a['raw_SELF_rows']]==['(1) helper','(2) helper']
+ badcases=[('duplicate-events',doc.replace('Cycles Instructions Flops','Cycles Cycles Flops')),('unexpected-event',doc.replace('Flops','Other')),('missing-event',doc.replace('events: Cycles Instructions Flops','events: Cycles Instructions')),('negative-counter',doc.replace('90 14 2','-90 14 2')),('extra-counter',doc.replace('90 14 2','90 14 2 0')),('summary-mismatch',doc.replace('summary: 110','summary: 111')),('missing-totals',doc.replace('totals: 110 26 2','')),('part2', 'part: 2\n'+doc),('multiple-parts','part: 1\npart: 1\n'+doc),('thread-split','thread: 1\n'+doc),('instruction-positions','positions: instr line\n'+doc),('derived-event','event: Sum = Cycles + Flops\n'+doc),('unresolved-name',doc.replace('fn=main','fn=(999)')),('overflow',doc.replace('90 14 2',str(1<<64)+' 14 2')),('jump-association',doc.replace('16 20 12','jump=1 16\n16 20 12')),('malformed-numeric',doc.replace('16 20 12','16 nope 12')),('short-summary',doc.replace('summary: 110 26 2','summary: 110 26')),('duplicate-header',doc.replace('events:','events: Cycles Instructions Flops\nevents:',1)),('cost-after-totals',doc+'17 0\n'),('negative-resulting-position',doc.replace('16 20 12','-0x20 20 12'))]
+ for name,text in badcases:bad(name,text,['Cycles','Instructions','Flops'])
++bad('malformed-compressed-open',doc.replace('fn=main','fn=(12'),['Cycles','Instructions','Flops'])
++bad('malformed-compressed-nospace',doc.replace('fn=main','fn=(1)name'),['Cycles','Instructions','Flops'])
+ bad('dangling-call',assoc.replace('totals: 15 4','calls=1 8\ntotals: 15 4'),['Ir','Dr'])
+ bad('name-redefinition',assoc.replace('fi=(3) inline.rs','fi=(1) other.rs'),['Ir','Dr'])
+ bad('misses-exceed-branches','events: Ir Bc Bcm\nsummary: 1 1 2\nfl=x\nfn=f\n0 1 1 2\ntotals: 1 1 2\n',['Ir','Bc','Bcm'])

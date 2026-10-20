@@ -1,0 +1,47 @@
+--- accepted51/run_pregate.py
++++ inert57/run_pregate.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Untimed12-game/continuity pre-gate of the exact ownPGO51 native image."""
++"""Untimed12-game/continuity pre-gate of the exact ownPGO57 native image."""
+ import concurrent.futures
+ import hashlib
+ import json
+@@ -18,7 +18,7 @@
+ ENGINE=Path(APPROVAL['ordinary_artifact']['image'])
+ EXPECTED=APPROVAL['ordinary_artifact']['sha256']
+ assert isinstance(EXPECTED,str) and len(EXPECTED)==64
+-OUT=PREP.parent/'tactical-check-mask-pregate-20261020-01'
++OUT=PREP.parent/'bitplane-pin-summary-pregate-20261020-01'
+ MASK={0,1,2,3,4,5,8,9,10,11,12,13}
+ def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(p,d):
+@@ -80,7 +80,7 @@
+     for path,h in clearance['dependencies'].items():assert sha(path)==h
+     terminal(BUILD/'tool-terminal.json')
+     source=json.loads(Path(plan['source_freeze']).read_text())
+-    assert source['files_sha256']=={**plan['native_sha256'],**plan['tools_sha256']}
++    assert source['files']=={**plan['native_sha256'],**plan['tools_sha256']}
+     assert len(plan['native_sha256'])==51 and len(plan['tools_sha256'])==23
+     b=json.loads((BUILD/'receipt.json').read_text())
+     assert b['outcome']=='build-succeeded-with-stable-input-snapshot'
+@@ -95,7 +95,7 @@
+         assert sha(BUILD/'source-before'/name)==h
+     before=pins();OUT.mkdir()
+     write(OUT/'binding.json',{'before':before,'engine_sha256':EXPECTED,'image':str(ENGINE),'affinity':sorted(MASK),
+-      'scope':'Untimed exact own-PGO51 regular pre-gate after current51 strict/wire+ownPGO70 pass; full native/117 are separately parent-owned; full3288 external, no CPU qualification.',
++      'scope':'Untimed exact own-PGO51 regular pre-gate after current57 strict/wire+ownPGO70 pass; full195 native/117 are separately parent-owned; full3288 external, no CPU qualification.',
+       'parallel_independent_games':3})
+     fixture=json.loads((KIT/'accepted-games-v1.json').read_text())
+     games=fixture['games'];assert len(games)==12 and sum(len(g['plies']) for g in games)==632
+--- accepted51/reconcile_pregate.mjs
++++ inert57/reconcile_pregate.mjs
+@@ -13,7 +13,7 @@
+ const hash=data=>createHash('sha256').update(data).digest('hex');
+ const fixture=load(join(kit,'accepted-games-v1.json'));validateFixture(fixture);
+ const binding=load(join(directory,'binding.json'));
+-const approval=load('/home/legolas/rook2/evidence/tactical-check-mask-pregate-preparation-20261020-01/pregate-clearance.json');
++const approval=load('/home/legolas/rook2/evidence/bitplane-pin-summary-pregate-preparation-20261020-01/pregate-clearance.json');
+ assert.equal(approval.authorized,true);
+ assert.equal(binding.engine_sha256,approval.ordinary_artifact.sha256);
+ assert.equal(hash(readFileSync(approval.ordinary_artifact.image)),binding.engine_sha256);

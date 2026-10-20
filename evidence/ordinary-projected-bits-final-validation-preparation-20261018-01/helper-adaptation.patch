@@ -1,0 +1,182 @@
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/guard.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/guard.py
+@@ -1,4 +1,4 @@
+-"""Full-byte-pair complete117 guard; no native launch from this module."""
++"""Ordinary projected-bit complete117 guard; no native launch from this module."""
+ from pathlib import Path
+ import hashlib,json,os
+ HERE=Path(__file__).resolve().parent
+@@ -13,23 +13,22 @@
+  assert kind in ['freeze','execution']
+  c=load(HERE/'execution-clearance.json');plan=load(HERE/'validation-plan.json')
+  assert c['authorized'] is True,'HOLD: explicit parent execution clearance absent'
+- assert c['scope']=='full-byte-pair-relations-complete117-untimed-diagnostic'
++ assert c['scope']=='ordinary-projected-bits-final117-untimed'
+  assert c['source_graph_sha256']==plan['source_graph_sha256'] and c['plan_sha256']==sha(HERE/'validation-plan.json')
+  assert c['conflicting_cpu_windows_closed'] is True and not c.get('timing_pgo_profiler_authorized',False)
+- a=c['parent_advancement_acceptance'];assert a and sha(a['path'])==a['sha256']
+- decision=load(a['path']);assert decision['accepted_for_complete117_diagnostic'] is True
++ a=c['parent_final_validation_authorization'];assert a and sha(a['path'])==a['sha256']
++ decision=load(a['path']);assert decision['candidate25_full117_required'] is True
+  assert decision['source_graph_sha256']==plan['source_graph_sha256'] and decision['generic_image_sha256']==plan['native_reference']['image_sha256']
+- assert decision['pgo_pilot_independent_reconciliation_sha256']==plan['pgo_advancement_reference']['independent_sha256']
+- pilot=load(plan['pgo_advancement_reference']['independent']);assert pilot['complete'] and pilot['advance_rule_satisfied']
++ # User explicitly requests candidate25 even if its performance pilot parks it.
++ # No CPU rule result is an admission requirement for final conformance.
+  assert sorted(os.sched_getaffinity(0))==plan['affinity']==[0,1,2,3,4,5,8,9,10,11,12,13]
+  assert os.environ.get('TMPDIR')==plan['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  check_dependencies(plan)
+  return plan
+ def check_sources(plan):
+- roots=[Path(plan['frozen_source'])]
+- if Path(plan['home_source']).exists():roots.append(Path(plan['home_source']))
+- for root in roots:
+-  assert all(sha(root/name)==h for name,h in plan['source_sha256'].items()),str(root)
++ for name,h in plan['source_sha256'].items():assert sha(plan['source_origins'][name])==h,name
++ if Path(plan['home_source']).exists():
++  assert all(sha(Path(plan['home_source'])/name)==h for name,h in plan['source_sha256'].items())
+  for name,h in plan['native_sha256'].items():assert sha(Path(plan['native_reference']['crate_source'])/name)==h
+  for name,h in plan['tools_sha256'].items():assert sha(Path(plan['native_reference']['crate_source'])/name)==h
+  for name,h in plan['diagnostic_sha256'].items():assert sha(Path(plan['root_cold_source'])/name.removeprefix('diagnostic/'))==h
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/stage.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/stage.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Future full-byte-pair complete117 freeze/DIAG; blocked until parent clearance."""
++"""Future ordinary-projected-bits complete117 freeze/DIAG; blocked until parent clearance."""
+ import argparse,json,os,re,shutil,subprocess,sys,tarfile
+ from pathlib import Path
+ sys.dont_write_bytecode=True
+@@ -42,7 +42,7 @@
+ def main():
+  parser=argparse.ArgumentParser();parser.add_argument('stage',choices=['freeze','diag']);args=parser.parse_args()
+  plan=clearance('freeze' if args.stage=='freeze' else 'execution')
+- source=Path(plan['home_source']);frozen=Path(plan['frozen_source']);paths={k:Path(v) for k,v in plan['output'].items()}
++ source=Path(plan['home_source']);paths={k:Path(v) for k,v in plan['output'].items()}
+  out=paths['freeze' if args.stage=='freeze' else 'diagnostic'];assert not out.exists(),'fresh absent stage output required'
+  check_sources(plan);check_dependencies(plan)
+  if args.stage=='freeze':assert not source.exists() and not source.is_symlink(),'fresh absent HOME execution copy required'
+@@ -53,14 +53,22 @@
+   if args.stage=='freeze':
+    source.mkdir()
+    for name,h in plan['source_sha256'].items():
+-    dest=source/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(frozen/name,dest);assert sha(dest)==h
++    dest=source/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(plan['source_origins'][name],dest);assert sha(dest)==h
+    assert {str(q.relative_to(source)) for q in source.rglob('*') if q.is_file()}==set(plan['source_sha256'])
+    with tarfile.open(out/'source-frozen.tar.gz','w:gz') as t:
+     for name in plan['source_sha256']:t.add(source/name,arcname=name,recursive=False)
+    result['source_archive_sha256']=sha(out/'source-frozen.tar.gz')
++   with tarfile.open(out/'source-frozen.tar.gz','r:gz') as t:
++    assert {m.name:__import__('hashlib').sha256(t.extractfile(m).read()).hexdigest() for m in t}==plan['source_sha256']
++   with tarfile.open(out/'official-inputs-115.tar.gz','w:gz') as t:
++    for name in plan['fixtures']:t.add(name,arcname=name.lstrip('/'),recursive=False)
++   with tarfile.open(out/'official-inputs-115.tar.gz','r:gz') as t:
++    assert {m.name:__import__('hashlib').sha256(t.extractfile(m).read()).hexdigest() for m in t}=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
++   result['official_archive_sha256']=sha(out/'official-inputs-115.tar.gz')
++   write(HERE/'archive-verification.json',dict(source112_sha256=result['source_archive_sha256'],official115_sha256=result['official_archive_sha256'],reopened_members_exact=True))
+   else:
+    # No generic ordinary build/native tests/strict replay branch exists here.
+-   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/full-byte-pair-relations-complete117-diag-unit',out,env,stages)
++   result['units']=units(source,source/'diagnostic',{'rook2-diag':209},source/'target/ordinary-projected-bits-relations-complete117-diag-unit',out,env,stages)
+    assert not paths['diagnostic-build'].exists(),'build.py output must be absent'
+    result['artifact_sha256']=build(source,source/'diagnostic','rook2-diag',paths['diagnostic-build'],out,env,stages,{k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()})
+    br=load(paths['diagnostic-build']/'receipt.json');nr=load(plan['native_reference']['build_receipt'])
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/reconcile.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/reconcile.py
+@@ -29,8 +29,7 @@
+  for key in ['freeze','diagnostic']:terminal(paths[key]/'tool-terminal.json')
+  check_sources(plan);check_dependencies(plan)
+  assert archive(paths['freeze']/'source-frozen.tar.gz')==plan['source_sha256']
+- assert archive(HERE/'source-112.tar.gz')==plan['source_sha256']
+- assert archive(HERE/'official-inputs-115.tar.gz')=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
++ assert archive(paths['freeze']/'official-inputs-115.tar.gz')=={name.lstrip('/'):h for name,h in plan['fixtures'].items()}
+  br=load(paths['diagnostic-build']/'receipt.json');expected={k.removeprefix('diagnostic/'):v for k,v in plan['diagnostic_sha256'].items()}
+  assert br['source_sha256_before']==br['source_sha256_after']==expected and br['source_identity_unchanged'] and br['crate']==str(source/'diagnostic')
+  nr=load(plan['native_reference']['build_receipt'])
+--- /home/legolas/rook2/evidence/full-byte-pair-relations-complete117-preparation-20261018-01/finalize.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/finalize.py
+@@ -39,7 +39,7 @@
+   except OSError:continue
+   if any(exe.startswith(x) for x in prefixes) or ('python' in Path(exe).name and len(argv)>1 and argv[1].endswith('.py') and argv[1].startswith(str(HERE)+'/')):live.append({'pid':int(p.name),'exe':exe,'argv':argv})
+  assert not live,live
+- result=dict(status='FULL_BYTE_PAIR_RELATIONS_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native_reused=True,fresh_ordinary_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict54_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,operations=117,cases=7673,whole_files=115,native_sha256=ind['native_artifact_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
++ result=dict(status='ORDINARY_PROJECTED_BITS_CANDIDATE25_COMPLETE117_FUNCTIONAL_PASS',source=plan['home_source'],source_graph_sha256=plan['source_graph_sha256'],native_reused=True,fresh_ordinary_native_runs=0,native_units=178,native_lib_units=176,native_dev_units=2,diagnostic_units=209,strict54_reused=54,wire_fixtures_reused=8,wire_searches_reused=24,operations=117,cases=7673,whole_files=115,native_sha256=ind['native_artifact_sha256'],adapter_sha256=ind['diagnostic_artifact_sha256'],all_original_raw_expected_actual_and_exits_reconciled=True,all_owned_native_jobs_terminal=True,live_owned_processes=live,actual_terminals={k:load(paths[k]/'tool-terminal.json') for k in ['freeze','diagnostic','reconciliation']},canonical_domain_audit_limit=plan['canonical_domain_audit_limit'],cpu_pgo_profiler_or_promotion_authorized=False,finalizer_outer_actual_terminal_required=True)
+  write(HERE/'validation-summary.json',result)
+  entries=[HERE/name for name in ['validation-plan.json','execution-clearance.json','prepared.json','source-proof.json','archive-verification.json','validation-summary.json','guard.py','stage.py','record_case.py','reconcile.py','finalize.py']]
+  entries += [paths['reconciliation']/name for name in ['independent-verification.json','case-reconciliation.json','raw-case-sha256.json','tool-terminal.json']]
+--- /home/legolas/rook2/evidence/complete117-pgo-pregate-preparation-20261018/run.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/run_pregate.py
+@@ -12,10 +12,13 @@
+ ROOT=Path('/home/legolas/rook2')
+ PREP=Path(__file__).resolve().parent
+ KIT=Path('/home/legolas/king-spec/conformance/gate-replay')
+-BUILD=ROOT/'evidence/complete117-pgo-use-build-20261018'
+-ENGINE=BUILD/'rook2-exact'
+-EXPECTED='6a5ce6e27b74490e623fbb705f70c770ec12ff7e88f761fb0c7119ca2aee4a50'
+-OUT=ROOT/'evidence/complete117-pgo-pregate-20261018'
++APPROVAL=json.loads((PREP/'pregate-clearance.json').read_text())
++assert APPROVAL['authorized'] is True,'HOLD: parent pre-gate clearance absent'
++BUILD=Path(APPROVAL['ordinary_artifact']['build_directory'])
++ENGINE=Path(APPROVAL['ordinary_artifact']['image'])
++EXPECTED=APPROVAL['ordinary_artifact']['sha256']
++assert isinstance(EXPECTED,str) and len(EXPECTED)==64
++OUT=PREP/'pregate'
+ MASK={0,1,2,3,4,5,8,9,10,11,12,13}
+ def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(p,d):
+@@ -23,8 +26,8 @@
+ def pins():
+     names=['run.mjs','combine.mjs','continuous.mjs','seed-command-controls.mjs',
+            'seed-persistence-controls.mjs','accepted-games-v1.json','continuous-switching-v1.json']
+-    files=[KIT/n for n in names]+[PREP/n for n in ['run.py','direct_wire_tap.mjs','sync_control_tap.mjs','reconcile_raw.mjs','stage6-clearance.json']]+[BUILD/'receipt.json',BUILD/'archive-receipt.json',ENGINE]
+-    files += [Path(path) for path in json.loads((PREP/'stage6-clearance.json').read_text())['dependencies']]
++    files=[KIT/n for n in names]+[PREP/n for n in ['run_pregate.py','direct_wire_tap.mjs','sync_control_tap.mjs','reconcile_pregate.mjs','pregate-clearance.json']]+[BUILD/'receipt.json',BUILD/'archive-receipt.json',ENGINE]
++    files += [Path(path) for path in json.loads((PREP/'pregate-clearance.json').read_text())['dependencies']]
+     return {str(p):sha(p) for p in files}
+ def command(name,argv,env=None):
+     with (OUT/(name+'.stdout')).open('xb') as o,(OUT/(name+'.stderr')).open('xb') as e:
+@@ -48,11 +51,28 @@
+ def main():
+     assert os.sched_getaffinity(0)==MASK
+     assert sha(ENGINE)==EXPECTED
+-    clearance=json.loads((PREP/'stage6-clearance.json').read_text());assert clearance['pass'] is True
++    clearance=json.loads((PREP/'pregate-clearance.json').read_text());assert clearance['authorized'] is True
++    from guard import clearance as functional_clearance,terminal,check_sources
++    plan=functional_clearance();check_sources(plan)
++    assert clearance['plan_sha256']==sha(PREP/'validation-plan.json')
++    assert clearance['all_conflicting_native_jobs_closed'] is True
++    terminal(Path(plan['output']['reconciliation'])/'tool-terminal.json')
++    summary=json.loads((PREP/'validation-summary.json').read_text())
++    assert summary['all_original_raw_expected_actual_and_exits_reconciled'] and summary['native_units']==178 and summary['diagnostic_units']==209
++    proof=json.loads(Path(clearance['ordinary_artifact']['independent_proof']).read_text())
++    assert proof['complete'] and proof['own_profile_only'] and proof['strict_training54'] and proof['fresh_strict54'] and proof['wire8_searches24']
++    variant=proof['variants']['ordinary-projected-bits'];assert variant['artifact_sha256']==EXPECTED and variant['source_sha256']==plan['native_sha256']
++    assert clearance['dependencies']
++    required=[ENGINE,BUILD/'receipt.json',BUILD/'archive-receipt.json',Path(clearance['ordinary_artifact']['independent_proof']),Path(clearance['ordinary_artifact']['independent_actual_terminal'])]
++    assert all(str(path) in clearance['dependencies'] for path in required)
++    terminal(Path(clearance['ordinary_artifact']['independent_actual_terminal']))
+     for path,h in clearance['dependencies'].items():assert sha(path)==h
+     b=json.loads((BUILD/'receipt.json').read_text())
+     assert b['outcome']=='build-succeeded-with-stable-input-snapshot'
+-    assert b['binary_output']['sha256']==EXPECTED and b['pgo']['mode']=='profile-use'
++    assert b['binary_output']['sha256']==EXPECTED and b['pgo']['mode']=='profile-use' and b['pgo']['inputs_unchanged']
++    assert b['source_sha256_before']==b['source_sha256_after']==plan['native_sha256']
++    assert b['tool_sha256_before']==b['tool_sha256_after']==plan['tools_sha256']
++    assert b['toolchain']==json.loads(Path(plan['native_reference']['build_receipt']).read_text())['toolchain']
+     before=pins();OUT.mkdir()
+     write(OUT/'binding.json',{'before':before,'engine_sha256':EXPECTED,'image':str(ENGINE),'affinity':sorted(MASK),
+       'scope':'Untimed exact own-PGO117 regular pre-gate after stage6 PASS; full3288 external, no CPU qualification.',
+--- /home/legolas/rook2/evidence/complete117-pgo-pregate-preparation-20261018/reconcile_raw.mjs
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/reconcile_pregate.mjs
+@@ -13,7 +13,10 @@
+ const hash=data=>createHash('sha256').update(data).digest('hex');
+ const fixture=load(join(kit,'accepted-games-v1.json'));validateFixture(fixture);
+ const binding=load(join(directory,'binding.json'));
+-assert.equal(binding.engine_sha256,'6a5ce6e27b74490e623fbb705f70c770ec12ff7e88f761fb0c7119ca2aee4a50');
++const approval=load('/home/legolas/rook2/evidence/ordinary-projected-bits-final-validation-preparation-20261018-01/pregate-clearance.json');
++assert.equal(approval.authorized,true);
++assert.equal(binding.engine_sha256,approval.ordinary_artifact.sha256);
++assert.equal(hash(readFileSync(approval.ordinary_artifact.image)),binding.engine_sha256);
+ for(const [path,expected] of Object.entries(binding.before))assert.equal(hash(readFileSync(path)),expected,path);
+ const plan=load(join(kit,'continuous-switching-v1.json'));
+ const continuous=plan.segments.map(segment=>{

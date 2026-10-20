@@ -1,0 +1,9 @@
+# Experiment54 independent ordering controls
+
+Four source-only `experiment54_` tests are frozen in `tactical/six_stream_tests.rs`. Root registers the child module after both source owners close. No edits to tactical.rs, module declarations, canonical source or old test bodies were made by this owner.
+
+The oracle follows the released mathematical definition with stable library sorts: sort each of six classes, restore class positions, then stable global sort. It does not use the candidate's packed rank, head selection, sentinels, cursors or insertion loops. Complete ternary vectors through length9 include all short fallback cases and the first uneven classes. Every length0..512 additionally uses seven representative key patterns, unsigned boundaries and both unique/full-opaque and duplicated raw Move payloads. All-zero length512 exercises the last nonexhausted rank+1; crossed5 ties explicitly require item6 before item1.
+
+Native order_by tests separately reconstruct preferred reversal and deferred0/1 order using the independent oracle. They retain stateful callback observation, list length/tail, reused scratch across large/small/empty calls and all-deferred order. Public priority_sequence's exact two-slice observable output and mismatched partial-panic behavior remain independent controls. A deliberate fourth-callback panic must leave the original MoveList unchanged, after which the same scratch handles valid large/small calls. Catch-unwind is unit-test containment only.
+
+Baseline193 textual identities/containing-file hashes are copied exactly from the existing frozen51 inventory and checked against this selection's74-map, not inherited from53's changed source. Four new declarations imply197=195lib+2dev pending root combined freeze. Source-proof.json states finite prospective call counts, never executed observations. No Rust parser/formatter/compiler/test/native/binutils/profile/Git/archive operation occurred; all tests remain UNRUN.

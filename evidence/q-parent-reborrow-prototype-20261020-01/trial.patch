@@ -1,0 +1,100 @@
+--- baseline/src/quiescence.rs
++++ candidate/src/quiescence.rs
+@@ -243,10 +243,9 @@
+             self.charge_node(history)?;
+             let ply = entry.ply;
+             self.pv_len[ply] = 0;
+-            let position = node.position;
+-            let checked = checked.unwrap_or_else(|| movegen::in_check(&position, position.side));
++            let checked = checked.unwrap_or_else(|| movegen::in_check(&node.position, node.position.side));
+             if O::ENABLED {
+-                frame = observer.enter(&position, entry, history.previous_move(),
++                frame = observer.enter(&node.position, entry, history.previous_move(),
+                     parent, node.retained, checked, entry_work);
+             }
+             if crate::ordinary_policy::early_draw(history,ply,checked,entry.analysis,entry.upper,&mut self.learning) {
+@@ -293,16 +292,18 @@
+                 (value.score, value.score, value.upper)
+             };
+ 
++            let position = &node.position;
++
+             if checked {
+                 if replies_available {
+                     if DIAGNOSTICS {
+                         self.stats.reused_reply_lists += 1;
+                     }
+                 } else {
+-                    movegen::generate_legal(&position, &mut self.candidates[ply]);
++                    movegen::generate_legal(position, &mut self.candidates[ply]);
+                 }
+             } else {
+-                tactical::generate_for_search(&position, &mut self.candidates[ply], coherent_geometry);
++                tactical::generate_for_search(position, &mut self.candidates[ply], coherent_geometry);
+             }
+             let count = self.candidates[ply].len;
+             if DIAGNOSTICS {
+@@ -315,7 +316,7 @@
+                 return Ok(ply as i32 - 9998);
+             }
+             tactical::order_with_scratch(
+-                &position,
++                position,
+                 &self.evaluator.root,
+                 &self.learning.history,
+                 &mut self.candidates[ply],
+@@ -349,13 +350,13 @@
+                         let estimate = standing
+                             + policy::allowance(
+                                 &self.evaluator.root,
+-                                &position,
++                                position,
+                                 &movement,
+                                 node.retained.positional,
+                                 node.retained.pawn_progress,
+                             );
+                         let moving_value =
+-                            policy::moving_value(&self.evaluator.root, &position, &movement);
++                            policy::moving_value(&self.evaluator.root, position, &movement);
+                         let decision = policy::capture_policy(
+                             estimate,
+                             moving_value,
+@@ -368,9 +369,9 @@
+                             },
+                             || {
+                                 let map = self.evaluator.ensure_influence_for_search(
+-                                    &position, &mut influence, coherent_geometry,
++                                    position, &mut influence, coherent_geometry,
+                                 );
+-                                policy::destination_support(&position, map, movement.to())
++                                policy::destination_support(position, map, movement.to())
+                             },
+                         );
+                         if DIAGNOSTICS && decision.best > best {
+@@ -380,7 +381,7 @@
+                         forced = decision.force_search;
+                     }
+ 
+-                    let projected = position.attack_view().projected(&position, movement);
++                    let projected = position.attack_view().projected(position, movement);
+                     if DIAGNOSTICS {
+                         self.stats.projections += 1;
+                     }
+@@ -390,7 +391,7 @@
+                     // Every quiet item from the non-check producer checks directly;
+                     // retain this screen explicitly for the composed policy.
+                     if !policy::initial_eligibility(
+-                        &position,
++                        position,
+                         &movement,
+                         previous,
+                         checking,
+@@ -441,7 +442,7 @@
+                 }
+                 let mut child =
+                     prepared_child.unwrap_or_else(|| node.child(&self.evaluator.root, movement));
+-                let capture_exception = policy::capture_exception(&position, &movement);
++                let capture_exception = policy::capture_exception(position, &movement);
+                 history.push(&child.position, Some(movement));
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;

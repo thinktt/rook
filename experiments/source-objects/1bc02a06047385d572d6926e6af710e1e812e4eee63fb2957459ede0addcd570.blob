@@ -1,0 +1,690 @@
+--- a/diagnostic/src/main.rs
++++ b/diagnostic/src/main.rs
+@@ -36,7 +36,6 @@
+ mod pawn_subtotals;
+ mod policies;
+ mod post_captures;
+-mod persistent_sessions;
+ mod position_terms;
+ mod positions;
+ mod quiescence_evaluation;
+@@ -124,7 +123,6 @@
+ 
+ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+     match operation {
+-        "session.searches" | "session.clockSeededSearches" | "session.interruptedSearches" | "session.ordinaryIterations" => persistent_sessions::dispatch(operation,input),
+         "output.postLifecycle" => post_captures::dispatch(input),
+         "search.rootWorkSchedule" | "search.unrestrictedRootSequence" | "search.restrictedRootSequence" => controlled_root::dispatch(operation,input),
+         "search.seededTimedSearch" | "session.goOutcome" => actual_timed::dispatch(operation, input),
+--- a/diagnostic/src/persistent_sessions.rs
++++ /dev/null
+@@ -1,631 +0,0 @@
+-//! Persistent cold transports: one actual Session, native search/clock/output owners.
+-use super::{array, boolean, integer, moves, object, positions, text, unsigned32, Result};
+-use rook2::{host::{self, Command, Host, Record}, movegen::{self, MoveList},
+-    output::Post, parameters::{self, Parameters, NAMES}, position::Position,
+-    quiescence::{Limits, Work}, session::{self, Action, Session}, timed::{self, Point},
+-    types::{Color, Move}};
+-use serde_json::{json, Value};
+-use std::{collections::VecDeque, io, time::{SystemTime, UNIX_EPOCH}};
+-
+-const NEUTRAL_MD3: [i32;30] = [100,100,100,100,100,100,100,100,100,100,0,0,
+-    100,100,100,100,100,100,100,100,100,100,0,100,0,14,0,3,0,67108864];
+-#[derive(Clone, Copy, PartialEq, Eq)]
+-enum Mode { Public, Clock, Interrupted }
+-#[derive(Clone)]
+-enum Setup { New, Force, Easy, Post(bool), Undo, Level, Move(String), Setboard(String), Parameters(Vec<String>) }
+-impl Setup {
+-    fn parse(line:&str,mode:Mode)->Result<Self> {
+-        if line.len()>2000 || !line.is_ascii() || line.bytes().any(|b|b==0||b==b'\r'||b==b'\n'
+-            ||(b.is_ascii_whitespace()&&b!=b' '&&b!=b'\t')) {
+-            return Err("setup must be a single ordinary ASCII record of at most2000 characters".into());
+-        }
+-        let words=line.split_ascii_whitespace().collect::<Vec<_>>();
+-        match words.as_slice() {
+-            ["new"]=>Ok(Self::New),["force"]=>Ok(Self::Force),["easy"]=>Ok(Self::Easy),
+-            ["post"]=>Ok(Self::Post(true)),["nopost"] if mode==Mode::Interrupted=>Ok(Self::Post(false)),
+-            ["undo"]=>Ok(Self::Undo),
+-            ["level",a,b,c]=>{
+-                let values=[a,b,c].into_iter().map(|v|parameters::integer(v))
+-                    .collect::<std::result::Result<Vec<_>,_>>().map_err(|e|format!("level integer: {e:?}"))?;
+-                if values!=[0,5,0] {return Err("setup level must be level 0 5 0".into());}
+-                Ok(Self::Level)
+-            },
+-            ["setboard",fields @ ..] if fields.len()==6||(fields.len()==4&&mode!=Mode::Interrupted)=>{
+-                let mut counters=[0,1];
+-                if fields.len()==6 {for (i,minimum) in [(0,0),(1,1)] {
+-                    if fields[4+i].is_empty()||!fields[4+i].bytes().all(|b|b.is_ascii_digit()) {
+-                        return Err("invalid public FEN counter".into());
+-                    }
+-                    counters[i]=parameters::integer(fields[4+i]).map_err(|e|format!("FEN counter: {e:?}"))?;
+-                    if counters[i]<minimum {return Err("invalid public FEN counter".into());}
+-                }}
+-                // Session searches inherit native ordinary FEN4/FEN6; interrupted
+-                // setup explicitly requires FEN6. No search-adapter pawn/check gates.
+-                Position::from_fen(&format!("{} {} {} {} 0 1",fields[0],fields[1],fields[2],fields[3]))?;
+-                Ok(Self::Setboard(format!("{} {} {} {} {} {}",fields[0],fields[1],fields[2],fields[3],counters[0],counters[1])))
+-            },
+-            ["cm_parm",args @ ..] if !args.is_empty()=>{
+-                let mut tokens=Vec::new();
+-                for arg in args {
+-                    if *arg=="default" { tokens.push("default".to_owned());continue; }
+-                    let (name,value)=arg.split_once('=').ok_or("setup parameters require assignments or default")?;
+-                    let v=parameters::integer(value).map_err(|e|format!("setup integer: {e:?}"))?;
+-                    assignment_token(name,v,mode)?;
+-                    tokens.push(format!("{name}={v}"));
+-                }
+-                Ok(Self::Parameters(tokens))
+-            },
+-            [movement]=>{ positions::coordinate(movement)?;Ok(Self::Move((*movement).to_owned())) },
+-            _=>Err("command outside released persistent setup vocabulary".into()),
+-        }
+-    }
+-    fn apply(&self,state:&mut Session<true>)->Result<()> {
+-        match self {
+-            Self::Setboard(fen)=>state.setboard(fen).map_err(|e|format!("native setboard: {e:?}")),
+-            Self::Parameters(tokens)=>{
+-                // This is exactly Session.idle's cm_parm state owner, without
+-                // its separate ordinary-wire record/token ceilings. The eager
+-                // diagnostic schema admits up to2000 characters, including one
+-                // unknown assignment token wider than an entire wire record.
+-                // No clock/search event exists between ordered parameter tokens.
+-                state.parameters.command(&tokens.iter().map(String::as_str).collect::<Vec<_>>())
+-                    .map(|_echo|()).map_err(|e|format!("native parameter command: {e:?}"))
+-            },
+-            Self::New=>idle(state,"new"),Self::Force=>idle(state,"force"),Self::Easy=>idle(state,"easy"),
+-            Self::Post(true)=>idle(state,"post"),Self::Post(false)=>idle(state,"nopost"),
+-            Self::Undo=>idle(state,"undo"),Self::Level=>idle(state,"level 0 5 0"),
+-            Self::Move(m)=>idle(state,m),
+-        }
+-    }
+-}
+-fn assignment_token(name:&str,v:i32,mode:Mode)->Result<()> {
+-    let mut bytes=name.bytes();
+-    if !bytes.next().is_some_and(|b|b.is_ascii_alphabetic())
+-        ||!bytes.all(|b|b.is_ascii_alphanumeric()||b==b'_') {
+-        return Err("parameter name must start with an ASCII letter and continue with letters, digits or underscores".into());
+-    }
+-    // Command storage accepts every signed32 value and lexical unknown name.
+-    // Only the clock/interrupted contracts restrict EVERY rnd assignment;
+-    // public searches restrict final effective rnd, not overwritten storage.
+-    if name=="rnd"&&(match mode {Mode::Public=>false,Mode::Clock=>!(0..=1000).contains(&v),Mode::Interrupted=>v!=0}) {
+-        return Err("random-setting assignment outside the route's every-assignment domain".into());
+-    }
+-    Ok(())
+-}
+-fn effective_domain(parameters:&Parameters,mode:Mode,md_cap:i32)->Result<()> {
+-    // Eager final-vector admission mirrors the native bind domain without
+-    // constructing a search or mutating live state. The actual go still binds.
+-    for (index,&v) in parameters.values.iter().enumerate() {
+-        let valid=match index {
+-            11=>true, // Stored opk is unconditionally inert, including admission.
+-            0..=21=>(0..=1000).contains(&v),
+-            22=>(-100..=100).contains(&v),23=>(0..=100).contains(&v),
+-            24=>(0..=if mode==Mode::Clock{1000}else{0}).contains(&v),
+-            25=>true,26=>(-10000..=10000).contains(&v),
+-            27=>(1..=md_cap).contains(&v),28=>v>=0,29=>v>=96,
+-            _=>unreachable!(),
+-        };
+-        if !valid {return Err(format!("final effective {} outside native/route search domain",NAMES[index]));}
+-    }
+-    Ok(())
+-}
+-fn idle(state:&mut Session<true>,line:&str)->Result<()> {
+-    match state.idle(line).map_err(|e|format!("native idle command: {e:?}"))? {
+-        Action::Reply(lines) if !lines.iter().any(|l|l.starts_with("Illegal move:")||l.starts_with("Error ("))=>Ok(()),
+-        Action::Reply(_)=>Err("native rejected setup command or move".into()),
+-        _=>Err("setup must not start an automatic search or terminate the session".into()),
+-    }
+-}
+-struct Query { commands:Vec<Setup>,allowance:i32,queued:Vec<Command>,expected:Parameters }
+-struct Public { mode:Mode,seconds:Option<u32>,queries:Vec<Query>,inherited:bool }
+-fn inherited_topology(rows:&[Vec<Setup>])->bool {
+-    matches!(rows, [_,second,third]
+-        if matches!(second.as_slice(),[Setup::Force,Setup::Undo,Setup::Move(_)])
+-        &&matches!(third.as_slice(),[Setup::Force,Setup::Undo,Setup::Undo]))
+-}
+-impl Public {
+-    fn parse(input:&Value,mode:Mode)->Result<Self> {
+-        if mode==Mode::Clock {object(input,&["systemSeconds","searches"])?;} else {object(input,&["searches"])?;}
+-        let seconds=if mode==Mode::Clock{Some(unsigned32(&input["systemSeconds"])?)}else{None};
+-        let supplied=array(&input["searches"],1,16)?;
+-        let mut rows=Vec::new();let mut schedules=Vec::new();
+-        for query in supplied {
+-            if mode==Mode::Interrupted {object(query,&["commands","allowanceCs","queued"])?;}
+-            else {object(query,&["commands","allowanceCs"])?;}
+-            let allowance=integer(&query["allowanceCs"],1,1_000_000)?;
+-            let mut queued=Vec::new();
+-            if mode==Mode::Interrupted {
+-                let queue=array(&query["queued"],0,4)?;
+-                for (i,v) in queue.iter().enumerate() {
+-                    queued.push(match (text(v)?,i+1==queue.len()) {
+-                        ("?",true)=>Command::Finish,("force",true)=>Command::Abort,
+-                        (".",false)=>Command::Status,("post",false)=>Command::Post(true),
+-                        ("nopost",false)=>Command::Post(false),
+-                        _=>return Err("queued schedule must end in ? or force, preceded only by status/post toggles".into()),
+-                    });
+-                }
+-            }
+-            let commands=array(&query["commands"],1,256)?.iter().map(|v|Setup::parse(text(v)?,mode))
+-                .collect::<Result<Vec<_>>>()?;
+-            if !matches!(commands.first(),Some(Setup::New|Setup::Force))
+-                ||!commands.iter().any(|c|matches!(c,Setup::Force)) {
+-                return Err("each setup starts with new or force and contains force".into());
+-            }
+-            if mode==Mode::Interrupted&&(!commands.iter().any(|c|matches!(c,Setup::Easy))
+-                ||!commands.iter().any(|c|matches!(c,Setup::Post(_)))) {
+-                return Err("interrupted setup must explicitly disable pondering and select posts".into());
+-            }
+-            rows.push(commands);schedules.push((allowance,queued));
+-        }
+-        let inherited=mode==Mode::Public&&inherited_topology(&rows);
+-        let mut parameters=Parameters::default();let mut queries=Vec::new();
+-        for (index,(commands,(allowance,queued))) in rows.into_iter().zip(schedules).enumerate() {
+-            let mut md=false;let mut rnd=false;
+-            for command in &commands {
+-                if let Setup::Parameters(tokens)=command {
+-                    for token in tokens {
+-                        md|=token.starts_with("md=");rnd|=token.starts_with("rnd=");
+-                    }
+-                    parameters.command(&tokens.iter().map(String::as_str).collect::<Vec<_>>())
+-                        .map_err(|e|format!("native parameter parsing: {e:?}"))?;
+-                }
+-            }
+-            let cap=if queued.is_empty(){4}else{20};
+-            effective_domain(&parameters,mode,cap)?;
+-            if inherited {
+-                if (index==0&&(!md||!rnd))||parameters.values!=NEUTRAL_MD3||allowance!=18100 {
+-                    return Err("inherited topology requires complete neutral md3/rnd0 and18100 allowance".into());
+-                }
+-            } else if !md||!rnd {return Err("each ordinary explicit setup must assign md and rnd".into());}
+-            queries.push(Query{commands,allowance,queued,expected:parameters.clone()});
+-        }
+-        if inherited {
+-            let b=match &queries[1].commands[2] {Setup::Move(m)=>m,_=>unreachable!()};
+-            positions::legal_move(&Position::from_fen(session::START)?,b)?;
+-        }
+-        Ok(Self{mode,seconds,queries,inherited})
+-    }
+-    fn observe(self)->Result<Value> {
+-        let mut state=Session::<true>::default();let mut results=Vec::new();let mut first_move=None;
+-        let mut first_ordinary=None;
+-        for (index,query) in self.queries.into_iter().enumerate() {
+-            if self.inherited&&index==1 {
+-                let b=match &query.commands[2]{Setup::Move(m)=>m,_=>unreachable!()};
+-                if first_move.as_ref()==Some(b) {return Err("inherited alternative must differ from the actual first selected move".into());}
+-            }
+-            for command in &query.commands {command.apply(&mut state)?;}
+-            if state.parameters!=query.expected||state.pondering {
+-                return Err("effective native setup settings changed or enabled pondering".into());
+-            }
+-            if self.inherited {
+-                if state.clock.schedule!=rook2::clock::Schedule::default() {
+-                    return Err("inherited companion requires the five-minute schedule".into());
+-                }
+-                if index==0&&(state.position()!=Position::from_fen(session::START)?||!state.moves.is_empty()
+-                    ||state.states[0]!=Position::from_fen(session::START)?) {
+-                    return Err("inherited first search requires standard empty-history start".into());
+-                }
+-            }
+-            idle(&mut state,&format!("time {}",query.allowance))?;
+-            let root=state.position();let before_ply=state.moves.len();
+-            let (result,host)=run(&mut state,self.seconds,query.queued,Limits{nodes:None},62)?;
+-            if self.inherited {
+-                let ordinary=ordinary(&root,&result.outcome)?;
+-                if index==0 {first_ordinary=Some(ordinary);}
+-                else if index==2&&first_ordinary.as_ref()!=Some(&ordinary) {
+-                    return Err("restored A must reproduce its complete actual ordinary answer".into());
+-                }
+-            }
+-            let events=semantic_events(&host.records);
+-            let selected=move_event(&host.records)?;
+-            if self.mode==Mode::Interrupted {
+-                let aborted=result.outcome.stop.reason=="abort";
+-                if aborted {
+-                    if selected.is_some()||!state.force||state.moves.len()!=before_ply||state.position()!=root {
+-                        return Err("native abort must preserve game and enter force without a move".into());
+-                    }
+-                } else if selected.is_none()||state.moves.len()!=before_ply+1 {
+-                    return Err("native non-abort must apply exactly one selected move".into());
+-                }
+-                results.push(json!({"events":events}));
+-            } else {
+-                let selected=selected.ok_or("completed ordinary session has no selected move")?;
+-                if state.moves.len()!=before_ply+1 {return Err("ordinary selected move was not applied".into());}
+-                let mut posts=Vec::new();
+-                for record in &host.records {
+-                    if let Record::Post(p)=record {
+-                        if p.fields.depth_token<1000||p.pv.trim().is_empty() {
+-                            return Err("public search post outside released five-field report domain".into());
+-                        }
+-                        posts.push(post(p));
+-                    }
+-                }
+-                if index==0 {first_move=Some(selected.to_string());}
+-                if self.mode==Mode::Clock {results.push(json!({"seed":result.seed,"move":selected.to_string(),"posts":posts}));}
+-                else {results.push(json!({"move":selected.to_string(),"posts":posts}));}
+-            }
+-        }
+-        Ok(json!({"results":results}))
+-    }
+-}
+-struct Recorder { pending:VecDeque<Command>,records:Vec<Record>,fixed:bool,seeds:Vec<u32> }
+-impl Host for Recorder {
+-    fn acquire_seed(&mut self,supplied:u32,entry:u32)->io::Result<u32> {
+-        let seed=if self.fixed {supplied} else {
+-            let seconds=SystemTime::now().duration_since(UNIX_EPOCH).map_err(io::Error::other)?.as_secs() as u32;
+-            host::seed_from_seconds(seconds,entry)
+-        };
+-        self.seeds.push(seed);Ok(seed)
+-    }
+-    fn command(&mut self)->io::Result<Option<Command>> {Ok(self.pending.pop_front())}
+-    fn publish(&mut self,record:Record)->io::Result<()> {self.records.push(record);Ok(())}
+-}
+-fn run(state:&mut Session<true>,seconds:Option<u32>,queued:Vec<Command>,limits:Limits,capacity:u8)->Result<(session::SearchResult,Recorder)> {
+-    if state.moves.len()>=800 {return Err("ordinary search requires at most799 prior plies".into());}
+-    let host=Recorder{pending:queued.into(),records:Vec::new(),fixed:seconds.is_some(),seeds:Vec::new()};
+-    let (result,host)=state.go_live(host,seconds.unwrap_or(0),limits,capacity,false);
+-    let result=result.map_err(|e|format!("native persistent search: {e:?}"))?;
+-    if !host.pending.is_empty() {return Err("search did not reach every queued command's native poll".into());}
+-    if host.seeds.as_slice()!=[result.seed] {return Err("ordinary search must acquire exactly one actual retained seed".into());}
+-    Ok((result,host))
+-}
+-fn post(p:&Post)->Value {json!({"depthToken":p.fields.depth_token,"evaluation":p.fields.evaluation,
+-    "searchId":p.fields.search_id,"pv":p.pv.trim().replace('0',"O"),"engineCentiseconds":p.fields.centiseconds})}
+-fn semantic_events(records:&[Record])->Vec<Value> {
+-    records.iter().filter_map(|record|match record {
+-        Record::Post(p)=>{let mut v=post(p);v["type"]=json!("post");Some(v)},
+-        Record::Status(s)=>Some(json!({"type":"status","engineCentiseconds":s.centiseconds,"searchId":s.search_id,
+-            "depthToken":s.depth_token,"remaining":s.remaining,"total":s.total,"pv":s.pv.trim().replace('0',"O")})),
+-        Record::Move(m)=>Some(json!({"type":"move","move":m.to_string()})),
+-        Record::Aborting|Record::Result(_)=>None,
+-    }).collect()
+-}
+-fn move_event(records:&[Record])->Result<Option<Move>> {
+-    let mut selected=None;let mut after_move=false;
+-    for record in records {match record {
+-        Record::Move(m) if selected.is_none()=>{selected=Some(*m);after_move=true;},
+-        Record::Result(_)=>{},Record::Aborting if selected.is_none()=>{},
+-        Record::Post(_)|Record::Status(_) if !after_move=>{},
+-        _=>return Err("native semantic event order/move multiplicity is invalid".into()),
+-    }}
+-    Ok(selected)
+-}
+-
+-fn variation(pv:&[Move])->Vec<Value> {pv.iter().copied().map(moves::descriptor).collect()}
+-fn work(sample:Work)->Value {json!({"searchCounterDelta":sample.effective_search_count(),
+-    "chargedSearchUnits":sample.charged_search_units,"chargedRelationQueries":sample.charged_relation_queries})}
+-fn legal_pv(mut root:Position,pv:&[Move])->Result<()> {
+-    if pv.len()>63 {return Err("ordinary PV exceeds63 moves".into());}
+-    for &movement in pv {
+-        let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
+-        if !legal.as_slice().contains(&movement) {return Err("native ordinary PV is not a legal typed continuation".into());}
+-        root=root.played_unchecked(movement);
+-    }
+-    Ok(())
+-}
+-fn ordinary(root:&Position,out:&timed::Outcome)->Result<Value> {
+-    let stats=&out.stats;
+-    if movegen::in_check(root,root.side)||out.initial_candidates.is_empty()
+-        ||out.stop.point!=Point::Iteration||out.stop.depth!=3||out.stop.pending.is_some()
+-        ||out.iterations.len()!=3||out.stop.work.charged_search_units>=4096
+-        ||stats.iio_initial_phases!=0||stats.iio_tail_phases!=0||stats.iio_passes!=0
+-        ||stats.iio_nonzero_fresh_extensions!=0||stats.accumulated_extension_uses!=0 {
+-        return Err("persistent ordinary result exceeds natural three-completion/no-poll/IIOzero domain".into());
+-    }
+-    let mut legal=MoveList::new();movegen::generate_legal(root,&mut legal);
+-    if out.initial_candidates.as_slice()!=legal.as_slice() {
+-        return Err("native initial candidates must be the complete actual root sequence".into());
+-    }
+-    let mut iterations=Vec::new();
+-    for (index,iteration) in out.iterations.iter().enumerate() {
+-        if usize::from(iteration.depth)!=index+1||!iteration.complete||iteration.steps.len()!=legal.len {
+-            return Err("natural session search did not complete all root candidates".into());
+-        }
+-        let mut seen=Vec::new();let mut steps=Vec::new();
+-        for step in &iteration.steps {
+-            if !legal.as_slice().contains(&step.movement)||seen.contains(&step.movement)
+-                ||step.passes.len()!=1||step.window[1]!=10000||step.work.charged_search_units>=4096 {
+-                return Err("ordinary root visit outside complete unrestricted domain".into());
+-            }
+-            seen.push(step.movement);
+-            legal_pv(root.played_unchecked(step.movement),&step.child_pv)?;legal_pv(*root,&step.pv)?;
+-            if ![step.window[0],step.window[1],step.score,step.best,step.second].into_iter()
+-                .all(|s|(-10000..=10000).contains(&s)) {
+-                return Err("ordinary score/window exceeds released domain".into());
+-            }
+-            steps.push(json!({"move":moves::descriptor(step.movement),"window":{"lower":step.window[0],"upper":step.window[1]},
+-                "score":step.score,"bestScore":step.best,"secondScore":step.second,
+-                "childPrincipalVariation":variation(&step.child_pv),"principalVariation":variation(&step.pv),"work":work(step.work)}));
+-        }
+-        let last=iteration.steps.last().ok_or("empty actual ordinary iteration")?;
+-        // This is a projection of actual completed step state, never a second
+-        // score insertion/sort/controller or synthetic evaluator answer.
+-        iterations.push(json!({"depth":iteration.depth,"candidates":variation(&seen),"steps":steps,
+-            "score":last.best,"principalVariation":variation(&last.pv),"work":work(last.work)}));
+-    }
+-    let captured=out.result.as_ref().ok_or("natural ordinary session has no actual retained capture")?;
+-    let last=out.iterations.last().unwrap().steps.last().unwrap();
+-    if captured.depth!=3||captured.score!=last.best||captured.pv!=last.pv||last.work!=out.stop.work {
+-        return Err("actual capture/final completed iteration/work do not close together".into());
+-    }
+-    legal_pv(*root,&captured.pv)?;
+-    Ok(json!({"initialCandidates":variation(&out.initial_candidates),"iterations":iterations,
+-        "result":{"score":captured.score,"principalVariation":variation(&captured.pv),"work":work(out.stop.work)}}))
+-}
+-fn fen(position:&Position,plies:usize,initial_side:Color)->String {
+-    let side=if position.side==Color::White{"w"}else{"b"};
+-    let fullmove=1+(plies+usize::from(initial_side==Color::Black))/2;
+-    format!("{} {side} {} {} {} {fullmove}",position.placement(),positions::rights(position),positions::ep(position),position.halfmove)
+-}
+-fn snapshot(state:&Session<true>)->Value {
+-    let first=&state.states[0];let current=state.position();
+-    json!({"initialFen":fen(first,0,first.side),"currentFen":fen(&current,state.moves.len(),first.side),
+-        "moves":state.moves.iter().map(ToString::to_string).collect::<Vec<_>>(),
+-        "sideToMove":if current.side==Color::White{"white"}else{"black"},
+-        "mode":if state.force{"force"}else if state.engine_color==Color::White{"play-white"}else{"play-black"}})
+-}
+-struct Rich { parameters:Parameters,alternative:String }
+-impl Rich {
+-    fn parse(input:&Value)->Result<Self> {
+-        object(input,&["initial","personalityParameters","schedule","actions","controls"])?;
+-        object(&input["initial"],&["fen","moves"])?;
+-        if text(&input["initial"]["fen"])?!=session::START||!array(&input["initial"]["moves"],0,0)?.is_empty() {
+-            return Err("persistent ordinary initial state must be exact standard empty-history start".into());
+-        }
+-        object(&input["personalityParameters"],&NAMES)?;
+-        let mut values=[0;30];
+-        for (index,name) in NAMES.iter().enumerate() {values[index]=integer(&input["personalityParameters"][*name],i32::MIN,i32::MAX)?;}
+-        if values!=NEUTRAL_MD3 {return Err("persistent ordinary requires the complete neutral md3/rnd0 vector".into());}
+-        object(&input["schedule"],&["levelCommand","remainingTimeCs"])?;
+-        if text(&input["schedule"]["levelCommand"])?!="level 0 5 0" {return Err("persistent schedule must be level 0 5 0".into());}
+-        integer(&input["schedule"]["remainingTimeCs"],18100,18100)?;
+-        let actions=array(&input["actions"],9,9)?;let kinds=["search","force","undo","move","search","force","undo","undo","search"];
+-        let mut alternative=None;
+-        for (action,kind) in actions.iter().zip(kinds) {
+-            match kind {
+-                "search"=>{object(action,&["kind","completedIterations"])?;integer(&action["completedIterations"],3,3)?;},
+-                "move"=>{object(action,&["kind","move"])?;let m=text(&action["move"])?;positions::coordinate(m)?;alternative=Some(m.to_owned());},
+-                _=>{object(action,&["kind"])?;},
+-            }
+-            if text(&action["kind"])?!=kind {return Err("persistent action order differs from the admitted topology".into());}
+-        }
+-        let controls=&input["controls"];
+-        object(controls,&["arrival","completion","inheritedSettings","pondering","searchState","workOrigin"])?;
+-        for (name,value) in [("arrival","wait-for-each-move-v1"),("completion","natural-md3"),
+-            ("inheritedSettings","session-global-md3-rnd0-v1"),("searchState","fresh-each-go"),("workOrigin","after-root-preparation")] {
+-            if text(&controls[name])?!=value {return Err(format!("unsupported persistent control {name}"));}
+-        }
+-        if boolean(&controls["pondering"])? {return Err("persistent ordinary pondering is outside domain".into());}
+-        let alternative=alternative.unwrap();positions::legal_move(&Position::from_fen(session::START)?,&alternative)?;
+-        Ok(Self{parameters:Parameters{values},alternative})
+-    }
+-    fn observe(self)->Result<Value> {
+-        let mut state=Session::<true>::default();
+-        let tokens=NAMES.iter().zip(self.parameters.values).map(|(name,value)|format!("{name}={value}")).collect();
+-        Setup::Parameters(tokens).apply(&mut state)?;Setup::Level.apply(&mut state)?;Setup::Easy.apply(&mut state)?;
+-        let initial=snapshot(&state);let mut actions=Vec::new();let mut searches=Vec::new();
+-        let mut first_move=None;let mut first_answer=None;let mut first_root=None;
+-        for (index,kind) in ["search","force","undo","move","search","force","undo","undo","search"].into_iter().enumerate() {
+-            let before=snapshot(&state);let mut action=json!({"index":index,"kind":kind,"before":before});
+-            match kind {
+-                "search"=>{
+-                    if state.parameters!=self.parameters||state.pondering {return Err("inherited native settings changed".into());}
+-                    idle(&mut state,"time 18100")?;
+-                    let root=snapshot(&state);let root_position=state.position();
+-                    let (result,host)=run(&mut state,None,Vec::new(),Limits{nodes:Some(4095)},3)?;
+-                    let answer=ordinary(&root_position,&result.outcome)?;
+-                    let selected=move_event(&host.records)?.ok_or("persistent ordinary session did not play a move")?;
+-                    if result.outcome.result.as_ref().and_then(|c|c.pv.first()).copied()!=Some(selected) {
+-                        return Err("native played move differs from actual retained PV".into());
+-                    }
+-                    let ordinal=searches.len();
+-                    if ordinal==0 {first_move=Some(selected.to_string());first_answer=Some(answer.clone());first_root=Some(root.clone());}
+-                    else if ordinal==2&&(first_root.as_ref()!=Some(&root)||first_answer.as_ref()!=Some(&answer)) {
+-                        return Err("A2 must reproduce A1's actual root and entire ordinary answer".into());
+-                    }
+-                    searches.push(json!({"index":ordinal,"root":root,"completedIterations":3,"ordinary":answer,
+-                        "selectedMove":selected.to_string(),"after":snapshot(&state)}));
+-                    action["searchIndex"]=json!(ordinal);
+-                },
+-                "force"=>Setup::Force.apply(&mut state)?,"undo"=>Setup::Undo.apply(&mut state)?,
+-                "move"=>{
+-                    if first_move.as_ref()==Some(&self.alternative) {return Err("B must differ from observed search A move".into());}
+-                    Setup::Move(self.alternative.clone()).apply(&mut state)?;action["move"]=json!(self.alternative);
+-                },
+-                _=>unreachable!(),
+-            }
+-            action["after"]=snapshot(&state);actions.push(action);
+-        }
+-        Ok(json!({"initial":initial,"actions":actions,"searches":searches,"final":snapshot(&state)}))
+-    }
+-}
+-pub(super) fn dispatch(operation:&str,input:&Value)->Result<Value> {
+-    match operation {
+-        "session.searches"=>Public::parse(input,Mode::Public)?.observe(),
+-        "session.clockSeededSearches"=>Public::parse(input,Mode::Clock)?.observe(),
+-        "session.interruptedSearches"=>Public::parse(input,Mode::Interrupted)?.observe(),
+-        "session.ordinaryIterations"=>Rich::parse(input)?.observe(),
+-        _=>Err("unknown persistent session operation".into()),
+-    }
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    fn explicit(queued:Option<Value>)->Value {
+-        let mut q=json!({"commands":["new","force","easy","post","level 0 5 0","cm_parm md=3 rnd=0"],"allowanceCs":18100});
+-        if let Some(v)=queued {q["queued"]=v;}q
+-    }
+-    fn inherited()->Value {
+-        let settings=NAMES.iter().zip(NEUTRAL_MD3).map(|(n,v)|format!("{n}={v}")).collect::<Vec<_>>().join(" ");
+-        json!({"searches":[{"commands":["force","easy","post","level 0 5 0",format!("cm_parm {settings}")],"allowanceCs":18100},
+-            {"commands":["force","undo","d2d4"],"allowanceCs":18100},
+-            {"commands":["force","undo","undo"],"allowanceCs":18100}]})
+-    }
+-    fn rich()->Value {
+-        json!({"initial":{"fen":session::START,"moves":[]},
+-            "personalityParameters":Value::Object(NAMES.iter().zip(NEUTRAL_MD3).map(|(n,v)|(n.to_string(),json!(v))).collect()),
+-            "schedule":{"levelCommand":"level 0 5 0","remainingTimeCs":18100},
+-            "actions":[{"kind":"search","completedIterations":3},{"kind":"force"},{"kind":"undo"},
+-                {"kind":"move","move":"d2d4"},{"kind":"search","completedIterations":3},{"kind":"force"},
+-                {"kind":"undo"},{"kind":"undo"},{"kind":"search","completedIterations":3}],
+-            "controls":{"arrival":"wait-for-each-move-v1","completion":"natural-md3",
+-                "inheritedSettings":"session-global-md3-rnd0-v1","pondering":false,
+-                "searchState":"fresh-each-go","workOrigin":"after-root-preparation"}})
+-    }
+-    #[test]
+-    fn diagnostic_width_and_native_parameter_owner_preserve_unknowns_order_and_reset_exemption() {
+-        let line=format!("cm_parm opk={} {}default cc=42 mycc=41 md=3 rnd=0",i32::MIN,"cc=1 ".repeat(220));
+-        assert!(line.len()>1022&&line.len()<=2000);
+-        let parsed=Setup::parse(&line,Mode::Public).unwrap();
+-        let mut state=Session::<true>::default();let before=state.position();let origin=state.ledger.last();
+-        parsed.apply(&mut state).unwrap();
+-        assert_eq!((state.parameters.values[12],state.parameters.values[13]),(41,42));
+-        assert_eq!(state.parameters.values[11],i32::MIN);
+-        assert_eq!((state.parameters.values[27],state.parameters.values[24]),(3,0));
+-        assert_eq!(state.position(),before);assert!(state.moves.is_empty());assert_eq!(state.ledger.last(),origin);
+-        let long_name="Unknown_parameter_".to_owned()+&"x".repeat(1500);
+-        let long=format!("cm_parm {long_name}=+0000000001");
+-        assert!(long.split_ascii_whitespace().nth(1).unwrap().len()>1022&&long.len()<=2000);
+-        let before=state.parameters.clone();
+-        assert!(state.idle(&long).is_err()); // Unchanged ordinary-wire boundary.
+-        Setup::parse(&long,Mode::Public).unwrap().apply(&mut state).unwrap();
+-        assert_eq!(state.parameters,before); // Native unknown assignment has no effect.
+-        let boundary=format!("force{}"," ".repeat(1995));
+-        assert!(Setup::parse(&boundary,Mode::Public).is_ok());
+-        assert!(Setup::parse(&(boundary+" "),Mode::Public).is_err());
+-        assert!(Setup::parse("level +000 0005 -0",Mode::Public).is_ok());
+-    }
+-    #[test]
+-    fn eager_storage_final_vectors_every_rnd_and_late_suffixes_have_distinct_boundaries() {
+-        let good=explicit(Some(json!([".","post","?"])));
+-        assert!(Public::parse(&json!({"searches":[good.clone()]}),Mode::Interrupted).is_ok());
+-        for queued in [json!(["?","post"]),json!(["."]),json!([".",".",".",".","?"]),json!([false])] {
+-            let mut bad=good.clone();bad["queued"]=queued;
+-            assert!(Public::parse(&json!({"searches":[good.clone(),bad]}),Mode::Interrupted).is_err());
+-        }
+-        // Arbitrary stored values/unknown names are legal before overwrite or
+-        // default. Each final vector is checked before any actual Session/search.
+-        for token in ["md=-2147483648 cc=1001 sop=-1 tts=0 default md=3 rnd=0",
+-            "md=21 cc=-1 cc=42 sop=101 sop=100 avd=101 avd=0 tts=0 tts=96 md=3 rnd=0",
+-            "unknown_name=-2147483648 RND=2147483647 opk=-2147483648 md=3 rnd=0"] {
+-            let mut q=good.clone();q["commands"][5]=json!(format!("cm_parm {token}"));
+-            assert!(Public::parse(&json!({"searches":[q]}),Mode::Interrupted).is_ok());
+-        }
+-        for token in ["rnd=1 default md=3 rnd=0","opk=2147483648 md=3 rnd=0",
+-            "1invalid=0 md=3 rnd=0","bad-name=0 md=3 rnd=0","unknown=-2147483649 md=3 rnd=0",
+-            "md=21 rnd=0","cc=1001 md=3 rnd=0","sop=-1 md=3 rnd=0","tts=95 md=3 rnd=0",
+-            "avd=101 md=3 rnd=0","cfd=-10001 md=3 rnd=0","ana=-1 md=3 rnd=0"] {
+-            let mut bad=good.clone();bad["commands"][5]=json!(format!("cm_parm {token}"));
+-            assert!(Public::parse(&json!({"searches":[good.clone(),bad]}),Mode::Interrupted).is_err());
+-        }
+-        let mut invalid=good.clone();invalid["commands"][5]=json!("cm_parm cc=1001 md=3 rnd=0");
+-        let mut later_reset=good.clone();later_reset["commands"][5]=json!("cm_parm default md=3 rnd=0");
+-        assert!(Public::parse(&json!({"searches":[invalid,later_reset]}),Mode::Interrupted).is_err());
+-        // Public's final-rnd wording does not impose the other contracts'
+-        // every-assignment rule on transient signed32 command storage.
+-        for token in ["rnd=2147483647 md=999 rnd=0 md=3","rnd=-2147483648 default md=3 rnd=0"] {
+-            let mut q=explicit(None);q["commands"][5]=json!(format!("cm_parm {token}"));
+-            assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_ok());
+-        }
+-        let mut q=explicit(None);q["commands"][5]=json!("cm_parm rnd=1 md=3");
+-        assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_err());
+-        for token in ["rnd=-1 rnd=0 md=3","rnd=1001 default rnd=0 md=3"] {
+-            let mut bad=explicit(None);bad["commands"][5]=json!(format!("cm_parm {token}"));
+-            assert!(Public::parse(&json!({"systemSeconds":0,"searches":[explicit(None),bad]}),Mode::Clock).is_err());
+-        }
+-        let mut q=explicit(None);q["commands"][5]=json!("cm_parm unknown=7 rnd=1000 md=999 md=3");
+-        let parsed=Public::parse(&json!({"systemSeconds":0,"searches":[q]}),Mode::Clock).unwrap();
+-        assert_eq!((parsed.queries[0].expected.values[24],parsed.queries[0].expected.values[27]),(1000,3));
+-        let mut q=explicit(None);q["commands"][5]=json!("cm_parm rnd=0 md=3 default");
+-        assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_err());
+-        let mut q=explicit(None);q["commands"][5]=json!("cm_parm unknown_md=3 rnd=0");
+-        assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_err());
+-    }
+-    #[test]
+-    fn setup_uses_public_fen_width_and_broad_joined_state_without_search_adapter_narrowing() {
+-        let broad="7k/8/8/8/8/8/3rP3/K7 w - d3";
+-        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Public).is_ok());
+-        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Clock).is_ok());
+-        assert!(Setup::parse(&format!("setboard {broad}"),Mode::Interrupted).is_err());
+-        let record=format!("setboard {broad} 2147483647 2147483647");
+-        let mut state=Session::<true>::default();Setup::parse(&record,Mode::Public).unwrap().apply(&mut state).unwrap();
+-        assert_eq!(state.position().halfmove,0);assert!(state.moves.is_empty());
+-        assert_eq!(positions::ep(&state.position()),"d3");
+-        let mut q=explicit(None);q["commands"]=json!(["force","new","cm_parm md=3 rnd=0"]);
+-        // New can leave normal play mode without starting a setup search; the
+-        // diagnostic does not invent a final-force restriction before explicit go.
+-        assert!(Public::parse(&json!({"searches":[q]}),Mode::Public).is_ok());
+-    }
+-    #[test]
+-    fn inherited_settings_are_only_the_exact_standard_neutral_three_search_exception() {
+-        let input=inherited();assert!(Public::parse(&input,Mode::Public).unwrap().inherited);
+-        assert!(Public::parse(&input,Mode::Clock).is_err());
+-        let mut changed=input.clone();changed["searches"][1]["commands"]=json!(["force","undo","d2d4","cm_parm md=3 rnd=0"]);
+-        assert!(Public::parse(&changed,Mode::Public).is_err());
+-        changed=input.clone();changed["searches"][1]["commands"][2]=json!("d2d5");
+-        assert!(Public::parse(&changed,Mode::Public).is_err());
+-        changed=input;changed["searches"][0]["allowanceCs"]=json!(18101);
+-        assert!(Public::parse(&changed,Mode::Public).is_err());
+-    }
+-    #[test]
+-    fn queue_host_offers_one_command_per_call_and_preserves_status_without_abort_wording() {
+-        let mut host=Recorder{pending:vec![Command::Status,Command::Post(false),Command::Abort].into(),
+-            records:Vec::new(),fixed:true,seeds:Vec::new()};
+-        assert_eq!(host.command().unwrap(),Some(Command::Status));assert_eq!(host.pending.len(),2);
+-        let root=Position::from_fen(session::START).unwrap();
+-        let status=rook2::output::status(root,&[None],7,4096,3000,2,20).unwrap();
+-        host.publish(Record::Status(status)).unwrap();host.publish(Record::Aborting).unwrap();
+-        assert_eq!(host.pending.len(),2);assert_eq!(host.command().unwrap(),Some(Command::Post(false)));
+-        assert_eq!(host.command().unwrap(),Some(Command::Abort));assert_eq!(host.command().unwrap(),None);
+-        let records=semantic_events(&host.records);assert_eq!(records.len(),1);
+-        assert_eq!(records[0]["pv"],json!("null"));assert_eq!(records[0]["type"],json!("status"));
+-    }
+-    #[test]
+-    fn fixed_seconds_acquire_native_clock_seed_again_after_new_without_epoch_reset() {
+-        let mut state=Session::<true>::default();
+-        for line in ["new","force","easy","level 0 5 0","cm_parm md=3 rnd=0 tts=65536","time 18100"] {idle(&mut state,line).unwrap();}
+-        let (a,host_a)=run(&mut state,Some(u32::MAX),Vec::new(),Limits{nodes:None},62).unwrap();
+-        assert_eq!(host_a.seeds.as_slice(),[a.seed]);
+-        assert_eq!(a.seed,host::seed_from_seconds(u32::MAX,a.entry_clock));
+-        let epoch=state.ledger.last();assert_ne!(epoch,0);
+-        idle(&mut state,"new").unwrap();assert_eq!(state.ledger.last(),epoch);
+-        idle(&mut state,"force").unwrap();idle(&mut state,"time 18100").unwrap();
+-        let (b,host_b)=run(&mut state,Some(u32::MAX),Vec::new(),Limits{nodes:None},62).unwrap();
+-        assert_eq!(host_b.seeds.as_slice(),[b.seed]);assert_eq!(b.entry_clock,epoch);
+-        assert_eq!(b.seed,host::seed_from_seconds(u32::MAX,b.entry_clock));assert_ne!(b.seed,a.seed);
+-    }
+-    #[test]
+-    fn rich_native_session_restores_a_after_actual_play_force_and_undo_with_inherited_settings() {
+-        // Pick B from actual legal roots after observing A, rather than pinning a
+-        // fixture-selected answer. rnd0 makes the independent acquisition inert.
+-        let mut probe=Session::<true>::default();
+-        Setup::Parameters(NAMES.iter().zip(NEUTRAL_MD3).map(|(n,v)|format!("{n}={v}")).collect())
+-            .apply(&mut probe).unwrap();
+-        Setup::Level.apply(&mut probe).unwrap();idle(&mut probe,"time 18100").unwrap();
+-        let (_,host)=run(&mut probe,Some(0),Vec::new(),Limits{nodes:Some(4095)},3).unwrap();
+-        let selected=move_event(&host.records).unwrap().unwrap();
+-        let mut legal=MoveList::new();movegen::generate_legal(&Position::from_fen(session::START).unwrap(),&mut legal);
+-        let alternative=legal.as_slice().iter().find(|&&m|m!=selected).unwrap().to_string();
+-        let mut input=rich();input["actions"][3]["move"]=json!(alternative);
+-        let output=Rich::parse(&input).unwrap().observe().unwrap();
+-        assert_eq!(output["initial"],output["searches"][0]["root"]);
+-        assert_eq!(output["searches"][0]["root"],output["searches"][2]["root"]);
+-        assert_eq!(output["searches"][0]["ordinary"],output["searches"][2]["ordinary"]);
+-        assert_ne!(output["searches"][0]["root"],output["searches"][1]["root"]);
+-        assert_eq!(output["searches"][1]["root"]["moves"],json!([alternative]));
+-        assert_eq!(output["actions"][2]["after"]["moves"],json!([]));
+-        assert_eq!(output["actions"][7]["after"]["moves"],json!([]));
+-        assert_eq!(output["searches"][0]["after"]["mode"],json!("play-white"));
+-        assert_eq!(output["searches"][1]["after"]["mode"],json!("play-black"));
+-        assert_eq!(output["final"],output["searches"][2]["after"]);
+-    }
+-    #[test]
+-    fn rich_schema_checks_complete_actions_controls_and_legal_alternative_before_observation() {
+-        let valid=rich();assert!(Rich::parse(&valid).is_ok());
+-        for (index,key,value) in [(8,"completedIterations",json!(2)),(7,"extra",Value::Null),(3,"move",json!("e2e5"))] {
+-            let mut bad=valid.clone();bad["actions"][index][key]=value;assert!(Rich::parse(&bad).is_err());
+-        }
+-        let mut bad=valid;bad["controls"]["pondering"]=json!(true);assert!(Rich::parse(&bad).is_err());
+-    }
+-}
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -23,7 +23,7 @@
+             .duration_since(UNIX_EPOCH)
+             .map_err(io::Error::other)?
+             .as_secs() as u32;
+-        Ok(rook2::host::seed_from_seconds(seconds, entry))
++        Ok(seconds.wrapping_add(entry))
+     }
+     fn started(&mut self, seed: u32) -> io::Result<()> {
+         if self.diagnostic_seed {
+--- a/src/host.rs
++++ b/src/host.rs
+@@ -4,13 +4,6 @@
+ use crate::session::GameResult;
+ use crate::types::{Color, Move};
+ use std::io;
+-
+-/// Seed arithmetic shared by native session preparation and actual host acquisition.
+-/// Callers own the seconds sample and its existing timing/error boundary.
+-#[inline]
+-pub fn seed_from_seconds(seconds: u32, entry: u32) -> u32 {
+-    seconds.wrapping_add(entry)
+-}
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub enum Command {
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -454,7 +454,7 @@
+                 .allowance(self.game_ply(), self.parameters.values[23], false, entry)?;
+         let seed = self
+             .seed_override
+-            .unwrap_or(crate::host::seed_from_seconds(system_seconds, entry));
++            .unwrap_or(system_seconds.wrapping_add(entry));
+         self.clock.begin(entry);
+         self.ledger.reset();
+         self.work = Work::default();

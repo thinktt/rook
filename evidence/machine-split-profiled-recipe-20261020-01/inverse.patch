@@ -1,0 +1,37 @@
+--- b/tools/build.py
++++ a/tools/build.py
+@@ -118,8 +118,6 @@
+                         help="completed native training provenance for --pgo-use")
+     parser.add_argument("--ext-tsp-profiled", action="store_true",
+                         help="use-only ExtTSP placement for profile-covered functions; requires --pgo-use")
+-    parser.add_argument("--machine-split-profiled", action="store_true",
+-                        help="use-only machine-function partitioning; requires --pgo-use and --ext-tsp-profiled")
+     parser.add_argument("--dry-run", action="store_true",
+                         help="inspect sources/tools and print plan; do not build or write receipts")
+     args = parser.parse_args()
+@@ -139,10 +137,6 @@
+             raise ValueError("PGO recording currently supports only --bin rook2")
+         if args.training_record and not args.pgo_use:
+             raise ValueError("--training-record requires --pgo-use")
+-        if args.machine_split_profiled and not args.pgo_use:
+-            raise ValueError("--machine-split-profiled requires --pgo-use")
+-        if args.machine_split_profiled and not args.ext_tsp_profiled:
+-            raise ValueError("--machine-split-profiled requires --ext-tsp-profiled")
+         if args.ext_tsp_profiled and not args.pgo_use:
+             raise ValueError("--ext-tsp-profiled requires --pgo-use")
+         if args.pgo_generate:
+@@ -194,14 +188,6 @@
+             if args.ext_tsp_profiled:
+                 llvm_args += (" -enable-ext-tsp-block-placement=true"
+                               " -ext-tsp-apply-without-profile=false")
+-                if args.machine_split_profiled:
+-                    llvm_args += " -enable-split-machine-functions=true"
+-                    pgo_record["partitioning"] = {
+-                        "algorithm": "machine-function-splitter",
+-                        "profiled_functions_only": True, "application": "use-only",
+-                        "fresh_training": False, "cutoff_and_EH_defaults_unchanged": True,
+-                        "llvm_option": "-enable-split-machine-functions=true",
+-                    }
+                 pgo_record["code_layout"] = {
+                     "algorithm": "ext-tsp", "profiled_functions_only": True,
+                     "application": "use-only", "fresh_training": False,

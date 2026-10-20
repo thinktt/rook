@@ -1,0 +1,7 @@
+# Inert60 generic caller/callee mechanism gate
+
+Await root release of exact immutable generic image/source/receipt. Control is57 generic5d10b2fa; candidate identities and all capture authority remain NULL/FALSE. No ELF/body or large-payload hash is read now.
+
+After release, bind source-before maps/compiler/flags/tools/images before and after. Resolve actual Activity compute and its consumed const-kind accumulator targets by call addresses plus source chronology, not names alone. Capture baselinecompute+candidatecompute and up to8 actual consumed clones: max10 full bodies/2MiB total. Symbol/section metadata is separately bounded in plan.json; no unrelated recursive/search body or probe is authorized. Preserve every failure/limit and stop if the requested mechanism cannot be classified within scope.
+
+The gate requires actual four typed group identities, observed six-input lowering and direct scalar-pair return without hidden output buffers/tuple staging/mutable total pointers. Count caller AND all callee frame/code/save/spill/outgoing-stack/return-add/call costs, including empty-group calls and inter-kind optimization loss. Existing marks remain live. No smaller-caller/frame-only gain inference. Numerical/charge/lazy owner preservation and safe regrouping remain source proof prerequisites, not consequences of the ABI report. No runtime speed forecast, engine/build/test/profile/Git authority. Root owns final mechanism admission and later execution.

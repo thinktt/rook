@@ -1,0 +1,60 @@
+--- /home/legolas/rook2/evidence/placement-pure-cache-pgo-cpu-preparation-20261018-01/guard.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-pgo-cpu-preparation-20261018-01/guard.py
+@@ -3,7 +3,7 @@
+ from pathlib import Path
+ import hashlib,json
+ P=Path(__file__).resolve().parent;E=P.parent;ROOT=E.parent
+-FUNCTIONAL=E/'placement-pure-cache-pgo-reconciliation-20261018-01/independent-verification.json'
++FUNCTIONAL=E/'ordinary-projected-bits-pgo-reconciliation-20261018-01/independent-verification.json'
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def load(p):return json.loads(Path(p).read_text())
+ def terminal(value):
+@@ -29,23 +29,23 @@
+   path=Path(path);assert str(path) in clear['dependencies'],path
+   assert clear['dependencies'][str(path)]==sha(path),path
+   if h is not None:assert sha(path)==h,path
+- # New source schema/native184 proof supplements, never replaces, both
++ # New source schema/native178 proof supplements, never replaces, both
+  # actual own-PGO54/profile/use54/wire24 proof rows below.
+  declaration=plan['predeclaration'];pinned(declaration['path'],declaration['sha256'])
+  assert load(declaration['path'])['advance_rule']==plan['advance_rule']
+  source=plan['source_manifest'];pinned(source['path'],source['sha256'])
+- manifest=load(source['path']);assert manifest['schema']=='relative-path-sha256-v1'
+- assert manifest['counts']=={'native_and_manifests':46,'tools':23,'total':69}
+- files=manifest['files']
+- assert manifest['graph_sha256']==plan['source_graph_sha256']==hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+- assert {k:v for k,v in files.items() if not k.startswith('tools/')}==plan['pgo_trials']['candidate']['source46']
+- assert {k:v for k,v in files.items() if k.startswith('tools/')}==plan['tools23']
++ manifest=load(source['path']);files=manifest['source69']
++ assert (len(files),len(manifest['native46']),len(manifest['tools23']))==(69,46,23)
++ assert files==manifest['native46']|manifest['tools23']
++ assert manifest['source_graph_sha256']==plan['source_graph_sha256']==hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
++ assert manifest['native46']==plan['pgo_trials']['candidate']['source46']
++ assert manifest['tools23']==plan['tools23']
+  generic=plan['generic_functional_proof'];pinned(generic['path'],generic['sha256'])
+  proof=load(generic['path'])
+- assert proof['complete'] and proof['native_tests']==plan['expected_native_tests']==184
++ assert proof['complete'] and proof['native_tests']==plan['expected_native_tests']==178
+  assert proof['engine_sha256']==plan['generic_candidate_sha256']
+- assert proof['source46_tools23_archive69_equal'] and proof['only_declared_placement_cache_sources_changed_vs_fullbyte_baseline']
+- assert proof['influence_relation_pawn_and_remembered_unchanged'] and proof['independent_influence_test_module_unchanged']
++ assert proof['source46_tools23_archive69_equal'] and proof['only_ordinary_changed_vs_fullbyte_baseline']
++ assert proof['activity_retained_pawn_unchanged'] and proof['all_existing_tests_unchanged']
+  assert proof['strict54_original_checkReplay'] and proof['compiler_cargo_generic_bound'] and proof['all_dependencies_stable']
+  assert len(proof['wire8_searches24_raw_protocol'])==8 and sum(x['searches'] for x in proof['wire8_searches24_raw_protocol'])==24
+  for path,h in proof['dependencies'].items():pinned(path,h)
+--- /home/legolas/rook2/evidence/placement-pure-cache-pgo-cpu-preparation-20261018-01/run_pilot.py
++++ /home/legolas/rook2/evidence/ordinary-projected-bits-pgo-cpu-preparation-20261018-01/run_pilot.py
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env python3
+-"""One frozen matched placement-pure-cache own-PGO development pilot; unchanged strict comparator."""
++"""One frozen matched ordinary-projected-bits own-PGO development pilot; unchanged strict comparator."""
+ from pathlib import Path
+ import datetime,hashlib,json,os,subprocess,sys
+ P=Path(__file__).resolve().parent
+ ROOT=P.parents[1]
+-OUT=ROOT/'evidence/placement-pure-cache-pgo-cpu-pilot-20261018-01'
++OUT=ROOT/'evidence/ordinary-projected-bits-pgo-cpu-pilot-20261018-01'
+ H=[0,1,2,3,4,5,8,9,10,11,12,13]
+ sys.path.insert(0,str(ROOT/'tools'))
+ from measure import cgroup_snapshot

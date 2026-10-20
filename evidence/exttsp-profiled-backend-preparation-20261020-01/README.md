@@ -1,0 +1,13 @@
+# Inert62 profiled layout capture
+
+No capture, binutils, script import/parse, build or engine was run. Candidate identity and launch are deliberately unset. Selection and baseline receipt are small-file pinned; image/profile hashes are known literal identities, not newly rehashed here.
+
+Accepted56 bounded collector/read/process/receipt/body extraction methods are preserved as method-source files; full helper-adaptation.patch exposes all changes. Scope is six complete bodies: actual ordinary search, Activity and coherent Influence for each image. Root must resolve normal production roles and exact mangled identities from discovery; missing/ambiguous role or any need for another body stops scope. One120s elapsed capture clock includes interstage gaps;30s read/command;2MiB total newly captured body assembly. No resets/retries.
+
+After immutable candidate/source/build-profile acceptance and runtime hashes are bound and launch explicitly true, proposed housekeeping commands are `PATH=/usr/bin:/bin taskset -c 0-5,8-13 env TMPDIR=/home/legolas/rook2-build-tmp PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 capture.py discover`, then parent creates body-request.json from actual discovery, then the same prefix runs `capture.py bodies` and `analyze.py`. No real body request exists yet. Activation plan is hashed into discovery, not pinned as a future mutable external authority file.
+
+Receipt admission expects actual generic mode plus profile-use (as57 receipt actually records), not a nonexistent mode=pgo-use. Native source51 must equal57 exactly, only tools/build.py may differ. Same own57 profile/training inputs and compiler settings are required; effective candidate flags must add precisely the two selected LLVM arguments in declared order. Root acceptance must affirm profile inputs valid, zero missing/stale profile warnings and effective ExtTSP arguments verified. No automatic source/flag adaptation on mismatch.
+
+Analyzer emits complete body bytes/hash, sizes/addresses, calls/RIP resolution, stack references and conservative static block/edge records. These records are aids to manual intra-function layout crosswalk, not a semantic normalization or weighted CFG comparison. Complete-body hash differences may be only relocated calls/data: they do not prove ExtTSP. Reconstruct actual branch destination/fallthrough mapping with source lines and preserve clone identities. Resolve direct annotated call targets manually using exact nm/disassembly labels; RIP relocations are recorded automatically. Frame/code/copy differences remain costs, not speed verdicts. No profile frequencies, CPU/PMU claims or whole-binary equivalence.
+
+Preparation is ready for parent source review only. No flags/design retune or execution authority is provided.

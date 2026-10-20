@@ -1,0 +1,21 @@
+# Post109 small-source development status (not frozen)
+
+Source: `/home/legolas/rook2-work/imp2-post-lifecycle109-proposal-20261018-1d53e7es`.
+Base: exact accepted frozen108 `/home/legolas/rook2-work/imp2-controlled-root108-combined-20261018-f5fjipe9`.
+Only small source/text work was authorized during parent CPU pilot40749/82e536. No hashes, archive, fixture inventory, Rust parsing, formatting, builds, tests, engine runs, codegen, Git or profiling were performed for post109. Full freeze and source/fixture reconciliation await explicit CPU plus independent-reconciliation closure.
+
+Native edits are src/lib.rs, src/timed.rs, src/output.rs, src/session.rs and new src/post_lifecycle.rs. Cold edits are diagnostic/src/main.rs and new diagnostic/src/post_captures.rs. No other change is intended; exact endpoint proof is deferred until permitted. Existing public Capture/Outcome/Search/Node/Position/Retained/Step fields are unchanged by source. New generic local CaptureSlot owns only the same latest Option and eligible Vec formerly local to timed; no success/published flag or clock lives in it.
+
+Production integration preserves actual root PV installation, BestChange, Ledger observation and Capture construction before slot.capture. Deep events clone into eligible, invoke actual publish_capture, then replace latest; shallow events replace without callback. publish_capture remains untouched: actual post toggle, fine-work override, rendering, host error and published-success assignment stay native. Failure propagates before Outcome. Actual offline completed_events and actual Session go_live finish both use final_report, with their distinct eligible-history versus live-success booleans. The outer abort gate, first-root fallback, move application and result publication remain outside the decision. Scalar captured_fields delegates to existing reported_score and keeps signed elapsed-word conversion; actual capture_fields still computes native root/selectivity margin first.
+
+Typed controlled runner owns each supplied event's one capture-clock callback, scalar report, shared capture call and finish decision. Neither new nor finish observes time. Empty typed input returns NoCapture without a clock read. Cold parsing eagerly validates every query/event/label plus unused finishClock before invoking any runner. Labels remain owned arbitrary ASCII alnum/_/- payload including digit-first, empty PV, shorter replacement and repeated captures; no chess placeholders or rendering/display truncation is used.
+
+Added source tests, all UNPARSED/UNRUN:
+
+- Four native owner/controlled tests: owned full/short/empty/repeated snapshots; explicit clone/publish/drop trace and callback-failure prior-latest retention; repeated deep reports with a shallow tail and actual source-call count; empty/no-read plus signed-high-bit/clamp/mate shallow finish.
+- Two actual Session integration tests: offline versus live shallow/eligible completion using real native search; publication failures at immediate capture and successful-search finish return before accepting a move. Existing native abort/toggle/protocol tests remain intact.
+- Four cold tests: exact eager schema/unused suffix domains; full opaque PV domain; depth decrease and finishClock irrelevance; wrapping clock-shift invariance, exact source count and cross-query independence.
+
+No claim is made that these sources compile or that the bounded real-search test budgets reach their asserted branches. Later validation must establish that, preserve failures and report before changing source. Equal logical local contents do not prove equal stack/frame/text/clone/call codegen: generic D/H callbacks, aggregate relay and Session final-post temporary require scoped default review. No inline annotations were added. Controlled runner response copies are cold output storage, not production state.
+
+Expected eventual inventory is 109 operations/7606 cases/106 whole files and 107 source files (45 native/23 tools/39 cold), inherited108 plus post22 only. These counts have NOT been recounted during the CPU window. The six new native and four new cold tests suggest 169 native and 192 DIAG declarations; these are also unconfirmed pending permitted recount. No execution or performance/adoption evidence exists for post109.

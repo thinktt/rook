@@ -1,0 +1,539 @@
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -97,26 +97,6 @@
+     material_score: i32,
+     weights: [i32; 2],
+ ) -> Activity {
+-    compute_impl::<false>(position, influence, material_score, weights)
+-}
+-
+-/// Placement permission is supplied only by the existing guarded owned search.
+-/// The caller's Influence bytes remain authoritative on either route.
+-pub(crate) fn compute_for_search(
+-    position: &Position, influence: &Influence, material_score: i32,
+-    weights: [i32; 2], coherent_geometry: bool,
+-) -> Activity {
+-    if coherent_geometry {
+-        compute_impl::<true>(position, influence, material_score, weights)
+-    } else {
+-        compute_impl::<false>(position, influence, material_score, weights)
+-    }
+-}
+-
+-fn compute_impl<const GEOMETRY: bool>(
+-    position: &Position, influence: &Influence, material_score: i32,
+-    weights: [i32; 2],
+-) -> Activity {
+     debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+     let phase = position.phase();
+     let mut marks = [[0u8; 64]; 2];
+@@ -124,7 +104,7 @@
+     let mut relation_queries = 0;
+     for color in [Color::White, Color::Black] {
+         let values = &DESTINATION_VALUES[color.index()];
+-        accumulate_kind::<1, GEOMETRY>(
++        accumulate_kind::<1>(
+             position,
+             influence,
+             color,
+@@ -134,7 +114,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<2, GEOMETRY>(
++        accumulate_kind::<2>(
+             position,
+             influence,
+             color,
+@@ -144,7 +124,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<3, GEOMETRY>(
++        accumulate_kind::<3>(
+             position,
+             influence,
+             color,
+@@ -154,7 +134,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<4, GEOMETRY>(
++        accumulate_kind::<4>(
+             position,
+             influence,
+             color,
+@@ -178,7 +158,7 @@
+ }
+ 
+ #[inline]
+-fn accumulate_kind<const KIND: usize, const GEOMETRY: bool>(
++fn accumulate_kind<const KIND: usize>(
+     position: &Position,
+     influence: &Influence,
+     color: Color,
+@@ -189,139 +169,13 @@
+     queries: &mut u64,
+ ) {
+     let kind = PieceKind::ALL[KIND];
+-    let sources = position.piece_squares(color, kind);
+-    // No slider group means no mask decoding/setup. These borrow actual planes;
+-    // no copied AttackBits, mailbox transpose or category producer is involved.
+-    let geometry = if GEOMETRY && KIND != 1 && !sources.is_empty() {
+-        #[cfg(test)]
+-        BORROWED_GROUPS.with(|count| count.set(count.get() + 1));
+-        Some(SliderGeometry::new::<KIND>(position.attack_planes(), color))
+-    } else {
+-        None
+-    };
+-    for &source in sources {
++    for &source in position.piece_squares(color, kind) {
+         let values = piece_destination_values::<KIND>(position, color, values);
+-        let mobility = if let Some(geometry) = &geometry {
+-            destinations_borrowed::<KIND>(position, influence, color, source, values, marks, geometry)
+-        } else {
+-            destinations_kind::<KIND>(position, influence, color, source, values, marks)
+-        };
++        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
+         let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+         *score += piece;
+         *queries += work;
+     }
+-}
+-
+-#[cfg(test)]
+-std::thread_local! {
+-    static BORROWED_GROUPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+-}
+-#[cfg(test)]
+-pub(crate) fn borrowed_geometry_groups() -> u64 {
+-    BORROWED_GROUPS.with(|count| count.get())
+-}
+-
+-// Invocation-local masks only; the referenced Position stays immutable.
+-struct SliderGeometry {
+-    occupied: u64,
+-    friendly: u64,
+-    opaque: u64,
+-    forward_opaque: u64,
+-}
+-impl SliderGeometry {
+-    fn new<const KIND: usize>(planes: &[u64; 4], color: Color) -> Self {
+-        let occupied = planes[0] | planes[1] | planes[2];
+-        let own = if color == Color::Black { planes[3] } else { !planes[3] };
+-        let friendly = occupied & own;
+-        let enemy = occupied & !own;
+-        let pawns = planes[0] & !planes[1] & !planes[2];
+-        let knights = !planes[0] & planes[1] & !planes[2];
+-        let bishops = planes[0] & planes[1] & !planes[2];
+-        let rooks = !planes[0] & !planes[1] & planes[2];
+-        let queens = planes[0] & !planes[1] & planes[2];
+-        let transparent = match KIND {
+-            2 => enemy | (friendly & (knights | rooks)),
+-            3 => (enemy & !pawns) | (friendly & rooks),
+-            4 => 0,
+-            _ => unreachable!("not an activity slider"),
+-        };
+-        let forward = if KIND == 3 {
+-            transparent | (friendly & (knights | bishops | queens))
+-        } else {
+-            transparent
+-        };
+-        Self { occupied, friendly, opaque: occupied & !transparent,
+-            forward_opaque: occupied & !forward }
+-    }
+-
+-    fn destinations<const KIND: usize>(
+-        &self, source: Square, direction: usize, color: Color,
+-    ) -> (u64, u64, bool) {
+-        let (rays, increasing) = crate::attacks::influence_rays(source);
+-        let ray = rays[direction];
+-        let increasing = increasing[direction];
+-        let direct = through(ray, nearest(ray & self.occupied, increasing), increasing);
+-        if KIND == 4 {
+-            return (direct & !self.friendly, 0, increasing);
+-        }
+-        let forward = if color == Color::White { 4 } else { 5 };
+-        let opaque = if KIND == 3 && direction == forward {
+-            self.forward_opaque
+-        } else {
+-            self.opaque
+-        };
+-        let visited = through(ray, nearest(ray & opaque, increasing), increasing);
+-        (direct & !self.friendly, (visited & !direct) & !self.friendly, increasing)
+-    }
+-}
+-#[inline]
+-fn nearest(blockers: u64, increasing: bool) -> u64 {
+-    if blockers == 0 { 0 }
+-    else if increasing { blockers & blockers.wrapping_neg() }
+-    else { 1u64 << (63 - blockers.leading_zeros()) }
+-}
+-#[inline]
+-fn through(ray: u64, blocker: u64, increasing: bool) -> u64 {
+-    if blocker == 0 { ray }
+-    else if increasing { ray & (blocker | blocker.wrapping_sub(1)) }
+-    else { ray & !blocker.wrapping_sub(1) }
+-}
+-#[inline]
+-fn take_nearest(targets: &mut u64, increasing: bool) -> Square {
+-    let index = if increasing { targets.trailing_zeros() } else { 63 - targets.leading_zeros() };
+-    *targets &= !(1u64 << index);
+-    Square(index as u8)
+-}
+-
+-fn destinations_borrowed<const KIND: usize>(
+-    position: &Position, influence: &Influence, color: Color, source: Square,
+-    values: &[u8; 64], marks: &mut Marks, geometry: &SliderGeometry,
+-) -> Mobility {
+-    let kind = PieceKind::ALL[KIND];
+-    let directions = match KIND { 2 => 0..4, 3 => 4..8, 4 => 0..8,
+-        _ => unreachable!("not an activity slider") };
+-    let mut result = Mobility::default();
+-    for direction in directions {
+-        let (mut direct, mut additional, increasing) = geometry.destinations::<KIND>(source, direction, color);
+-        let vertical = if KIND == 3 && DIRECTIONS[direction].0 == 0 { 2 } else { 1 };
+-        while direct != 0 {
+-            let target = take_nearest(&mut direct, increasing);
+-            let victim = position.board[target.0 as usize];
+-            let category = direct_category(influence, color, kind, target, victim);
+-            result.categories += category;
+-            mark(marks, color, kind, target, category);
+-            result.total += category * values[target.0 as usize] as i64 * vertical;
+-        }
+-        while additional != 0 {
+-            let target = take_nearest(&mut additional, increasing);
+-            let victim = position.board[target.0 as usize];
+-            result.queries += 1;
+-            let category = capture_priority(kind, victim,
+-                relation(influence.code(color, target), influence.code(color.opponent(), target), kind) as i64);
+-            result.total += category * values[target.0 as usize] as i64 * vertical;
+-        }
+-    }
+-    result
+ }
+ 
+ #[inline]
+@@ -973,101 +827,4 @@
+             assert_eq!(first.relation_queries, reflected.relation_queries);
+         }
+     }
+-    // BEGIN experiment42 test sources (unrun at source freeze).
+-    #[test]
+-    fn borrowed_geometry_visibility_and_categories_match_scalar() {
+-        fn check<const K: usize>(position: &Position, map: &Influence, color: Color) {
+-            let geometry = SliderGeometry::new::<K>(position.attack_planes(), color);
+-            let values = std::array::from_fn(|i| (i % 23 + 1) as u8);
+-            for index in 0..64 {
+-                let source = Square(index);
+-                for direction in if K == 2 { 0..4 } else if K == 3 { 4..8 } else { 0..8 } {
+-                    let (mut direct, mut extra, increasing) = geometry.destinations::<K>(source, direction, color);
+-                    let mut actual = Vec::new();
+-                    while direct != 0 { actual.push((take_nearest(&mut direct, increasing), false)); }
+-                    while extra != 0 { actual.push((take_nearest(&mut extra, increasing), true)); }
+-                    // Independent coordinate walk; no mask/prefix helper or ray table.
+-                    let mut expected = Vec::new();
+-                    let mut cursor = source;
+-                    let mut additional = false;
+-                    let step = DIRECTIONS[direction];
+-                    while let Some(target) = cursor.offset(step.0, step.1) {
+-                        let victim = position.board[target.0 as usize];
+-                        if victim.is_empty() || victim.color() != color {
+-                            expected.push((target, additional));
+-                        }
+-                        if !victim.is_empty() {
+-                            if !transparent(color, PieceKind::ALL[K], step, victim) { break; }
+-                            additional = true;
+-                        }
+-                        cursor = target;
+-                    }
+-                    assert_eq!(actual, expected, "kind={K} color={color:?} source={source} direction={direction}");
+-                }
+-                let mut a = [[0; 64]; 2];
+-                let mut b = a;
+-                let actual = destinations_borrowed::<K>(position, map, color, source, &values, &mut a, &geometry);
+-                let expected = destinations_kind::<K>(position, map, color, source, &values, &mut b);
+-                assert_eq!((actual.categories, actual.total, actual.queries, a),
+-                    (expected.categories, expected.total, expected.queries, b));
+-            }
+-        }
+-        // Coherent placements; opposing kings remain admitted activity targets.
+-        // Synthetic source squares exercise geometry independently of source lists.
+-        for placement in ["7k/8/8/8/8/8/8/K7",
+-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
+-            "7k/pp2rqp1/1n2bn2/2B1R3/1QN1q1r1/1P2N3/P2B4/K7",
+-            "k7/R7/8/8/8/8/7r/7K"] {
+-            let position = position(placement);
+-            for salt in [0u8, 1, 73, 255] {
+-                let map = Influence { profiles: std::array::from_fn(|c|
+-                    std::array::from_fn(|i| (i as u8).wrapping_mul(37).wrapping_add(salt).wrapping_add(c as u8 * 11))) };
+-                for color in [Color::White, Color::Black] {
+-                    check::<2>(&position, &map, color);
+-                    check::<3>(&position, &map, color);
+-                    check::<4>(&position, &map, color);
+-                }
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn borrowed_geometry_complete_activity_custom_maps_and_public_fallback() {
+-        for placement in ["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
+-            "7k/pp2rqp1/1n2bn2/2B1R3/1QN1q1r1/1P2N3/P2B4/K7",
+-            "k7/R7/8/8/8/8/7r/7K"] {
+-            let position = position(placement);
+-            let maps = [Influence::build(&position), Influence { profiles: [[255; 64], [170; 64]] },
+-                Influence { profiles: std::array::from_fn(|c| std::array::from_fn(|i| (i * 29 + c * 67) as u8)) }];
+-            let mut custom_is_discriminating = false;
+-            let before_owned = borrowed_geometry_groups();
+-            for map in &maps {
+-                custom_is_discriminating |= compute(&position, map, 123, [63, 177])
+-                    != compute(&position, &maps[0], 123, [63, 177]);
+-                for weights in [[0, 0], [63, 177], [200, 9]] {
+-                    for material in [-7000, -17, 0, 7000] {
+-                        assert_eq!(compute_for_search(&position, map, material, weights, true),
+-                            compute(&position, map, material, weights));
+-                    }
+-                }
+-            }
+-            assert!(custom_is_discriminating, "custom-map witness must differ from rebuilt map");
+-            assert!(borrowed_geometry_groups() > before_owned);
+-            let mut stale = position;
+-            stale.board[sq("a3").0 as usize] = Piece::new(Color::Black, PieceKind::Queen);
+-            assert!(stale.validate().is_err());
+-            assert_ne!(stale.attack_planes(), crate::attacks::AttackBits::from_board(&stale.board).planes());
+-            let before = borrowed_geometry_groups();
+-            assert_eq!(compute(&stale, &maps[1], 123, [63, 177]),
+-                compute_impl::<false>(&stale, &maps[1], 123, [63, 177]));
+-            assert_eq!(borrowed_geometry_groups(), before);
+-        }
+-        let empty_groups = position("7k/8/8/8/8/8/8/K7");
+-        let before = borrowed_geometry_groups();
+-        assert_eq!(compute_for_search(&empty_groups, &empty_influence(), 0, [100, 100], true),
+-            compute(&empty_groups, &empty_influence(), 0, [100, 100]));
+-        assert_eq!(borrowed_geometry_groups(), before, "no slider setup without a group");
+-    }
+-    // END experiment42 test sources.
+-
+-}
++}
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -336,12 +336,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, |_| {}, |_| {})
+-    }
+-    /// Only the existing owned-root placement permission may enable geometry.
+-    pub(crate) fn full_for_search(&mut self, node: &mut Node, influence: &Influence,
+-        in_check: bool, coherent_geometry: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, coherent_geometry, |_| {}, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -351,7 +346,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, observer, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -360,7 +355,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, false, observer, |_| {})
++        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -371,7 +366,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, false, |_| {}, observer)
++        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -381,14 +376,13 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, |_| {}, observer)
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+         in_check: bool,
+-        coherent_geometry: bool,
+         observer: F,
+         details: D,
+     ) -> Evaluation {
+@@ -404,7 +398,7 @@
+             self.pawns.select(position, influence)
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        let activity = activity::compute_for_search(position, influence, material, self.weights.mobility, coherent_geometry);
++        let activity = activity::compute(position, influence, material, self.weights.mobility);
+         let shelter = shelter::compute(
+             position,
+             influence,
+@@ -681,7 +675,7 @@
+                 } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+                 } else {
+-                    self.full_for_search(node, influence, false, coherent_geometry)
++                    self.full(node, influence, false)
+                 },
+                 initially_full: true,
+                 fast_score: None,
+@@ -703,7 +697,7 @@
+             } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+             } else {
+-                self.full_for_search(node, influence, false, coherent_geometry)
++                self.full(node, influence, false)
+             }
+         } else {
+             fast
+@@ -1025,62 +1019,4 @@
+         verify::<false>();
+         verify::<true>();
+     }
+-    // BEGIN experiment42 test sources (unrun at source freeze).
+-    #[test]
+-    fn borrowed_geometry_full_selector_public_observation_and_retained_equality() {
+-        fn check<const D: bool>() {
+-            let position = Position::from_fen(START).unwrap();
+-            let map = Influence { profiles: std::array::from_fn(|c| std::array::from_fn(|i| (i * 31 + c * 89) as u8)) };
+-            let mut a = Evaluator::<D>::new(&position);
+-            let mut b = Evaluator::<D>::new(&position);
+-            let mut x = Node::root(position, &a.root);
+-            let mut y = x;
+-            let before = crate::activity::borrowed_geometry_groups();
+-            let owned = a.full_for_search(&mut x, &map, false, true);
+-            assert_eq!(owned, b.full(&mut y, &map, false));
+-            let mut rebuilt_evaluator = Evaluator::<D>::new(&position);
+-            let mut rebuilt_node = Node::root(position, &rebuilt_evaluator.root);
+-            let rebuilt = rebuilt_evaluator.full(&mut rebuilt_node, &Influence::build(&position), false);
+-            assert!(owned != rebuilt || x.retained != rebuilt_node.retained,
+-                "custom map must distinguish silently rebuilt influence");
+-            assert!(crate::activity::borrowed_geometry_groups() > before);
+-            assert_eq!(x, y);
+-            assert_eq!(a.stats, b.stats);
+-            x.retained.age = 7;
+-            y = x;
+-            let mut ma = Some(map);
+-            let mut mb = ma;
+-            let sa = a.select_noncheck_for_search(&mut x, -30000, 30000, true, &mut ma, true);
+-            let sb = b.select_noncheck(&mut y, -30000, 30000, true, &mut mb);
+-            assert_eq!(sa, sb);
+-            assert_eq!(x, y);
+-            assert_eq!(a.stats, b.stats);
+-            assert_eq!(ma.unwrap().profiles, map.profiles);
+-            assert_eq!(mb.unwrap().profiles, map.profiles);
+-            let mut stale = position;
+-            stale.board[16] = Piece::new(Color::Black, PieceKind::Queen);
+-            assert!(stale.validate().is_err());
+-            assert_ne!(stale.attack_planes(), crate::attacks::AttackBits::from_board(&stale.board).planes());
+-            let mut a = Evaluator::<D>::new(&stale);
+-            let mut b = Evaluator::<D>::new(&stale);
+-            let mut x = Node::root(stale, &a.root);
+-            let mut y = x;
+-            let before = crate::activity::borrowed_geometry_groups();
+-            let mut observations = 0;
+-            let observed = a.full_observed(&mut x, &map, false, |_| observations += 1);
+-            assert_eq!(observed, b.full(&mut y, &map, false));
+-            assert_eq!((x, a.stats), (y, b.stats));
+-            assert_eq!(observations, 1);
+-            let mut supplied = Some(map);
+-            let mut stages = Vec::new();
+-            a.select_noncheck_stages_observed(&mut x, -30000, 30000, true, &mut supplied, |stage| stages.push(stage));
+-            assert!(!stages.is_empty());
+-            assert_eq!(borrowed_geometry_groups_for_test(), before);
+-        }
+-        fn borrowed_geometry_groups_for_test() -> u64 { crate::activity::borrowed_geometry_groups() }
+-        check::<true>();
+-        check::<false>();
+-    }
+-    // END experiment42 test sources.
+-
+-}
++}
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -476,43 +476,6 @@
+         }
+     }
+ 
+-    // BEGIN experiment42 test sources (unrun at source freeze).
+-    #[test]
+-    fn borrowed_geometry_owned_roots_and_external_boundaries() {
+-        let position = Position::from_fen(START).unwrap();
+-        let mut search = engine::<true>(&position);
+-        let mut history = SearchHistory::new(&position);
+-        let before = crate::activity::borrowed_geometry_groups();
+-        assert!(matches!(search.run_iterations(position, &mut history, 2, Limits { nodes: Some(0) }),
+-            Err(Error::Stopped(Stopped::NodeLimit(0)))));
+-        assert!(crate::activity::borrowed_geometry_groups() > before, "owned root uses true full before stop");
+-        assert!(!search.geometry_permission());
+-        assert_eq!(history.search_ply(), 0);
+-        let completed = search.run_iterations(position, &mut history, 1, Limits::default()).unwrap();
+-        assert!(!completed.pv.is_empty());
+-        assert!(!search.geometry_permission());
+-        assert_eq!(history.search_ply(), 0);
+-        // Public root/sequence ingress must revoke an earlier owned permission.
+-        search.bind_geometry_permission(&position);
+-        assert!(search.geometry_permission());
+-        let before = crate::activity::borrowed_geometry_groups();
+-        let _root = search.prepare_root(position);
+-        assert!(!search.geometry_permission());
+-        assert_eq!(crate::activity::borrowed_geometry_groups(), before);
+-        search.bind_geometry_permission(&position);
+-        search.begin_sequence(Limits::default());
+-        assert!(!search.geometry_permission());
+-        let controls = crate::timed::Controls { average_cs: 100000, maximum_cs: 100000,
+-            origin: 0, seed: 0, randomness: 0, maximum_entered_iterations: 2 };
+-        let before = crate::activity::borrowed_geometry_groups();
+-        let result = search.run_work_timed(position, &mut history, controls, Limits { nodes: Some(0) });
+-        assert!(result.is_err());
+-        assert!(crate::activity::borrowed_geometry_groups() > before);
+-        assert!(!search.geometry_permission());
+-        assert_eq!(history.search_ply(), 0);
+-    }
+-    // END experiment42 test sources.
+-
+ }
+ 
+ pub struct Iteration {
+@@ -846,7 +809,7 @@
+             }
+         }
+         let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+-        let evaluation = self.evaluator.full_for_search(node, map, checked, coherent_geometry);
++        let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -150,11 +150,10 @@
+         let influence = self.evaluator.ensure_influence_for_search(
+             &position, &mut scratch, coherent_geometry,
+         );
+-        self.evaluator.full_for_search(
++        self.evaluator.full(
+             &mut root,
+             influence,
+             movegen::in_check(&position, position.side),
+-            coherent_geometry,
+         );
+         (root, scratch.unwrap())
+     }

@@ -1,0 +1,51 @@
+# Controlled root106 source proposal
+
+This isolated SOURCE-ONLY/UNRUN extension adds rootWorkSchedule12, unrestrictedRootSequence12 and restrictedRootSequence41 through one native typed supplied-reply driver and exact cold schemas. It is based on `/home/legolas/rook2-work/imp2-root-scheduler-native-20261018-dd1pho5x`, itself exact frozen103 plus the parent's shared production scheduler. New source `/home/legolas/rook2-work/imp2-controlled-root106-proposal-20261018-4zmdecac`. No105 cold routes or ordered-bit source were mixed into this branch. Root, parent and existing evidence are unchanged. Every helper used housekeeping0-5,8-13 and HOME TMPDIR. No Rust parsing, rustfmt, compilation, test, engine, codegen, PGO, CPU or profiler execution occurred.
+
+## Native owner and one supplied driver
+
+The entire original root_schedule.rs, including its existing tests, remains an exact byte prefix. Appended definitions begin at281; `supplied_iteration`327 owns all attempted-reply selection, absolute SearchID additions, Iteration::next/returned calls, ordered typed Pass capture and produced ranked-prefix snapshots. No original Row, Completed, Attempt, Pending, Iteration field or production method changes. In particular, `src/timed.rs` and all other native files are byte-identical to the parent; production's existing caller/adjustment/child/history/capture/poll/stop integration is untouched by this extension. No Search/Node/Position/Retained fields, callbacks, labels, JSON or fictitious chess objects enter native state.
+
+SuppliedCandidate has prior_work, a first typed Reply and Option<Reply> retry, indexed by immutable original slot. Restricted parsing supplies/validates every retry, including the first candidate's unused reply. Unrestricted has None, avoiding a fabricated placeholder answer; frozen unrestricted policy can never request it even after crossing25000. Driver constructs opaque u16 rows in original slot order, then looks up replies by owner-produced Attempt.id, never current exploration index. It uses only the owner's retry flag; it does not independently test aspiration thresholds. Each actual attempt adds that reply's nonnegative work with checked u64 addition, records its requested window/returned score/new absolute N, then commits the actual return to the same Iteration used by production. It never charges prior work to N. Final carried work and score prefix come from the owner, including both executed passes exactly once. Completed snapshots are taken after commit; no interrupted/timed behavior is invented.
+
+SuppliedStep::insertion_rank308 locates its completed ID in its own produced native ranked prefix for presentation. It does not enlarge Completed/Row or add maintained insertion state. The driver's SuppliedOutcome retains completed steps, final absolute N and completed ranked rows. Native u64 admission remains separate from JSON safe-integer policy; one test source exercises counts above2^53-1 that still fit u64. Like the existing owner, typed callers must provide valid score/row domains and per-candidate carried sums fitting u64. The cold transport proves the stronger safe sums before entry. Missing actually requested retry is a native caller invariant violation, never a cold fallback.
+
+## Exact cold admissions; eager whole-request validation
+
+New `diagnostic/src/controlled_root.rs` alone owns schema, numeric/label validation and output projection; main adds its module/three-route arm. No pass/retry/rank recurrence lives in the adapter. The exact input object is `{queries}` and every query/candidate object has its route-specific exact fields.
+
+| Route | Queries / candidates | Query and candidate domains |
+| --- | --- | --- |
+| rootWorkSchedule |1..128 /1..64|searchId0..SAFE; candidate exactly label/work, each work0..SAFE. No sum of prior effort is charged or bounded.|
+| unrestrictedRootSequence |1..16 /1..32|initialSearchId0..24999; candidate label/score/priorWork/searchWork. Score±10000, each work0..SAFE; each prior+search and initial+all search fitSAFE.|
+| restrictedRootSequence |1..8 /1..32|initialSearchId25000..SAFE, previousBest±10000; candidate label/firstScore/retryScore/priorWork/firstWork/retryWork. Both scores±10000, each work0..SAFE; each prior+first+retry and initial+ALL first+retry fitSAFE, even unused retries.|
+
+SAFE=9007199254740991. Numeric helper7 admits finite nonnegative integral JSON numeric values in the exact interchange range, not strings/bools or fractions. Checked sum helper14 rejects overflow/range excess. Labels17 are unique per query,1..32 ASCII bytes: letter first, then letters/digits/_/-. Unicode, empty, digit-first, oversized and duplicates reject. These diagnostic64/32 root limits do not replace native u16 identity capacity or production512 roots.
+
+Schedule::parse32 and Sequence::parse58 fully construct typed inputs without calling native policy/order/Iteration. Dispatch104 first collects every parsed query before any observe/driver call. All fields and unused retry scores/work are checked, including late queries and conservative sums. An invalid suffix yields an error before executing a valid prefix. No new production2^53 limit is introduced. Existing103 routes/source files are preserved outside main's additive registration.
+
+## Produced output and boundaries
+
+rootWorkSchedule calls exactly native policy(N) and order_tail(rows,policy) through cold schedule45, preserving the pinned first candidate and stable work ties. It does not pretend to execute a first child. Its result is exactly restricted/candidates(label,work).
+
+Both sequence routes call only native supplied_iteration, then project its ID-indexed typed observations. Unrestricted Steps are label/lowerBound/upperBound/returnedScore/insertionRank/searchId/rankedCandidates(label,score,work). Restricted Steps are label/passes(lowerBound,upperBound,score,searchId)/returnedScore/rankingScore/insertionRank/rankedCandidates. Returned versus ranking scores remain distinct. The original window/ranking penalty, at-most-one retry, current produced best/second and stable score ties all come from the existing native owner. No empty/equal sentinel window is rejected, widened or used to create a fake child.
+
+The final ranked rows plus final N feed the same native policy/order_tail boundary to produce nextIteration. This schedules a next boundary only; it does not enter a second iteration, consume another supplied reply, shift timing history or assign a move result. Labels are a presentation table; score/work stay paired with native IDs through both exploration reordering and score ranking. RootWorkSchedule's input labels and all sequence labels obey the same strict letter-first domain, not the broader later timed-label syntax.
+
+## Test-source inventory and foundation status
+
+Two new native declarations cover: unrestricted mid-iteration threshold crossing with stable prefix ties/next work schedule and valid native counts aboveSAFE; and restricted tail reordering where distinct original-slot replies, retry-at-upper equality, original-window final fail-low penalty, both-pass carry and unused work all differ observably. Existing three scheduler tests remain byte-identical, including sentinel/high-ID ownership.
+
+Six cold declarations cover exact labels/candidate bounds; exact wide counts and unused conservative sum/score rejection; stable pinned/idempotent work scheduling; unrestricted threshold crossing and equal sentinel windows; restricted identity/retry/work/unused-data invariance; eager late-query rejection and route-specific batching/independence. No test is implementation-generated expected data. Original65 fixtures remain necessary: these test sources do not replace them. All newly declared tests are UNRUN.
+
+Parent foundation evidence, as supplied, is recorded separately: native/type/generic158 actual90001/fd36d9->5d488c exit0, artifact059bd1d63b4cb9781be5d406a8a7581c20649ed6e894be3e36ffbba2c2bbec4d; strict54/eightwire24 actual22376/a45ab8->f47247 exit0. Those passes apply to the immutable parent only, not this appended driver/routes. No emitted default layout/frame/code-size/performance proof exists yet. The new unused native public driver may be stripped from an ordinary engine, but this is not assumed without a fresh artifact/codegen gate.
+
+Independently counted new selection is3operations/65cases/3complete files. Union with the exact103 basis is **106operations/7579cases/103wholefiles**, unique IDs/no partial files. It excludes seededTimed/goOutcome105, so do not add that branch's5 cases implicitly. Source closure is104files =44native+23tools+37DIAG. Declared tests:158lib+2dev=160native (158foundation+2),181DIAG (175+6), all extension counts UNRUN. Source and fixture archives/manifests are metadata evidence, not executed conformance.
+
+## Freeze and downstream gates
+
+trial.patch is exactly root_schedule append + new cold module + additive main registration. source-manifest binds all104 files; source-104.tar.gz was re-read and every member independently matched that map. Whole-fixture inventory preserves all100 complete inherited files by hash, then adds root-work12/root-sequence12/root-restricted41. Input anchors pin required parent reviews/plan, released contracts and parent actual native terminal receipt. Review/plans/archives contain no runtime fixture dispatch.
+
+No substantial API gap was found for these three completed controlled routes. The two timed-controller gaps remain: a shared native ordered timing-event/completion/capture owner for timedRootSequence and a native supplied-activity/poll interruption owner for workTimedRootSequence. Adaptive scalar reuse alone does not close either; this patch claims neither route nor public selected-result lifetime.
+
+Before any execution: parent source/API/type review and explicit clearance. Then native160, generic freeze/archive, DIAG181 plus all106/7579/103 original raw/expected/actual-exit checks, strict54/eightwire24 tied to the exact new native source, independent reconciliation and scoped default root codegen/frame/layout/call review. No build/test/type success, adoption, ABI neutrality or CPU gain is claimed for the extension. Preserve actual failure before any source fix. Parent retains architectural and measurement decisions.

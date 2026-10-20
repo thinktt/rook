@@ -1,0 +1,54 @@
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -414,21 +414,33 @@
+         let mut child=root.child(&search.evaluator.root,movement);
+         search.begin_sequence(Limits{nodes:Some(200000)});
+         if tail {
+-            // A legitimate deep exact remembered result for each main reply
+-            // isolates the parent's real tail admission from nested IIO entry.
++            // Actual bound-cutoff records isolate the parent's real tail
++            // admission from descendants of the first main reply.
+             let mut replies=MoveList::new();movegen::generate_legal(&child.position,&mut replies);
+             for &reply in replies.as_slice() {
+                 let grandchild=child.child(&search.evaluator.root,reply);
+                 let table=search.remembered.as_mut().unwrap();
+-                table.store(Store{query:Query{group:table.group_for(&grandchild.position),
++                // Force an actual lower cutoff in the first main child's
++                // widest incoming window; interior exact metadata alone does
++                // not return a score from the native remembered probe.
++                let query=Query{group:table.group_for(&grandchild.position),
+                     identity:grandchild.position.secondary,ply:2,target:64,
+-                    lower:-10000,upper:10000},score:0,move_hint:None,
++                    lower:-10000,upper:10000};
++                table.store(Store{query,score:10000,move_hint:None,
+                     quiet_mate_checked:true,mark_depth:true});
++                let observed=table.probe(query);
++                assert_eq!((observed.bound,observed.marked_depth,observed.score),
++                    (Bound::Lower,Some(62),Some(10000)));
+             }
+             let table=search.remembered.as_mut().unwrap();
+             table.store(Store{query:Query{group:table.group_for(&child.position),
+                 identity:child.position.secondary,ply:1,target:6,lower:-10000,upper:100},
+                 score:100,move_hint:None,quiet_mate_checked:true,mark_depth:true});
++            let observed=table.probe(Query{group:table.group_for(&child.position),
++                identity:child.position.secondary,ply:1,target:6,
++                lower:-10000,upper:10000});
++            assert_eq!((observed.bound,observed.marked_depth,observed.score),
++                (Bound::Lower,Some(5),None));
+         }
+         let mut history=SearchHistory::new(&position);
+         history.push(&child.position,Some(movement));
+@@ -465,8 +477,11 @@
+             assert_eq!((c.stats.iio_passes,c.stats.iio_children,
+                 c.stats.iio_nonzero_fresh_extensions),(0,0,0));
+             assert_eq!(history_c.search_ply(),0);
+-            // Tail's first ordinary main child is permitted, but no IIO child.
+-            if !tail {assert_eq!(c.stats.children,0);}
++            // Tail's first ordinary main child returns through the actual
++            // remembered cutoff; then the parent itself reaches tail entry.
++            if tail {
++                assert_eq!((c.stats.children,c.stats.table_hits),(1,1));
++            } else {assert_eq!(c.stats.children,0);}
+         }
+     }
+ 

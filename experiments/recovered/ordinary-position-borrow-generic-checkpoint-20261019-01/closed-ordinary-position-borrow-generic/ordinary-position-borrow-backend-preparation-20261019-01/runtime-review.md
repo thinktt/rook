@@ -1,0 +1,19 @@
+Experiment47 removes the selected parent Position snapshot in the inspected generic production chain; recommend proceeding only to parent-admitted focused checks and the fixed generic screen. No CPU benefit or qualification is inferred.
+
+Exact control43 ea057f6a… versus47 c1342846…; source72 graph55face79…, only evaluator.rs/ordinary.rs changed, compiler/settings/tools matched. Discovery c797fe/0, capture34ce3b/0 and analyzer7a6930/0 all actually closed. Five discovery and four new objdump children returned0; two baseline complete bodies reused. Six complete bodies total,367266B NEW raw, within6/2MiB. All189 pins remain unchanged.
+
+|Complete owner|Control bytes|47 bytes|Stack reservation|
+|---|---:|---:|---|
+|ordinary|8670|8486|0x428→0x388 (−160B)|
+|common default full_impl|2415|1726|0x138 unchanged; same outgoing0x8 adjustment|
+|Q|7316|7334|0x4c8 unchanged; existing outgoing0x8 adjustment|
+
+Control ordinary3eeca copies160B from node+0x10 to rsp+0x278. This entry copy is absent in the complete47 ordinary body; frame reduction is exactly160B. Candidate retains the actual Node pointer, derives Position with3f36b add0x10, and passes it directly to the shared evaluator at3f55d. Its only remaining memcpy40620 has variable2*PV length, not a fixed Position transfer. Existing Node::child construction remains a separate outlined owner. This is not an apply/unmake or child-copy claim.
+
+The split does not move a160B aggregate into the inspected evaluator/return boundary. At3f54a rdx is Position,3f54d rcx is original Node/Retained, r8 is Influence, and r9 carries checked. Common full_impl412a0 receives these distinct references; the full_parts/default Node wrappers inline, with one linked numerical owner. Its complete body has no memcpy or materialized Node/Position aggregate. Same12 call roles, same main frame, and no new normal helper/copy boundary. Its−689B is an emitted-code change, not an instruction/cycle saving estimate; precise arithmetic/register reshaping is not attributed to one cause.
+
+Paired Q verifies the existing public full route shares that owner: calls3c584/3c748 reach412a0 with split arguments, while Q’s own pre-existing160B entry snapshot3ad4a stays in place on both sides. Existing136B copies are distinct and remain; they are not a relocated ordinary snapshot. Q grows18B and keeps its frame/call roles. Ordinary static call sites76→74 remove the entry memcpy and one cold bounds site; Q60→60, shared full12→12. Presence/counts of static calls are not dynamic frequencies. All .text496043→495211 (−832B); .rodata+8B and .data.rel.ro−24B are static section facts only.
+
+Source authority remains separate from this emitted scope. Parent-accepted source preserves the five public Node full-family signatures, observers/detail/finish chronology, one default no-op closure pair and numerical full owner, retained refresh and same-child retries. Source root/select/Q calls retain public full; actual Q and ordinary/default linkage is captured. No separate full_parts/public wrapper or observed/detail monomorph is required to exist in the normal ELF. Root/main full instruction bodies and observer instantiations were not captured, and no arbitrary demangled counterpart is assigned. No global ABI/ISA/body equality or copy-absence theorem is claimed.
+
+The private ABI now carries separate Position and Retained references (checked shifts fromr8 tor9); Q’s+18B and altered register/alias allocation are real costs to measure. Source-only semantic review and static absence of the extra copy do not prove an aggregate win. No native tests/engine/build/profile/timing/Git/source action occurred here. Preparation closure.json remains historical despite subsequent root activation; runtime-proof.json binds the active plan. All owned jobs are terminal, with no further capture planned.

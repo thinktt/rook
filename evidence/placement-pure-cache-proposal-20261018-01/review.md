@@ -1,0 +1,45 @@
+# One 1024-entry exact-placement pure-component trial
+
+This is an unexecuted source proposal on the exact current c3fd806fa fullbyte native69 basis. The isolated source is `/home/legolas/rook2-work/imp2-placement-pure-cache-20261018-x2gvi1c5`. All69 copied members were compared to root at copy time; subsequent work used only the frozen fullbyte basis and owned copy. Activity fusion and the full byte-pair table remain present. Pawn-forward-scan and remembered reciprocal proposals are excluded. No Rust parsing, formatting, build, test, engine, profiler, timing or Git command was run.
+
+The advisor's bounded critique and parent decision justify one trial, not adoption. The fixed future generic70 rule remains aggregate ratio<=.995, at least5 lower case medians, worst ratio<=1.02; otherwise park with no resize/retry. Existing census hits are supporting opportunity evidence, not CPU savings or full-domain purity proof.
+
+## Storage and reset owner
+
+`Evaluator` privately owns `PureCache`; `Position`, `AttackBits`, `Node`, `Retained`, `Search` source fields and their transition owners are unchanged. Each entry has a32-byte exact `AttackBits` key and32-byte payload (activity pieces2, pressure2, shelter terms2, activity R u64). `repr(C, align(64))` gives an expected64-byte stride/alignment and65536-byte entry allocation for1024 slots; these are source-derived expectations with unexecuted size/alignment assertions, not measured ABI facts. Box metadata/allocation overhead and enclosing Evaluator/Search layout effects are additional and remain unmeasured.
+
+`Vec::with_capacity(1024)` plus `resize_with` initializes one entry at a time on the heap, then becomes a boxed slice. There is no source-level64KiB array temporary. All Evaluator constructors initialize the owner; actual `begin_search` clears it immediately after PawnCache.clear. Ledger/work/stat resets and child rollback do not clear it. Allocation, first-search repeated clearing, miss costs and possible compiler lowering/stack temporaries must be included in later backend/CPU review.
+
+Index is exactly `(primary ^ secondary.rotate_left(16)) & 1023`. Equality compares all four coherent tag planes; hash collisions alone never admit a hit. Zero planes mark empty slots. This is justified only for the private coherent valid-tag, nonempty Search full-evaluation domain: kings imply occupancy, and every valid nonzero Piece tag sets at least one plane. King-victim terminal continuations do not enter full evaluation. Arbitrary malformed/stale public Positions are not newly admitted to this private contract; debug assertions reject empty trusted keys. No board reconstruction, tag scan or new maintained state is introduced.
+
+## Shared computation and semantic work
+
+The original full owner still binds current phase/material, selects/replaces PawnCache and computes pawn terms before probing. Misses run the exact old activity and shelter producers once in their old order, then store only pure scalars. Hits reconstruct weighted Activity/Shelter through the SAME existing numerical weighting owners: `activity::weighted` and `shelter::combine` change visibility only. No arithmetic is cloned. Material/root weights, tempo, pawn progress/structure, central/pattern terms, retained updates and the single finishing owner all remain live; the entire full composition/charge/finish suffix is byte-equal to basis.
+
+Activity R is returned on hits and added to live pawn R in the original sum, stats and Evaluation field; Search charges remain untouched. The cache does not skip Influence acquisition, PawnCache effects, progress, any semantic R or finishing. A32-byte payload is pure only with this board's native Influence and produced activity pressure. Arbitrary public custom maps are deliberately outside reuse even if the board equals a cached key.
+
+## Provenance and public boundary
+
+All five existing public map-accepting full/fresh/observed methods instantiate `full_impl<..., CACHE=false>`. All three existing public selectors instantiate `select_noncheck_impl<..., CACHE=false>`, including prefilled custom scratch. Their callback, sparse/refresh conditions and fast owners remain shared. Public fast methods do not access the cache. These APIs neither consume nor populate the new cache, even if an earlier trusted call populated it.
+
+Only crate-private `full_search`, `select_noncheck_search`, and `select_noncheck_search_stages` request caching. Their native-map provenance is a documented caller contract audited at every current callsite, not a runtime map-validation scan or a claim of type-level proof. Future crate-private callsites must repeat that audit.
+
+* Root: `prepare_root_with_influence` begins the search, creates local scratch=None, calls ensure_influence for the exact root, then full_search at the original full-call site; returned root map remains the actual produced map.
+* Ordinary: `visit_ordinary_impl` creates local scratch=None. Its optional king-pressure/threat screen and eventual full_search use ensure_influence for the same copied current position. Supplied Predecessor influence is used by existing predecessor policy only and is never the full-search map. Child/null/recursive routes enter this same owner; no caller-supplied current scratch enters it.
+* Q: `visit_q_impl` creates local influence=None after its existing terminal/draw gates. Both default and observed noncheck routes use the trusted selectors; the shared selector's sparse and refresh full calls use that locally produced scratch. Observed stages are emitted around the same actual full/fast calls, including hits. Later destination-support acquisition uses the same exact position and owner. Checked Q keeps the original no-standing-full branch; terminal fast calls remain unchanged.
+* No other production evaluator full/selector callsite exists outside these owners. Test calls to old public methods remain unchanged. Root preparation, ordinary and Q charge/child/history/ordering boundaries change only the named call wrappers.
+
+## Source proof and tests (all unexecuted)
+
+Five files differ; total source69 remains46 native/manifests+23 tools. Activity/shelter differences are visibility only; literal inverse replacements recover entire ordinary and Q files. Existing Node/Retained declarations, entire influence source (including the independent exhaustive relation oracle), all old evaluator tests, and tools23 are unchanged. Source proof also compares the full pawn/material prefix, complete post-activity composition/finish suffix, and fast/finish owners. No diagnostic route, fixture selection or corpus answer is added.
+
+Six new units yield184 declarations=182 library+2 development; declaration counting is text inventory, not compiled discovery:
+
+1. `pure_cache_exact_collision_clear_and_heap_entry_layout`: independently constructs coherent king/two-knight FEN boards until a REAL1024-slot collision; distinguishes exact keys, replacement and clear, plus64B alignment/stride/heap pointer assertions.
+2. `pure_cache_placement_reuse_ignores_chronology_rules_and_reweights_live`: actual nonzero activity-R payload from START; reverses same-kind chronological groups and changes side/rights/EP/halfmove; native Influence equality and full evaluation/retained/stats match uncached computation on hits under asymmetric weights and distinct root bindings. Explicit rebind without clear is controlled test input, not a production reset-policy change. Final begin_search must clear every slot.
+3. `pure_cache_hit_still_replaces_interfering_pawn_cache_and_charges_all_work`: independent known pawn-group collision, intervening PUBLIC uncached evaluation, then placement-cache hit with actual PawnCache replacement; whole Evaluation/retained/stats compare to public native evaluation. This pawn-only witness is not the sole nonzero activity-R proof.
+4. `pure_cache_all_public_custom_map_paths_bypass_reads_and_writes`: all eight map-accepting public full/fresh/selector routes, scratch prefilled with a custom255 map, both empty and deliberately poisoned private cache. Results/state/work match uncached native controls and every cache entry remains exact-before.
+5. `pure_cache_trusted_default_and_observed_selectors_keep_native_stages`: dense refresh and sparse initial-full paths, both trusted default/observed wrappers against public controls, exact stage/selection/retained/stats and produced scratch equality.
+6. `pure_cache_matches_uncached_whole_evaluation_through_special_children`: actual legal native children including castling, promotion both colors, ordinary EP and broad joined nonpawn EP both colors. Repeated full evaluations compare complete Evaluation/retained/stats in both diagnostics monomorphs.
+
+Remaining review gates are compiler/type/test validity; actual entry/storage/default ABI and layout; public CACHE=false erasure; hit/miss calls, payload copies, weighted owner propagation and retained R; all native/strict/wire/original component regressions; then the ONE fixed generic trial if authorized. Cache residency, spills and CPU gain cannot be established from this source. No execution clearance is claimed.

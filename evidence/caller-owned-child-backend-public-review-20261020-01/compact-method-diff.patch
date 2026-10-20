@@ -1,0 +1,23 @@
+--- preserved-original-analysis
++++ compact-offline-postmortem
+@@ -51,7 +51,7 @@
+    owners=[] if target is None else owning(side,target)
+    fallthrough=(int(ins[index+1][0],16) if index+1<len(ins) else end) if op!='jmp' else None
+    edges.append(dict(address=address,operand=operand,target=None if target is None else hex(target),captured_target=owners,cross_fragment=bool(owners and any(x['label']!=r['label'] for x in owners)),unresolved_indirect=target is None,fallthrough=None if fallthrough is None else hex(fallthrough)))
+- facts.append(dict(side=side,role=r['role'],label=r['label'],fragment_kind=r['fragment_kind'],actual_symbol=r['display_name'],actual_mangled_symbol=r['actual_mangled_symbol'],address=hex(start),end_exclusive=hex(end),bytes=r['bytes'],machine_sha256=hashlib.sha256(code).hexdigest(),output_section=section['name'],instructions=len(ins),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',op)) for a,op in ins),stack_reference_instruction_count=sum(bool(re.search(r'\[(?:rsp|rbp)',op)) for a,op in ins),mnemonics=sorted(mnemonics),calls=calls,register_mediated_call_rows=[dict(address=a,operand=op) for a,op in ins if re.fullmatch(r'call\s+(?:r(?:ax|bx|cx|dx|si|di|bp|sp|[89]|1[0-5]))',op)],static_transfer_edges=edges,source_paths=sorted(set(re.findall(r'^(/[^:\n]+):\d+',text,re.M)))))
++ facts.append(dict(side=side,role=r['role'],label=r['label'],fragment_kind=r['fragment_kind'],actual_symbol=r['display_name'],actual_mangled_symbol=r['actual_mangled_symbol'],address=hex(start),end_exclusive=hex(end),bytes=r['bytes'],machine_sha256=hashlib.sha256(code).hexdigest(),output_section=section['name'],instructions=len(ins),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',op)) for a,op in ins),stack_reference_instruction_count=sum(bool(re.search(r'\[(?:rsp|rbp)',op)) for a,op in ins),mnemonics=sorted(mnemonics),calls=calls,register_mediated_call_rows=[dict(address=a,operand=op) for a,op in ins if re.fullmatch(r'call\s+(?:r(?:ax|bx|cx|dx|si|di|bp|sp|[89]|1[0-5]))',op)],source_paths=sorted(set(re.findall(r'^(/[^:\n]+):\d+',text,re.M)))))
+ owners={}
+ for role in sorted({x['role'] for x in request}):
+  owners[role]={}
+@@ -62,5 +62,10 @@
+  owners[role]['combined_size_delta']=owners[role]['candidate']['combined_machine_bytes']-owners[role]['control']['combined_machine_bytes'] if owners[role]['candidate'] and owners[role]['control'] else None
+ assert all(sha(path)==value for path,value in d['pins'].items())
+ result=dict(complete=True,owners=owners,fragments=facts,sections=sections,all_inputs_unchanged=True,all_actual_child_codes_zero=all(x['exit_code']==0 for x in d['commands']) and all(x['command']['exit_code']==0 for x in b['bodies']),complete_fragments=len(request),total_captured_text_bytes=captured_text_bytes(),manual_mechanism_review_required=True,execution_authorized=False,limits=['NAME suffixes are profile attribution, not physical clones; exact symbol/source/call-role confirmation remains manual.','Complete hot and all recognized .cold suffix fragments required; unsupported/unsized/unmapped fragments stop instead of broader capture.','A final merged .text is allowed; actual linked fragment addresses and cross-fragment transfers matter.','Fragment stack/code/call/opcode facts are static; no summed frame or CPU claim. Register-mediated calls are unresolved here: manual actual definition/use proof is required, never label them callbacks or memcpy from totals alone.'])
+-save(P/'analysis.json',result)
++result['all_discovery_and_body_codes_zero']=result['all_actual_child_codes_zero']
++result['all_actual_child_codes_zero']=False
++result['original_analysis_exit_code']=1
++result['original_analysis_json_complete']=False
++result['offline_postmortem']='Compact independent facts from unchanged complete raw bodies; original gate failed metadata file-size cap. Full static edges remain in raw bodies; no captures or clocks retried/reset.'
++save(P/'analysis-compact.json',result)
+ print(json.dumps(dict(complete=True,owners=owners,fragments=len(request),all_inputs_unchanged=True)))

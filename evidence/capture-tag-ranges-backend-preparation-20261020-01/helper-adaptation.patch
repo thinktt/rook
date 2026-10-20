@@ -1,0 +1,182 @@
+--- accepted56/capture.py
++++ prospective64/capture.py
+@@ -1,12 +1,12 @@
+ #!/usr/bin/env python3
+ from pathlib import Path
+-import hashlib,json,os,subprocess,sys,time,resource
++import hashlib,json,os,subprocess,sys,time,resource,re
+ P=Path(__file__).resolve().parent
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+ ENTERED=time.monotonic();DEADLINE=None
+ 
+ def check():
+- assert DEADLINE is not None and time.monotonic()<DEADLINE, '120s whole-capture elapsed deadline'
++ assert DEADLINE is not None and time.monotonic()<DEADLINE, '180s whole-capture elapsed deadline'
+ def read(path):
+  start=time.monotonic();chunks=[]
+  with Path(path).open('rb') as f:
+@@ -28,24 +28,28 @@
+  assert plan['launch'] is True and plan['parent_backend_activation'] is True
+  assert os.sched_getaffinity(0)==H and os.environ['PATH']=='/usr/bin:/bin' and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
+- assert plan['max_complete_bodies']==4 and plan['max_new_raw_disassembly_bytes']==1048576 and plan['per_read_or_command_wall_s']==30 and plan['total_elapsed_wall_s']==120
++ assert plan['max_complete_bodies']==2 and plan['max_total_captured_text_bytes']==2097152 and plan['per_read_or_command_wall_s']==30 and plan['total_elapsed_wall_s']==180
+  if stage=='discover':
+-  DEADLINE=ENTERED+120
++  DEADLINE=ENTERED+180
+   save(P/'capture-clock.json',dict(started_monotonic=ENTERED,boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),deadline=DEADLINE))
+  else:
+   c=json.loads((P/'capture-clock.json').read_text());DEADLINE=c['deadline']
+-  assert Path('/proc/sys/kernel/random/boot_id').read_text().strip()==c['boot_id'] and DEADLINE==c['started_monotonic']+120
++  assert Path('/proc/sys/kernel/random/boot_id').read_text().strip()==c['boot_id'] and DEADLINE==c['started_monotonic']+180
+  check()
+  assert plan['candidate_image_sha256'] and plan['candidate_receipt_sha256'] and plan['candidate_build_terminal'] and plan['candidate_source_graph_sha256']
+  assert plan['expected_source_counts'] and plan['expected_added_native_files'] is not None and plan['candidate_source_freeze']['sha256'] and plan['runtime_sha256']
++ assert plan['expected_changed_tool_files'] is not None and plan['quiet_clearance']
++ assert sha(plan['quiet_clearance']['path'])==plan['quiet_clearance']['sha256']
+  assert all(sha(p)==h for p,h in plan['input_sha256'].items())
+  assert all(sha(p)==h for p,h in plan['runtime_sha256'].items())
+  terminal=plan['candidate_build_terminal'];assert sha(terminal['path'])==terminal['sha256']
+  t=load(terminal['path']);assert t['actual_tool_terminal_observed'] is True and t['exit_code']==0 and t['terminal_chunk_id']
+  return plan
+ 
+-def run(argv,stem,raw_cap=1048576):
+- check();assert 0<raw_cap<=1048576
++def raw_text_bytes():
++ return sum(q.stat().st_size for pattern in ['*.stdout','*.stderr'] for q in P.glob(pattern))
++def run(argv,stem):
++ check();raw_cap=2097152-raw_text_bytes();assert raw_cap>0
+  started=time.monotonic();failure=None
+  def cap():resource.setrlimit(resource.RLIMIT_FSIZE,(raw_cap,raw_cap))
+  with (P/(stem+'.stdout')).open('xb') as out,(P/(stem+'.stderr')).open('xb') as err:
+@@ -57,6 +61,7 @@
+  # Preserve actual command/exit even when the deadline or output cap failed.
+  row=dict(argv=argv,pid=child.pid,actual_child_return_observed=True,exit_code=code,elapsed_wall_s=elapsed,failure=failure,stdout_bytes=(P/(stem+'.stdout')).stat().st_size,stderr_bytes=(P/(stem+'.stderr')).stat().st_size)
+  with (P/(stem+'-command.json')).open('x') as f:json.dump(row,f,indent=2);f.write('\n')
++ assert raw_text_bytes()<=2097152,'raw text cap exceeded; stop and preserve partial outputs'
+  assert failure is None and code==0 and elapsed<=30 and row['stderr_bytes']==0,row
+  check();row.update(stdout_sha256=sha(P/(stem+'.stdout')),stderr_sha256=sha(P/(stem+'.stderr')))
+  # Hash record is separate so the observed terminal record is never overwritten.
+@@ -66,13 +71,17 @@
+ def discover():
+  plan=setup('discover');pins={str(P/n):sha(P/n) for n in ['capture.py','analyze.py','plan.json']};pins.update(plan['input_sha256']);pins.update(plan['runtime_sha256']);commands=[];receipts={}
+  freeze=load(plan['candidate_source_freeze']['path']);assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+- assert freeze['source_preparation_accepted'] is True and freeze['source_graph_sha256']==plan['candidate_source_graph_sha256']
++ assert plan['candidate_source_freeze']['schema']=='flat_files_sha256'
+  pins[plan['candidate_source_freeze']['path']]=plan['candidate_source_freeze']['sha256'];pins[plan['candidate_build_terminal']['path']]=plan['candidate_build_terminal']['sha256']
+  for side in ['control','candidate']:
+   build=Path(plan[side+'_build']);image=build/'rook2-exact';r=load(build/'receipt.json');receipts[side]=r
+   assert sha(image)==plan[side+'_image_sha256']==r['binary_output']['sha256']
+-  if side=='candidate':assert sha(build/'receipt.json')==plan['candidate_receipt_sha256']
++  if side=='candidate':
++   assert sha(build/'receipt.json')==plan['candidate_receipt_sha256']
++   assert load(build/'frozen-image.json')['source_graph_sha256']==plan['candidate_source_graph_sha256']
+   assert image.stat().st_mode&0o777==0o555
++  assert r['build_effective_environment']['RUSTFLAGS']==' '.join(r['rust_flags'])
++  assert r['build_effective_environment']['CARGO_ENCODED_RUSTFLAGS']=='\x1f'.join(r['rust_flags'])
+   assert r['mode']=='generic' and r['pgo']['mode']=='none' and r['target_cpu']=='x86-64'
+   assert r['source_sha256_before']==r['source_sha256_after'] and r['tool_sha256_before']==r['tool_sha256_after']
+   assert r['source_identity_unchanged'] and r['tool_identity_unchanged'] and r['cargo_config_unchanged']
+@@ -84,40 +93,51 @@
+   assert exe in plan['runtime_sha256'];pins[exe]=sha(exe);commands.append(run([exe,'--version'],Path(exe).name+'-version'))
+  a,b=receipts.values()
+  for key in ['toolchain','mode','target_triple','target_cpu','jobs','rust_flags','build_effective_environment','cargo_config_sha256_before']:assert a[key]==b[key],key
+- assert a['tool_sha256_before']==b['tool_sha256_before'] and len(b['tool_sha256_before'])==23
++ assert set(a['tool_sha256_before'])==set(b['tool_sha256_before']) and len(b['tool_sha256_before'])==23
++ changed_tools=sorted(n for n in a['tool_sha256_before'] if a['tool_sha256_before'][n]!=b['tool_sha256_before'][n]);assert changed_tools==plan['expected_changed_tool_files'] and set(changed_tools)<={'tools/build.py'}
+  changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'].get(n));assert changed==['src/activity.rs']
+  assert not (set(a['source_sha256_before'])-set(b['source_sha256_before']))
+  added=sorted(set(b['source_sha256_before'])-set(a['source_sha256_before']));assert added==plan['expected_added_native_files']
+- assert b['source_sha256_before']|b['tool_sha256_before']==freeze['files_sha256']
++ assert b['source_sha256_before']|b['tool_sha256_before']==freeze
+  counts=dict(native=len(b['source_sha256_before']),tools=len(b['tool_sha256_before']),total=len(b['source_sha256_before'])+len(b['tool_sha256_before']));assert counts==plan['expected_source_counts']
+  assert len(a['source_sha256_before'])==51 and len(a['tool_sha256_before'])==23
+  assert all(sha(p)==h for p,h in pins.items())
+- save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,compiler_settings_equal=True,changed_existing_files=changed,added_files=added,candidate_source_counts=counts))
++ save(P/'discovery.json',dict(complete=True,pins=pins,commands=commands,compiler_settings_equal=True,changed_existing_files=changed,changed_tools=changed_tools,added_files=added,candidate_source_counts=counts))
+  print(json.dumps(dict(complete=True,commands=len(commands),pins=len(pins),changed=changed,added=added)))
+ 
+-def bodies():
+- plan=setup('bodies');d=load(P/'discovery.json');assert all(sha(p)==h for p,h in d['pins'].items())
+- request=load(P/'body-request.json');assert 2<=len(request)<=4
+- assert {(r['side'],r['label']) for r in request}>={('control','activity'),('candidate','activity')}
+- assert len({(r['side'],r['label']) for r in request})==len(request)
+- total=0;rows=[]
+- for row in request:
+-  assert row['side'] in ['control','candidate'] and row['label'] in ['activity','full'] and row['complete_body'] is True and row['source_role']
+-  side=row['side'];image=Path(plan[side+'_build'])/'rook2-exact';start=int(row['start'],16);size=int(row['bytes']);assert size>0
+-  selected=[]
+-  for line in read(P/(side+'-nm.stdout')).decode().splitlines():
+-   fields=line.split(maxsplit=3)
+-   if len(fields)==4 and fields[2] in ['t','T'] and int(fields[0],16)==start and int(fields[1],16)==size:selected.append(fields[3])
+-  assert row['actual_symbol'] in selected
++def select_bodies():
++ plan=setup('select');request=[]
++ for side in ['control','candidate']:
+   mangled=[]
+   for line in read(P/(side+'-nm-mangled.stdout')).decode().splitlines():
+-   fields=line.split(maxsplit=3)
+-   if len(fields)==4 and fields[2] in ['t','T'] and int(fields[0],16)==start and int(fields[1],16)==size:mangled.append(fields[3])
+-  assert row['actual_mangled_symbol'] in mangled
+-  result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],side+'-'+row['label'],1048576-total)
+-  total+=result['stdout_bytes'];assert total<=1048576
++   f=line.split(maxsplit=3)
++   if len(f)==4 and f[2] in ['t','T'] and 'activity7compute' in f[3]:mangled.append((int(f[0],16),int(f[1],16),f[3]))
++  # Select exact noncold legacy-Rust symbol namespace BEFORE demangling.
++  # Any second clone/cold/unknown emitted owner stops before a body capture.
++  assert len(mangled)==1 and re.fullmatch(plan['activity_mangled_pattern'],mangled[0][2]),'multiple/outlined/ambiguous Activity owners; stop'
++  address,size,symbol=mangled[0];assert size>0
++  if side=='control':assert address==int(plan['control_activity']['start'],16) and size==plan['control_activity']['bytes'] and symbol==plan['control_activity']['actual_mangled_symbol']
++  displays=[]
++  for line in read(P/(side+'-nm.stdout')).decode().splitlines():
++   f=line.split(maxsplit=3)
++   if len(f)==4 and f[2] in ['t','T'] and int(f[0],16)==address and int(f[1],16)==size:displays.append(f[3])
++  assert 'rook2::activity::compute' in displays
++  request.append(dict(side=side,label='activity',start=hex(address),bytes=size,actual_symbol='rook2::activity::compute',actual_mangled_symbol=symbol,complete_body=True,source_role='Unique exact noncold Activity owner in this immutable generic ELF; unchanged public compute API. Actual inlined capture_priority contexts require manual proof.'))
++ save(P/'body-request.json',request)
++
++def bodies():
++ plan=setup('bodies');d=load(P/'discovery.json');assert all(sha(path)==h for path,h in d['pins'].items())
++ request=load(P/'body-request.json');assert len(request)==2 and {(r['side'],r['label']) for r in request}=={('control','activity'),('candidate','activity')}
++ rows=[]
++ for row in request:
++  assert row['complete_body'] is True
++  side=row['side'];image=Path(plan[side+'_build'])/'rook2-exact';start=int(row['start'],16);size=row['bytes']
++  result=run(['/usr/bin/objdump','-d','-l','--demangle','--no-show-raw-insn','-Mintel','--start-address='+hex(start),'--stop-address='+hex(start+size),str(image)],side+'-activity')
+   rows.append(dict(**row,command=result,raw_bytes=result['stdout_bytes']))
+- assert all(sha(p)==h for p,h in d['pins'].items())
+- save(P/'bodies.json',dict(complete=True,bodies=rows,total_raw_bytes=total,all_discovery_inputs_unchanged=True))
+- print(json.dumps(dict(complete=True,bodies=len(rows),raw_bytes=total)))
+-if __name__=='__main__':{'discover':discover,'bodies':bodies}[sys.argv[1]]()
++ assert all(sha(path)==h for path,h in d['pins'].items())
++ save(P/'bodies.json',dict(complete=True,bodies=rows,total_raw_bytes=raw_text_bytes(),all_discovery_inputs_unchanged=True,body_request_sha256=sha(P/'body-request.json')))
++ print(json.dumps(dict(complete=True,bodies=2,raw_bytes=raw_text_bytes())))
++
++def gate():
++ discover();select_bodies();bodies();run(['/usr/bin/python3',str(P/'analyze.py')],'analysis')
++if __name__=='__main__':{'discover':discover,'select':select_bodies,'bodies':bodies,'gate':gate}[sys.argv[1]]()
+--- accepted56/analyze.py
++++ prospective64/analyze.py
+@@ -8,6 +8,7 @@
+ sha=lambda b:hashlib.sha256(b).hexdigest()
+ d=load(P/'discovery.json');requests=load(P/'body-request.json');bodyproof=load(P/'bodies.json')
+ assert bodyproof['complete'] and bodyproof['all_discovery_inputs_unchanged']
++assert len(requests)==2 and file_sha(P/'body-request.json')==bodyproof['body_request_sha256']
+ images={side:Path(plan[side+'_build'])/'rook2-exact' for side in ['control','candidate']}
+ sections={};raw={};symbols={}
+ for side,image in images.items():
+@@ -46,12 +47,12 @@
+   text=read(P/(side+'-'+label+'.stdout')).decode();ins=re.findall(r'^\s*([0-9a-f]+):\s+(.+)$',text,re.M)
+   calls=[dict(address=a,operand=i,resolved=resolve(side,i)) for a,i in ins if re.match(r'call\s',i)]
+   refs=[dict(address=a,operand=i,resolved=resolve(side,i)) for a,i in ins if '# ' in i and resolve(side,i)]
+-  pair[side]=dict(address=hex(address),bytes=r['bytes'],machine_sha256=sha(code),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',i)) for _,i in ins),call_sites=calls,resolved_RIP_references=refs,instructions=len(ins),AND_instructions=[dict(address=a,operand=i) for a,i in ins if re.match(r'and\s',i)],conditional_branches=[dict(address=a,operand=i) for a,i in ins if re.match(r'j(?!mp)[a-z]+\s',i)])
++  pair[side]=dict(address=hex(address),bytes=r['bytes'],machine_sha256=sha(code),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',i)) for _,i in ins),call_sites=calls,resolved_RIP_references=refs,instructions=len(ins),AND_instructions=[dict(address=a,operand=i) for a,i in ins if re.match(r'and\s',i)],stack_references=[dict(address=x,operand=op) for x,op in ins if re.search(r'\[(?:rsp|rbp)',op)],mnemonics=sorted({op.split()[0] for x,op in ins}),indirect_jumps=[dict(address=x,operand=op) for x,op in ins if re.match(r'jmp\s',op) and not re.match(r'jmp\s+[0-9a-f]+(?:\s|$)',op)],conditional_branches=[dict(address=a,operand=i) for a,i in ins if re.match(r'j(?!mp)[a-z]+\s',i)])
+  functionproof[label]=dict(**pair)
+  if set(pair)=={'control','candidate'}:functionproof[label].update(complete_machine_bytes_identical=pair['control']['machine_sha256']==pair['candidate']['machine_sha256'],size_delta=pair['candidate']['bytes']-pair['control']['bytes'])
+  else:functionproof[label]['unpaired_actual_owner']=True
+ sectionproof={name:{side:sections[side][name] for side in ['control','candidate']} for name in ['.text','.rodata','.data.rel.ro']}
+ assert all(file_sha(p)==h for p,h in d['pins'].items())
+-result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],mechanism_verdict='Manual generic51-to56 complete Activity proof required: source-square own/opponent support counts share unconditional packed16bit-lane arithmetic in allfourkind/twocolor actual owners; retain comparison, attackpenalty, knight exemption, relation/R and supplied bytes. Public profile_sum unchanged; packing/extraction/register/frame/code/call costs disclosed. No53zero branch or speed inference.',limits=['No CPU or correctness execution, PGO transfer or whole-binary equality.','At most four requested complete paired Activity/common full bodies and1MiB new disassembly. No standalone publicprofile_sum/packed helper or otherbody capture without new authority; unpaired actual owner never gets an invented counterpart.','Actual unconditional packed lanes/shared arithmetic/extraction must survive source-square penalty for allfourkind/twocolor inline instances in the captured complete Activity owner; no53opponentzero branch. Public profile_sum source unchanged; actual commonfull route required if needed to establish consumer.','Packing/extraction/register lifetime/frame/spills/code/calls/copies remain costs; missing or unexpectedly outlined sharing is explicit scope limit, not a fabricated proof or automatic focused/timing authority.'])
++result=dict(complete=True,functions=functionproof,sections=sectionproof,all_inputs_unchanged=True,all_capture_children_exit0=all(r['exit_code']==0 for r in d['commands']) and all(r['command']['exit_code']==0 for r in bodyproof['bodies']),complete_function_count=len(requests),raw_complete_function_bytes=bodyproof['total_raw_bytes'],manual_capture_tag_range_proof_required=True,execution_authorized=False,limits=['Two complete exact Activity owners only; no unresolved clone, cold/outline expansion or arbitrary demangled counterpart.','Actual all affected static-kind/color capture_priority contexts need source-address proof of indexed jump replacement by raw validated range/equality operations, same lazy invalid guard and fallback categories.','Relation reads/call placement, additional R charges, transparency, direct Queen shortcut, empty/Pawn/Queen cheap contexts, live supplied map bytes remain unchanged. No forced-victim bypass46, zero-opponent53, packed-support56 or phase/separation change.','Price all frames/calls/copies/stack/code/new loads/static tables and ISA. Anonymous table extent/uniqueness cannot be inferred from whole rodata delta. No dynamic savings or full-program CPU/semantic claim.'])
+ with (P/'analysis.json').open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+ print(json.dumps(dict(complete=True,body_sizes={k:{s:v[s]['bytes'] for s in ['control','candidate'] if s in v} for k,v in functionproof.items()},all_inputs_unchanged=True)))

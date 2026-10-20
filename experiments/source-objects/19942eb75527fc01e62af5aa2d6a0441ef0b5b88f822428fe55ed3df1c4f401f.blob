@@ -1,0 +1,388 @@
+//! Request-local retained pawn sequences backed by the native cache/progress owners.
+use super::{array, boolean, color, object, positions, Result};
+use rook2::{
+    influence::Influence,
+    pawn_progress,
+    pawn_structure::{PawnCache, PawnStructure, Weakness},
+    position::Position,
+    types::{Color, Piece, PieceKind, Square},
+};
+use serde_json::{json, Value};
+
+struct Step {
+    position: Position,
+    pawn_order: [Vec<Square>; 2],
+    clear: bool,
+}
+
+fn pawn_order(position: &Position, value: &Value) -> Result<[Vec<Square>; 2]> {
+    object(value, &["white", "black"])?;
+    let mut order = [Vec::new(), Vec::new()];
+    for (side, name) in [(Color::White, "white"), (Color::Black, "black")] {
+        let supplied = array(&value[name], 0, 8)?;
+        if supplied.len() != position.piece_squares(side, PieceKind::Pawn).len() {
+            return Err("pawnOrder must name every current pawn exactly once".into());
+        }
+        let mut seen = 0u64;
+        for value in supplied {
+            let square = positions::square(value)?;
+            if position.board[square.0 as usize] != Piece::new(side, PieceKind::Pawn)
+                || seen & (1u64 << square.0) != 0
+            {
+                return Err("pawnOrder contains a duplicate or mismatched square".into());
+            }
+            seen |= 1u64 << square.0;
+            order[side.index()].push(square);
+        }
+    }
+    Ok(order)
+}
+
+/// Fully validate every step before creating/mutating retained request state.
+fn parse(candidates: bool, input: &Value) -> Result<Vec<Step>> {
+    object(input, &["steps"])?;
+    array(&input["steps"], 1, 4096)?
+        .iter()
+        .map(|step| {
+            if candidates {
+                object(step, &["placement", "pawnOrder", "clear", "sideToMove"])?;
+            } else {
+                object(step, &["placement", "pawnOrder", "clear"])?;
+            }
+            let mut position = positions::placement(&step["placement"], true)?;
+            let pawn_order = pawn_order(&position, &step["pawnOrder"])?;
+            let clear = boolean(&step["clear"])?;
+            if candidates {
+                position.side = color(&step["sideToMove"])?;
+            }
+            Ok(Step {
+                position,
+                pawn_order,
+                clear,
+            })
+        })
+        .collect()
+}
+
+fn weakness_name(weakness: Weakness) -> &'static str {
+    match weakness {
+        Weakness::None => "none",
+        Weakness::Isolated => "isolated",
+        Weakness::BlockedBackward => "blocked-backward",
+        Weakness::ExposedBackward => "exposed-backward",
+        Weakness::ExposedLevel => "exposed-level",
+    }
+}
+
+fn structure_output(structure: &PawnStructure) -> Value {
+    let color_output = |side: Color| {
+        let pawns: Vec<_> = structure
+            .pawn_slice(side)
+            .iter()
+            .map(|pawn| {
+                json!({"square":pawn.square.to_string(),"candidate":pawn.candidate,
+                "weakness":weakness_name(pawn.weakness)})
+            })
+            .collect();
+        json!({"baseScore":structure.base_score[side.index()],"pawns":pawns})
+    };
+    // Retained semantic order is observable here; no canonical sorting.
+    json!({"white":color_output(Color::White),"black":color_output(Color::Black)})
+}
+
+pub(super) fn dispatch(operation: &str, input: &Value) -> Result<Value> {
+    let candidates = match operation {
+        "evaluation.retainedPawnStructure" => false,
+        "evaluation.retainedPawnCandidates" => true,
+        _ => return Err("unsupported retained-pawn operation".into()),
+    };
+    let steps = parse(candidates, input)?;
+    let mut cache = PawnCache::new();
+    let mut results = Vec::with_capacity(steps.len());
+    for step in steps {
+        if step.clear {
+            cache.clear();
+        }
+        let position = &step.position;
+        let influence = Influence::build(position);
+        let selection = cache.select_with_order(
+            position,
+            &influence,
+            [&step.pawn_order[0], &step.pawn_order[1]],
+        );
+        let mut output = json!({"identity":positions::identity(position),"reused":selection.reused,
+            "structure":structure_output(&selection.structure)});
+        if candidates {
+            let mut selected = [[Square(0); 8]; 2];
+            let mut lengths = [0; 2];
+            let mut paths = [pawn_progress::Paths::default(); 2];
+            for side in [Color::White, Color::Black] {
+                let index = side.index();
+                lengths[index] = pawn_progress::current_candidates(
+                    position,
+                    &selection.structure,
+                    side,
+                    &mut selected[index],
+                );
+                paths[index] = pawn_progress::candidates(
+                    position,
+                    &influence,
+                    side,
+                    &selected[index][..lengths[index]],
+                );
+            }
+            output["candidates"] = json!({
+                "white":selected[0][..lengths[0]].iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "black":selected[1][..lengths[1]].iter().map(ToString::to_string).collect::<Vec<_>>()});
+            output["whiteScore"] = json!(paths[0].score);
+            output["blackScore"] = json!(paths[1].score);
+            // This observer stops before material-count fallback and weighting.
+            output["endingScore"] = json!(pawn_progress::ending(
+                position,
+                &influence,
+                paths,
+                lengths[0] + lengths[1] != 0
+            ));
+        }
+        results.push(output);
+    }
+    Ok(json!({"results":results}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn step(placement: &str, white: &[&str], black: &[&str], clear: bool) -> Value {
+        json!({"placement":placement,"pawnOrder":{"white":white,"black":black},"clear":clear})
+    }
+
+    fn candidate(mut value: Value, side: &str) -> Value {
+        value["sideToMove"] = json!(side);
+        value
+    }
+
+    fn structure(input: &Value) -> Value {
+        dispatch("evaluation.retainedPawnStructure", input).unwrap()["results"].clone()
+    }
+
+    fn candidates(input: &Value) -> Value {
+        dispatch("evaluation.retainedPawnCandidates", input).unwrap()["results"].clone()
+    }
+
+    #[test]
+    fn retained_order_changes_only_on_miss_or_clear_and_requests_start_empty() {
+        let placement = "7k/8/8/8/6P1/3P4/8/K7";
+        let first = step(placement, &["g4", "d3"], &[], false);
+        let reversed = step(placement, &["d3", "g4"], &[], false);
+        let cleared = step(placement, &["d3", "g4"], &[], true);
+        let result = structure(&json!({"steps":[first.clone(),reversed.clone(),cleared]}));
+        assert_eq!(result[0]["reused"], false);
+        assert_eq!(result[1]["reused"], true);
+        assert_eq!(result[0]["structure"], result[1]["structure"]);
+        assert_eq!(result[0]["structure"]["white"]["pawns"][0]["square"], "g4");
+        assert_eq!(result[2]["reused"], false);
+        assert_eq!(result[2]["structure"]["white"]["pawns"][0]["square"], "d3");
+        let independent = structure(&json!({"steps":[reversed]}));
+        assert_eq!(independent[0]["reused"], false);
+        assert_eq!(independent[0]["structure"], result[2]["structure"]);
+    }
+
+    #[test]
+    fn zero_identity_reuses_initial_empty_and_can_replace_a_populated_zero_group() {
+        let empty = step("7k/8/8/8/8/8/8/K7", &[], &[], false);
+        let occupied = step("7k/8/8/8/6P1/3P4/8/K7", &["g4", "d3"], &[], false);
+        let result = structure(&json!({"steps":[empty.clone(),occupied,empty.clone(),empty]}));
+        assert_eq!(result[0]["identity"]["pawn"], 0);
+        assert_eq!(result[1]["identity"]["pawnGroup"], 0);
+        assert_eq!(
+            result
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["reused"].as_bool().unwrap())
+                .collect::<Vec<_>>(),
+            [true, false, false, true]
+        );
+        assert_eq!(
+            result[0]["structure"],
+            json!({"white":{"baseScore":0,"pawns":[]},
+            "black":{"baseScore":0,"pawns":[]}})
+        );
+        assert_eq!(result[0]["structure"], result[2]["structure"]);
+    }
+
+    #[test]
+    fn group_replacement_is_local_and_clear_removes_other_groups() {
+        let a = step("7k/8/8/8/6P1/3P4/8/K7", &["g4", "d3"], &[], false);
+        let b = step("7k/8/8/8/8/5P2/1P6/K7", &["f3", "b2"], &[], false);
+        let c = step("7k/8/6P1/8/8/3P4/8/K7", &["g6", "d3"], &[], false);
+        let mut clear_b = b.clone();
+        clear_b["clear"] = json!(true);
+        let result =
+            structure(&json!({"steps":[a.clone(),b.clone(),a.clone(),c,b,a.clone(),clear_b,a]}));
+        assert_eq!(
+            result
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["reused"].as_bool().unwrap())
+                .collect::<Vec<_>>(),
+            [false, false, true, false, true, false, false, false]
+        );
+        assert_eq!(
+            result[0]["identity"]["pawnGroup"],
+            result[3]["identity"]["pawnGroup"]
+        );
+        assert_ne!(result[0]["identity"]["pawn"], result[3]["identity"]["pawn"]);
+        assert_ne!(
+            result[0]["identity"]["pawnGroup"],
+            result[1]["identity"]["pawnGroup"]
+        );
+    }
+
+    #[test]
+    fn genuine_full_collision_retains_descriptors_but_filters_missing_current_pawns() {
+        let a = candidate(
+            step(
+                "7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7",
+                &["g7", "e6", "f5", "e2"],
+                &["b6", "d6", "e5", "c3"],
+                false,
+            ),
+            "white",
+        );
+        let b = candidate(
+            step(
+                "7k/8/2p4P/2p5/7P/1p6/p5PP/K7",
+                &["h6", "h4", "g2", "h2"],
+                &["c6", "c5", "b3", "a2"],
+                false,
+            ),
+            "black",
+        );
+        let mut clear_b = b.clone();
+        clear_b["clear"] = json!(true);
+        let result = candidates(&json!({"steps":[a,b,clear_b]}));
+        assert_eq!(result[0]["identity"]["pawn"], 3193864068u32);
+        assert_eq!(result[0]["identity"]["pawn"], result[1]["identity"]["pawn"]);
+        assert_ne!(
+            result[0]["identity"]["secondary"],
+            result[1]["identity"]["secondary"]
+        );
+        assert_eq!(result[1]["reused"], true);
+        assert_eq!(result[0]["structure"], result[1]["structure"]);
+        assert_eq!(result[1]["candidates"], json!({"white":[],"black":[]}));
+        assert_eq!(result[1]["whiteScore"], 0);
+        assert_eq!(result[1]["blackScore"], 0);
+        assert_eq!(result[1]["endingScore"], 0);
+        assert_eq!(result[2]["reused"], false);
+        assert_ne!(result[0]["structure"], result[2]["structure"]);
+    }
+
+    #[test]
+    fn partial_collision_keeps_only_surviving_retained_candidates_without_appending() {
+        let a = candidate(
+            step(
+                "7k/P3p1P1/1p1pP3/4pP2/8/2p5/4P3/K7",
+                &["a7", "g7", "e6", "f5", "e2"],
+                &["e7", "b6", "d6", "e5", "c3"],
+                true,
+            ),
+            "white",
+        );
+        let b = candidate(
+            step(
+                "7k/P3p3/2p4P/2p5/7P/1p6/p5PP/K7",
+                &["a7", "h6", "h4", "g2", "h2"],
+                &["e7", "c6", "c5", "b3", "a2"],
+                false,
+            ),
+            "white",
+        );
+        let result = candidates(&json!({"steps":[a,b]}));
+        assert_eq!(result[1]["reused"], true);
+        assert_eq!(result[1]["candidates"], json!({"white":["a7"],"black":[]}));
+        assert_eq!(result[1]["endingScore"], 480);
+    }
+
+    #[test]
+    fn retained_order_controls_tied_ending_until_explicit_clear() {
+        let placement = "8/P1P5/8/8/3K3k/8/p7/8";
+        let a = candidate(step(placement, &["a7", "c7"], &["a2"], true), "white");
+        let b = candidate(step(placement, &["c7", "a7"], &["a2"], false), "white");
+        let mut clear_b = b.clone();
+        clear_b["clear"] = json!(true);
+        let mut return_a = a.clone();
+        return_a["clear"] = json!(false);
+        let result = candidates(&json!({"steps":[a,b,clear_b,return_a]}));
+        assert_eq!(
+            result
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["endingScore"].as_i64().unwrap())
+                .collect::<Vec<_>>(),
+            [400, 400, 0, 0]
+        );
+        assert_eq!(result[1]["candidates"]["white"], json!(["a7", "c7"]));
+        assert_eq!(result[2]["candidates"]["white"], json!(["c7", "a7"]));
+    }
+
+    #[test]
+    fn raw_selected_ending_excludes_fallback_and_empty_queen_pair_turn_offset() {
+        let pawn = candidate(step("k7/8/8/8/8/8/P7/7K", &["a2"], &[], false), "white");
+        let queens = candidate(step("q6k/8/8/8/8/8/8/K6Q", &[], &[], false), "black");
+        let result = candidates(&json!({"steps":[pawn,queens]}));
+        assert_eq!(result[0]["candidates"]["white"], json!(["a2"]));
+        assert!(result[0]["whiteScore"].as_i64().unwrap() > 0);
+        assert_eq!(result[0]["endingScore"], 0);
+        assert_eq!(result[1]["candidates"], json!({"white":[],"black":[]}));
+        assert_eq!(result[1]["whiteScore"], 0);
+        assert_eq!(result[1]["blackScore"], 0);
+        assert_eq!(result[1]["endingScore"], 0);
+    }
+
+    #[test]
+    fn all_steps_and_supplied_orders_validate_before_any_retained_state_exists() {
+        let good = step("7k/8/8/8/6P1/3P4/8/K7", &["g4", "d3"], &[], false);
+        for white in [json!(["g4"]), json!(["g4", "g4"]), json!(["g4", "h8"])] {
+            let mut bad = good.clone();
+            bad["pawnOrder"]["white"] = white;
+            assert!(parse(false, &json!({"steps":[good.clone(),bad]})).is_err());
+        }
+        for field in [
+            "identity",
+            "doubledWeight",
+            "phase",
+            "rootPhase",
+            "sideToMove",
+        ] {
+            let mut bad = good.clone();
+            bad[field] = Value::Null;
+            assert!(parse(false, &json!({"steps":[good.clone(),bad]})).is_err());
+        }
+        let mut bad = good.clone();
+        bad["clear"] = json!(1);
+        assert!(parse(false, &json!({"steps":[good.clone(),bad]})).is_err());
+        let mut bad = good.clone();
+        bad["pawnOrder"]["extra"] = json!([]);
+        assert!(parse(false, &json!({"steps":[good.clone(),bad]})).is_err());
+        assert!(parse(true, &json!({"steps":[candidate(good.clone(),"White")]})).is_err());
+        assert!(parse(false, &json!({"steps":[]})).is_err());
+        assert!(parse(false, &json!({"steps":vec![good;4097]})).is_err());
+    }
+
+    #[test]
+    fn artificial_component_positions_are_admitted_with_exact_material_limits() {
+        let adjacent = step("8/8/8/8/8/8/k7/K7", &[], &[], false);
+        assert!(parse(false, &json!({"steps":[adjacent]})).is_ok());
+        for placement in [
+            "7k/8/8/8/8/NNNNNNNN/NNN5/K7",
+            "P6k/8/8/8/8/8/8/K7",
+            "7k/8/8/8/8/8/PPPPPPPP/KP6",
+        ] {
+            assert!(parse(false, &json!({"steps":[step(placement,&[],&[],false)]})).is_err());
+        }
+    }
+}

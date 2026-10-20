@@ -1,0 +1,340 @@
+--- b/src/activity.rs
++++ a/src/activity.rs
+@@ -81,10 +81,6 @@
+     28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 33, 33, 33,
+     33, 34, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36,
+ ];
+-#[cfg(test)]
+-#[path = "activity/separated_tests.rs"]
+-mod separated_tests;
+-
+ type Marks = [[u8; 64]; 2];
+ 
+ #[derive(Clone, Copy, Debug, Default)]
+@@ -99,38 +95,6 @@
+     position: &Position,
+     influence: &Influence,
+     material_score: i32,
+-    weights: [i32; 2],
+-) -> Activity {
+-    compute_impl::<false>(position, influence, material_score, weights)
+-}
+-
+-/// Placement permission is supplied only by the existing guarded owned search.
+-/// The caller's Influence bytes remain authoritative on either route.
+-pub(crate) fn compute_for_search(
+-    position: &Position, influence: &Influence, material_score: i32,
+-    weights: [i32; 2], coherent_geometry: bool,
+-) -> Activity {
+-    if coherent_geometry && has_sliders(position) {
+-        compute_impl::<true>(position, influence, material_score, weights)
+-    } else {
+-        compute_impl::<false>(position, influence, material_score, weights)
+-    }
+-}
+-
+-// Permission is checked first by the caller. A zero-slider native invocation
+-// keeps the scalar consumer and cannot enter coherent plane decoding.
+-#[inline]
+-fn has_sliders(position: &Position) -> bool {
+-    position.counts.iter().any(|counts|
+-        counts[PieceKind::Bishop.index()] != 0
+-            || counts[PieceKind::Rook.index()] != 0
+-            || counts[PieceKind::Queen.index()] != 0)
+-}
+-
+-// Keep scalar and coherent complete consumers at distinct compiler boundaries.
+-#[inline(never)]
+-fn compute_impl<const GEOMETRY: bool>(
+-    position: &Position, influence: &Influence, material_score: i32,
+     weights: [i32; 2],
+ ) -> Activity {
+     debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
+@@ -140,7 +104,7 @@
+     let mut relation_queries = 0;
+     for color in [Color::White, Color::Black] {
+         let values = &DESTINATION_VALUES[color.index()];
+-        accumulate_kind::<1, GEOMETRY>(
++        accumulate_kind::<1>(
+             position,
+             influence,
+             color,
+@@ -150,7 +114,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<2, GEOMETRY>(
++        accumulate_kind::<2>(
+             position,
+             influence,
+             color,
+@@ -160,7 +124,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<3, GEOMETRY>(
++        accumulate_kind::<3>(
+             position,
+             influence,
+             color,
+@@ -170,7 +134,7 @@
+             &mut raw_scores[color.index()],
+             &mut relation_queries,
+         );
+-        accumulate_kind::<4, GEOMETRY>(
++        accumulate_kind::<4>(
+             position,
+             influence,
+             color,
+@@ -194,7 +158,7 @@
+ }
+ 
+ #[inline]
+-fn accumulate_kind<const KIND: usize, const GEOMETRY: bool>(
++fn accumulate_kind<const KIND: usize>(
+     position: &Position,
+     influence: &Influence,
+     color: Color,
+@@ -205,128 +169,13 @@
+     queries: &mut u64,
+ ) {
+     let kind = PieceKind::ALL[KIND];
+-    let sources = position.piece_squares(color, kind);
+-    // No slider group means no mask decoding/setup. These borrow actual planes;
+-    // no copied AttackBits, mailbox transpose or category producer is involved.
+-    let geometry = if GEOMETRY && KIND != 1 && !sources.is_empty() {
+-        Some(SliderGeometry::new::<KIND>(position.attack_planes(), color))
+-    } else {
+-        None
+-    };
+-    for &source in sources {
++    for &source in position.piece_squares(color, kind) {
+         let values = piece_destination_values::<KIND>(position, color, values);
+-        let mobility = if let Some(geometry) = &geometry {
+-            destinations_borrowed::<KIND>(position, influence, color, source, values, marks, geometry)
+-        } else {
+-            destinations_kind::<KIND>(position, influence, color, source, values, marks)
+-        };
++        let mobility = destinations_kind::<KIND>(position, influence, color, source, values, marks);
+         let (piece, work) = piece_score_kind::<KIND>(influence, color, source, mobility, endgame);
+         *score += piece;
+         *queries += work;
+     }
+-}
+-
+-// Invocation-local masks only; the referenced Position stays immutable.
+-struct SliderGeometry {
+-    occupied: u64,
+-    friendly: u64,
+-    opaque: u64,
+-    forward_opaque: u64,
+-}
+-impl SliderGeometry {
+-    fn new<const KIND: usize>(planes: &[u64; 4], color: Color) -> Self {
+-        let occupied = planes[0] | planes[1] | planes[2];
+-        let own = if color == Color::Black { planes[3] } else { !planes[3] };
+-        let friendly = occupied & own;
+-        let enemy = occupied & !own;
+-        let pawns = planes[0] & !planes[1] & !planes[2];
+-        let knights = !planes[0] & planes[1] & !planes[2];
+-        let bishops = planes[0] & planes[1] & !planes[2];
+-        let rooks = !planes[0] & !planes[1] & planes[2];
+-        let queens = planes[0] & !planes[1] & planes[2];
+-        let transparent = match KIND {
+-            2 => enemy | (friendly & (knights | rooks)),
+-            3 => (enemy & !pawns) | (friendly & rooks),
+-            4 => 0,
+-            _ => unreachable!("not an activity slider"),
+-        };
+-        let forward = if KIND == 3 {
+-            transparent | (friendly & (knights | bishops | queens))
+-        } else {
+-            transparent
+-        };
+-        Self { occupied, friendly, opaque: occupied & !transparent,
+-            forward_opaque: occupied & !forward }
+-    }
+-
+-    fn destinations<const KIND: usize>(
+-        &self, source: Square, direction: usize, color: Color,
+-    ) -> (u64, u64, bool) {
+-        let (rays, increasing) = crate::attacks::influence_rays(source);
+-        let ray = rays[direction];
+-        let increasing = increasing[direction];
+-        let direct = through(ray, nearest(ray & self.occupied, increasing), increasing);
+-        if KIND == 4 {
+-            return (direct & !self.friendly, 0, increasing);
+-        }
+-        let forward = if color == Color::White { 4 } else { 5 };
+-        let opaque = if KIND == 3 && direction == forward {
+-            self.forward_opaque
+-        } else {
+-            self.opaque
+-        };
+-        let visited = through(ray, nearest(ray & opaque, increasing), increasing);
+-        (direct & !self.friendly, (visited & !direct) & !self.friendly, increasing)
+-    }
+-}
+-#[inline]
+-fn nearest(blockers: u64, increasing: bool) -> u64 {
+-    if blockers == 0 { 0 }
+-    else if increasing { blockers & blockers.wrapping_neg() }
+-    else { 1u64 << (63 - blockers.leading_zeros()) }
+-}
+-#[inline]
+-fn through(ray: u64, blocker: u64, increasing: bool) -> u64 {
+-    if blocker == 0 { ray }
+-    else if increasing { ray & (blocker | blocker.wrapping_sub(1)) }
+-    else { ray & !blocker.wrapping_sub(1) }
+-}
+-#[inline]
+-fn take_nearest(targets: &mut u64, increasing: bool) -> Square {
+-    let index = if increasing { targets.trailing_zeros() } else { 63 - targets.leading_zeros() };
+-    *targets &= !(1u64 << index);
+-    Square(index as u8)
+-}
+-
+-fn destinations_borrowed<const KIND: usize>(
+-    position: &Position, influence: &Influence, color: Color, source: Square,
+-    values: &[u8; 64], marks: &mut Marks, geometry: &SliderGeometry,
+-) -> Mobility {
+-    let kind = PieceKind::ALL[KIND];
+-    let directions = match KIND { 2 => 0..4, 3 => 4..8, 4 => 0..8,
+-        _ => unreachable!("not an activity slider") };
+-    let mut result = Mobility::default();
+-    for direction in directions {
+-        let (mut direct, mut additional, increasing) = geometry.destinations::<KIND>(source, direction, color);
+-        let vertical = if KIND == 3 && DIRECTIONS[direction].0 == 0 { 2 } else { 1 };
+-        while direct != 0 {
+-            let target = take_nearest(&mut direct, increasing);
+-            let victim = position.board[target.0 as usize];
+-            let category = direct_category(influence, color, kind, target, victim);
+-            result.categories += category;
+-            mark(marks, color, kind, target, category);
+-            result.total += category * values[target.0 as usize] as i64 * vertical;
+-        }
+-        while additional != 0 {
+-            let target = take_nearest(&mut additional, increasing);
+-            let victim = position.board[target.0 as usize];
+-            result.queries += 1;
+-            let category = capture_priority(kind, victim,
+-                relation(influence.code(color, target), influence.code(color.opponent(), target), kind) as i64);
+-            result.total += category * values[target.0 as usize] as i64 * vertical;
+-        }
+-    }
+-    result
+ }
+ 
+ #[inline]
+--- b/src/evaluator.rs
++++ a/src/evaluator.rs
+@@ -336,12 +336,7 @@
+     }
+ 
+     pub fn full(&mut self, node: &mut Node, influence: &Influence, in_check: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, |_| {}, |_| {})
+-    }
+-    /// Only the existing owned-root placement permission may enable geometry.
+-    pub(crate) fn full_for_search(&mut self, node: &mut Node, influence: &Influence,
+-        in_check: bool, coherent_geometry: bool) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, coherent_geometry, |_| {}, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, |_| {})
+     }
+     /// Cold component observation; the default monomorph has a zero-sized no-op observer.
+     pub fn full_observed<F: FnOnce(Components)>(
+@@ -351,7 +346,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, observer, |_| {})
++        self.full_impl::<false, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     pub fn fresh_observed<F: FnOnce(Components)>(
+         &mut self,
+@@ -360,7 +355,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, false, observer, |_| {})
++        self.full_impl::<true, _, _>(node, influence, in_check, observer, |_| {})
+     }
+     /// Forced-fresh observation includes the single native finishing result.
+     /// Ordinary calls retain statically dispatched, zero-sized no-op observers.
+@@ -371,7 +366,7 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<true, _, _>(node, influence, in_check, false, |_| {}, observer)
++        self.full_impl::<true, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     /// Ordinary full selection, including the actual cache identity-match flag.
+     pub fn full_detailed_observed<F: FnOnce(FullDetails)>(
+@@ -381,14 +376,13 @@
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
+-        self.full_impl::<false, _, _>(node, influence, in_check, false, |_| {}, observer)
++        self.full_impl::<false, _, _>(node, influence, in_check, |_| {}, observer)
+     }
+     fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+         &mut self,
+         node: &mut Node,
+         influence: &Influence,
+         in_check: bool,
+-        coherent_geometry: bool,
+         observer: F,
+         details: D,
+     ) -> Evaluation {
+@@ -404,7 +398,7 @@
+             self.pawns.select(position, influence)
+         };
+         let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        let activity = activity::compute_for_search(position, influence, material, self.weights.mobility, coherent_geometry);
++        let activity = activity::compute(position, influence, material, self.weights.mobility);
+         let shelter = shelter::compute(
+             position,
+             influence,
+@@ -681,7 +675,7 @@
+                 } else if OBSERVE {
+                     self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+                 } else {
+-                    self.full_for_search(node, influence, false, coherent_geometry)
++                    self.full(node, influence, false)
+                 },
+                 initially_full: true,
+                 fast_score: None,
+@@ -703,7 +697,7 @@
+             } else if OBSERVE {
+                 self.full_detailed_observed(node, influence, false, |details| full_observer(details))
+             } else {
+-                self.full_for_search(node, influence, false, coherent_geometry)
++                self.full(node, influence, false)
+             }
+         } else {
+             fast
+--- b/src/ordinary.rs
++++ a/src/ordinary.rs
+@@ -809,7 +809,7 @@
+             }
+         }
+         let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+-        let evaluation = self.evaluator.full_for_search(node, map, checked, coherent_geometry);
++        let evaluation = self.evaluator.full(node, map, checked);
+         if DIAGNOSTICS {
+             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
+         }
+--- b/src/quiescence.rs
++++ a/src/quiescence.rs
+@@ -150,11 +150,10 @@
+         let influence = self.evaluator.ensure_influence_for_search(
+             &position, &mut scratch, coherent_geometry,
+         );
+-        self.evaluator.full_for_search(
++        self.evaluator.full(
+             &mut root,
+             influence,
+             movegen::in_check(&position, position.side),
+-            coherent_geometry,
+         );
+         (root, scratch.unwrap())
+     }

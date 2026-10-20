@@ -1,0 +1,327 @@
+--- a/src/attacks.rs
++++ b/src/attacks.rs
+@@ -65,6 +65,50 @@
+ 
+ static MASKS: Masks = masks();
+ 
++/// Invocation-local legal-slider supply. No mutable tag planes escape.
++/// This is not evaluation Influence and treats both kings as blockers.
++#[derive(Clone, Copy)]
++pub(crate) struct SlidingRayView {
++    occupied: u64,
++    forbidden: u64,
++}
++
++impl SlidingRayView {
++    /// Geometric destinations, including a capturable first blocker only.
++    #[inline]
++    pub(crate) fn targets(&self, source: Square, direction: usize) -> u64 {
++        let ray = MASKS.rays[source.0 as usize][direction];
++        let blockers = self.occupied & ray;
++        let through_first = if blockers == 0 {
++            ray
++        } else {
++            let first = if MASKS.increasing[direction] {
++                blockers.trailing_zeros() as usize
++            } else {
++                (63 - blockers.leading_zeros()) as usize
++            };
++            // The blocker-origin ray omits its origin: keep that square,
++            // remove only farther squares, then exclude own pieces/kings.
++            ray & !MASKS.rays[first][direction]
++        };
++        through_first & !self.forbidden
++    }
++
++    /// Caller keeps the specified direction order and passes a nonempty mask.
++    /// Explicit extraction avoids an iterator or an order inferred from Color.
++    #[inline]
++    pub(crate) fn take_nearest(targets: &mut u64, direction: usize) -> Square {
++        debug_assert_ne!(*targets, 0);
++        let index = if MASKS.increasing[direction] {
++            targets.trailing_zeros()
++        } else {
++            63 - targets.leading_zeros()
++        };
++        *targets &= !(1u64 << index);
++        Square(index as u8)
++    }
++}
++
+ impl AttackBits {
+     pub(crate) const fn empty() -> Self {
+         Self { planes: [0; 4] }
+@@ -125,6 +169,18 @@
+             }
+             tag == piece.0
+         })
++    }
++
++    /// Derive once after earlier producer prefixes, without new maintained state.
++    #[inline]
++    pub(crate) fn sliding_ray_view(&self, side: Color) -> SlidingRayView {
++        let [a, b, c, black] = self.planes;
++        let occupied = a | b | c;
++        let own_color = if side == Color::Black { black } else { !black };
++        let enemy_color = if side == Color::Black { !black } else { black };
++        let own = occupied & own_color;
++        let enemy_kings = !a & b & c & enemy_color;
++        SlidingRayView { occupied, forbidden: own | enemy_kings }
+     }
+ 
+     #[inline]
+@@ -275,6 +331,76 @@
+ mod tests {
+     use super::*;
+     use crate::movegen::{self, MoveList};
++
++    #[test]
++    fn sliding_ray_view_matches_coordinate_oracle_for_all_ray_occupancies_and_stop_tags() {
++        // Pure destination oracle deliberately uses offsets/mailbox, not MASKS,
++        // nearest-bit extraction or another ray-mask implementation.
++        fn coordinate(board: &[Piece; 64], source: Square, side: Color, direction: usize) -> Vec<Square> {
++            let (df, dr) = DIRECTIONS[direction];
++            let mut result = Vec::new();
++            let mut next = source.offset(df, dr);
++            while let Some(to) = next {
++                let piece = board[to.0 as usize];
++                if !piece.is_empty() && (piece.color() == side || piece.kind() == PieceKind::King) {
++                    break;
++                }
++                result.push(to);
++                if !piece.is_empty() { break; }
++                next = to.offset(df, dr);
++            }
++            result
++        }
++        for source in 0..64 {
++            let source = Square(source);
++            for direction in 0..8 {
++                let (df, dr) = DIRECTIONS[direction];
++                let mut squares = Vec::new();
++                let mut next = source.offset(df, dr);
++                while let Some(to) = next {
++                    squares.push(to);
++                    next = to.offset(df, dr);
++                }
++                for side in [Color::White, Color::Black] {
++                    // Every occupancy subset; every valid color/type for the
++                    // first blocker. Farther occupied tags also vary, but do
++                    // not affect the legal slider's geometric stopping point.
++                    for occupied in 0usize..(1usize << squares.len()) {
++                        for stop_side in [Color::White, Color::Black] {
++                            for stop_kind in PieceKind::ALL {
++                                let mut board = [Piece::EMPTY; 64];
++                                board[source.0 as usize] = Piece::new(side, PieceKind::Queen);
++                                let mut first = true;
++                                for (offset, square) in squares.iter().enumerate() {
++                                    if occupied & (1usize << offset) != 0 {
++                                        let piece = if first {
++                                            first = false;
++                                            Piece::new(stop_side, stop_kind)
++                                        } else {
++                                            Piece::new(if offset % 2 == 0 { side } else { side.opponent() },
++                                                PieceKind::ALL[offset % 6])
++                                        };
++                                        board[square.0 as usize] = piece;
++                                    }
++                                }
++                                let bits = AttackBits::from_board(&board);
++                                assert!(bits.matches_board(&board));
++                                let view = bits.sliding_ray_view(side);
++                                let expected = coordinate(&board, source, side, direction);
++                                let mut targets = view.targets(source, direction);
++                                let mut actual = Vec::new();
++                                while targets != 0 {
++                                    actual.push(SlidingRayView::take_nearest(&mut targets, direction));
++                                }
++                                assert_eq!(actual, expected,
++                                    "source={source} direction={direction} side={side:?} occupied={occupied} stop={stop_side:?}/{stop_kind:?}");
++                            }
++                        }
++                    }
++                }
++            }
++        }
++    }
+ 
+     #[test]
+     fn every_tag_replacement_matches_independent_mailbox_decode() {
+--- a/src/movegen.rs
++++ b/src/movegen.rs
+@@ -604,6 +604,81 @@
+     }
+ }
+ 
++fn sliding_pieces<const LIMIT: usize>(
++    position: &Position,
++    list: &mut MoveList,
++    safety: &GenerationSafety,
++    view: &crate::attacks::SlidingRayView,
++    kind: PieceKind,
++) {
++    #[cfg(test)]
++    if FORCE_PROJECTION.with(|forced| forced.get()) {
++        return coordinate_pieces::<LIMIT>(position, list, safety, kind);
++    }
++    let directions = match kind {
++        PieceKind::Bishop => 0..4,
++        PieceKind::Rook => 4..8,
++        PieceKind::Queen => 0..8,
++        _ => unreachable!(),
++    };
++    for &from in position.piece_squares(position.side, kind) {
++        for direction in directions.clone() {
++            let mut targets = view.targets(from, direction);
++            while targets != 0 {
++                let to = crate::attacks::SlidingRayView::take_nearest(&mut targets, direction);
++                add_if_safe(position, list, safety, Move::new(from, to, MoveKind::Ordinary));
++                if list.len >= LIMIT { return; }
++            }
++        }
++    }
++}
++
++// Keep the original coordinate producer independent of the proposed bitset
++// destination kernel. FORCE_PROJECTION also selects old mailbox safety.
++#[cfg(test)]
++fn coordinate_pieces<const LIMIT: usize>(
++    position: &Position,
++    list: &mut MoveList,
++    safety: &GenerationSafety,
++    kind: PieceKind,
++) {
++    let directions: &[(i8, i8)] = match kind {
++        PieceKind::Knight => &KNIGHT,
++        PieceKind::Bishop => &DIRECTIONS[..4],
++        PieceKind::Rook => &DIRECTIONS[4..],
++        PieceKind::Queen | PieceKind::King => &DIRECTIONS,
++        PieceKind::Pawn => unreachable!(),
++    };
++    let sliding = matches!(kind, PieceKind::Bishop | PieceKind::Rook | PieceKind::Queen);
++    for &from in position.piece_squares(position.side, kind) {
++        for &(df, dr) in directions {
++            let mut next = from.offset(df, dr);
++            while let Some(to) = next {
++                let victim = position.board[to.0 as usize];
++                if !victim.is_empty()
++                    && (victim.color() == position.side || victim.kind() == PieceKind::King)
++                {
++                    break;
++                }
++                add_if_safe(
++                    position,
++                    list,
++                    safety,
++                    Move::new(from, to, MoveKind::Ordinary),
++                );
++                if list.len >= LIMIT {
++                    return;
++                }
++                if !sliding || !victim.is_empty() {
++                    break;
++                }
++                next = to.offset(df, dr);
++            }
++        }
++    }
++}
++
++
+ fn prefix_matching(
+     list: &mut MoveList,
+     next: &mut usize,
+@@ -708,6 +783,20 @@
+             checkers.squares[0],
+             position.side,
+         );
++    }
++    // Isolate the new kernel to complete nonchecked slider production.
++    // Knights remain on the coordinate path; derive the transient view only
++    // after their original cap guard and all earlier special/pawn prefixes.
++    if LIMIT == MOVE_CAPACITY && !safety.checked {
++        pieces::<LIMIT>(position, list, &safety, PieceKind::Knight);
++        if list.len >= LIMIT { return; }
++        let view = position.attack_view().sliding_ray_view(position.side);
++        for kind in [PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++            sliding_pieces::<LIMIT>(position, list, &safety, &view, kind);
++            if list.len >= LIMIT { return; }
++        }
++        pieces::<LIMIT>(position, list, &safety, PieceKind::King);
++        return;
+     }
+     // Do not shortcut double check to king-only here: the broader joined EP
+     // transition can remove a non-pawn checker and simultaneously block a ray.
+@@ -788,6 +877,72 @@
+                     (two.squares, two.len),
+                     "two checkers: {context}/{target}/{side:?}"
+                 );
++            }
++        }
++    }
++
++    #[test]
++    fn slider_bitset_order_keeps_source_chronology_and_actual_move_history() {
++        let position = Position::from_fen(
++            "7k/6pp/8/8/3Q3Q/2B3B1/1R3R2/K7 w - - 0 1").unwrap();
++        assert!(!in_check(&position, position.side));
++        compare_projection(&position, "slider chronology before");
++        let mut changed = position;
++        for kind in [PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++            let sources = position.piece_squares(position.side, kind);
++            assert_eq!(sources.len(), 2);
++            let slots = sources.iter().map(|square| position.squares[position.side.index()]
++                .iter().position(|s| s == square).unwrap()).collect::<Vec<_>>();
++            changed.squares[position.side.index()].swap(slots[0], slots[1]);
++        }
++        assert_eq!(changed.board, position.board);
++        assert_eq!(changed.attack_view(), position.attack_view());
++        compare_projection(&changed, "slider chronology swapped");
++        for current in [&position, &changed] {
++            let mut generated = MoveList::new();
++            generate_legal(current, &mut generated);
++            for kind in [PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
++                let mut sources = generated.as_slice().iter()
++                    .filter(|m| current.board[m.from().0 as usize].kind() == kind)
++                    .map(|m| m.from()).collect::<Vec<_>>();
++                sources.dedup();
++                assert_eq!(sources.as_slice(), current.piece_squares(current.side, kind));
++            }
++        }
++        let mut history = Position::from_fen(START).unwrap();
++        for named in ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4"] {
++            let mut generated = MoveList::new();
++            generate_legal(&history, &mut generated);
++            let movement = *generated.as_slice().iter().find(|m| m.to_string() == named).unwrap();
++            history = history.played_unchecked(movement);
++            assert!(history.attack_view().matches_board(&history.board));
++            compare_projection(&history, named);
++        }
++    }
++
++    #[test]
++    fn slider_bitset_scope_keeps_checked_capped_and_special_fallbacks() {
++        for fen in [
++            START,
++            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
++            "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1",
++            "k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1",
++            "7k/8/8/8/2b5/2p5/2R4r/K6r w - - 0 1",
++            "1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1",
++            "k7/8/8/4KPnr/8/8/8/8 w - g6 0 1",
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            compare_projection(&position, fen);
++            for limit in [1, 2] {
++                let mut current = MoveList::new();
++                let mut original = MoveList::new();
++                if limit == 1 { generate_bounded::<1>(&position, &mut current); }
++                else { generate_bounded::<2>(&position, &mut current); }
++                FORCE_PROJECTION.with(|forced| forced.set(true));
++                if limit == 1 { generate_bounded::<1>(&position, &mut original); }
++                else { generate_bounded::<2>(&position, &mut original); }
++                FORCE_PROJECTION.with(|forced| forced.set(false));
++                assert_eq!(current.as_slice(), original.as_slice(), "cap{limit}: {fen}");
+             }
+         }
+     }

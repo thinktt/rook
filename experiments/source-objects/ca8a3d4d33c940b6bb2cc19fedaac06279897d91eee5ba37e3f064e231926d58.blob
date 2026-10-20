@@ -1,0 +1,93 @@
+--- a/src/tactical.rs
++++ b/src/tactical.rs
+@@ -280,16 +280,65 @@
+                 cursor -= gap;
+             }
+             moves[cursor] = movement;
+             priorities[cursor] = priority;
+         }
+     }
+ }
+ 
++fn preferred_into(moves: &mut [Move], priorities: &mut [u32], output: &mut [Move]) {
++    let n = moves.len();
++    debug_assert_eq!(priorities.len(), n);
++    debug_assert_eq!(output.len(), n);
++    debug_assert!(n <= MOVE_CAPACITY);
++    if n <= 6 {
++        priority_sequence(moves, priorities);
++        output.copy_from_slice(moves);
++        return;
++    }
++
++    let gap = 6;
++    for index in gap..moves.len() {
++        let movement = moves[index];
++        let priority = priorities[index];
++        let mut cursor = index;
++        while cursor >= gap && priorities[cursor - gap] < priority {
++            moves[cursor] = moves[cursor - gap];
++            priorities[cursor] = priorities[cursor - gap];
++            cursor -= gap;
++        }
++        moves[cursor] = movement;
++        priorities[cursor] = priority;
++    }
++
++    let mut heads = [0u64; 6];
++    for stream in 0..6 {
++        heads[stream] = (((priorities[stream] as u64) << 9) | (511 - stream) as u64) + 1;
++    }
++    for destination in output {
++        let mut rank = heads[0];
++        let mut winning_stream = 0;
++        for stream in 1..6 {
++            if heads[stream] > rank {
++                rank = heads[stream];
++                winning_stream = stream;
++            }
++        }
++        let index = 511 - ((rank - 1) & 511) as usize;
++        *destination = moves[index];
++        let next = index + 6;
++        heads[winning_stream] = if next < n {
++            (((priorities[next] as u64) << 9) | (511 - next) as u64) + 1
++        } else {
++            0
++        };
++    }
++}
++
+ /// Shared quiescence ranking also accepts quiet evasions and underpromotions.
+ pub fn order(
+     position: &Position,
+     context: &RootContext,
+     history: &[[[u32; 64]; 6]; 2],
+     list: &mut MoveList,
+ ) {
+     order_with_scratch(
+@@ -350,19 +399,22 @@
+             first -= 1;
+             scratch[first] = movement;
+             priorities[first] = priority;
+         } else {
+             scratch[low] = movement;
+             low += 1;
+         }
+     }
+-    priority_sequence(&mut scratch[first..], &mut priorities[first..]);
+     let preferred = MOVE_CAPACITY - first;
+-    list.moves[..preferred].copy_from_slice(&scratch[first..]);
++    preferred_into(
++        &mut scratch[first..],
++        &mut priorities[first..],
++        &mut list.moves[..preferred],
++    );
+     list.moves[preferred..preferred + low].copy_from_slice(&scratch[..low]);
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+     use crate::movegen::{generate_legal, in_check};
+ 

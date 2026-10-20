@@ -1,0 +1,19 @@
+--- accepted-own-generic/capture-functions.py
++++ ordinary-projected-bits/capture-functions.py
+@@ -3,10 +3,12 @@
+ import json,re,subprocess
+ from capture import HERE,PLAN,guard,sha,write
+ GROUPS={
+- 'evaluation-cache':r'rook2::evaluator::(?:Evaluator|PureCache|PureComponents|PureEntry)',
+- 'pawn-owners':r'rook2::(?:pawn_structure::(?:PawnCache|fresh)|pawn_terms::compute|pawn_progress::(?:selected|structure_weighted))',
+- 'activity-shelter':r'rook2::(?:activity::(?:compute|weighted|king_pressure)|shelter::(?:compute|combine))',
+- 'search-scope':r'rook2::(?:.*(?:Search|Quiescence).*::(?:visit_ordinary|ordering_phase|visit_q|charge_node|prepare_root|new)|run(?:\s|::|$)|root_schedule::|timed_sequence::)',
++ 'ordinary-Q-order':r'rook2::(?:ordinary::|quiescence::).*::(?:visit_ordinary|ordering_phase|visit_q)',
++ 'charge':r'rook2::engine::Search.*::charge_node',
++ 'root-run':r'^rook2::run$',
++ 'projection-query-generation':r'rook2::(?:attacks::AttackBits::|movegen::(?:find_attackers|attacked|projected_board|generate_legal|in_check))',
++ 'full-fast':r'rook2::evaluator::Evaluator.*::(?:full|fast)',
++ 'node-transitions':r'rook2::evaluator::Node::(?:child|root|null_child)',
+ }
+ SUPPORT=re.compile(r'__rust_(?:alloc|dealloc|realloc)|alloc::alloc::|alloc::raw_vec::|drop_in_place<.*(?:Evaluator|Search|PureCache)')
+ def symbols(path):

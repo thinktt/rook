@@ -1,0 +1,136 @@
+{
+  "experiment": 60,
+  "status": "INERT_AWAIT_EXPLICIT_IMMUTABLE_GENERIC_BUILD_RELEASE",
+  "capture_authorized": false,
+  "selection": {
+    "path": "/home/legolas/rook2/evidence/activity-kind-return-selection-20261020-01/selection.json",
+    "sha256": "7a5798aec2454ac831843aaaa1d53c4d7b3c7445e37d485322edb5b7c6bf8577"
+  },
+  "source_feasibility_review": {
+    "path": "/home/legolas/rook2/evidence/current57-activity-kind-boundary-review-20261020-01/review.md",
+    "sha256": "e1d8c181f3065e1e09abceac9db3eeb50eecafb9259918575a46fce05a452329"
+  },
+  "helper_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "TMPDIR": "/home/legolas/rook2-build-tmp",
+  "variants": {
+    "baseline": {
+      "image": "/home/legolas/rook2/evidence/bitplane-pin-summary-generic-build-20261020-01/rook2-exact",
+      "sha256": "5d10b2fa6b75b1eead79a444c5eaccd13f5e8b959e1d0469075be1ebabba27e6",
+      "receipt": "/home/legolas/rook2/evidence/bitplane-pin-summary-generic-build-20261020-01/receipt.json",
+      "receipt_sha256": "d1b21d67481493fcc34e7231f1c24636e576dc4974ab50ce729b0db3065b9d87",
+      "frozen_identity": {
+        "path": "/home/legolas/rook2/evidence/bitplane-pin-summary-generic-build-20261020-01/rook2-exact",
+        "sha256": "5d10b2fa6b75b1eead79a444c5eaccd13f5e8b959e1d0469075be1ebabba27e6",
+        "size_bytes": 7060840,
+        "mode": "0555"
+      }
+    },
+    "candidate": {
+      "image": "/home/legolas/rook2/evidence/activity-kind-return-generic-build-20261020-01/rook2-exact",
+      "sha256": null,
+      "source_graph_sha256": null,
+      "receipt_sha256": null,
+      "source_freeze_sha256": null,
+      "build_actual_terminal": null
+    }
+  },
+  "paired_settings_required": {
+    "mode": "generic",
+    "target_cpu": "x86-64",
+    "rust_flags": [
+      "-C",
+      "target-cpu=x86-64"
+    ],
+    "pgo": "none",
+    "toolchain": {
+      "rustc": {
+        "argv": [
+          "/usr/bin/rustc",
+          "-vV"
+        ],
+        "exit_code": 0,
+        "stdout": "rustc 1.85.1 (4eb161250 2025-03-15) (built from a source tarball)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: x86_64-unknown-linux-gnu\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+        "stderr": ""
+      },
+      "cargo": {
+        "argv": [
+          "/usr/bin/cargo",
+          "--version"
+        ],
+        "exit_code": 0,
+        "stdout": "cargo 1.85.1 (d73d2caf9 2024-12-31)\n",
+        "stderr": ""
+      },
+      "rustc_executable_sha256": "b4e139165f4f075f9a3fb4b20e7e4898472f08304961706072752d4aa11522b1",
+      "cargo_executable_sha256": "3feb6f7da827ce1fbc6a188db4e365465b0819f5f7c54ead984dc3a329a19412"
+    },
+    "tools23_unchanged": true,
+    "actual_source_delta_and_count_pending": true
+  },
+  "scope": {
+    "max_full_bodies": 10,
+    "max_combined_body_stdout_bytes": 2097152,
+    "required_bodies": [
+      "baseline actual activity::compute",
+      "candidate actual activity::compute",
+      "all actual candidate accumulator bodies called by compute, up to8 clones"
+    ],
+    "max_accumulator_bodies": 8,
+    "unrelated_search_bodies": 0,
+    "symbol_metadata_bytes_per_image": 262144,
+    "section_metadata_bytes_per_image": 65536,
+    "stderr_bytes_per_command": 65536,
+    "failure_limit_or_unclassifiable_relevant_target": "Preserve all output/actual failure and stop before correction or scope expansion."
+  },
+  "prospective_commands": {
+    "nm": [
+      "/usr/bin/nm",
+      "-S",
+      "--defined-only",
+      "--demangle",
+      "EXACT_RELEASED_IMAGE"
+    ],
+    "sections": [
+      "/usr/bin/readelf",
+      "-h",
+      "-S",
+      "EXACT_RELEASED_IMAGE"
+    ],
+    "body": [
+      "/usr/bin/objdump",
+      "-d",
+      "-C",
+      "--no-show-raw-insn",
+      "--start-address=ACTUAL_SYMBOL_START",
+      "--stop-address=ACTUAL_SYMBOL_END",
+      "EXACT_RELEASED_IMAGE"
+    ]
+  },
+  "required_gate": [
+    "Follow actual compute call addresses and original source order to identify four const-kind groups per color; demangled identical names alone do not assign N/B/R/Q.",
+    "Observe all actual input registers/outgoing stack at each group call. Six source thin inputs are hypotheses until their real lowering is established.",
+    "Observe both scalar result values returned in actual registers and immediately added to caller totals; verify no sret/hidden output pointer, tuple/group-array staging or retained mutable total pointers.",
+    "Compare complete caller plus all consumed callee bodies: code bytes, frame reservations, saves, stack locals/spills, calls and returns, continuation state and footprint. No frame-only saving claim.",
+    "Identify explicit empty-group entry/exit and whether all8 possible calls remain; no occupancy/frequency inference from static control flow.",
+    "Check no new eager value/rook lookup or changed lazy numerical path; source full per-piece-owner preservation and regrouping bounds remain separate required proofs.",
+    "If actual boundary disappears or hidden output/staging survives, report mechanism NO_GO; any other cost concern remains explicit for parent judgment."
+  ],
+  "future_tool_identities": null,
+  "actual_candidate_release": null,
+  "no_engine_build_tests_profile_git": true,
+  "no_speed_forecast": true,
+  "preparation_large_payload_hashes": 0
+}

@@ -1,0 +1,383 @@
+//! Count-only diagnostic control plane. Never produces, caches, or changes a map.
+//! Frame IDs certify only source-audited census association, not production provenance.
+use crate::geometry::{DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
+use crate::influence::Influence;
+use crate::position::Position;
+use crate::types::{Color, Move, MoveKind, PieceKind, Square};
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::io::{self, Write};
+use std::path::PathBuf;
+
+const MAX_BINS: usize = 2048;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Kind { Root, Ordinary, Q }
+impl Kind { fn name(self) -> &'static str { match self { Self::Root => "root", Self::Ordinary => "ordinary", Self::Q => "q" } } }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Edge { Root, Main, Iio, Null, MateQ, ScoutRetry, QChild, Handoff }
+impl Edge { fn name(self) -> &'static str { match self {
+    Self::Root => "root_child", Self::Main => "main_child", Self::Iio => "iio_child",
+    Self::Null => "null_child", Self::MateQ => "mate_q_child", Self::ScoutRetry => "scout_retry",
+    Self::QChild => "q_child", Self::Handoff => "same_node_handoff",
+} } }
+#[derive(Clone)]
+struct Parent {
+    position: Position, native: bool, coherent: bool, checked: Option<bool>,
+    edge: Edge, movement: Option<Move>,
+}
+struct ActiveFrame {
+    id: u64, kind: Kind, position: Position, native: bool, coherent: bool,
+    checked: Option<bool>, demands: u64, supplied: u64, unassociated: u64, handoff: bool, parent: Option<Parent>,
+}
+struct Pending { id: u64, parent_id: u64, edge: Edge, movement: Option<Move>, consumed: bool }
+#[derive(Default, Clone)]
+struct Work(BTreeMap<String, u64>);
+impl Work {
+    fn add(&mut self, key: &str, value: u64) { *self.0.entry(key.to_owned()).or_default() += value; }
+}
+#[derive(Default)]
+struct State {
+    path: Option<PathBuf>, frames: Vec<ActiveFrame>, edges: Vec<Pending>, next: u64,
+    totals: BTreeMap<String, u64>, bins: BTreeMap<String, BTreeMap<String, u64>>,
+    invalid: bool, expecting_build: bool, completed_work: Option<Work>,
+}
+std::thread_local! { static STATE: RefCell<State> = RefCell::new(State::default()); }
+fn plus(map: &mut BTreeMap<String,u64>, key: &str, value: u64, bad: &mut bool) {
+    let entry = map.entry(key.to_owned()).or_default();
+    if let Some(sum) = entry.checked_add(value) { *entry = sum; }
+    else { *bad = true; *entry = u64::MAX; }
+}
+impl State {
+    fn add(&mut self, key: &str, value: u64) { plus(&mut self.totals, key, value, &mut self.invalid); }
+    fn next_id(&mut self)->u64 {
+        match self.next.checked_add(1) {Some(id)=>{self.next=id;id},None=>{self.invalid=true;u64::MAX}}
+    }
+    fn row(&mut self, key: String, values: &Work) {
+        if !self.bins.contains_key(&key) && self.bins.len() == MAX_BINS {
+            self.invalid = true; self.add("joint_bin_limit",1); return;
+        }
+        let row = self.bins.entry(key).or_default();
+        plus(row,"samples",1,&mut self.invalid);
+        for (name,value) in &values.0 { plus(row,name,*value,&mut self.invalid); }
+    }
+}
+/// Explicit process control; only the diagnostic ordinary binary calls this.
+pub fn start_from_env() {
+    let path = std::env::var_os("ROOK2_INFLUENCE_CENSUS").map(PathBuf::from);
+    STATE.with(|cell| { let mut state=cell.borrow_mut(); *state=State { path, ..State::default() }; });
+}
+fn changes(parent: &Position, child: &Position) -> usize {
+    parent.board.iter().zip(&child.board).filter(|(a,b)| a != b).count()
+}
+fn change_class(n: usize) -> &'static str { match n { 0=>"cells0",1=>"cells1",2=>"cells2",3=>"cells3",_=>"cells4plus" } }
+fn check_class(value: Option<bool>) -> &'static str { match value { Some(true)=>"checked",Some(false)=>"unchecked",None=>"check_unknown" } }
+fn transition_cohort(frame: &ActiveFrame) -> String {
+    match &frame.parent {
+        Some(parent) => format!("{}/{}/{}/{}/{}",frame.kind.name(),parent.edge.name(),
+            change_class(changes(&parent.position,&frame.position)),check_class(frame.checked),
+            if parent.native { "parent_native" } else { "parent_unproven" }),
+        None if frame.kind==Kind::Root => format!("root/root_entry/no_parent/{}",check_class(frame.checked)),
+        None => format!("{}/unassociated/no_parent/{}",frame.kind.name(),check_class(frame.checked)),
+    }
+}
+/// Diagnostic snapshot only; the numerical Node is untouched.
+pub(crate) struct Frame { id: Option<u64> }
+impl Frame {
+    pub(crate) fn enter(kind: Kind, position: &Position) -> Self {
+        STATE.with(|cell| {
+            let mut state=cell.borrow_mut(); if state.path.is_none() { return Self { id: None }; }
+            let id=state.next_id();
+            let mut link=None; let mut immediate=if kind==Kind::Root {"root_entry"} else {"unassociated"};
+            if kind != Kind::Root {
+                let edge_index=state.edges.len().checked_sub(1);
+                if let Some(index)=edge_index {
+                    let edge=&state.edges[index];
+                    if !edge.consumed && state.frames.last().is_some_and(|f| f.id==edge.parent_id) {
+                        let edge_kind=edge.edge;let movement=edge.movement;
+                        state.edges[index].consumed=true;
+                        let parent=state.frames.last().unwrap();
+                        immediate=edge_kind.name();
+                        if edge_kind==Edge::Handoff {
+                            // A delegation is not a new child. Preserve the prior actual edge.
+                            if parent.position != *position { state.invalid=true; }
+                            else { link=parent.parent.clone(); }
+                        } else {
+                            link=Some(Parent { position:parent.position,native:parent.native,
+                                coherent:parent.coherent,checked:parent.checked,edge:edge_kind,movement });
+                        }
+                    }
+                }
+            }
+            state.add("frames_entered",1);state.add(&format!("frames_entered.{}",kind.name()),1);
+            state.add(&format!("immediate_edge.{}",immediate),1);
+            if immediate=="same_node_handoff" {state.add("immediate_changes.cells0",1);}
+            else if let Some(parent)=&link { state.add(&format!("immediate_changes.{}",change_class(changes(&parent.position,position))),1); }
+            else { state.add("immediate_changes.unknown",1); }
+            state.frames.push(ActiveFrame { id,kind,position:*position,native:false,coherent:false,
+                checked:None,demands:0,supplied:0,unassociated:0,handoff:immediate=="same_node_handoff",parent:link });
+            Self { id:Some(id) }
+        })
+    }
+    pub(crate) fn id(&self) -> Option<u64> { self.id }
+    pub(crate) fn checked(&self, checked: bool) {
+        if let Some(id)=self.id { STATE.with(|cell| {
+            let mut state=cell.borrow_mut();
+            if let Some(frame)=state.frames.iter_mut().find(|frame| frame.id==id) { frame.checked=Some(checked); }
+            else { state.invalid=true; state.add("checked_owner_missing",1); }
+        }); }
+    }
+}
+impl Drop for Frame {
+    fn drop(&mut self) {
+        if let Some(id)=self.id { STATE.with(|cell| {
+            let mut state=cell.borrow_mut();
+            if !state.frames.last().is_some_and(|frame| frame.id==id) {
+                state.invalid=true;state.add("frame_drop_mismatch",1);return;
+            }
+            let frame=state.frames.pop().unwrap();state.add("frames_left",1);
+            state.add(&format!("frames_left.{}",frame.kind.name()),1);
+            state.add(if frame.native { "frames_with_native_map" } else { "frames_without_native_map" },1);
+            let mut work=Work::default();work.add("native_demands",frame.demands);work.add("some_events",frame.supplied);
+            work.add("unassociated_events",frame.unassociated);work.add("same_node_handoff",u64::from(frame.handoff));
+            let status=if frame.native {"native_map"} else if frame.supplied!=0 {"some_only"}
+                else if frame.unassociated!=0 {"unassociated_map_activity"} else {"no_map_events"};
+            state.add(&format!("frame_map_status.{}",status),1);work.add(&format!("frame_map_status.{}",status),1);
+            state.row(format!("frame/{}",transition_cohort(&frame)),&work);
+        }); }
+    }
+}
+pub(crate) struct EdgeGuard { id: Option<u64> }
+impl EdgeGuard {
+    pub(crate) fn new(edge: Edge,movement: Option<Move>) -> Self {
+        STATE.with(|cell| {
+            let mut state=cell.borrow_mut();if state.path.is_none() {return Self{id:None};}
+            if let Some(parent_id)=state.frames.last().map(|frame|frame.id) {
+                let id=state.next_id();
+                state.edges.push(Pending{id,parent_id,edge,movement,consumed:false});state.add("edges_opened",1);
+                Self{id:Some(id)}
+            } else {state.add("edge_without_frame",1);Self{id:None}}
+        })
+    }
+}
+impl Drop for EdgeGuard {
+    fn drop(&mut self) {
+        if let Some(id)=self.id {STATE.with(|cell| {
+            let mut state=cell.borrow_mut();
+            if !state.edges.last().is_some_and(|edge|edge.id==id) {state.invalid=true;state.add("edge_drop_mismatch",1);return;}
+            let edge=state.edges.pop().unwrap();state.add("edges_closed",1);
+            state.add(if edge.consumed {"edges_consumed"} else {"edges_unconsumed"},1);
+        });}
+    }
+}
+fn slider_envelope(kind:PieceKind,normal:u64,weak:u64)->Work {
+    let mut out=Work::default();out.add("source_calls",1);out.add("slider_sources",1);out.add(&format!("source_kind.{}",kind.index()),1);
+    out.add("directions",if kind==PieceKind::Queen {8}else{4});
+    out.add("normal_targets",normal.count_ones() as u64);out.add("weak_targets",weak.count_ones() as u64);
+    out.add("targets",(normal.count_ones()+weak.count_ones()) as u64);
+    out.add("weak_nonempty_sources",u64::from(weak!=0));out
+}
+fn piece_targets(position:&Position,side:Color,kind:PieceKind,source:Square,coherent:bool) -> Work {
+    let mut out=Work::default();out.add("source_calls",1);out.add(&format!("source_kind.{}",kind.index()),1);
+    match kind {
+        PieceKind::Pawn=>out.add("targets",PAWN_TARGETS[side.index()][(source.0&63) as usize].len as u64),
+        PieceKind::Knight=>out.add("targets",KNIGHT_SOURCES[(source.0&63) as usize].len as u64),
+        PieceKind::King=>out.add("targets",KING_TARGETS[(source.0&63) as usize].len as u64),
+        _=>{
+            out.add("slider_sources",1);out.add("directions",if kind==PieceKind::Queen {8}else{4});
+            if coherent {
+                let (normal,weak)=Influence::census_slider_masks(position,side,kind,source);
+                out=slider_envelope(kind,normal,weak);
+            } else {out.add("scalar_slider_target_counts_unknown",1);}
+        }
+    }
+    out
+}
+fn fresh_work(position:&Position,coherent:bool) -> Work {
+    let mut work=Work::default();work.add("producer_calls",1);work.add("zero_result_payload_bytes",128);work.add("output_payload_bytes",128);
+    for side in [Color::White,Color::Black] {
+        let sliders=[PieceKind::Bishop,PieceKind::Rook,PieceKind::Queen].into_iter()
+            .map(|kind|position.piece_squares(side,kind).len()).sum::<usize>();
+        let active=coherent && sliders!=0;
+        work.add(if active {"bitplane_colors"} else {"scalar_colors"},1);
+        if active {work.add("counter_plane_words_initialized",8);work.add("transpose_colors",1);}
+        for kind in PieceKind::ALL {
+            for &source in position.piece_squares(side,kind) {
+                work.add("full_sources",1);work.add(&format!("sources.{}",kind.index()),1);
+                let source_work=piece_targets(position,side,kind,source,coherent);
+                if matches!(kind,PieceKind::Bishop|PieceKind::Rook|PieceKind::Queen) {
+                    work.add("full_slider_sources",1);work.add("full_slider_directions",if kind==PieceKind::Queen {8}else{4});
+                    for (name,count) in &source_work.0 {work.add(&format!("slider.{}",name),*count);}
+                } else {work.add("pnk_targets",*source_work.0.get("targets").unwrap_or(&0));}
+                if active {
+                    let shift=match kind {PieceKind::Pawn=>6,PieceKind::Knight|PieceKind::Bishop=>4,PieceKind::Rook=>2,PieceKind::Queen=>1,PieceKind::King=>0};
+                    let weak=*source_work.0.get("weak_nonempty_sources").unwrap_or(&0)!=0;
+                    work.add("carry_plane_updates",if weak {8}else{8-shift});
+                }
+            }
+        }
+    }
+    work
+}
+/// Producer completion counts actual full builders, including unassociated calls.
+pub(crate) fn producer_completed(position:&Position,coherent:bool) {
+    let enabled=STATE.with(|cell|cell.borrow().path.is_some());if !enabled {return;}
+    let work=fresh_work(position,coherent);
+    STATE.with(|cell| {
+        let mut state=cell.borrow_mut();state.add("producer_completed",1);
+        state.add(if coherent {"producer_coherent"}else{"producer_scalar"},1);
+        let association=if state.expecting_build {"native_ensure"}else{"unassociated_direct"};
+        state.row(format!("producer/{}/{}",association,if coherent{"coherent"}else{"scalar"}),&work);
+        if state.expecting_build {
+            if state.completed_work.is_some() {state.invalid=true;state.add("multiple_producers_for_demand",1);}
+            state.completed_work=Some(work);
+        } else {state.add("unassociated_direct_producer",1);}
+    });
+}
+pub(crate) fn before_native_build() {
+    STATE.with(|cell| {let mut state=cell.borrow_mut();if state.path.is_none(){return;}
+        if state.expecting_build {state.invalid=true;state.add("nested_native_builder",1);}
+        state.expecting_build=true;state.completed_work=None;state.add("native_none_attempts",1);
+    });
+}
+fn aligned(source:Square,target:Square,direction:usize)->bool {
+    let df=target.file() as i16-source.file() as i16;let dr=target.rank() as i16-source.rank() as i16;
+    if df==0 && dr==0 {return false;}
+    let (step_f,step_r)=DIRECTIONS[direction];
+    if step_f==0 {df==0 && dr.signum()==step_r as i16}
+    else if step_r==0 {dr==0 && df.signum()==step_f as i16}
+    else {df.abs()==dr.abs() && df.signum()==step_f as i16 && dr.signum()==step_r as i16}
+}
+fn affected_work(parent:&Parent,child:&Position,child_coherent:bool)->Work {
+    let mut out=Work::default();let Some(movement)=parent.movement else {out.add("no_movement",1);return out;};
+    let ordinary=matches!(movement.kind(),MoveKind::Ordinary|MoveKind::Promotion(_));
+    out.add(if ordinary {"ordinary_or_promotion"}else{"special_not_two_cell_candidate"},1);
+    let from=movement.from();let to=movement.to();
+    let changed:Vec<usize>=parent.position.board.iter().zip(&child.board).enumerate().filter_map(|(i,(a,b))|(a!=b).then_some(i)).collect();
+    let shape=ordinary && changed.len()==2 && changed.contains(&(from.0 as usize)) && changed.contains(&(to.0 as usize))
+        && !parent.position.board[from.0 as usize].is_empty() && child.board[from.0 as usize].is_empty()
+        && !child.board[to.0 as usize].is_empty();
+    if !shape {out.add("not_two_cell_shape",1);return out;}
+    out.add("two_cell_shape",1);
+    if !parent.native {out.add("parent_native_unavailable",1);return out;}
+    out.add("parent_native_available_two_cell",1);
+    if !parent.coherent || !child_coherent {out.add("mask_coherence_unavailable",1);return out;}
+    out.add("certified_two_cell_for_masks",1);
+    out.add("parent_checked",u64::from(parent.checked==Some(true)));
+    for (position,source,label) in [(&parent.position,from,"remove_mover"),(&parent.position,to,"remove_victim"),(child,to,"add_mover")] {
+        let piece=position.board[source.0 as usize];if piece.is_empty(){continue;}
+        let work=piece_targets(position,piece.color(),piece.kind(),source,true);
+        for (name,count) in &work.0 {out.add(&format!("{}.{}",label,name),*count);}
+    }
+    out.add("promotion",u64::from(matches!(movement.kind(),MoveKind::Promotion(_))));
+    // Every collinear origin/direction of both colors; never nearest-blocker discovery.
+    for side in [Color::White,Color::Black] {
+        for kind in [PieceKind::Bishop,PieceKind::Rook,PieceKind::Queen] {
+            for &source in parent.position.piece_squares(side,kind) {
+                if source==from || source==to {continue;}
+                if parent.position.board[source.0 as usize]!=child.board[source.0 as usize] {out.add("unexpected_other_source_change",1);continue;}
+                let range=match kind {PieceKind::Bishop=>0..4,PieceKind::Rook=>4..8,_=>0..8};
+                let mut directions=0;
+                for direction in range {if aligned(source,from,direction)||aligned(source,to,direction){directions+=1;}}
+                if directions==0 {continue;}
+                out.add("affected_origins",1);out.add("affected_directions",directions);
+                out.add(&format!("affected_origins.color{}",side.index()),1);
+                let (old_normal,old_weak)=Influence::census_slider_masks(&parent.position,side,kind,source);
+                let (new_normal,new_weak)=Influence::census_slider_masks(child,side,kind,source);
+                for (normal,weak,label) in [(old_normal,old_weak,"replay_old_complete_source"),(new_normal,new_weak,"replay_new_complete_source")] {
+                    let work=slider_envelope(kind,normal,weak);
+                    for (name,count) in &work.0 {out.add(&format!("{}.{}",label,name),*count);}
+                }
+                // Cancel same-weight membership within this source only. Weight changes remain.
+                let changed_normal=old_normal^new_normal;let changed_weak=old_weak^new_weak;
+                out.add("same_normal_targets",(old_normal&new_normal).count_ones() as u64);
+                out.add("same_weak_targets",(old_weak&new_weak).count_ones() as u64);
+                out.add("changed_normal_targets",changed_normal.count_ones() as u64);
+                out.add("changed_weak_targets",changed_weak.count_ones() as u64);
+                out.add("changed_union_targets",(changed_normal|changed_weak).count_ones() as u64);
+                out.add("normal_remove_only_targets",(old_normal&!new_normal).count_ones() as u64);
+                out.add("normal_add_only_targets",(new_normal&!old_normal).count_ones() as u64);
+                out.add("weak_remove_only_targets",(old_weak&!new_weak).count_ones() as u64);
+                out.add("weak_add_only_targets",(new_weak&!old_weak).count_ones() as u64);
+            }
+        }
+    }
+    out
+}
+/// Called only after the unchanged numerical builder returned Some's new value.
+pub(crate) fn native_map_completed(owner:Option<u64>,position:&Position,coherent:bool) {
+    let enabled=STATE.with(|cell|cell.borrow().path.is_some());if !enabled{return;}
+    let (mut work,parent,cohort,associated)=STATE.with(|cell| {
+        let mut state=cell.borrow_mut();state.expecting_build=false;state.add("native_none_completed",1);
+        let work=state.completed_work.take().unwrap_or_else(||{state.invalid=true;state.add("missing_completed_producer",1);Work::default()});
+        let index=owner.and_then(|id|state.frames.iter().position(|f|f.id==id));
+        if let Some(index)=index {
+            // Equality is a sanity check only. The explicit owner and actual None event supply association.
+            if state.frames[index].position==*position {
+                let frame=&mut state.frames[index];frame.native=true;frame.coherent=coherent;
+                let Some(demands)=frame.demands.checked_add(1) else {state.invalid=true;return (work,None,"unassociated/counter_overflow".to_owned(),false);};frame.demands=demands;
+                let parent=frame.parent.clone();let cohort=transition_cohort(frame);let handoff=frame.handoff;
+                let mut work=work;work.add("same_node_handoff",u64::from(handoff));
+                state.add("native_none_associated",1);(work,parent,cohort,true)
+            } else {
+                state.add("native_owner_position_mismatch",1);
+                if let Some(frame)=state.frames.last_mut(){frame.unassociated+=1;}else{state.add("unassociated_event_without_frame",1);}
+                (work,None,"unassociated/owner_mismatch".to_owned(),false)
+            }
+        } else {
+            state.add("native_none_unassociated",1);
+            if let Some(frame)=state.frames.last_mut(){frame.unassociated+=1;}else{state.add("unassociated_event_without_frame",1);}
+            (work,None,"unassociated/no_owner".to_owned(),false)
+        }
+    });
+    if let Some(parent)=parent {
+        let affected=affected_work(&parent,position,coherent);for (name,count) in affected.0 {work.add(&name,count);}
+    } else {work.add("no_parent_context",1);}
+    STATE.with(|cell| {let mut state=cell.borrow_mut();
+        if !associated {state.add("demand_not_certified",1);}
+        state.row(format!("demand/{}",cohort),&work);
+    });
+}
+pub(crate) fn some_event(owner:Option<u64>) {
+    STATE.with(|cell| {let mut state=cell.borrow_mut();if state.path.is_none(){return;}
+        state.add("ensure_some_events",1);
+        if let Some(index)=owner.and_then(|id|state.frames.iter().position(|f|f.id==id)) {
+            state.frames[index].supplied+=1;
+            state.add("ensure_some_associated",1);
+        } else {
+            state.add("ensure_some_unassociated",1);
+            if let Some(frame)=state.frames.last_mut(){frame.unassociated+=1;}else{state.add("unassociated_event_without_frame",1);}
+        }
+        // A supplied or reused Some never creates a native-map certificate.
+    });
+}
+pub(crate) fn child_constructed(movement:Option<Move>) {
+    STATE.with(|cell| {let mut state=cell.borrow_mut();if state.path.is_none(){return;}
+        let kind=match movement.map(Move::kind) {
+            None=>"null",Some(MoveKind::Ordinary)=>"ordinary",Some(MoveKind::Promotion(_))=>"promotion",
+            Some(MoveKind::EnPassant)=>"en_passant",Some(MoveKind::Castle)=>"castle",
+        };
+        state.add("owned_child_constructions",1);state.add(&format!("owned_child_constructions.{}",kind),1);
+    });
+}
+fn write_map(file:&mut std::fs::File,map:&BTreeMap<String,u64>)->io::Result<()> {
+    write!(file,"{{")?;let mut first=true;
+    for (name,value) in map {if !first{write!(file,",")?;}first=false;write!(file,"{:?}:{}",name,value)?;}
+    write!(file,"}}")
+}
+/// Once at normal CLI completion, no stdout/stderr and no per-node file I/O.
+pub fn finish(engine_success:bool)->io::Result<()> {
+    STATE.with(|cell| {
+        let mut state=std::mem::take(&mut *cell.borrow_mut());let Some(path)=state.path.take() else{return Ok(());};
+        let complete=!state.invalid && state.frames.is_empty() && state.edges.is_empty() && !state.expecting_build && state.completed_work.is_none();
+        let mut file=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+        write!(file,"{{\"schema\":\"rook2-influence-eligibility-census-v1\",\"hook_version\":1,\"native_pid\":{},\"engine_success\":{},\"complete\":{},\"diagnostic_only\":true,\"live_frames\":{},\"pending_edges\":{},\"invalid_or_overflow\":{},\"totals\":",std::process::id(),engine_success,complete,state.frames.len(),state.edges.len(),state.invalid)?;
+        write_map(&mut file,&state.totals)?;write!(file,",\"joint_bins\":[")?;let mut first=true;
+        for (cohort,values) in &state.bins {
+            if !first{write!(file,",")?;}first=false;write!(file,"{{\"cohort\":{:?},\"counts\":",cohort)?;write_map(&mut file,values)?;write!(file,"}}")?;
+        }
+        writeln!(file,"],\"limits\":[\"diagnostic work is not machine instructions or traffic\",\"affected mask targets replay complete sources, not minimal changed rays\",\"scalar slider target counts are unknown\",\"FrameID is census source association, not production provenance\",\"thread local normal CLI census; no timing interpretation\"]}}")?;
+        file.flush()?;
+        if !complete {return Err(io::Error::other("incomplete influence census"));}
+        Ok(())
+    })
+}

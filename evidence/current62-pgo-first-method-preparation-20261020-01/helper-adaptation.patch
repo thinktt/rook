@@ -1,0 +1,168 @@
+--- accepted57/guard.py
++++ future-pgo-first/guard.py
+@@ -6,7 +6,11 @@
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ load=lambda p:json.loads(Path(p).read_text())
+ PLAN=load(HERE/'plan.json')
++assert PLAN.get('ready_for_candidate_activation') is True, 'INERT future method: no candidate selected/bound'
++assert PLAN.get('launch_authorized') is True and PLAN.get('parent_review_accepted') is True
++assert isinstance(PLAN.get('source_root'),str) and PLAN['source_root']
+ SOURCE=Path(PLAN['source_root'])
++assert SOURCE != ROOT, 'future isolated candidate only'
+ sys.dont_write_bytecode=True
+ sys.path.insert(0,str(SOURCE/'tools'))
+ from build import source_snapshot,tool_snapshot,cargo_configs
+@@ -23,30 +27,27 @@
+ 
+ def validate_authority(c):
+  assert c.get('authorized') is True and c.get('all_conflicting_native_work_terminal') is True
+- assert c.get('scope')=='bitplane-pin-summary-own-pgo-build-train-no-cpu'
++ assert c.get('scope')=='future-new-source-own-pgo-build-train-no-screen'
+  assert c['plan_sha256']==sha(HERE/'plan.json')
+  assert c['source_root']==str(SOURCE)
+  assert c['prepared_scripts_sha256']==load(HERE/'script-pins.json')
+- assert c['source_candidate_accepted'] is True
+- assert c['native193_library_accepted'] is True
+- assert c['generic_pilot_independent_terminal_path'] in c['generic_pilot_actual_terminals']
+- assert c['generic_pilot_advance_accepted'] is True
+- assert isinstance(PLAN['generic_candidate_sha256'],str) and len(PLAN['generic_candidate_sha256'])==64
+- assert c['generic_candidate_sha256']==PLAN['generic_candidate_sha256']
+- assert c['generic_pilot_evidence'] and c['generic_pilot_actual_terminals']
+- for path,digest in c['generic_pilot_evidence'].items():assert sha(path)==digest
+- for path,digest in c['generic_pilot_actual_terminals'].items():assert sha(path)==digest;terminal(path)
+- assert c['source_and_build_evidence'] and c['actual_terminals']
+- for path,digest in c['source_and_build_evidence'].items():assert sha(path)==digest
++ assert c['future_new_source_candidate_only'] is True
++ assert c['source_candidate_accepted'] is True and c['focused_native_accepted'] is True
++ # A generic timing pass is intentionally NOT an admission requirement.
++ assert c['candidate_selection_evidence'] and c['source_and_focused_evidence'] and c['actual_terminals']
++ for group in ['candidate_selection_evidence','source_and_focused_evidence']:
++  for path,digest in c[group].items():assert sha(path)==digest
+  for path,digest in c['actual_terminals'].items():assert sha(path)==digest;terminal(path)
+  assert c['training_cpu']==14 and c['sibling15_no_owned_task'] is True
+  assert c['quiet_window_and_interference_review']
++ assert c['parent_scheduling_and_resource_binding']
+  return c
+ 
+ def check_inputs():
+- assert len(PLAN['engine_source_sha256'])==PLAN['expected_source_files']==51
++ assert isinstance(PLAN['expected_source_files'],int) and PLAN['expected_source_files']>0
++ assert len(PLAN['engine_source_sha256'])==PLAN['expected_source_files']
+  assert len(PLAN['tool_source_sha256'])==PLAN['expected_tool_files']==23
+- assert PLAN['expected_source_total']==74
++ assert PLAN['expected_source_total']==PLAN['expected_source_files']+PLAN['expected_tool_files']
+  assert source_snapshot(SOURCE)==PLAN['engine_source_sha256']
+  assert tool_snapshot(SOURCE)==PLAN['tool_source_sha256']
+  assert tool_snapshot(ROOT)==PLAN['tool_source_sha256']
+@@ -84,6 +85,10 @@
+   profile='profile-generate' if mode=='instrumented' else 'profile-use'
+   expected=str(Path(PLAN['profile_raw']) if mode=='instrumented' else Path(PLAN['training'])/'merged.profdata')
+   assert options.get(profile)==expected and ('profile-use' if mode=='instrumented' else 'profile-generate') not in options
++  if mode=='instrumented':
++   assert 'llvm-args' not in options
++  else:
++   assert options.get('llvm-args')=='-pgo-warn-missing-function -enable-ext-tsp-block-placement=true -ext-tsp-apply-without-profile=false'
+   observed[source]=options
+  return observed
+ 
+--- accepted57/build_stage.py
++++ future-pgo-first/build_stage.py
+@@ -18,7 +18,7 @@
+   t=load(train/'training.json');v=load(train/'verification.json')
+   assert t['complete'] and v['complete'] and v['independent_remerge_byte_identical'] and v['original_checkReplay_count']==54 and v['raw_training_protocol_cases']==54
+   assert sha(train/'merged.profdata')==t['profile_sha256']==v['merged_profile_sha256']
+-  command+=['--pgo-use',str(train/'merged.profdata'),'--training-record',str(train/'training.json')]
++  command+=['--pgo-use',str(train/'merged.profdata'),'--training-record',str(train/'training.json'),'--ext-tsp-profiled']
+  run(command,HERE/(stage+'-build'),env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1'))
+  r=load(out/'receipt.json')
+  assert r['outcome']=='build-succeeded-with-stable-input-snapshot' and r['cargo_exit_code']==0
+@@ -26,7 +26,7 @@
+  assert r['tool_sha256_before']==r['tool_sha256_after']==PLAN['tool_source_sha256']
+  assert r['cargo_config_sha256_before']==r['cargo_config_sha256_after']==PLAN['cargo_config_sha256']
+  assert r['toolchain']==PLAN['toolchain'] and r['mode']=='generic' and r['target_cpu']=='x86-64' and r['target_triple']==PLAN['target_triple'] and r['jobs']==4
+- expected=PLAN['base_flags']+(['-C',f"profile-generate={Path(PLAN['profile_raw'])}"] if stage=='instrumented' else ['-C',f"profile-use={train/'merged.profdata'}",'-C','llvm-args=-pgo-warn-missing-function'])
++ expected=PLAN['base_flags']+(['-C',f"profile-generate={Path(PLAN['profile_raw'])}"] if stage=='instrumented' else ['-C',f"profile-use={train/'merged.profdata'}",'-C','llvm-args=-pgo-warn-missing-function -enable-ext-tsp-block-placement=true -ext-tsp-apply-without-profile=false'])
+  assert r['rust_flags']==expected
+  effective=check_thin_build(out,'instrumented' if stage=='instrumented' else 'profile-use')
+  warning=(out/'build.stderr').read_text().lower()
+--- accepted57/train.py
++++ future-pgo-first/train.py
+@@ -9,14 +9,13 @@
+ import sys
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "bitplane-pin-summary-pgo-training-20261020-01"
+ ROOT = HERE.parents[1]
+-BUILD = ROOT / 'evidence/bitplane-pin-summary-pgo-instrumented-build-20261020-01'
+-SOURCE = Path('/home/legolas/rook2-work/imp2-bitplane-pin-summary-20261020-01')
+ SPEC = Path('/home/legolas/king-spec/conformance/profiling')
+ sys.dont_write_bytecode=True
+-sys.path.insert(0, str(Path('/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-preparation-20261020-01')))
+-from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_thin_build
++sys.path.insert(0, str(HERE))
++from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_thin_build,PLAN,SOURCE
++OUT=Path(PLAN['training'])
++BUILD=Path(PLAN['instrumented_build'])
+ sys.path.insert(0, str(SOURCE / 'tools'))
+ from build import source_snapshot, cargo_configs, tool_snapshot
+ 
+--- accepted57/verify.py
++++ future-pgo-first/verify.py
+@@ -8,12 +8,12 @@
+ import subprocess
+ 
+ HERE = Path(__file__).resolve().parent
+-OUT = HERE.parent / "bitplane-pin-summary-pgo-training-20261020-01"
+ ROOT = HERE.parents[1]
+ sys.dont_write_bytecode=True
+-sys.path.insert(0,'/home/legolas/rook2/evidence/bitplane-pin-summary-pgo-preparation-20261020-01')
+-from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_thin_build,run
+-sys.path.insert(0,'/home/legolas/rook2-work/imp2-bitplane-pin-summary-20261020-01/tools')
++sys.path.insert(0,str(HERE))
++from guard import require_clearance,terminal,check_inputs,check_merge_tool,check_thin_build,run,PLAN,SOURCE
++OUT=Path(PLAN['training'])
++sys.path.insert(0,str(SOURCE/'tools'))
+ from build import source_snapshot,tool_snapshot
+ 
+ 
+@@ -38,7 +38,7 @@
+     terminal(OUT/'tool-terminal.json')
+     training = load(OUT/'training.json')
+     replay = load(OUT/'replay.json')
+-    build_path = ROOT/'evidence/bitplane-pin-summary-pgo-instrumented-build-20261020-01/receipt.json'
++    build_path = Path(PLAN['instrumented_build'])/'receipt.json'
+     build = load(build_path)
+     effective = check_thin_build(build_path.parent,'instrumented')
+     assert training['effective_rustc_options']==effective
+@@ -57,19 +57,19 @@
+         assert row['exit']=={'code':0,'signal':None} and row['error'] is None and row['stderr']==''
+         assert row['discardedObservedBytes']==0 and not row.get('cleanupUnconfirmed',False)
+     assert not (OUT/'replay.stderr').stat().st_size
+-    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), ('../bitplane-pin-summary-pgo-preparation-20261020-01/train.py', 'driver_sha256'),
++    for filename, key in [('replay.json', 'replay_sha256'), ('launch.json', 'launch_sha256'), (str(HERE/'train.py'), 'driver_sha256'),
+                           ('merged.profdata', 'profile_sha256'), ('merged.profdata.gz', 'profile_archive_sha256')]:
+         assert sha(OUT/filename) == training[key]
+     assert gzip.decompress((OUT/'merged.profdata.gz').read_bytes()) == (OUT/'merged.profdata').read_bytes()
+     assert all(sha(Path(p)) == h for p, h in training['input_sha256'].items())
+     assert sha(build_path) == training['instrumented_build_receipt']['sha256']
+     assert sha(build_path.parent/'rook2-exact') == training['instrumented_engine_sha256'] == build['binary_output']['sha256']
+-    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(Path('/home/legolas/rook2-work/imp2-bitplane-pin-summary-20261020-01'))
++    assert training['engine_source_sha256'] == build['source_sha256_before'] == source_snapshot(SOURCE)
+     assert sha(Path('/usr/bin/llvm-profdata-19').resolve()) == training['merge_tool_sha256']
+     terminal_receipt = load(OUT/'tool-terminal.json')
+     assert terminal_receipt['exit_code'] == 0
+     assert all(sha(Path(path))==h for path,h in load(OUT/'input-closure.json').items())
+-    assert tool_snapshot(Path('/home/legolas/rook2-work/imp2-bitplane-pin-summary-20261020-01'))==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
++    assert tool_snapshot(SOURCE)==load(HERE/'plan.json')['tool_source_sha256']==build['tool_sha256_before']==build['tool_sha256_after']
+     # Reuse the accepted raw protocol model and released original checker on
+     # training only; post-use54/wire is deliberately gated after the CPU pilot.
+     from raw_model import replay as verify_raw_replay
+@@ -87,7 +87,7 @@
+     verification = dict(complete=True, effective_rustc_options=effective, independent_remerge_byte_identical=True, independent_remerge_exit_code=result.returncode, independent_remerge_command=command, independent_profile_sha256=sha(merged), strict_replays=54, original_checkReplay_count=54, raw_training_protocol_cases=54, raw_profiles_independently_hashed=54,
+           merged_profile_sha256=training['profile_sha256'], training_record_sha256=sha(OUT/'training.json'),
+           driver_terminal_sha256=sha(OUT/'tool-terminal.json'), verifier_sha256=sha(Path(__file__)),
+-          scope='Own exact bitplane-pin-summary candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
++          scope='Own exact future selected candidate compiler training and independent raw/PID/profile remerge only; no production timing interpretation')
+     check_inputs()
+     write('verification.json', verification)
+     print(json.dumps(verification))

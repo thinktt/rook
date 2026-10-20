@@ -1,0 +1,131 @@
+--- b/src/activity.rs
++++ a/src/activity.rs
+@@ -202,31 +202,14 @@
+     if victim.is_empty() {
+         return category;
+     }
+-    // Preserve the existing kind validation here, after emptiness and after
+-    // the caller's relation evaluation, including all nonempty raw aliases.
+-    let tag = victim.0 & 7;
+-    if tag == 0 || tag == 7 {
+-        panic!("invalid piece code");
+-    }
+-    match kind {
+-        PieceKind::Knight | PieceKind::Bishop => {
+-            if tag == 2 || tag == 3 {
+-                2
+-            } else if tag >= 4 {
+-                3
+-            } else {
+-                category
+-            }
+-        }
+-        PieceKind::Rook => {
+-            if tag == 4 {
+-                2
+-            } else if tag >= 5 {
+-                3
+-            } else {
+-                category
+-            }
+-        }
++    match (kind, victim.kind()) {
++        (PieceKind::Knight | PieceKind::Bishop, PieceKind::Knight | PieceKind::Bishop) => 2,
++        (
++            PieceKind::Knight | PieceKind::Bishop,
++            PieceKind::Rook | PieceKind::Queen | PieceKind::King,
++        ) => 3,
++        (PieceKind::Rook, PieceKind::Rook) => 2,
++        (PieceKind::Rook, PieceKind::Queen | PieceKind::King) => 3,
+         _ => category,
+     }
+ }
+@@ -845,88 +828,3 @@
+         }
+     }
+ }
+-
+-#[cfg(test)]
+-mod experiment64_tests {
+-    use super::*;
+-    use std::panic::{catch_unwind, AssertUnwindSafe};
+-
+-    // Exact pre-trial capture_priority owner, renamed only; global Piece::kind
+-    // remains unchanged and is independent of the new low-tag predicates.
+-fn original_capture_priority(kind: PieceKind, victim: Piece, category: i64) -> i64 {
+-    if victim.is_empty() {
+-        return category;
+-    }
+-    match (kind, victim.kind()) {
+-        (PieceKind::Knight | PieceKind::Bishop, PieceKind::Knight | PieceKind::Bishop) => 2,
+-        (
+-            PieceKind::Knight | PieceKind::Bishop,
+-            PieceKind::Rook | PieceKind::Queen | PieceKind::King,
+-        ) => 3,
+-        (PieceKind::Rook, PieceKind::Rook) => 2,
+-        (PieceKind::Rook, PieceKind::Queen | PieceKind::King) => 3,
+-        _ => category,
+-    }
+-}
+-
+-    const CATEGORIES: [i64; 9] = [i64::MIN, -17, -1, 0, 1, 2, 3, 41, i64::MAX];
+-
+-    fn panic_text(result: Result<i64, Box<dyn std::any::Any + Send>>) -> String {
+-        let payload = result.expect_err("invalid nonempty tag must panic");
+-        if let Some(text) = payload.downcast_ref::<&str>() {
+-            text.to_string()
+-        } else if let Some(text) = payload.downcast_ref::<String>() {
+-            text.clone()
+-        } else {
+-            panic!("unexpected panic payload type");
+-        }
+-    }
+-
+-    #[test]
+-    fn experiment64_capture_priority_all_returning_raw_tags_and_categories() {
+-        for raw in 0..=255u8 {
+-            let victim = Piece(raw);
+-            if raw != 0 && matches!(raw & 7, 0 | 7) {
+-                continue;
+-            }
+-            for kind in PieceKind::ALL {
+-                for category in CATEGORIES {
+-                    assert_eq!(capture_priority(kind, victim, category),
+-                               original_capture_priority(kind, victim, category),
+-                               "raw={raw} kind={kind:?} category={category}");
+-                }
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn experiment64_capture_priority_all_invalid_aliases_keep_panic_and_lazy_empty() {
+-        for raw in 1..=255u8 {
+-            if !matches!(raw & 7, 0 | 7) {
+-                continue;
+-            }
+-            for kind in PieceKind::ALL {
+-                for category in CATEGORIES {
+-                    let old = panic_text(catch_unwind(AssertUnwindSafe(||
+-                        original_capture_priority(kind, Piece(raw), category))));
+-                    let new = panic_text(catch_unwind(AssertUnwindSafe(||
+-                        capture_priority(kind, Piece(raw), category))));
+-                    assert_eq!(old, "invalid piece code");
+-                    assert_eq!(new, old, "raw={raw} kind={kind:?} category={category}");
+-                }
+-            }
+-        }
+-        for kind in PieceKind::ALL {
+-            for category in CATEGORIES {
+-                assert_eq!(capture_priority(kind, Piece::EMPTY, category), category);
+-            }
+-        }
+-        // The Queen opponent-zero shortcut still reaches capture validation:
+-        // it must not turn an invalid nonempty victim into an accepted category.
+-        let influence = Influence { profiles: [[0; 64]; 2] };
+-        let target = Square::parse("d4").unwrap();
+-        let result = catch_unwind(AssertUnwindSafe(|| direct_category(
+-            &influence, Color::White, PieceKind::Queen, target, Piece(7))));
+-        assert_eq!(panic_text(result), "invalid piece code");
+-    }
+-}

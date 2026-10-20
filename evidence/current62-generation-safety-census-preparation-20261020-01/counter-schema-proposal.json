@@ -1,0 +1,146 @@
+{
+  "prospective_only": true,
+  "schema": "rook2-generation-safety-demand-v1",
+  "scope": "whole native process, not search-only phase",
+  "top": [
+    "schema",
+    "pid",
+    "complete",
+    "overflow",
+    "invalid",
+    "calls_rows"
+  ],
+  "call_rows": {
+    "exact_count": 6,
+    "dimensions": {
+      "limit": [
+        "full512",
+        "limit2"
+      ],
+      "checkers": [
+        "0",
+        "1",
+        "2plus_saturated"
+      ]
+    },
+    "counters": [
+      "calls",
+      "safety_new",
+      "prefix_limit_before_safety",
+      "pin_summary_calls",
+      "pin_summary_zero",
+      "pin_summary_nonzero",
+      "single_check_pawn_prefix_calls",
+      "threshold_returns",
+      "exhausted_returns",
+      "emitted_moves",
+      "output_len_sum",
+      "promotion_destination_trials",
+      "promotion_destination_accepts",
+      "promotion_choices_emitted",
+      "projection_calls"
+    ],
+    "source_entered": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "piece_cursor_destinations": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "piece_blocker_rejects": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "safety_trials_by_source": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "routes": [
+      "unchecked_unpinned_accept",
+      "unchecked_pinned_projection_accept",
+      "unchecked_pinned_projection_reject",
+      "checked_offmask_reject",
+      "checked_onmask_projection_accept",
+      "checked_onmask_projection_reject",
+      "king_projection_accept",
+      "king_projection_reject",
+      "unexpected_special_accepts_route"
+    ],
+    "special_routes": [
+      "ep_projection_accept",
+      "ep_projection_reject",
+      "castle_transit_projection_accept",
+      "castle_transit_projection_reject",
+      "castle_final_projection_accept",
+      "castle_final_projection_reject"
+    ],
+    "threshold_stage": [
+      "ep",
+      "castle",
+      "early_king",
+      "pawns",
+      "knight",
+      "bishop",
+      "rook",
+      "queen",
+      "king"
+    ],
+    "bounded_final_count_histogram": [
+      "0",
+      "1",
+      "2"
+    ],
+    "pawn_geometry_counters": [
+      "capture_offsets_inboard",
+      "capture_victim_eligible",
+      "single_forward_offsets_inboard",
+      "single_forward_empty",
+      "double_forward_empty"
+    ]
+  },
+  "raw_pawn_geometry_counters": [
+    "capture_offsets_inboard",
+    "capture_victim_eligible",
+    "single_forward_offsets_inboard",
+    "single_forward_empty",
+    "double_forward_empty"
+  ],
+  "numeric_domain": "checked u64; overflow or partition error invalidates diagnostic, never core branching; JSON integer exactness required by offline verifier",
+  "reconciliation": [
+    "calls == safety_new + prefix_limit_before_safety",
+    "calls == threshold_returns + exhausted_returns",
+    "pin_summary_calls == pin_summary_zero + pin_summary_nonzero",
+    "safety_trials == sum(exclusive GenerationSafety::accepts routes)",
+    "unexpected_special_accepts_route == 0",
+    "projection_calls == unchecked_pinned_accept/reject + checked_onmask_accept/reject + king_accept/reject + all EP/transit/final special projection outcomes",
+    "emitted_moves == accepted nonpromotion Safety trials + promotion_choices_emitted + ep_projection_accept + castle_final_projection_accept",
+    "promotion_destination_accepts <= promotion_choices_emitted <= 4*promotion_destination_accepts",
+    "emitted_moves == output_len_sum",
+    "for limit2, histogram0+1+2 == calls and output_len_sum == histogram1+2*histogram2",
+    "for full512 admitted current domain, threshold_returns == 0; unexpected hit stops review, no silent relaxation"
+  ],
+  "not_runtime_or_measured_schema": true,
+  "derived_definitions": {
+    "safety_trials": "sum(safety_trials_by_source)",
+    "accepted_nonpromotion_safety_trials": "sum(accepted routes) - promotion_destination_accepts",
+    "limit2_complete_result": "exhausted return with final count0 or1; source caller may reuse that complete list",
+    "limit2_two_witness_result": "count2 reached; threshold stop may coincide with actual exhaustion, no full-list prefix claim"
+  }
+}

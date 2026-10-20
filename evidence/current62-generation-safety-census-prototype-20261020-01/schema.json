@@ -1,0 +1,109 @@
+{
+  "prospective_only": false,
+  "schema": "rook2-generation-safety-demand-v1",
+  "top_fields": [
+    "schema",
+    "pid",
+    "complete",
+    "overflow",
+    "invalid",
+    "calls_rows"
+  ],
+  "row_dimensions": {
+    "limit": [
+      "full512",
+      "limit2"
+    ],
+    "checkers": [
+      "0",
+      "1",
+      "2plus_saturated"
+    ]
+  },
+  "scalar_fields": [
+    "calls",
+    "safety_new",
+    "prefix_limit_before_safety",
+    "pin_summary_calls",
+    "pin_summary_zero",
+    "pin_summary_nonzero",
+    "single_check_pawn_prefix_calls",
+    "threshold_returns",
+    "exhausted_returns",
+    "emitted_moves",
+    "output_len_sum",
+    "promotion_destination_trials",
+    "promotion_destination_accepts",
+    "promotion_choices_emitted",
+    "projection_calls"
+  ],
+  "array_fields": {
+    "source_entered": 6,
+    "piece_cursor_destinations": 6,
+    "piece_blocker_rejects": 6,
+    "safety_trials_by_source": 6
+  },
+  "object_fields": {
+    "routes": [
+      "unchecked_unpinned_accept",
+      "unchecked_pinned_projection_accept",
+      "unchecked_pinned_projection_reject",
+      "checked_offmask_reject",
+      "checked_onmask_projection_accept",
+      "checked_onmask_projection_reject",
+      "king_projection_accept",
+      "king_projection_reject",
+      "unexpected_special_accepts_route"
+    ],
+    "special_routes": [
+      "ep_projection_accept",
+      "ep_projection_reject",
+      "castle_transit_projection_accept",
+      "castle_transit_projection_reject",
+      "castle_final_projection_accept",
+      "castle_final_projection_reject"
+    ],
+    "threshold_stage": [
+      "ep",
+      "castle",
+      "early_king",
+      "pawns",
+      "knight",
+      "bishop",
+      "rook",
+      "queen",
+      "king"
+    ],
+    "pawn_geometry_counters": [
+      "capture_offsets_inboard",
+      "capture_victim_eligible",
+      "single_forward_offsets_inboard",
+      "single_forward_empty",
+      "double_forward_empty"
+    ]
+  },
+  "histogram_field": "bounded_final_count_histogram",
+  "histogram_length": 3,
+  "source_order": [
+    "Pawn",
+    "Knight",
+    "Bishop",
+    "Rook",
+    "Queen",
+    "King"
+  ],
+  "actual_builder_schema_pending": false,
+  "builder_source": "/home/legolas/rook2-work/imp2-generation-safety-census-20261020-01/src/generation_census.rs",
+  "environment": "ROOK2_GENERATION_SAFETY_CENSUS_PATH",
+  "path_policy": "absolute, create_new, once after run returns, <=65536 bytes, write_all and flush; missingpath/IOfailure forces native diagnostic exit1",
+  "counter_domain": {
+    "type": "u64 exact decimal JSON integer",
+    "minimum": 0,
+    "maximum": 18446744073709551615,
+    "overflow": "checked addition marks overflow, complete false; no core control change"
+  },
+  "row_order": "full512/0,full512/1,full512/2plus_saturated,limit2/0,limit2/1,limit2/2plus_saturated",
+  "source_entered_scope": "Actual typed pawns/pieces loop entry only; EP and castles are special-route cohorts, no extra inventory walk",
+  "schema_proof_scope": "Actual source serializer contract, not a successful runtime report",
+  "thread_scope": "Current normal native single main thread; no invented aggregation of hypothetical external threads"
+}

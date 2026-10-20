@@ -1,0 +1,9 @@
+# Next functional composition after CPU windows
+
+Select exact generic110 native45/tool23 plus its40-file frontend and the independent joined110 cold module/main additions. The two proposals each start from exact post109; only generic changes native ordinary/timed/Stopped and actual_timed projection, while joined changes new joined_search/main. Preserve both frozen/proposal endpoints and apply an explicitly additive main merge. No root/source adoption is implied.
+
+Expected union (to be independently verified after CPU windows):111operations,7614cases,108complete original files; source109files=45native+23tools+41cold;173native and199DIAG declarations. The joined post-review strengthening preserves old reviewed patch and adds only assertions of existing native root/fallback invariants. Source remains unparsed/unrun/unfrozen at this plan stage.
+
+Wait for generic independent read-only review, parent source acceptance and closure of both CPU windows. Then freeze exact source/patch/inverse/input/declaration inventory and authorize a fresh generic/native/strict54/eightwire24/full111DIAG/independent raw exit/image/source/archive closure. Codegen compares actual default ordinary/IIO/Q/timed/Result ABI against exact post109 and verifies false specialization only in diagnostic scope; frozen source equality can later bind cold-only compositions. No separate standalone generic or joined execution is needed if this exact composition covers their full original files and admission units. Preserve failed builds/tests and revise source explicitly before any repair.
+
+Persistent113 proposal is a separate cold-only post109 branch; controlled timed112 is a separate generic110 branch. Later combine only after exact reviewed endpoints and fresh appropriate gates, never silently move a parent or reuse its timings.

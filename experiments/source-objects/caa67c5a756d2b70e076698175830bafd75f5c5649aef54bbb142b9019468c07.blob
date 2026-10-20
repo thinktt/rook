@@ -1,0 +1,68 @@
+--- /home/legolas/rook2/evidence/shelter-ring-value-static-backend-review-20261019-01/capture.py
++++ /home/legolas/rook2/evidence/activity-borrowed-geometry-backend-review-20261019-01/capture.py
+@@ -1,9 +1,9 @@
+-"""Bounded authorized41 static comparison; no engine or source mutation."""
++"""Bounded authorized42 static comparison; no engine or source mutation."""
+ from pathlib import Path
+ import json,hashlib,os,subprocess,sys,re
+ P=Path(__file__).resolve().parent;E=P.parent
+-D={"control":E/'pressure-value-static-generic-build-20261019-01',"candidate":E/'shelter-ring-value-static-generic-build-20261019-01'}
+-EXPECTED={"control":"adbf66a39b710bc0f44db2ceb99cac7b823fc02962e4c23a2d6ec12dfa92d664","candidate":"7009a40f1c0b340b03183aded58424155486852c80b0bdee1676eb48bd359fee"}
++D={"control":E/'pressure-value-static-generic-build-20261019-01',"candidate":E/'activity-borrowed-geometry-generic-build-20261019-01'}
++EXPECTED={"control":"adbf66a39b710bc0f44db2ceb99cac7b823fc02962e4c23a2d6ec12dfa92d664","candidate":"7177275ade2989d139998fcc667b0953a4b0edcd2617c1101bc51906a2bab3b3"}
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest();load=lambda p:json.loads(Path(p).read_text())
+ def save(n,q):
+  with (P/n).open('x') as f:json.dump(q,f,indent=2);f.write('\n')
+@@ -11,8 +11,8 @@
+ assert os.environ['PATH']=='/usr/bin:/bin' and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+ assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
+ pins={str(P/'capture.py'):sha(P/'capture.py')};receipts={}
+-freeze=E/'shelter-ring-value-static-parent-review-20261019-01/source-freeze.json';q=load(freeze);pins[str(freeze)]=sha(freeze)
+-assert q['source_graph']=='8926d8c56cba95715d236d7df670cf146b8b70cfefbf5681d9590624ce858f9a'
++freeze=E/'activity-borrowed-geometry-parent-review-20261019-01/source-freeze.json';q=load(freeze);pins[str(freeze)]=sha(freeze)
++assert q['source_graph']=='64cef0f22818677df07aebc20c1e7072e53c1efcc1cf1e2d87274fb585ed48cd'
+ for side,b in D.items():
+  r=load(b/'receipt.json');receipts[side]=r
+  assert r['cargo_exit_code']==0 and r['mode']=='generic' and r['pgo']['mode']=='none'
+@@ -20,23 +20,23 @@
+  assert r['source_sha256_before']==r['source_sha256_after'] and len(r['source_sha256_before'])==49
+  assert r['tool_sha256_before']==r['tool_sha256_after'] and len(r['tool_sha256_before'])==23
+  assert sha(b/'rook2-exact')==EXPECTED[side]==r['binary_output']['sha256']
+- terminal_path=(E/'shelter-ring-value-static-parent-review-20261019-01/generic-build-tool-terminal.json') if side=='candidate' else b/'tool-terminal.json'
++ terminal_path=b/'tool-terminal.json'
+  term=load(terminal_path);pins[str(terminal_path)]=sha(terminal_path)
+  if side=='candidate':
+-  assert term['exit_code']==0 and term['actual_terminal_chunk']=='7c6c77' and term['session_id']==50541 and term['launch_actual_chunk']=='34f66f'
+-  assert term['artifact_sha256']==EXPECTED[side] and term['result_sha256']==sha(E/'shelter-ring-value-static-generic-build-execution-20261019-01/result.json')
++  assert term['exit_code']==0 and term['actual_terminal_chunk']=='43e72e' and term['session_id']==84692 and term['launch_actual_chunk']=='947b92'
++  assert term['artifact_sha256']==EXPECTED[side] and term['result_sha256']==sha(E/'activity-borrowed-geometry-generic-build-execution-20261019-01/result.json')
+  else:assert term['actual_tool_terminal_observed'] and term['exit_code']==0 and (term.get('terminal_chunk_id') or term.get('chunk_id'))
+  for n in ['receipt.json','rook2-exact','frozen-image.json','build.stderr']:pins[str(b/n)]=sha(b/n)
+  for n,h in (r['source_sha256_before']|r['tool_sha256_before']).items():
+   f=b/'source-before'/n;assert sha(f)==h;pins[str(f)]=h
+  log=(b/'build.stderr').read_text();lines=[l for l in log.splitlines() if 'Running ' in l and '--crate-type bin' in l and 'src/bin/rook2.rs' in l]
+  assert len(lines)==1 and '-C lto=thin ' in lines[0] and '-C codegen-units=1 ' in lines[0]
+-execution=E/'shelter-ring-value-static-generic-build-execution-20261019-01/result.json';pins[str(execution)]=sha(execution);assert load(execution)['complete'] and load(execution)['source_unchanged']
++execution=E/'activity-borrowed-geometry-generic-build-execution-20261019-01/result.json';pins[str(execution)]=sha(execution);assert load(execution)['complete'] and load(execution)['source_unchanged']
+ a,b=receipts.values()
+ for k in ['mode','target_triple','target_cpu','jobs','toolchain','build_effective_environment']:assert a[k]==b[k],k
+ assert a['tool_sha256_before']==b['tool_sha256_before']
+ assert set(a['source_sha256_before'])==set(b['source_sha256_before'])
+-assert [n for n,h in a['source_sha256_before'].items() if h!=b['source_sha256_before'][n]]==['src/shelter.rs']
++assert sorted(n for n,h in a['source_sha256_before'].items() if h!=b['source_sha256_before'][n])==['src/activity.rs','src/evaluator.rs','src/ordinary.rs','src/quiescence.rs']
+ assert q['files_sha256']==b['source_sha256_before']|b['tool_sha256_before']
+ for t in ['nm','objdump','readelf','size']:pins['/usr/bin/'+t]=sha('/usr/bin/'+t)
+ def run(argv,stem):
+@@ -59,10 +59,10 @@
+   side,addr=spec.split(':');addr=int(addr,16);assert side in D
+   rows=[m for l in (P/(side+'-nm.stdout')).read_text().splitlines() if (m:=re.match(r'^([0-9a-f]+) ([0-9a-f]+) [tT] (.*)$',l)) and int(m[1],16)==addr]
+   assert len(rows)==1;r=rows[0];size=int(r[2],16);name=r[3]
+-  assert 'rook2::shelter::' in name or 'full_impl' in name
++  assert any(x in name for x in ['rook2::activity::','full_impl','full_for_search'])
+   stem=side+'-body-'+format(addr,'x');commands.append(run(['/usr/bin/objdump','-d','-w','-C','-Mintel','--no-show-raw-insn','--start-address='+hex(addr),'--stop-address='+hex(addr+size),str(D[side]/'rook2-exact')],stem))
+   bodies.append({'side':side,'address':addr,'bytes':size,'symbol':name,'stdout':stem+'.stdout'})
+- assert len(bodies)<=12 and sum((P/r['stdout']).stat().st_size for r in bodies)<=131072
++ assert len(bodies)<=12 and sum((P/r['stdout']).stat().st_size for r in bodies)<=1048576
+  assert all(sha(p)==h for p,h in pins.items());save('bodies.json',{'complete':True,'bodies':bodies,'commands':commands,'all_inputs_unchanged':True})
+ else:raise ValueError(stage)
+ print(json.dumps({'complete':True,'stage':stage,'engine_runs':0}))

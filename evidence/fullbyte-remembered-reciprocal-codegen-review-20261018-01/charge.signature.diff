@@ -1,0 +1,155 @@
+--- control/charge
++++ candidate/charge
+@@ -6,7 +6,7 @@
+ push rbx
+ sub rsp,0x128
+ mov rax,QWORD PTR [rsi+0x8]
+-mov rbx,QWORD PTR [rsi+0x6340]
++mov rbx,QWORD PTR [rsi+0x6348]
+ cmp rbx,rax
+ setae cl
+ test BYTE PTR [rsi],cl
+@@ -15,7 +15,7 @@
+ mov QWORD PTR [rdi+0x8],rax
+ jmp LOCAL+0x4a
+ inc rbx
+-mov QWORD PTR [rsi+0x6340],rbx
++mov QWORD PTR [rsi+0x6348],rbx
+ test ebx,0xfff
+ jne LOCAL+0x47
+ cmp DWORD PTR [rsi+0x10],0x3
+@@ -31,7 +31,7 @@
+ ret 
+ mov QWORD PTR [rsp+0x30],rdx
+ mov QWORD PTR [rsp],rdi
+-mov r12,QWORD PTR [rsi+0x55a0]
++mov r12,QWORD PTR [rsi+0x55a8]
+ movzx r14d,BYTE PTR [rsi+0x168]
+ movzx ecx,r14b
+ cmp DWORD PTR [rsi+0x78],ecx
+@@ -57,7 +57,7 @@
+ mov rbp,rsi
+ mov rsi,rcx
+ xor ecx,ecx
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x8b0]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x8b8]
+ cmp rax,0x7fffffff
+ mov r13d,0x7fffffff
+ cmovb r13,rax
+@@ -84,7 +84,7 @@
+ mov BYTE PTR [rbp+0x3d],0x2
+ mov BYTE PTR [rbp+0x3e],r14b
+ mov QWORD PTR [rsp+0x8],rbp
+-mov rsi,QWORD PTR [rbp+0x2ff0]
++mov rsi,QWORD PTR [rbp+0x2ff8]
+ movabs rbp,0x8000000000000000
+ lea rdi,[rsp+0x38]
+ call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x30]
+@@ -104,7 +104,7 @@
+ mov rdx,QWORD PTR [rsp+0x48]
+ lea rdi,[rsp+0x38]
+ mov rsi,r12
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x780]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x788]
+ test r14,r14
+ je LOCAL+0x1d1
+ mov rdi,r12
+@@ -145,10 +145,10 @@
+ cmp al,0x7
+ je LOCAL+0x195
+ mov rcx,QWORD PTR [rsp+0x8]
+-cmp QWORD PTR [rcx+0x2fb0],rbp
++cmp QWORD PTR [rcx+0x2fb8],rbp
+ je LOCAL+0x4a0
+ movzx ecx,al
+-lea rdx,[PCREL anon.6885b4ebbb9ebb005495b342e4a07d64.474.llvm.12549816398431449828+0x48d]
++lea rdx,[PCREL anon.6c02fb29ac5f93ab719a77cb99b866e3.474.llvm.13449752346486655729+0x48d]
+ movsxd rcx,DWORD PTR [rdx+rcx*4]
+ add rcx,rdx
+ jmp rcx
+@@ -157,12 +157,12 @@
+ shr eax,0x8
+ and al,0x1
+ mov rcx,QWORD PTR [rsp+0x8]
+-mov BYTE PTR [rcx+0x2fdc],al
++mov BYTE PTR [rcx+0x2fe4],al
+ jmp LOCAL+0x195
+ mov rax,QWORD PTR [rsp+0x8]
+-mov BYTE PTR [rax+0x2fdd],0x1
++mov BYTE PTR [rax+0x2fe5],0x1
+ mov BYTE PTR [rsp+0x38],0x2
+-mov rdi,QWORD PTR [rax+0x2ff8]
++mov rdi,QWORD PTR [rax+0x3000]
+ lea rsi,[rsp+0x38]
+ call <rook2::WireHost<W,E> as rook2::host::Host>::publish
+ test rax,rax
+@@ -170,10 +170,10 @@
+ mov bpl,0x4
+ jmp LOCAL+0x228
+ mov r14,QWORD PTR [rsp+0x8]
+-mov ebp,DWORD PTR [r14+0x5628]
++mov ebp,DWORD PTR [r14+0x5630]
+ lea r13,[r14+0x80]
+ mov rdi,r13
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x2d8]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x2e0]
+ shr rax,0x20
+ movzx ecx,ax
+ lea rdi,[rsp+0x38]
+@@ -205,7 +205,7 @@
+ push r10
+ push r11
+ push rbp
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x3d0]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x3e0]
+ add rsp,0x20
+ mov rax,QWORD PTR [rsp+0xd8]
+ movabs rcx,0x8000000000000000
+@@ -215,13 +215,13 @@
+ mov bl,0x15
+ jmp LOCAL+0x228
+ mov rax,QWORD PTR [rsp+0x8]
+-lea rdi,[rax+0x2fb0]
+-mov edx,DWORD PTR [rax+0x2fd8]
+-movzx ecx,BYTE PTR [rax+0x2fe1]
+-movzx r8d,BYTE PTR [rax+0x2fe2]
++lea rdi,[rax+0x2fb8]
++mov edx,DWORD PTR [rax+0x2fe0]
++movzx ecx,BYTE PTR [rax+0x2fe9]
++movzx r8d,BYTE PTR [rax+0x2fea]
+ mov esi,r12d
+ mov r9d,r13d
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x600]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x608]
+ cmp al,0x3
+ setne bpl
+ shl bpl,0x2
+@@ -235,7 +235,7 @@
+ je LOCAL+0x47
+ jmp LOCAL+0x22c
+ mov rax,QWORD PTR [rsp+0x8]
+-mov BYTE PTR [rax+0x2fde],0x0
++mov BYTE PTR [rax+0x2fe6],0x0
+ jmp LOCAL+0x195
+ movzx ecx,WORD PTR [rsp+0xe0]
+ mov rdx,QWORD PTR [rsp+0xe8]
+@@ -254,7 +254,7 @@
+ mov WORD PTR [rsp+0x48],cx
+ mov BYTE PTR [rsp+0x38],0x1
+ mov rax,QWORD PTR [rsp+0x8]
+-mov rdi,QWORD PTR [rax+0x2ff8]
++mov rdi,QWORD PTR [rax+0x3000]
+ lea rsi,[rsp+0x38]
+ call <rook2::WireHost<W,E> as rook2::host::Host>::publish
+ test rax,rax
+@@ -267,7 +267,7 @@
+ call core::ptr::drop_in_place<std::io::error::Error>
+ mov bpl,0x5
+ jmp LOCAL+0x228
+-lea rdi,[PCREL anon.6885b4ebbb9ebb005495b342e4a07d64.474.llvm.12549816398431449828+0x90d]
+-lea rdx,[PCREL anon.6885b4ebbb9ebb005495b342e4a07d64.469.llvm.12549816398431449828+0x468]
++lea rdi,[PCREL anon.6c02fb29ac5f93ab719a77cb99b866e3.474.llvm.13449752346486655729+0x8cb]
++lea rdx,[PCREL anon.6c02fb29ac5f93ab719a77cb99b866e3.469.llvm.13449752346486655729+0x450]
+ mov esi,0x25
+-call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x220]
++call QWORD PTR [PCREL _GLOBAL_OFFSET_TABLE_+0x228]

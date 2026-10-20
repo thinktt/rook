@@ -1,0 +1,29 @@
+--- a/diagnostic/src/persistent_sessions.rs
++++ b/diagnostic/src/persistent_sessions.rs
+@@ -585,15 +585,25 @@
+     fn fixed_seconds_acquire_native_clock_seed_again_after_new_without_epoch_reset() {
+         let mut state=Session::<true>::default();
+         for line in ["new","force","easy","level 0 5 0","cm_parm md=3 rnd=0 tts=65536","time 18100"] {idle(&mut state,line).unwrap();}
++        // A shallow search need not accrue a whole clock tick. Start with a
++        // native prior epoch so resetting it on new is still observable.
++        let prior=rook2::work_clock::Ledger::with_origin(17);
++        state.ledger=prior;
+         let (a,host_a)=run(&mut state,Some(u32::MAX),Vec::new(),Limits{nodes:None},62).unwrap();
++        assert_eq!(a.entry_clock,prior.last());
+         assert_eq!(host_a.seeds.as_slice(),[a.seed]);
+         assert_eq!(a.seed,host::seed_from_seconds(u32::MAX,a.entry_clock));
+         let epoch=state.ledger.last();assert_ne!(epoch,0);
+         idle(&mut state,"new").unwrap();assert_eq!(state.ledger.last(),epoch);
+         idle(&mut state,"force").unwrap();idle(&mut state,"time 18100").unwrap();
++        assert_eq!(state.ledger.last(),epoch);
+         let (b,host_b)=run(&mut state,Some(u32::MAX),Vec::new(),Limits{nodes:None},62).unwrap();
+         assert_eq!(host_b.seeds.as_slice(),[b.seed]);assert_eq!(b.entry_clock,epoch);
+-        assert_eq!(b.seed,host::seed_from_seconds(u32::MAX,b.entry_clock));assert_ne!(b.seed,a.seed);
++        assert_eq!(b.seed,host::seed_from_seconds(u32::MAX,b.entry_clock));
++        // Fresh acquisition can retain the same value when seconds and the
++        // observed whole clock are unchanged; the host records each event.
++        if b.entry_clock==a.entry_clock {assert_eq!(b.seed,a.seed);}
++        else {assert_ne!(b.seed,a.seed);}
+     }
+     #[test]
+     fn rich_native_session_restores_a_after_actual_play_force_and_undo_with_inherited_settings() {

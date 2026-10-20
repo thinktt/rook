@@ -1,0 +1,79 @@
+{
+  "allow_focused_validation": true,
+  "allow_timing": false,
+  "candidate_sha256": "db2bedb99752697351429b99376185b6afb5209b26460c171f3b0bce4df58b63",
+  "source_graph_sha256": "65d16b624d0c01647e8499f4cec79192e3e4515ad1bba100012054b60dc7a4b3",
+  "actual_discovery_terminal": "d0f1d2/0",
+  "actual_body_terminal": "179a06/0",
+  "actual_analysis_terminal": "a17bbd/0",
+  "analysis_sha256": "4b1849ee8df56bf6abf79c468f7e896a1dece2f084adcb8242c56baa5da1abd7",
+  "root_source_reads": [
+    "3ee519/0",
+    "9ee566/0"
+  ],
+  "source_count_bypass": [
+    {
+      "kind": "Knight",
+      "opponent_zero_branch": "18cdd",
+      "target": "18d60"
+    },
+    {
+      "kind": "Bishop",
+      "opponent_zero_branch": "191e7",
+      "target": "19270"
+    },
+    {
+      "kind": "Rook",
+      "opponent_zero_branch": "1985f",
+      "target": "198f0"
+    },
+    {
+      "kind": "Queen",
+      "opponent_zero_branch": "1a29e",
+      "target": "1a330"
+    }
+  ],
+  "mechanism": "Each existing color-loop kind owner loads raw opposing byte then jumps past both five-field sums; zero target subtracts2 with cmove only when ownbyte0. Baseline computes both sums unconditionally. Nonzero preserves count arithmetic and <= predicate; live raw bytes feed lowmobility/exemption/relation; semantic R increment remains ahead of source relation shortcut.",
+  "actual_common_full_calls": {
+    "control": "43058 GOTe4e60 ->18850",
+    "candidate": "430b8 GOTe4e60 ->18850"
+  },
+  "costs": {
+    "activity_bytes": [
+      7884,
+      7982
+    ],
+    "activity_frame_bytes": [
+      456,
+      456
+    ],
+    "activity_pushes": [
+      6,
+      6
+    ],
+    "activity_static_instructions": [
+      1907,
+      1921
+    ],
+    "activity_call_sites": [
+      14,
+      14
+    ],
+    "full_bytes": [
+      2415,
+      2415
+    ],
+    "full_static_instructions": [
+      576,
+      576
+    ],
+    "text_delta_bytes": 96,
+    "rodata_delta_bytes": 32
+  },
+  "limits": [
+    "Static instruction/load/spill arrangement changes are not priced CPU costs. Added branch and larger code may lose; source profile does not measure zero-byte frequency.",
+    "Only generic Activity and common full bodies captured; no ownPGO or complete recursive-body claim.",
+    "Focused tests and original replay outputs still pending; no correctness or performance acceptance yet."
+  ],
+  "production_stays": 51
+}

@@ -1,0 +1,420 @@
+--- historical66/capture.py
++++ inert67/capture.py
+@@ -20,7 +20,8 @@
+ def load(p):return json.loads(read(p))
+ def save(p,j):
+  check()
+- with Path(p).open('x') as f:json.dump(j,f,indent=2);f.write('\n')
++ encoded=json.dumps(j,indent=2)+'\n';assert len(encoded.encode())<=8388608, '8MiB metadata file cap'
++ with Path(p).open('x') as f:f.write(encoded)
+ def terminal(path):
+  t=load(path)
+  assert t.get('actual_tool_terminal_observed') is True and t['exit_code']==0
+@@ -33,7 +34,8 @@
+  assert plan['launch'] is True and plan['parent_backend_activation'] is True
+  assert os.sched_getaffinity(0)==H and os.environ['PATH']=='/usr/bin:/bin' and os.environ['TMPDIR']=='/home/legolas/rook2-build-tmp'
+  assert not any(os.environ.get(k) for k in ['LD_PRELOAD','LD_LIBRARY_PATH','LLVM_PROFILE_FILE'])
+- assert plan['max_complete_bodies']==8 and plan['max_total_captured_text_bytes']==3145728
++ assert plan['max_complete_bodies']==6 and plan['max_total_captured_text_bytes']==4194304
++ assert plan['metadata_regular_file_cap_bytes']==8388608
+  assert plan['per_read_or_command_wall_s']==30 and plan['total_elapsed_wall_s']==180
+  if stage=='discover':
+   DEADLINE=ENTERED+180
+@@ -56,7 +58,7 @@
+ def captured_text_bytes():
+  return sum(q.stat().st_size for suffix in ['*.stdout','*.stderr'] for q in P.glob(suffix))
+ def run(argv,stem):
+- check();raw_cap=3145728-captured_text_bytes();file_cap=raw_cap//2;assert file_cap>0
++ check();raw_cap=4194304-captured_text_bytes();file_cap=8388608 if stem=='analysis' else raw_cap//2;assert raw_cap>0 and file_cap>0
+  started=time.monotonic();failure=None
+  def cap():resource.setrlimit(resource.RLIMIT_FSIZE,(file_cap,file_cap))
+  with (P/(stem+'.stdout')).open('xb') as out,(P/(stem+'.stderr')).open('xb') as err:
+@@ -66,9 +68,9 @@
+    child.kill();code=child.wait();failure='command/aggregate deadline exceeded; stopped and reaped'
+  elapsed=time.monotonic()-started
+  # Preserve actual command/exit even when the deadline or output cap failed.
+- row=dict(argv=argv,pid=child.pid,remaining_combined_raw_cap_before=raw_cap,per_output_file_byte_cap=file_cap,actual_child_return_observed=True,exit_code=code,elapsed_wall_s=elapsed,failure=failure,stdout_bytes=(P/(stem+'.stdout')).stat().st_size,stderr_bytes=(P/(stem+'.stderr')).stat().st_size)
++ row=dict(argv=argv,pid=child.pid,remaining_combined_raw_cap_before=raw_cap,per_regular_file_byte_cap=file_cap,analysis_metadata_cap_distinct_from_raw=(stem=='analysis'),actual_child_return_observed=True,exit_code=code,elapsed_wall_s=elapsed,failure=failure,stdout_bytes=(P/(stem+'.stdout')).stat().st_size,stderr_bytes=(P/(stem+'.stderr')).stat().st_size)
+  with (P/(stem+'-command.json')).open('x') as f:json.dump(row,f,indent=2);f.write('\n')
+- assert captured_text_bytes()<=3145728,'aggregate raw text cap exceeded; stop and preserve failure'
++ assert captured_text_bytes()<=4194304,'aggregate raw text cap exceeded; stop and preserve failure'
+  assert failure is None and code==0 and elapsed<=30 and row['stderr_bytes']==0,row
+  check();row.update(stdout_sha256=sha(P/(stem+'.stdout')),stderr_sha256=sha(P/(stem+'.stderr')))
+  # Hash record is separate so the observed terminal record is never overwritten.
+@@ -95,7 +97,7 @@
+ def discover():
+  plan=setup('discover');pins={str(P/n):sha(P/n) for n in ['capture.py','analyze.py','select_complete_families.py','plan.json']};pins.update(plan['input_sha256']);pins.update(plan['runtime_sha256']);commands=[];receipts={};options={}
+  freeze=load(plan['candidate_source_freeze']['path']);assert sha(plan['candidate_source_freeze']['path'])==plan['candidate_source_freeze']['sha256']
+- assert freeze['source74_graph']==plan['candidate_source_graph_sha256'] and freeze['changed_files']==['src/evaluator.rs','src/ordinary.rs']
++ assert freeze['source74_graph']==plan['candidate_source_graph_sha256'] and freeze['changed_files']==['src/quiescence.rs']
+  for side in ['control','candidate']:
+   build=Path(plan[side+'_build']);image=build/'rook2-exact';r=load(build/'receipt.json');receipts[side]=r
+   assert sha(image)==plan[side+'_image_sha256']==r['binary_output']['sha256'] and image.stat().st_mode&0o777==0o555
+@@ -123,7 +125,7 @@
+  for k in ['toolchain','mode','target_triple','target_cpu','jobs','cargo_config_sha256_before']:assert a[k]==b[k],k
+  assert a['tool_sha256_before']==b['tool_sha256_before'] and len(b['tool_sha256_before'])==23
+  assert set(a['source_sha256_before'])==set(b['source_sha256_before']) and len(b['source_sha256_before'])==51
+- changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/evaluator.rs','src/ordinary.rs']
++ changed=sorted(n for n in a['source_sha256_before'] if a['source_sha256_before'][n]!=b['source_sha256_before'][n]);assert changed==['src/quiescence.rs']
+  assert b['source_sha256_before']|b['tool_sha256_before']==freeze['files_sha256']
+  for side,r in receipts.items():
+   assert r['rust_flags'][3]=='profile-use='+r['pgo']['profile']
+@@ -159,25 +161,40 @@
+ def select_bodies():
+  plan=setup('select');request=[]
+  from select_complete_families import select_complete_families
++ selection=load(P/'role-selection.json')
++ assert selection['parent_confirmed'] is True and selection['discovery_sha256']==sha(P/'discovery.json')
++ assert selection['normal_consumed_Q_role_evidence'] and selection['alternate_Q_and_ordinary_scope_review']
+  for side in ['control','candidate']:
+   syms=symbols(side);dem=[]
+   for line in read(P/(side+'-nm.stdout')).decode().splitlines():
+    f=line.split(maxsplit=3)
+    if len(f)==4 and f[2] in ['t','T']:dem.append((int(f[0],16),int(f[1],16),f[3]))
+-  roles=list(plan['primary_roles'])
+-  for role in plan['optional_roles']:
+-   if side in role['allowed_sides'] and any(n==role['display_name'] for a,z,n in dem):roles.append(role)
++  roles=selection['roles'][side]
++  assert 1<=len(roles)<=3 and any(x['role']=='q_primary' for x in roles)
++  assert len({x['role'] for x in roles})==len(roles)
++  for role in roles:
++   assert role['role'] in ['q_primary','q_alternate','ordinary']
++   assert role['actual_mangled_symbol'] and role['source_and_call_role_evidence']
++   assert isinstance(role['expected_start'],str) and int(role['expected_start'],16)>=0 and role['expected_bytes']>0
++   expected='src/ordinary.rs' if role['role']=='ordinary' else 'src/quiescence.rs'
++   assert role['source']==expected
++   marker='visit_ordinary_impl' if role['role']=='ordinary' else 'visit_q_impl'
++   assert marker in role['display_name']
+   rows=select_complete_families(syms,dem,roles,side)
+   for j,row in enumerate(rows):
+    row['start']=hex(row['start']);row['label']=row['role']+'-'+str(j);row['complete_body']=True
+   request+=rows
+- assert 4<=len(request)<=8,'more than8 complete primary/helper/cold bodies: STOP BEFORE BODY CAPTURE'
++ assert 2<=len(request)<=6,'more than6 complete actual Q/ordinary/cold bodies: STOP BEFORE BODY CAPTURE'
++ assert {x['side'] for x in request if x['role']=='q_primary'}=={'control','candidate'}
+  save(P/'body-request.json',request)
++ save(P/'body-selection-proof.json',dict(role_selection_sha256=sha(P/'role-selection.json'),discovery_sha256=sha(P/'discovery.json'),body_request_sha256=sha(P/'body-request.json')))
+  return request
+ 
+ def bodies():
+  plan=setup('bodies');d=load(P/'discovery.json');assert all(sha(x)==h for x,h in d['pins'].items())
+- request=load(P/'body-request.json');assert 4<=len(request)<=8
++ request=load(P/'body-request.json');assert 2<=len(request)<=6
++ selection=load(P/'body-selection-proof.json')
++ assert selection['role_selection_sha256']==sha(P/'role-selection.json') and selection['discovery_sha256']==sha(P/'discovery.json') and selection['body_request_sha256']==sha(P/'body-request.json')
+  assert len({(x['side'],x['label']) for x in request})==len(request)
+  for side in ['control','candidate']:
+   syms=symbols(side)
+@@ -196,6 +213,7 @@
+  print(json.dumps(dict(complete=True,bodies=len(rows),raw_bytes=captured_text_bytes())))
+ 
+ def gate():
+- discover();select_bodies();bodies()
+- run(['/usr/bin/python3',str(P/'analyze.py')],'analysis')
+-if __name__=='__main__':{'discover':discover,'select':select_bodies,'bodies':bodies,'gate':gate}[sys.argv[1]]()
++ raise AssertionError('Manual actual role-selection required between discover/select; use staged commands within one original180s clock')
++def analyze():
++ setup('analyze');run(['/usr/bin/python3',str(P/'analyze.py')],'analysis')
++if __name__=='__main__':{'discover':discover,'select':select_bodies,'bodies':bodies,'analyze':analyze,'gate':gate}[sys.argv[1]]()
+--- historical66/analyze.py
++++ inert67/analyze.py
+@@ -51,7 +51,7 @@
+    owners=[] if target is None else owning(side,target)
+    fallthrough=(int(ins[index+1][0],16) if index+1<len(ins) else end) if op!='jmp' else None
+    edges.append(dict(address=address,operand=operand,target=None if target is None else hex(target),captured_target=owners,cross_fragment=bool(owners and any(x['label']!=r['label'] for x in owners)),unresolved_indirect=target is None,fallthrough=None if fallthrough is None else hex(fallthrough)))
+- facts.append(dict(side=side,role=r['role'],label=r['label'],fragment_kind=r['fragment_kind'],actual_symbol=r['display_name'],actual_mangled_symbol=r['actual_mangled_symbol'],address=hex(start),end_exclusive=hex(end),bytes=r['bytes'],machine_sha256=hashlib.sha256(code).hexdigest(),output_section=section['name'],instructions=len(ins),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',op)) for a,op in ins),stack_reference_instruction_count=sum(bool(re.search(r'\[(?:rsp|rbp)',op)) for a,op in ins),mnemonics=sorted(mnemonics),calls=calls,register_mediated_call_rows=[dict(address=a,operand=op) for a,op in ins if re.fullmatch(r'call\s+(?:r(?:ax|bx|cx|dx|si|di|bp|sp|[89]|1[0-5]))',op)],static_transfer_edges=edges,source_paths=sorted(set(re.findall(r'^(/[^:\n]+):\d+',text,re.M)))))
++ facts.append(dict(side=side,role=r['role'],label=r['label'],fragment_kind=r['fragment_kind'],actual_symbol=r['display_name'],actual_mangled_symbol=r['actual_mangled_symbol'],address=hex(start),end_exclusive=hex(end),bytes=r['bytes'],machine_sha256=hashlib.sha256(code).hexdigest(),output_section=section['name'],instructions=len(ins),stack_reservations=re.findall(r'\bsub\s+rsp,(0x[0-9a-f]+)',text),pushes=sum(bool(re.match(r'push\s',op)) for a,op in ins),stack_reference_instruction_count=sum(bool(re.search(r'\[(?:rsp|rbp)',op)) for a,op in ins),mnemonics=sorted(mnemonics),calls=calls,register_mediated_call_rows=[dict(address=a,operand=op) for a,op in ins if re.fullmatch(r'call\s+(?:r(?:ax|bx|cx|dx|si|di|bp|sp|[89]|1[0-5]))',op)],static_transfer_edge_counts=dict(total=len(edges),unresolved_indirect=sum(x['unresolved_indirect'] for x in edges),cross_fragment=sum(x['cross_fragment'] for x in edges)),serialized_branch_edge_lists_omitted=True,source_paths=sorted(set(re.findall(r'^(/[^:\n]+):\d+',text,re.M)))))
+ owners={}
+ for role in sorted({x['role'] for x in request}):
+  owners[role]={}
+@@ -61,6 +61,6 @@
+   owners[role][side]=dict(combined_machine_bytes=sum(x['bytes'] for x in fs),fragment_labels=[x['label'] for x in fs],cold_fragment_count=sum(x['fragment_kind']=='cold' for x in fs),hot_stack_reservations=[x['stack_reservations'] for x in fs if x['fragment_kind']=='hot'],combined_calls=sum(len(x['calls']) for x in fs),combined_instruction_rows=sum(x['instructions'] for x in fs))
+  owners[role]['combined_size_delta']=owners[role]['candidate']['combined_machine_bytes']-owners[role]['control']['combined_machine_bytes'] if owners[role]['candidate'] and owners[role]['control'] else None
+ assert all(sha(path)==value for path,value in d['pins'].items())
+-result=dict(complete=True,owners=owners,fragments=facts,sections=sections,all_inputs_unchanged=True,all_actual_child_codes_zero=all(x['exit_code']==0 for x in d['commands']) and all(x['command']['exit_code']==0 for x in b['bodies']),complete_fragments=len(request),total_captured_text_bytes=captured_text_bytes(),manual_mechanism_review_required=True,execution_authorized=False,limits=['NAME suffixes are profile attribution, not physical clones; exact symbol/source/call-role confirmation remains manual.','Complete hot and all recognized .cold suffix fragments required; unsupported/unsized/unmapped fragments stop instead of broader capture.','A final merged .text is allowed; actual linked fragment addresses and cross-fragment transfers matter.','Fragment stack/code/call/opcode facts are static; no summed frame or CPU claim. Register-mediated calls are unresolved here: manual actual definition/use proof is required, never label them callbacks or memcpy from totals alone.'])
++result=dict(complete=True,owners=owners,fragments=facts,sections=sections,all_inputs_unchanged=True,all_actual_child_codes_zero=all(x['exit_code']==0 for x in d['commands']) and all(x['command']['exit_code']==0 for x in b['bodies']),complete_fragments=len(request),total_captured_text_bytes=captured_text_bytes(),manual_mechanism_review_required=True,compact_metadata=True,raw_branch_instructions_preserved=True,execution_authorized=False,limits=['NAME suffixes are profile attribution, not physical clones; exact symbol/source/call-role confirmation remains manual.','Complete hot and all recognized .cold suffix fragments required; unsupported/unsized/unmapped fragments stop instead of broader capture.','A final merged .text is allowed; actual linked fragment addresses and cross-fragment transfers matter.','Fragment stack/code/call/opcode facts are static; no summed frame or CPU claim. Register-mediated calls are unresolved here: manual actual definition/use proof is required, never label them callbacks or memcpy from totals alone.'])
+ save(P/'analysis.json',result)
+ print(json.dumps(dict(complete=True,owners=owners,fragments=len(request),all_inputs_unchanged=True)))
+--- historical66/select_complete_families.py
++++ inert67/select_complete_families.py
+@@ -16,10 +16,13 @@
+         hot=[]
+         for a,n,symbol in mangled_rows:
+             if COLD.search(symbol): continue
++            if role.get('actual_mangled_symbol') and symbol!=role['actual_mangled_symbol']: continue
+             displays=[d for x,z,d in display_rows if (x,z)==(a,n)]
+             if role['display_name'] in displays: hot.append((a,n,symbol))
+         assert len(hot)==1, ('missing/ambiguous sized noncold candidate',role['role'],hot)
+         a,n,stem=hot[0]
++        if role.get('actual_mangled_symbol'):
++            assert a==int(role['expected_start'],16) and n==role['expected_bytes'], 'physical request range mismatch'
+         assert n>0 and len([x for x in mangled_rows if x[:2]==(a,n)])==1, 'unsized/aliased hot candidate'
+         family=[x for x in mangled_rows if x[2]==stem or re.fullmatch(re.escape(stem)+r'\.cold(?:\.[0-9]+)?',x[2])]
+         assert not [x for x in mangled_rows if x[2].startswith(stem+'.') and x not in family], 'unsupported suffix: STOP'
+--- historical66/plan.json
++++ inert67/plan.json
+@@ -1,180 +1,121 @@
+ {
+-  "experiment": 66,
+-  "status": "INERT_SOURCE_BOUND_FUTURE_OWN_PGO_ONLY",
++  "experiment": 67,
++  "status": "INERT67_ACTUAL_OWN_PGO_BOUND_PARENT_REVIEW_PENDING",
+   "launch": false,
+   "parent_backend_activation": false,
+   "parent_review": null,
+   "quiet_clearance": null,
+-  "max_complete_bodies": 8,
+-  "max_total_captured_text_bytes": 3145728,
++  "max_complete_bodies": 6,
++  "max_total_captured_text_bytes": 4194304,
+   "per_read_or_command_wall_s": 30,
+   "total_elapsed_wall_s": 180,
+   "control_build": "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01",
+   "control_image_sha256": "01237e6dfe89822e540d0f07c7b70f7227537a846ce8c69ea9e91167b759e98d",
+   "control_profile_sha256": "b4806420937681c8228903507018233d7176be0333ef98881a73d34c66df3a5c",
+-  "candidate_build": null,
+-  "candidate_image_sha256": null,
+-  "candidate_profile_sha256": null,
+-  "candidate_source_root": "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01",
++  "candidate_build": "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-use-build-20261020-01",
++  "candidate_image_sha256": "6b87914c7b6b90df21d3bc4447998d7013f3c4b28c80b76794d6dd18491ae781",
++  "candidate_profile_sha256": "6197280bb1c64a26e70af6c2453191a52dd2ec32b532994854933bd7346606ea",
++  "candidate_source_root": "/home/legolas/rook2-work/imp2-q-parent-reborrow-20261020-01",
+   "candidate_source_freeze": {
+-    "path": "/home/legolas/rook2/evidence/caller-owned-child-prototype-20261020-01/source-manifest.json",
+-    "sha256": "89f7d8002dd7bd7f947961d94f47da26cd3bc3153e5073f9d094f811b81ead5c"
++    "path": "/home/legolas/rook2/evidence/q-parent-reborrow-prototype-20261020-01/source-manifest.json",
++    "sha256": "5a4de080e1f3a3b4ca1c219e2c59c6c56034d6139bb66d8317094d7b2c46b3ef"
+   },
+-  "candidate_source_graph_sha256": "6a6c4c9df613d99600d5a488b21fda43051a76ab4b266ccd0a80b79c97e6b1ec",
++  "candidate_source_graph_sha256": "3edc9709aecf38812d724edc5973edf867f092c6792433b61e030f42b5f87444",
+   "expected_source_counts": {
+     "native": 51,
+     "tools": 23,
+     "total": 74
+   },
+-  "candidate_actual_terminals": null,
+-  "candidate_prerequisite_records": null,
+-  "candidate_instrumented_receipt": null,
+-  "candidate_training_record": null,
+-  "candidate_verification": null,
++  "candidate_actual_terminals": [
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-instrumented-build-20261020-01/tool-terminal.json",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/tool-terminal.json",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/verify-tool-terminal.json",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-use-build-20261020-01/tool-terminal.json",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-native-tests-20261020-01/tool-terminal.json"
++  ],
++  "candidate_prerequisite_records": [
++    {
++      "path": "/home/legolas/rook2/evidence/q-parent-reborrow-native-tests-20261020-01/result.json",
++      "sha256": "897d4501508d1396c79fc09585e4b6938dd2ee49dccbee0efdd7b405890184a3",
++      "checks": {
++        "exit_code": 0,
++        "total": 195,
++        "source_before_after_exact": true
++      }
++    },
++    {
++      "path": "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/verification.json",
++      "sha256": "69e69ebb713b88a285516acdc0da720a1a0486834a0fc79e609c31b8a0db3612",
++      "checks": {
++        "complete": true,
++        "independent_remerge_byte_identical": true,
++        "original_checkReplay_count": 54,
++        "raw_training_protocol_cases": 54,
++        "raw_profiles_independently_hashed": 54
++      }
++    }
++  ],
++  "candidate_instrumented_receipt": "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-instrumented-build-20261020-01/receipt.json",
++  "candidate_training_record": "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/training.json",
++  "candidate_verification": "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/verification.json",
+   "primary_roles": [
+     {
+-      "role": "ordinary",
+-      "display_name": "rook2::ordinary::<impl rook2::engine::Search<_,H>>::visit_ordinary_impl",
+-      "source": "src/ordinary.rs",
+-      "purpose": "normal main-child1006 complete consumer, initialization/apply/postapply transport and all other copies"
+-    },
+-    {
+-      "role": "public_child",
+-      "display_name": "rook2::evaluator::Node::child",
+-      "source": "src/evaluator.rs",
+-      "purpose": "preserved public Position-return/Retained construction and any shared-helper compiler effects"
++      "role": "q_primary",
++      "source": "src/quiescence.rs",
++      "purpose": "Actual normal consumed Q owner on each side; identify exact symbol and incoming ordinary/Q call role, not same-demangle guessing"
+     }
+   ],
+   "optional_roles": [
+     {
+-      "role": "unit_worker",
+-      "display_name": "rook2::evaluator::Node::apply_child_in_place",
+-      "source": "src/evaluator.rs",
+-      "allowed_sides": [
+-        "candidate"
+-      ],
+-      "purpose": "actual outlined private unit worker only if emitted"
++      "role": "q_alternate",
++      "source": "src/quiescence.rs",
++      "purpose": "Actual alternate consumed Q only, exact role selected after discovery"
+     },
+     {
+-      "role": "nonking_helper",
+-      "display_name": "rook2::evaluator::Node::child_nonking_squares",
+-      "source": "src/evaluator.rs",
+-      "allowed_sides": [
+-        "candidate"
+-      ],
+-      "purpose": "unexpected outline despite inline(always); disclose and inspect before any admission"
++      "role": "ordinary",
++      "source": "src/ordinary.rs",
++      "purpose": "Actual production ordinary caller and Q target resolution if needed"
+     }
+   ],
+-  "optional_selection_policy": "Finite candidate-only presence-driven helpers; all primary/helper/cold fragments count against SAME8; missing/ambiguous or oversized family STOP before body capture",
++  "optional_selection_policy": "Parent role-selection.json after actual discovery: exact mangled symbol+display+source/call-role evidence for each side; all hot/cold fragments share SAME6/4MiB/180s. Missing/ambiguous/overcap =>STOP, no expansion.",
+   "input_sha256": {
+-    "/home/legolas/rook2/evidence/caller-owned-child-selection-20261020-01/selection.json": "35bfd0d7c5347031e35122b665d18cf0d7ccfa5f8a6e00a78af0458494753493",
+-    "/home/legolas/rook2/evidence/caller-owned-child-prototype-20261020-01/source-manifest.json": "89f7d8002dd7bd7f947961d94f47da26cd3bc3153e5073f9d094f811b81ead5c",
+-    "/home/legolas/rook2/evidence/caller-owned-child-prototype-20261020-01/source-proof.json": "8220ad5f7f5c6da7dca7e3c78f6f6f86b5574dfcf3085d5afc9128e1fe3a02e3",
+-    "/home/legolas/rook2/evidence/caller-owned-child-prototype-20261020-01/trial.patch": "bf2172ad95fac2b288762828035eb75cf6c9386663017f375e3f2f163733c64f",
+-    "/home/legolas/rook2/evidence/caller-owned-child-prototype-20261020-01/closure.json": "2de455fce8cb9070706fd111516e70e1747dfa68f58bc94e637c84713d913063",
+-    "/home/legolas/rook2/evidence/current62-child-application-opportunity-20261020-01/review.md": "ae14786e061d8a911b93d7b971607c827927dcab0aa94907d78c421037aab7e7",
+-    "/home/legolas/rook2/evidence/current62-child-application-opportunity-20261020-01/source-proof.json": "ebc7637a1dbf71fb1487992e7ab1d0ba2144530d53a8676d658bf129092e993c",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-selection-20261020-01/selection.json": "f6a37a3f5f5f7125550dc0c50d98961470ee673f2897d5d9313f6cc2590b5416",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-prototype-20261020-01/source-manifest.json": "5a4de080e1f3a3b4ca1c219e2c59c6c56034d6139bb66d8317094d7b2c46b3ef",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-prototype-20261020-01/source-proof.json": "4018ea2316295f2c95cf5dd6b85cec3a33d1170ad3e286330f09b7be41bfc7e5",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-prototype-20261020-01/trial.patch": "f9fe7937780c23275d8903d5d880c723da76c5ffbd58d67deb47b3600ef5e937",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-prototype-20261020-01/closure.json": "29af2af36c6f8c52b609a1bc124712d94e3be0c266cf79bc22aedfde5cf0947a",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-parent-review-20261020-01/acceptance.json": "86cdc07155c8e6dbea3d5ca5c98f3588b7ce904732d32bda6b60cad857243477",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-native-tests-20261020-01/result.json": "897d4501508d1396c79fc09585e4b6938dd2ee49dccbee0efdd7b405890184a3",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-native-tests-20261020-01/tool-terminal.json": "af3084cd1e96982f522664bf796140e286c660a0dc2b71ef1c37eaa06264c792",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-results-20261020-01/report.json": "de7505ac7b6145e54bd75bc14e17bad59933f93d2b3eb5a100f6b042d7651dff",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-use-build-20261020-01/receipt.json": "1b90b8f503c14c11218fa7676ae99a6754b30a616d0bc4324e37903c1b97f6c0",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-use-build-20261020-01/frozen-image.json": "3b7ea7cbd41a03accef681f1cdaddc2d6ce71eb8ec68b591e9abfc6a038641b6",
+     "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/receipt.json": "4d6cb9680c95b028699c0414cb3af3c8923b89568d7b53008b9c8fa9db0f8eee",
+     "/home/legolas/rook2/evidence/exttsp-profiled-pgo-use-build-20261020-01/frozen-image.json": "71ea704666669027f635d33708712ace4042ee658ad6c5b473a1a8f1515566ee",
+-    "/home/legolas/rook2/evidence/machine-split-profiled-backend-review-20261020-01/control-nm.stdout": "e79d321643ada1896c53a85382b2c09160cabf1c1ee986fd9f87ab3b27462fc3",
+-    "/home/legolas/rook2/evidence/machine-split-profiled-backend-review-20261020-01/control-nm-mangled.stdout": "b65ee077fc43a964916802ab2e6fe0c68b7baf4f8c538db677d5b427660cead7",
+-    "/home/legolas/rook2/evidence/one-sided-relations-backend-bound-preparation-20261020-01/capture.py": "62ba49043a0ad40cbf3c5fcd17bd1e0b6c30b73729f3c8a546477e7de8a7e21c",
+-    "/home/legolas/rook2/evidence/one-sided-relations-backend-bound-preparation-20261020-01/analyze.py": "012a730c6cdbad526c26fea71377b5ed5c7b402a0c9d452afa77d37001c5b629",
+-    "/home/legolas/rook2/evidence/one-sided-relations-backend-bound-preparation-20261020-01/select_complete_families.py": "0cb8233d8421320f013b86e15b2813781f9c4d301f8782c8346037f9aae000f6",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/Cargo.lock": "d34b5888f77c0319fb614ba5701a4a1177af31b803054ad3a8251926ba237c97",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/Cargo.toml": "6199772414ef5972898842d76472301d256e42f9dd2181fa421ff5cbc21c85d1",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/activity.rs": "81cd2ff5ecd7125cbf2993031c57db97b02fa3877d314fc5f06350c6019024f5",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/attacks.rs": "00d4d2a89c32626be5ef501bc377d427a90588f28b2913e59438a1772e4494f3",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/bin/rook2-dev.rs": "1eea8e56f268a3fd943d1dc2d2ccd0c7607c80793c1a8f41eb464bdc53853c34",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/bin/rook2.rs": "ccc0809b7c2f7c709097660fdc62d06c79f0c7563ec79753214afe8be185046e",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/clock.rs": "4b1d6f18e94d3161cefa8b4a5daafddffd1aba5d3d4ade182a03eed3ee493a79",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/development.rs": "e25b082c342df61b2aa8c30e2970e65007ad3e99750807724bda42ab59a3045f",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/endgame.rs": "4f382e7b5359f1956a0e155328aad08f35dab74252ee0794d61dafcd1cd2214a",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/engine.rs": "c17cfcf136d2b37f94d8c5c30b3a0a76d5c533ab3d6dc1103a7b724c68033995",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/engine/geometry_tests.rs": "4677760cbf58f0aaeec901b21cfb6dc3a797fdbe128afbad34fe20e9c4e5e921",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/eval_basis.rs": "5b369b122dc69aa40e5f8b81c3153173e633c9cfec89f160cef49886b5c36647",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/evaluation.rs": "767b1ef83fea5d30d1b5a6edaa259fa718c666cfdb568fb9ad7b2aca2e9f33f7",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/evaluator.rs": "9acd9639c0bd13440f9ff2564fc4b6ed4c9c036ddfa8bfe1a3905afe8981b180",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/first_iteration.rs": "713830b62783a81033e1355687534783647b243c51e10f829546d080ce157722",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/geometry.rs": "582a2e8ad2672a937062ae829ae596ee263b69c6ec52103c55c658a6ecc225f1",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/history.rs": "f6b2a5073307d655e33e774900c9fea26f4bdfefbdd2cd9848ff0758c4b34fde",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/host.rs": "cc694d926fb1c1bc3063c3c9a20a8399abc92019f4927b2b79850e7a706924ac",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/identity.rs": "761779f7f2e0186dfbe28e162bf5fc8c8461d9f9c342787ebe2becfd0914a376",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/influence.rs": "fa01b22dc312b5e9161ce405571172b5d272c8ecc2bcca1ce3de1cf7f66eb7fa",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/influence/coherent.rs": "b4155e4b65beb0eb9aea822bae714b1222accde3b7be574d50ecf56da980ef64",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/influence/coherent_tests.rs": "999c4d015a447d4847de4f11d98175271e3c5a630ea5ae8b5fe6378767ebd8b0",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/lib.rs": "6f09459cb36d8e8e0dfc0d473f3b91fcd19feed4c8220888b83af37124abc0c4",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/movegen.rs": "2665dfbc957191b06f82c35412f72be94943944cffd0c04851bdcdc91086dcc8",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/ordinary.rs": "63d4ad25cd3651baa6bad6184320437970e3cb5fe70ff8cdbc0685d46d728b7f",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/ordinary_policy.rs": "5a796d4f7b11c1818a7dbdfe34080d9502d7c517217b521315534a318e9301a6",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/output.rs": "90c1f45a9d907dcb85ed97a0b9d45828196d17a381bd84f09f8f49e1872eef6d",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/parameters.rs": "30dd03e5ead3df289b25929c7bea81e72d1e2b9a2250916883107f0cfaf7f42e",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/pawn_progress.rs": "0bca6bb9678657b2efadc023c07d1ffcc9ff91c1c97553b84e2131c6ce30d9dc",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/pawn_structure.rs": "b9d0921514c5ba7ba7532f07501fae7dc38b707f6c2f2f0bb01787be5263be13",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/pawn_terms.rs": "a2081196fb0bfdbd1ac7830d2f668009b267e77d3e56b92c249af709cd99fff3",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/position.rs": "e85eb42304bb010ea199160568b215958f9de966cc71d398e8e0e42553054d82",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/positional_terms.rs": "053b04b8f434db2ddadda71686831b40baf3c59d09be6cde5895af1b7d430260",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/post_lifecycle.rs": "1c429549a023d67b68304375a1b40d2a1228c104579b53659db5595df0d82bb6",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/quiescence.rs": "9ff56aefef807d7df53f446abef404dba90150572116c0cae09057556bb39e6a",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/quiescence_policy.rs": "baeb3f40c47f119481f0040b1c9bb15f9af25ee39376cf0c01d1a06091011468",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/relation_table.rs": "8b559327e7fe433750ab30add4e172570a4a0a80d10b3b3b63bd475dd731de49",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/remembered.rs": "af2eb6046fd7e58b1a35e7ed3051936559b7f739224ed698b54c49317faec293",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/root_schedule.rs": "550146f895ef9a43b8ecdc6fce5e26fb973602e6f5d5b17add1a4920768a72d8",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/session.rs": "e3585bdf5fabb45eff8f3a48ea75da8e414b8b9dc2fbcbc4a44f51a30cc87d7f",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/shelter.rs": "d6012e72cda2502538c215e074b2ebcba396342b903d9d431cc257eb3f9e5811",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/tactical.rs": "22fb473a0c3288a1ce392833e1dd09749bc77d795d3b697ba1071f21b58d3d4d",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/tactical/check_mask_tests.rs": "136d904829288e54c9efee9a107c95dfad651182d99800bf69e483174ffe85b3",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/tactical/check_masks.rs": "8468db1a066e1e6983271e3b54d6023c20d3b55386a775098f0db48472cec626",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/time_powers.rs": "8332a3c4516496ebfb77ab9426e35ae1c94108f21dbd071b8baf9ac3c4c2215e",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/timed.rs": "f62d6ea5591fc23515da241ee3dfefd30d500c79e0349068ca595076f8044d2e",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/timed_sequence.rs": "3089985b5b23dc397770cbf4e228219a27c71db1c01a8a553305e4adb3e3f08f",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/timing.rs": "a950ca151dbdbc026f7c11eff98d1f67985f932dd949d2872436c3271972f934",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/types.rs": "2a202da079b16b3becb6651427701ec8e40aed88bd19550854c800b842b22feb",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/wire.rs": "f851e0b386db01debc0107e01be64ebef0454934673bece463ecd39d0d984841",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/src/work_clock.rs": "946c1e40e29254e4d98f642fe051f4a4b337bb401f5f00d8b0e275539e71ab02",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/README.md": "f440d5aaa77de9ad8f53bab524364578420103b2373bbbf5f2bc70629d8f4ae6",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/account_native.py": "f98132f3947a2320ebf6ae5d86f4abaa907650a6eb30f992d580e8290dbcb1fb",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/archive_build.py": "ea3944cf7ce09a3e6c4476644083324ac8fabec12cd7436f8536a872f3ff4b86",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/build.py": "9ec72da0c15c07eee8c5ef1a63729ffdef6fc048baa37c58d9eed1bbe3d4df4e",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/check_core.py": "07bacfb310c50cf3770c9b644b33bb356f4a320cdd2ec72db02146682b540f34",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/check_evaluation.py": "ff1e685f5d678bd47c2edd81dda9a6eb3e32d73aea899ac5d82583eb74d55ff1",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/check_live.py": "eb8b3ef49a4acf7f41ea8d45308ae5ae501d607ecca89196ff0a553e2600a2c0",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/check_policies.py": "dbe4f2d7f93eb3f4fd7fb02bff0a5e9a9984f79827cb49e49e4d53d26ef37a1b",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/check_timing.py": "36d10917098ce67c4f6eda7f0886d55a90ca92a65ad7566fdd89b3b8cca8a5d5",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/clock_profile.py": "58c75d8a82a4e5eb17db559cd8d5aaca70419a988b66ce03d3cdfc9dcaa0310b",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/collect_games.py": "1fdae0d6e5cce440887c296a36386f8c62acef61cc824250cc0427120e84c39d",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/collect_ordinary.py": "755a3c61a97dd8bb6af3b219214456119c45da8115ce507d2e634424f9f4dc61",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/compare_ordinary.py": "814c39847f07cc1d50aa45c759e515af8a4dc55b16673d6278f2df2bd3d2ae53",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/evaluation_probe.rs": "49f6a1c57f12df3f3721f7f67d57af2ac322ce70af2d2989533c7673d4a1c5b7",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/generate_spec_tables.py": "4f4f2ac6c36e26f32eeb3a4de4f29239522e402c3a83c3fecefebab53ffc5de3",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/generate_time_powers.py": "795a100bd7a32893fef6d946a2fef9a15cb86672841bed51d633f67e0f14261a",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/measure.py": "a7aef2142b0aab59b2bfb62f78ccb589f9915e180f990f1be1e59ec3b9e86224",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/runner-control.c": "48ecf2dbcce382ba468c8f14e4d66211b691eeba6ea78b2870f94cc4f49dbfc8",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/tap_wire.mjs": "059679c485201568545b3eb12ed663403c3c2d3776edcf3b92a1dc1fd6ab9271",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/test_account_native.py": "248830e0bb69bb3f72372c138528b8085b7dc77fcb0270e5f535c4ba7fe2b353",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/test_measure.py": "7a7448ba95878beae6331c25ea0d3fee98fbccaebd2d5617a9c68189af24846b",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/test_tap_wire.py": "1d7122edf2fadfb18390c3e239742176cbdad26f70e3e2ea6a63979fd18b07a4",
+-    "/home/legolas/rook2-work/imp2-caller-owned-child-20261020-01/tools/timing_probe.rs": "fe1f56db1564687383439df1edc1d81ab2fe419a76a50efcc521bd005b069442"
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-instrumented-build-20261020-01/receipt.json": "7d847e56ead4e8ba2c9a1610fcdc223c091e0c0f59384cad5fcc4737a62070f2",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/training.json": "8597d75296a1ea2a15da69aacb7d65f450d880e1b6734e935801937820c4b985",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/verification.json": "69e69ebb713b88a285516acdc0da720a1a0486834a0fc79e609c31b8a0db3612",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-instrumented-build-20261020-01/tool-terminal.json": "46afce653bb71d85d9dfbe653247caee926e1a05597e62125d8a536ea3b68216",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/tool-terminal.json": "c8777dd8b131ccbfbe9b4a0d263c48997170991f0ef1ace1543557fb5a6b7186",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-training-20261020-01/verify-tool-terminal.json": "35ddf02b14d1f20868d730dc9c1e8bcb0fa37242c594f354dea7d07a66f6ca9f",
++    "/home/legolas/rook2/evidence/q-parent-reborrow-pgo-use-build-20261020-01/tool-terminal.json": "f6f374acde87a61954713d07004d04ed9d216f230ce77881fe87d83550e5bf02"
+   },
+   "runtime_sha256": null,
+-  "selection_sha256": "35bfd0d7c5347031e35122b665d18cf0d7ccfa5f8a6e00a78af0458494753493",
++  "selection_sha256": "f6a37a3f5f5f7125550dc0c50d98961470ee673f2897d5d9313f6cc2590b5416",
+   "baseline_falsifier": {
+-    "ordinary_metadata_start": "0x30cd0",
+-    "ordinary_metadata_bytes": 29244,
+-    "public_child_metadata_start": "0x16360",
+-    "public_child_metadata_bytes": 977,
+-    "main_preapply_copy": "3356d sets160;33589 callr15 memcpy parent.position\u2192temporaryrsp248",
+-    "apply": "33598 GOTeed50\u2192Position::apply_unchecked26180, temporary destination",
+-    "main_postapply_copy": "3359e sets160;335ae callr15 memcpy temporary\u2192finalrsp130; then Retained stores",
+-    "resolved_call_inventory": "ordinary6 direct GOT memcpy +2 register-mediated r15 memcpy; other copies/parent snapshot/PV distinct",
+-    "authority": "closed own62 source/metadata review, not candidate code proof"
++    "known_control_primary_Q_start_reference_only": "0x2bf40",
++    "primary_Q_symbol_suffix_reference_only": "hbf... not a complete identity or selection",
++    "mechanism": "Entry160B parent Position snapshot must disappear rather than relocate; late parent borrowing preserves early evaluator mutation and all Q child/probe/retained/map timing.",
++    "other_transports": "Necessary child initialization, Option prepared-child transport, parent/history/PV copies remain separately priced; no66 child erasure claim."
+   },
+   "pending_parent_bindings": [
+-    "fullnative195 actual acceptance/terminal (currently live, not read)",
+-    "fresh candidate instrumented build; exact original54 training/raw/PID audit and independent byte-identical remerge/use receipts and actual terminals",
+-    "actual own ExtTSP image/profile/source-before/archive/compiler/tools/runtime hashes",
+-    "actual body role and readonly scope admission",
+-    "quiet scheduling and parent reviewed-helper proof; preserve preactivation plan"
++    "Independent review of exact helpers, actual runtime executable hashes and quiet clearance",
++    "Exact Q/alternate/ordinary symbols and consumed call roles after actual discovery; sourceNAME alone insufficient",
++    "One fresh capture-clock created by authorized discovery; no clock/requests imported from66",
++    "Separate manual copy/ABI/frame/spill/code/call/ISA and role review before any timing authority"
+   ],
+-  "no_runtime_authority": true
++  "no_runtime_authority": true,
++  "metadata_regular_file_cap_bytes": 8388608,
++  "body_role_requests": null,
++  "compact_analyzer_policy": "Omit serialized per-instruction branch-edge lists prospectively; retain edge counts, full raw branch instructions, calls/register rows, code hashes, sources, sections/frame/stack facts. Analysis file independent8MiB ceiling; stdout/stderr still combined4MiB."
+ }

@@ -1,0 +1,1 @@
+Exact107 frozen109 source in fresh HOME execution copy, native169/generic/strict54/eightwire24/DIAG192/full1097606/106 plus independent raw/source/image/archive/exit closure and bounded108 backend comparison. No source fix, CPU/PGO/profiler or promotion. Parent owns decisions; every actual terminal recorded externally.

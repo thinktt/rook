@@ -1,0 +1,7 @@
+# Ordinary projected-bit Boolean checks: one source-only trial
+
+Replace only the mate-probe and ordinary frontier checking tests with the already validated AttackBits projection and Boolean query. Production quiescence already uses this representation. The current two sites accept only Ordinary moves, retain the identical opponent king/attacking side, and consume only a Boolean. No new state, child construction, restoration, ordering, semantic charge or downstream flag is added. This is separate from the older known-check generation proposal.
+
+Current79d instruction simulation is material enough for source preparation, with exact two-site envelope interpretation pending; no CPU gain follows from instruction shares. plan.json predeclares one generic70 trial and its advancement rule before any build, contingent on parent source review, native178/broad projection checks, original54/eightwire24, independent raw/source identity and bounded actual backend review. A generic pass only permits own-source PGO, whose separate pilot must also pass before full117 validation and source promotion. All images/results remain absent.
+
+source-manifest.json binds the isolated69-file clone; native-only.patch contains exactly four changed lines in ordinary.rs. All68 other files match the current full-byte basis. source69.tar.gz freezes the proposed source; production is untouched. No helper, native, build, oracle, profile or timing ran during this preparation.

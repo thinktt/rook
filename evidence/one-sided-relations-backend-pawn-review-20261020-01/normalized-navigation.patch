@@ -1,0 +1,40 @@
+--- control-pawn_structure-2
++++ candidate-pawn_structure-2
+@@ -504,12 +504,13 @@
+ test   r9,r9
+ je TARGET
+ mov    rax,QWORD PTR [rsp+0x18]
+ movzx  eax,BYTE PTR [rax+rdi*1]
++lea    rdx,[rip+RELOC]        # DATA
++movzx  eax,BYTE PTR [rdx+rax*1]
+ shl    eax,0x8
+-or     rax,r9
+-lea    rdx,[rip+RELOC]        # DATA
+-cmp    BYTE PTR [rdx+rax*1],0x0
++add    rax,QWORD PTR [rip+RELOC]        # DATA
++cmp    BYTE PTR [r9+rax*1],0x0
+ je TARGET
+ mov    rdx,QWORD PTR [rsp+0x8]
+ jmp TARGET
+ mov    rax,QWORD PTR [rsp+0x20]
+
+--- control-pawn_piece-3
++++ candidate-pawn_piece-3
+@@ -626,13 +626,13 @@
+ inc    QWORD PTR [rsp+0x88]
+ movzx  eax,BYTE PTR [rax+rcx*1]
+ test   rax,rax
+ je TARGET
+-mov    ecx,r8d
++lea    rcx,[rip+RELOC]        # DATA
++movzx  ecx,BYTE PTR [rcx+r8*1+0x200]
+ shl    ecx,0x8
+-or     rcx,rax
+-lea    rax,[rip+RELOC]        # DATA
+-movzx  eax,BYTE PTR [rax+rcx*1+0x20000]
++add    rcx,QWORD PTR [rip+RELOC]        # DATA
++movzx  eax,BYTE PTR [rax+rcx*1]
+ cmp    al,0x2
+ je TARGET
+ test   r8b,0xc
+ je TARGET

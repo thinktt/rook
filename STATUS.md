@@ -1,5 +1,10 @@
 # Implementation status
 
+The [brief performance catalog](docs/performance-experiments.md) lists tried and
+untried ideas. Bulk evidence and original Git history have moved to
+`/home/legolas/rook2-experiments`; see [storage layout](docs/evidence-layout.md).
+Historical paths and commit IDs below retain their original meaning.
+
 ## Current stage — candidate62 profile-covered compiler layout
 
 Candidate62 is the retained production build, 2026-10-20. It adds an explicit
