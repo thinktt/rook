@@ -17,9 +17,13 @@ Generic and own-source PGO fixed70 comparisons improve1.0570045% and1.1563291%,
 7of7lower each. Full57 whole54 independently closes216 lifetimes/432 original offline checks
 at69.051049whole-native CPU seconds (68.640search),0.527456%lower than51
 in a separate window,48of54lower. This is the new best completed whole54.
-CPU15 had53nonidle ticks. Full57 whole12 timing remains pending;51 still owns
-the best completed698.491201whole-game CPU seconds. See the
-[whole54 report](evidence/bitplane-pin-summary-standard54-results-20261020-01/README.md).
+CPU15 had53nonidle ticks. Full57 whole12 independently closes48 lifetimes/2528
+searches at689.783349whole-native CPU seconds,1.246666%lower than51
+in a separate window,12of12 game medians lower. These are the new best completed
+whole54 and whole12 totals. Whole12 CPU15 recorded2nonidle/2iowait ticks;285
+measured per-search CPU values remain null. See the
+[whole54 report](evidence/bitplane-pin-summary-standard54-results-20261020-01/README.md)
+and [whole12 report](evidence/bitplane-pin-summary-games12-results-20261020-01/README.md).
 [Decision0043](docs/decisions/0043-bitplane-pin-summary.md) records adoption.
 Finite checks do not close all production-domain obligations; uncertified
 empty-source cutoff-hint composition, final performance qualification and the

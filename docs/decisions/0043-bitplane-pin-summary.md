@@ -52,3 +52,13 @@ causal claim. CPU15 had53nonidle ticks. Whole57 12 is pending. Published
 Rust-PGO reference63.431779s gives raw ratio1.088588 and maximum individual
 1.194456, with no raw ratio above1.25; cross-hardware/window and unresolved
 profile/uncertainty prerequisites prevent a qualification claim.
+
+The first complete57 whole12 now independently closes48lifetimes/2528searches
+at689.783349whole-native CPU seconds,1.246666%lower than51's separate window,
+all12 game medians lower. CPU15 records2nonidle/2iowait ticks versus501nonidle
+in the earlier51 window; this is a descriptive comparison with differing
+conditions. All285 unresolved measured per-search CPU values remain null.
+The raw reference ratio is1.070721, maximum individual1.149139, with none above
+1.25; these do not establish final performance qualification. The later
+[timing state](../../evidence/bitplane-pin-summary-integration-20261020-01/timing-state-after-games12.json)
+supersedes the historical pending flags above without changing their records.

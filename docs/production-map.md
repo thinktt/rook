@@ -21,7 +21,12 @@ not certify manually stale public mutations. Generic/own-PGO fixed70 improves
 1.0570045%/1.1563291%,7of7lower each. Full57 whole54 independently closes216lifetimes/432original checks at69.051049
 whole-native CPU seconds (68.640search),0.527456%lower than51
 in a separate window,48of54lower. CPU15 had53nonidle ticks. Full57 whole12
-is pending;51 still owns the best completed698.491201whole-game CPU seconds.
+independently closes48lifetimes/2528searches at689.783349whole-native CPU seconds,
+1.246666%lower than51 in a separate window,12of12 medians lower. CPU15 records
+2nonidle/2iowait ticks;285 measured per-search CPU values remain null. The
+[whole12 report](../evidence/bitplane-pin-summary-games12-results-20261020-01/README.md)
+and [later timing state](../evidence/bitplane-pin-summary-integration-20261020-01/timing-state-after-games12.json)
+record both new best completed totals. Reference ratios remain reported-only.
 The [whole54 report](../evidence/bitplane-pin-summary-standard54-results-20261020-01/README.md)
 preserves all samples and raw/reference comparison limits. No canonical rebuild,
 whole-engine qualification or external3288 completion follows. The existing
@@ -231,3 +236,14 @@ Before completion, expand this map to individual normative clauses and close
 each with evidence of matching scope. Final performance qualification and the
 external3,288-game functional gate are still required. Intermediate fixture
 passes and speedups are progress rather than mission completion.
+
+## Scoped Shelter arithmetic closure for57
+
+The [parent acceptance](../evidence/current57-shelter-arithmetic-domain-review-20261020-01/parent-acceptance.json)
+and [independent review](../evidence/current57-shelter-arithmetic-independent-review-20261020-01/review.md)
+close the bounded Shelter arithmetic calculation without corrections: weighted
+outputs lie within native±47775, strict diagnostic±24610, common±61525.
+This imports canonical coherent placement, admitted kings/inventory, the unchanged
+Activity bound, strict parsing and effective parameter/lifetime ownership. It
+does not close arbitrary Rust helper arguments, stale public mutations, the whole
+evaluator subtotal or retained-cache/hint composition. No source or timing changes.

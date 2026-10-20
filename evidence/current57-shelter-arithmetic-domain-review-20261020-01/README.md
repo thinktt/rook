@@ -1,0 +1,1 @@
+Parent-derived bounded king-shelter source/arithmetic lemma; independent review pending. Diagnostic pressure/weights are explicitly0..4096; inherited native pressure<=2996 and effective weights<=10240 yield safe terms and weighted i32 casts. Source and timed artifact unchanged; no runtime/test/build/profile/archive execution or full qualification claim.

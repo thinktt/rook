@@ -1,0 +1,52 @@
+--- accepted51
++++ current57
+@@ -1,9 +1,9 @@
+ #!/usr/bin/env python3
+-"""Close already-terminal and independently reconciled current51 game12 evidence."""
++"""Close already-terminal and independently reconciled current57 game12 evidence."""
+ import csv,gzip,hashlib,json,os,tarfile,datetime
+ from pathlib import Path
+ P=Path(__file__).resolve().parent
+-D=P.parent/'tactical-check-mask-games12-preparation-20261020-01'
++D=P.parent/'bitplane-pin-summary-games12-preparation-20261020-01'
+ H={0,1,2,3,4,5,8,9,10,11,12,13}
+ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ load=lambda p:json.loads(Path(p).read_text())
+@@ -18,7 +18,7 @@
+  for terminal in (actual_collector,actual_independent):
+   assert terminal['actual_tool_terminal_observed'] is True
+   assert terminal['exit_code']==0 and terminal['terminal_chunk_id']
+- assert actual_collector['initial_chunk_id']=='0a76e2' and actual_collector['session_id']==27581
++ assert actual_collector['initial_chunk_id']=='525d58' and actual_collector['session_id']==91446
+  assert actual_independent['proof_sha256']==sha(D/'reconciliation/result.json')
+  terminals=load(D/'collector-terminals.json')
+  assert terminals['games12']['actual_terminal_chunk']==actual_collector['terminal_chunk_id']
+@@ -30,8 +30,8 @@
+  assert len(sm['runs'])==48 and len(sm['game_summaries'])==12
+  g=r['games12'];assert (g['lifetimes'],g['warmups'],g['measured'],g['searches'])==(48,12,36,2528)
+  plan=load(D/'plan.json')
+- assert sha(D/'plan.json')=='18077f9cf5924b4fdfc375cd26f17608faf7a6e27578ce121afa2d070015737f'
+- assert plan['engine_sha256']=='48ee57b14e436338037e21f0f01f0f340959d7b05771f5cd759a3eab38d655b4'
++ assert sha(D/'plan.json')=='aeb25866522ea2db02fdd678f130ff34786874367d56c47987e6e28c76620069'
++ assert plan['engine_sha256']=='af849f920897ec1f174b16718be5d6886158913ee4819f84273f15bd8c23e5b8'
+  for f,h in plan['dependency_sha256'].items():assert sha(f)==h,('changed authority input',f)
+  rows=[]
+  for game in plan['ordered_games']:
+@@ -39,7 +39,7 @@
+   rows.append(dict(game=game,local_cpu_median_s=a['median'],local_cpu_minimum_s=a['minimum'],local_cpu_maximum_s=a['maximum'],reference_cpu_median_s=b['median'],reference_cpu_minimum_s=b['minimum'],reference_cpu_maximum_s=b['maximum'],reported_ratio=u['median_ratio']))
+  with (P/'unit-medians.csv').open('x',newline='') as f:
+   w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+- report=dict(scope='Reported-only current51 whole-native game12 CPU; no qualification',engine_sha256=plan['engine_sha256'],lifetimes=48,warmups=12,measured=36,searches=2528,semantic_posts=g['semantic_posts'],local_sum_unit_medians_s=g['sum_unit_medians_s'],reference_sum_unit_medians_s=g['reference_sum_unit_medians_s'],ratio_of_sums=g['ratio_of_sums'],cpu_context=g['cpu_context'],unresolved_measured_search_cpu=g['unresolved_measured_search_cpu'],units=g['units'],independent_reconciliation_sha256=sha(D/'reconciliation/result.json'),actual_collector_terminals=terminals,qualified_performance_pass=False)
++ report=dict(scope='Reported-only current57 whole-native game12 CPU; no qualification',engine_sha256=plan['engine_sha256'],lifetimes=48,warmups=12,measured=36,searches=2528,semantic_posts=g['semantic_posts'],local_sum_unit_medians_s=g['sum_unit_medians_s'],reference_sum_unit_medians_s=g['reference_sum_unit_medians_s'],ratio_of_sums=g['ratio_of_sums'],cpu_context=g['cpu_context'],unresolved_measured_search_cpu=g['unresolved_measured_search_cpu'],units=g['units'],independent_reconciliation_sha256=sha(D/'reconciliation/result.json'),actual_collector_terminals=terminals,qualified_performance_pass=False)
+  save(P/'reference-comparison.json',report)
+  paths=sorted(x for x in D.rglob('*') if x.is_file())
+  assert all(not x.is_symlink() for x in D.rglob('*'))
+@@ -67,7 +67,7 @@
+    assert sha(D/m.name)==a['sha256'];seen.append(m.name)
+  assert set(seen)==set(manifest)
+  save(P/'archive-closure.json',dict(complete=True,archive_sha256=sha(archive),archive_bytes=archive.stat().st_size,members=len(seen),unpacked_bytes=sum(v['bytes'] for v in manifest.values()),all_member_headers_modes_bytes_and_originals_reopened=True,archive_inputs_sha256=sha(P/'archive-inputs.json'),independent_reconciliation_sha256=sha(D/'reconciliation/result.json'),created_utc=datetime.datetime.now(datetime.timezone.utc).isoformat()))
+- readme=f"""# Current51 complete game12 CPU
++ readme=f"""# Current57 complete game12 CPU
+ 
+ Exact own-PGO image `{plan['engine_sha256']}`. All48 fresh native lifetimes passed:12 warmups and36 measured repetitions,2528 exact searches total. All raw streams and native exits were independently reconciled before this report.
+ 
