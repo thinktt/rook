@@ -1,6 +1,6 @@
 # Current local production candidate
 
-The separate [Debian dual-target builder](../build/linux-builder/README.md) can build GNU/glibc and dynamic-musl ordinary images in one container. It pins an upstream Rust toolchain and isolated target sysroots. Its new outputs are unqualified; it does not automatically reproduce or replace the archived candidate below, and profiles must belong to its own target/toolchain/source.
+The separate [Debian dual-target builder](../build/linux-builder/README.md) can build GNU/glibc and dynamic-musl main engines and diagnostic companions in one container. It pins an upstream Rust toolchain and isolated target sysroots. Its new outputs are unqualified; it does not automatically reproduce or replace the archived candidate below, and profiles must belong to its own target/toolchain/source.
 
 The **first-main corrected build** is the current locally adopted candidate for continuing qualification. The source is the tested correction with its test additions; the existing exact ordinary and diagnostic artifacts remain at their isolated build paths. Adoption did not rebuild either artifact. Retained62 is preserved as the initial comparison control.
 

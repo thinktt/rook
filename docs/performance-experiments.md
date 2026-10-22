@@ -145,3 +145,5 @@ has been promoted. The first-main correction is locally adopted for conformance;
 retained62 remains the initial production control.
 Bulk records, original history and detailed audit catalogs live in
 `/home/legolas/rook2-experiments`; see [archive layout](evidence-layout.md).
+
+Builder follow-up: the [Debian dual-runtime recipe](../build/linux-builder/README.md) now builds all four main/diagnostic outputs with checksum-locked diagnostic vendoring and offline compilation. Both diagnostic companions pass 25 position-setup fixtures, including musl inside Alpine. This is packaging validation, with no new performance result or candidate replacement; see the builder validation record for limits.

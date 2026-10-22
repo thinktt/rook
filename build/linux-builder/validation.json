@@ -1,34 +1,132 @@
 {
-  "schema": "rook-linux-builder-local-validation-v1",
-  "rawDirectory": "/home/legolas/rook2-experiments/debian-dual-builder-20261022-01",
-  "plainBothCompile": true,
-  "instrumentedBothCompile": true,
-  "muslSmokeRunsInAlpine": true,
-  "wrongTargetProfileRejectedBeforeCargo": true,
+  "schema": "rook-linux-builder-local-validation-v2",
+  "rawDirectory": "/home/legolas/rook2-experiments/debian-four-builder-20261022-01",
+  "plainFourCompile": true,
+  "instrumentedMainBothCompile": true,
+  "diagnosticPlainInEveryTestedMode": true,
+  "diagnosticGenerateHashesEqualPlain": true,
+  "diagnosticFixture": {
+    "file": "position-setup-v1.json",
+    "sha256": "2482f7ea459ba846fe4d652c715938df03ac0dfa8b999df7dfdefdc4607d8a22",
+    "casesPerRuntime": 25,
+    "glibcPass": true,
+    "muslInsideAlpinePass": true,
+    "completeEngineQualification": false
+  },
+  "vendoredRegistryPackages": 11,
+  "tamperedArchiveRejected": true,
+  "changedDiagnosticLockRejectedBeforeCargo": true,
   "successfulPgoUseTrainingAndBuildTested": false,
   "dockerFrontendOrImageAssemblyTested": false,
-  "engineExecutions": 0,
-  "smokeProgramExecutions": 1,
-  "scope": "namespace validation on Debian with official Rust1.85.1 components and Alpine musl sysroot; no qualification, timings, promotion or package changes",
-  "terminals": {
-    "smoke": "b5bd49/0",
-    "plain": "457195/0",
-    "generate": "b6db5e/0",
-    "negativePgo": "9d7184/0"
-  },
+  "independentTwoPlainBuildReproductionTested": false,
   "sourceSha256": {
-    "Dockerfile": "9e2fb678986ef4f65f1b9508dac5355a1ea8c22530ff75c16636b52181f8599c",
-    "build.py": "4680eb64e1dad12a46c8041735404d2e79b5ed1c171de55098c26aecb36f39a4",
-    "musl-linker.sh": "c54cd083c16019a1d60a0c344f4dd3b1e22da2880903c68e0c12953b380a86d6"
+    "Dockerfile": "446a89201e577204fda5a5441263859bc9be760e5dbc81de8652e0529cf59cd5",
+    "build.py": "05ac26aa1c8daa9f8cfd40c2032ad64f34a08a99350103049eb4fe16bd0211d8",
+    "musl-linker.sh": "c54cd083c16019a1d60a0c344f4dd3b1e22da2880903c68e0c12953b380a86d6",
+    "vendor.py": "db307a0e0c73ff4ee10ca6e8a1c2962dfeb29ee40d060051e5911e09fbfeb871",
+    "diagnostic-Cargo.lock": "de29168c113c042fe59e0603845b0e1c6c8c566fe7c3a73c7dd87cae3f98c0ef"
   },
   "rawRecordSha256": {
-    "link-validation.json": "c0fbe96d98b2c8f3a2037feefaa6eeb881bced7a8e4424877bea595ddea1725f",
-    "dual-validation-2.json": "4d28c6a3ee0d6dc919a0ed71f443bdfa44c64317fef4d2bf3b6a64e5f69a6a27",
-    "generate-validation.json": "af0a64f3c071a6ada934e64328508947e8e718384f4fc3efc90aa0552a6b18db",
-    "negative-validation.json": "93a1db263c378082837695a633cc28f112bf6d9d410585dac2ac505e289d22d7"
+    "plain-validation.json": "a734df833c0f3d4f6a50e60df7bb76f61d916b40975cdabd91ae0df87a04d56c",
+    "generate-validation.json": "29766dd9d31b6fe45089c00cd02b768c05195a8506846c48ca898c8fb869fa94",
+    "vendor-negative.json": "48aa415951cca8baa36a2ec17e8efdc34e5e41ed2284afb6da410128ceb168c2",
+    "lock-negative.json": "a2992232f0d56d2f089da78c11fb9c85d2610cfe9563ebcfb98946bc4da084c6",
+    "diagnostic-smoke.json": "450da0c638c0da729e273d04cc52de45982d8764fcd0130c78c882143fd6e018",
+    "glibc-diagnostic.stdout": "7b84db6470a728eef591cace802c70d0e71fb6ca025f42de5c55f0c0b628de74",
+    "glibc-diagnostic.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "musl-diagnostic-2.stdout": "0b0722e0789750c42e68d4ebb6695efa581f57844e0eb29f44cfba33d82d9efe",
+    "musl-diagnostic-2.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "musl-diagnostic.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "musl-diagnostic.stderr": "29bb56f99c4a5cff93ddb972360390677cff51a68cc8b89619a5ae9645ad5250"
+  },
+  "plainArtifacts": {
+    "glibc": {
+      "rook": {
+        "bytes": 3562760,
+        "flags": [
+          "-C",
+          "target-cpu=x86-64",
+          "-C",
+          "linker=/usr/bin/gcc"
+        ],
+        "mode": "plain",
+        "needed": [
+          "libgcc_s.so.1",
+          "libm.so.6",
+          "libc.so.6"
+        ],
+        "sha256": "1cc8cdf67d6f66cd407ed94a2822e6ee07eb61084adf8fa6630f27c5c96346b7"
+      },
+      "rook-diag": {
+        "bytes": 9978880,
+        "flags": [
+          "-C",
+          "target-cpu=x86-64",
+          "-C",
+          "linker=/usr/bin/gcc"
+        ],
+        "mode": "plain",
+        "needed": [
+          "libgcc_s.so.1",
+          "libm.so.6",
+          "libc.so.6"
+        ],
+        "sha256": "2048bf20c4ce0e36e0e04cf2e54bc3f80534eb2009799d90dec3761fab9b1686"
+      }
+    },
+    "musl": {
+      "rook": {
+        "bytes": 3548776,
+        "flags": [
+          "-C",
+          "target-cpu=x86-64",
+          "-C",
+          "linker=/opt/rook-builder/musl-linker.sh",
+          "-C",
+          "target-feature=-crt-static"
+        ],
+        "mode": "plain",
+        "needed": [
+          "libgcc_s.so.1",
+          "libc.musl-x86_64.so.1"
+        ],
+        "sha256": "3c42984a1a1114b30d3ad55ae58f93ae7f6af5d5edd18d9f24ddfbd5af7bc35c"
+      },
+      "rook-diag": {
+        "bytes": 9972920,
+        "flags": [
+          "-C",
+          "target-cpu=x86-64",
+          "-C",
+          "linker=/opt/rook-builder/musl-linker.sh",
+          "-C",
+          "target-feature=-crt-static"
+        ],
+        "mode": "plain",
+        "needed": [
+          "libgcc_s.so.1",
+          "libc.musl-x86_64.so.1"
+        ],
+        "sha256": "1f062b796ae91da6930ff584ef93c2d292db5ee85d133e113b7b4281443e3666"
+      }
+    }
+  },
+  "scope": "Offline namespace validation on Debian with official Rust1.85.1 components, pinned Alpine target sysroot and locked diagnostic crates. Small diagnostic fixture only; no benchmarks, full qualification, promotion or package changes.",
+  "terminals": {
+    "vendor": "8fc849/0",
+    "plain": "386a8d/0",
+    "negativeGuards": "e47847/0",
+    "initialSmoke": "9d4423/1",
+    "correctedMuslSmoke": "fcc013/0",
+    "generate": "e0a6e2/0"
   },
   "preparationFailures": [
-    "Host Debian-packaged rustc cannot consume upstream musl standard library despite the same displayed release; test switched to exact upstream compiler.",
-    "Initial namespace-only musl link attempted before source script was executable; Dockerfile already chmods it. The fresh full retry passed."
-  ]
+    "First Alpine diagnostic namespace attempted a nonexistent /spec mount destination on a read-only root and failed before engine launch. Reusing the existing /home/legolas/king-spec destination passed; both attempt logs are preserved."
+  ],
+  "previousOrdinaryOnlyValidation": {
+    "commit": "2a97f8ff8e17ceb1a3eb065e36bd3fb800db1fe3",
+    "rawDirectory": "/home/legolas/rook2-experiments/debian-dual-builder-20261022-01",
+    "wrongTargetProfileRejectedBeforeCargo": true,
+    "currentRecipeProfileUseNotTested": true
+  }
 }

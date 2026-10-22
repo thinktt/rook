@@ -43,6 +43,9 @@ RUN mkdir -p /tmp/apks /opt/musl-sysroot \
            /usr/lib/x86_64-linux-musl/musl-gcc.specs > /opt/musl-sysroot/musl-gcc.specs \
     && rm -rf /tmp/apks
 
+COPY vendor.py diagnostic-Cargo.lock /opt/rook-builder/
+# Download/check archives while creating the image; engine builds need no network/cache mount.
+RUN python3 /opt/rook-builder/vendor.py --lock /opt/rook-builder/diagnostic-Cargo.lock --output /opt/rook-builder/vendor
 COPY Dockerfile build.py musl-linker.sh /opt/rook-builder/
 RUN chmod 755 /opt/rook-builder/musl-linker.sh \
     && mkdir -p /source /out /profiles /profiles-out /build \
