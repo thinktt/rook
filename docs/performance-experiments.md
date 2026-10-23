@@ -147,3 +147,5 @@ Bulk records, original history and detailed audit catalogs live in
 `/home/legolas/rook2-experiments`; see [archive layout](evidence-layout.md).
 
 Builder follow-up: the [Debian dual-runtime recipe](../build/linux-builder/README.md) now builds all four main/diagnostic outputs with checksum-locked diagnostic vendoring and offline compilation. Both diagnostic companions pass 25 position-setup fixtures, including musl inside Alpine. This is packaging validation, with no new performance result or candidate replacement; see the builder validation record for limits.
+
+Static-glibc packaging: added a third runtime to the Debian builder. Both plain binaries compile offline and have no ELF loader/shared-library requirement. Alpine checks pass 25 position-setup + 4 diagnostic search cases and 8 ordinary interruption sessions / 24 searches. No performance or full qualification claim; [static validation](../build/linux-builder/static-validation.json).

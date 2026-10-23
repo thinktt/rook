@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build ordinary and diagnostic GNU/dynamic-musl images; never publish or train."""
+"""Build main/diagnostic dynamic GNU, static GNU and dynamic-musl images."""
 import argparse
 import hashlib
 import json
@@ -10,7 +10,8 @@ import shutil
 import subprocess
 
 HERE = Path(__file__).resolve().parent
-TARGETS = {"glibc": "x86_64-unknown-linux-gnu", "musl": "x86_64-unknown-linux-musl"}
+TARGETS = {"glibc": "x86_64-unknown-linux-gnu", "musl": "x86_64-unknown-linux-musl",
+           "glibc-static": "x86_64-unknown-linux-gnu"}
 
 
 def sha(path):
@@ -28,7 +29,10 @@ def check_elf(image, variant):
     dynamic = subprocess.check_output(["readelf", "-dW", str(image)], text=True)
     versions = subprocess.check_output(["readelf", "-VW", str(image)], text=True)
     needed = re.findall(r"Shared library: \[(.*?)\]", dynamic)
-    if variant == "musl":
+    if variant == "glibc-static":
+        if re.search(r"\bINTERP\b", program) or needed or "GLIBC_" in versions:
+            raise ValueError("static GNU ELF has an interpreter or shared-runtime requirement")
+    elif variant == "musl":
         if "/lib/ld-musl-x86_64.so.1" not in program or "libc.musl-x86_64.so.1" not in needed or "GLIBC_" in versions:
             raise ValueError("dynamic-musl ELF contains an unexpected runtime")
         if set(needed) - {"libc.musl-x86_64.so.1", "libgcc_s.so.1"}:
@@ -40,7 +44,8 @@ def check_elf(image, variant):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--variant", choices=["both", *TARGETS], default="both")
+    parser.add_argument("--variant", choices=["all", "both", *TARGETS], default="all",
+                        help="all builds three runtimes; both retains the original two dynamic runtimes")
     parser.add_argument("--mode", choices=["plain", "generate", "use"], default="plain")
     parser.add_argument("--source", type=Path, default=Path("/source"))
     parser.add_argument("--output", type=Path, default=Path("/out"))
@@ -86,14 +91,16 @@ def main():
     version = subprocess.check_output(["rustc", "-vV"], env=env, text=True)
     builder_pin = hashlib.sha256(b"".join((HERE / n).read_bytes() for n in
         ("Dockerfile", "build.py", "musl-linker.sh", "vendor.py", "diagnostic-Cargo.lock"))).hexdigest()
-    variants = TARGETS if args.variant == "both" else [args.variant]
+    variants = list(TARGETS) if args.variant == "all" else ["glibc", "musl"] if args.variant == "both" else [args.variant]
     for variant in variants:
         out = args.output / variant
         out.mkdir()
         target = TARGETS[variant]
-        flags = ["-C", "target-cpu=x86-64", "-C", "linker=" + ("/usr/bin/gcc" if variant == "glibc" else str(HERE / "musl-linker.sh"))]
+        flags = ["-C", "target-cpu=x86-64", "-C", "linker=" + (str(HERE / "musl-linker.sh") if variant == "musl" else "/usr/bin/gcc")]
         if variant == "musl":
             flags += ["-C", "target-feature=-crt-static"]
+        elif variant == "glibc-static":
+            flags += ["-C", "target-feature=+crt-static"]
         metadata = {"schema": "rook-builder-profile-v1", "target": target, "source_sha256": snapshot,
                     "source_date_epoch": args.source_date_epoch,
                     "rustc_vv": version, "builder_pin": builder_pin, "base_flags": list(flags)}
