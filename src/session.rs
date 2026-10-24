@@ -147,6 +147,11 @@ impl<const D: bool> Session<D> {
             .evaluator.set_research_full_mode(mode)
     }
 
+    pub fn finish_inventory_worker(&mut self) -> Result<String,String> {
+        self.search.as_mut().ok_or("search is currently active")?
+            .evaluator.finish_inventory_worker()
+    }
+
     #[cfg(feature = "child-preparation")]
     pub fn set_child_preparation_budget(&mut self,budget:usize)->Result<(),String> {
         self.search.as_mut().ok_or("search is active")?.evaluator.set_child_preparation_budget(budget)

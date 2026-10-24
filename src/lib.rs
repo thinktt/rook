@@ -59,3 +59,4 @@ pub(crate) mod pawn_worker;
 
 #[cfg(feature = "inventory-census")]
 pub mod inventory_census;
+pub(crate) mod inventory_worker;

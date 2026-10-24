@@ -90,6 +90,7 @@ fn run() -> Result<(), Failure> {
             "--research-full=inline" => research_full = Some(rook2::evaluator::ResearchFullMode::Inline),
             "--research-full=current" => research_full = Some(rook2::evaluator::ResearchFullMode::Current),
             "--research-full=reversed" => research_full = Some(rook2::evaluator::ResearchFullMode::Reversed),
+            "--research-full=inventory" => research_full = Some(rook2::evaluator::ResearchFullMode::Inventory),
             _ => {
                 return Err(Failure::Message(format!(
                     "rook2: unsupported option: {option}\n"
@@ -122,6 +123,10 @@ fn run() -> Result<(), Failure> {
         rook2::inventory_census::enable().map_err(Failure::Message)?;
         Some(path)
     } else {None};
+    let inventory_worker_report = std::env::var_os("ROOK2_INVENTORY_WORKER_REPORT");
+    if inventory_worker_report.as_ref().is_some_and(|path|std::path::Path::new(path).exists()) {
+        return Err(Failure::Message("rook2: inventory worker report must be a fresh path\n".into()));
+    }
     let mut input = Input::stdin()?;
     let mut output = io::stdout().lock();
     let mut errors = io::stderr().lock();
@@ -177,6 +182,11 @@ fn run() -> Result<(), Failure> {
     #[cfg(feature = "inventory-census")]
     if let Some(path) = inventory_report {
         let report = rook2::inventory_census::finish_json().map_err(Failure::Message)?;
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+        writeln!(file,"{report}")?;
+    }
+    if let Some(path) = inventory_worker_report {
+        let report = session.finish_inventory_worker().map_err(Failure::Message)?;
         let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
         writeln!(file,"{report}")?;
     }

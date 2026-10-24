@@ -809,6 +809,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                 }
             }
         }
+        let mut inventory_ticket = self.evaluator.launch_inventory(&position,coherent_geometry);
         #[cfg(feature = "inventory-census")]
         let mut inventory_census = crate::inventory_census::Frame::launch(
             &position, coherent_geometry, checked, p, request.depth, scratch.is_some());
@@ -844,6 +845,11 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                 }
                 #[cfg(feature = "inventory-census")]
                 inventory_census.null_entered();
+                // Release the one helper before any recursive null activation.
+                // A completed owned parent list stays local until actual demand.
+                if let Some(ticket) = inventory_ticket.as_mut() {
+                    ticket.settle_for_null().unwrap_or_else(|error|panic!("inventory null settlement failed: {error}"));
+                }
                 let mut child = node.null_child();
                 history.push(&child.position, None);
                 let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
@@ -882,7 +888,17 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
 
         #[cfg(feature = "inventory-census")]
         let generation_start = inventory_census.inventory_start();
-        movegen::generate_legal(&position, &mut self.candidates[p]);
+        let inventory_ready = inventory_ticket.as_mut().is_some_and(|ticket|
+            ticket.consume_into(&mut self.candidates[p])
+                .unwrap_or_else(|error|panic!("inventory result consumption failed: {error}")));
+        if !inventory_ready {
+            movegen::generate_legal(&position, &mut self.candidates[p]);
+            // The readiness decision is final. Finish/discard the duplicate
+            // before mate/IIO/main recursion can acquire the helper's slot.
+            if let Some(ticket) = inventory_ticket.as_mut() {
+                ticket.discard().unwrap_or_else(|error|panic!("inventory fallback drain failed: {error}"));
+            }
+        }
         #[cfg(feature = "inventory-census")]
         inventory_census.native_inventory(generation_start, &self.candidates[p]);
         let count = self.candidates[p].len;
@@ -1246,3 +1262,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
 #[cfg(test)]
 #[path = "ordinary/first_main_tests.rs"]
 mod first_main_tests;
+
+#[cfg(test)]
+#[path = "ordinary/inventory_tests.rs"]
+mod inventory_tests;
