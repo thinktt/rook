@@ -26,13 +26,12 @@ engine and never use expected answers as a runtime answer database.
 
 ## Ownership and collaboration
 
-The owner-approved [last-mile working agreement](docs/leadership-working-agreement-last-mile.md)
-governs the current phase. `imp2-lead` owns technical strategy and architecture,
-including deep investigation and original design work. Imp2 owns implementation
-and experimental execution within that agenda and makes routine engineering
-decisions independently. Challenge proposed directions and raise significant
-architectural tradeoffs, unexpected evidence and scope changes. Keep
-coordination lightweight; routine execution does not require approval.
+The owner's current direction supersedes the historical last-mile working
+agreement: the implementation owner owns architecture, engineering and execution.
+`imp2-lead` is an independent reviewer/advisor, consulted selectively for
+consequential decisions or significant uncertainty, not routine approval.
+Imp3 owns the current release-builder/pipeline task. This task does not reopen
+engine optimization or expand the owner's selected qualification scope.
 
 Top-level agents use Herdr native prompts to other Herdr agents with their
 centrally assigned sender identity. Follow the standard local AGENTS.md
@@ -130,7 +129,9 @@ the active model at commit time.
 
 Keep code history, reproducible experiment setups and concise outcome reports in
 this repository. Store raw runs, binaries, profiles, intermediate build products
-and packed checkpoints in `/home/legolas/rook2-experiments`. The complete original
+and packed checkpoints in `/home/legolas/rook2-experiments`. The small text-form
+PGO profiles under `build/profiles` are explicit versioned release build inputs;
+raw training profiles and evidence remain outside Git. The complete original
 worktree/history is preserved there. Read `docs/evidence-layout.md` for relocated
 paths and commit mapping, and update `docs/performance-experiments.md` with brief
 idea/result entries (label untried proposals explicitly). Do not automatically

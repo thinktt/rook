@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
-"""Build main/diagnostic dynamic GNU, static GNU and dynamic-musl images."""
+"""Build unstripped dynamic/static glibc companions from explicit release inputs."""
 import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 
 HERE = Path(__file__).resolve().parent
-TARGETS = {"glibc": "x86_64-unknown-linux-gnu", "musl": "x86_64-unknown-linux-musl",
-           "glibc-static": "x86_64-unknown-linux-gnu"}
 
 
 def sha(path):
@@ -19,137 +16,118 @@ def sha(path):
 
 
 def write(path, value):
-    with path.open("x") as stream:
-        json.dump(value, stream, indent=2, sort_keys=True)
-        stream.write("\n")
-
-
-def check_elf(image, variant):
-    program = subprocess.check_output(["readelf", "-lW", str(image)], text=True)
-    dynamic = subprocess.check_output(["readelf", "-dW", str(image)], text=True)
-    versions = subprocess.check_output(["readelf", "-VW", str(image)], text=True)
-    needed = re.findall(r"Shared library: \[(.*?)\]", dynamic)
-    if variant == "glibc-static":
-        if re.search(r"\bINTERP\b", program) or needed or "GLIBC_" in versions:
-            raise ValueError("static GNU ELF has an interpreter or shared-runtime requirement")
-    elif variant == "musl":
-        if "/lib/ld-musl-x86_64.so.1" not in program or "libc.musl-x86_64.so.1" not in needed or "GLIBC_" in versions:
-            raise ValueError("dynamic-musl ELF contains an unexpected runtime")
-        if set(needed) - {"libc.musl-x86_64.so.1", "libgcc_s.so.1"}:
-            raise ValueError("unexpected musl dependency: " + repr(needed))
-    elif "/lib64/ld-linux-x86-64.so.2" not in program or "libc.so.6" not in needed:
-        raise ValueError("GNU ELF contains an unexpected runtime")
-    return needed
+    path.write_text(json.dumps(value, indent=2, sort_keys=True)+'\n')
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--variant", choices=["all", "both", *TARGETS], default="all",
-                        help="all builds three runtimes; both retains the original two dynamic runtimes")
-    parser.add_argument("--mode", choices=["plain", "generate", "use"], default="plain")
-    parser.add_argument("--source", type=Path, default=Path("/source"))
-    parser.add_argument("--output", type=Path, default=Path("/out"))
-    parser.add_argument("--profiles", type=Path, default=Path("/profiles"))
-    parser.add_argument("--jobs", type=int, default=4)
-    parser.add_argument("--source-date-epoch", type=int, default=1742256000)
-    args = parser.parse_args()
-    if not 1 <= args.jobs <= 64 or args.source_date_epoch < 0:
-        parser.error("jobs must be1..64 and epoch nonnegative")
-    if not args.output.is_dir() or any(args.output.iterdir()):
-        parser.error("output must be an existing empty mounted directory")
-    source = Path("/build/source")
-    if source.exists():
-        parser.error("build directory already used; start a fresh container")
-    lock = HERE / "diagnostic-Cargo.lock"
-    if sha(args.source / "diagnostic/Cargo.lock") != sha(lock):
-        parser.error("diagnostic lock differs from builder; refresh diagnostic-Cargo.lock and rebuild the image")
-    names = ["Cargo.toml", "Cargo.lock", "diagnostic/Cargo.toml", "diagnostic/Cargo.lock"]
-    names += [str(p.relative_to(args.source)) for p in sorted((args.source / "src").rglob("*")) if p.is_file()]
-    names += [str(p.relative_to(args.source)) for p in sorted((args.source / "diagnostic/src").rglob("*")) if p.is_file()]
-    if any((args.source / p).exists() for p in ("build.rs", "diagnostic/build.rs")):
-        parser.error("this curated builder does not admit unreviewed project build.rs inputs")
-    snapshot = {}
-    for name in names:
-        path = source / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        data = (args.source / name).read_bytes()
-        path.write_bytes(data)
-        os.utime(path, (args.source_date_epoch, args.source_date_epoch))
-        snapshot[name] = hashlib.sha256(data).hexdigest()
-    Path("/build/home").mkdir()
-    cargo_home = Path("/build/cargo-home")
-    cargo_home.mkdir()
-    (cargo_home / "config.toml").write_text(
-        '[source.crates-io]\nreplace-with = "locked-vendor"\n'
-        '[source.locked-vendor]\ndirectory = "/opt/rook-builder/vendor"\n'
-        '[net]\noffline = true\n')
-    env = {"PATH": "/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin", "HOME": "/build/home",
-           "RUSTUP_HOME": "/usr/local/rustup", "CARGO_HOME": "/build/cargo-home",
-           "RUSTUP_TOOLCHAIN": "1.85.1-x86_64-unknown-linux-gnu", "LANG": "C", "LC_ALL": "C", "TZ": "UTC",
-           "CARGO_NET_OFFLINE": "true", "CARGO_INCREMENTAL": "0", "CARGO_BUILD_JOBS": str(args.jobs),
-           "SOURCE_DATE_EPOCH": str(args.source_date_epoch)}
-    version = subprocess.check_output(["rustc", "-vV"], env=env, text=True)
-    builder_pin = hashlib.sha256(b"".join((HERE / n).read_bytes() for n in
-        ("Dockerfile", "build.py", "musl-linker.sh", "vendor.py", "diagnostic-Cargo.lock"))).hexdigest()
-    variants = list(TARGETS) if args.variant == "all" else ["glibc", "musl"] if args.variant == "both" else [args.variant]
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--source', type=Path, default=Path('/source'))
+    p.add_argument('--output', type=Path, default=Path('/out'))
+    p.add_argument('--variant', choices=['all', 'glibc', 'glibc-static'], default='all')
+    p.add_argument('--mode', choices=['release', 'generate', 'plain'], default='release')
+    p.add_argument('--jobs', type=int, default=4)
+    a = p.parse_args()
+    if not 1 <= a.jobs <= 64 or not a.output.is_dir() or any(a.output.iterdir()):
+        p.error('jobs must be 1..64; output must be an existing empty directory')
+    recipe_path = a.source/'build/release.json'
+    recipe = json.loads(recipe_path.read_text())
+    if recipe['schema'] != 'rook-release-build-v1':
+        p.error('unsupported build recipe')
+    if sha(a.source/'diagnostic/Cargo.lock') != sha(HERE/'diagnostic-Cargo.lock'):
+        p.error('diagnostic lock changed; refresh the builder lock and rebuild the image')
+    source, home = Path(recipe['sourceRoot']), Path(recipe['cargoHome'])
+    if any(not path.is_absolute() or '..' in path.parts or path.parts[1] not in ('home', 'build') for path in [source, home]):
+        p.error('build paths must be absolute paths below /home or /build')
+    if source.exists() or home.exists():
+        p.error('fresh /home and /build mounts required')
+    names = ['Cargo.toml', 'Cargo.lock', 'diagnostic/Cargo.toml', 'diagnostic/Cargo.lock']
+    names += [str(f.relative_to(a.source)) for prefix in ['src', 'diagnostic/src']
+              for f in sorted((a.source/prefix).rglob('*')) if f.is_file()]
+    if any((a.source/n).exists() for n in ['build.rs', 'diagnostic/build.rs']):
+        p.error('project build.rs needs explicit review before adding it to this recipe')
+    snapshot = {n:sha(a.source/n) for n in names}
+    graph = hashlib.sha256(json.dumps(snapshot, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    if graph != recipe['sourceGraphSha256']:
+        p.error('source graph differs from the profile-bound release recipe')
+    for n in names:
+        dest = source/n
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(a.source/n, dest)
+    vendor = home/'registry/src'/recipe['registryDirectory']
+    shutil.copytree(HERE/'vendor', vendor)
+    (home/'config.toml').write_text(
+        '[source.crates-io]\nreplace-with="locked-vendor"\n'
+        '[source.locked-vendor]\ndirectory='+json.dumps(str(vendor))+'\n[net]\noffline=true\n')
+    env = dict(PATH='/usr/bin:/bin', HOME=str(home.parent), CARGO_HOME=str(home),
+               RUSTC='/usr/bin/rustc', RUSTC_WRAPPER='', RUSTC_WORKSPACE_WRAPPER='',
+               CARGO_NET_OFFLINE='true', CARGO_INCREMENTAL='0', CARGO_BUILD_JOBS=str(a.jobs),
+               LANG='C', LC_ALL='C', TZ='UTC', TMPDIR='/tmp')
+    version = subprocess.check_output(['/usr/bin/rustc', '-vV'], env=env, text=True)
+    variants = list(recipe['variants']) if a.variant == 'all' else [a.variant]
     for variant in variants:
-        out = args.output / variant
+        settings = recipe['variants'][variant]
+        out = a.output/variant
         out.mkdir()
-        target = TARGETS[variant]
-        flags = ["-C", "target-cpu=x86-64", "-C", "linker=" + (str(HERE / "musl-linker.sh") if variant == "musl" else "/usr/bin/gcc")]
-        if variant == "musl":
-            flags += ["-C", "target-feature=-crt-static"]
-        elif variant == "glibc-static":
-            flags += ["-C", "target-feature=+crt-static"]
-        metadata = {"schema": "rook-builder-profile-v1", "target": target, "source_sha256": snapshot,
-                    "source_date_epoch": args.source_date_epoch,
-                    "rustc_vv": version, "builder_pin": builder_pin, "base_flags": list(flags)}
-        if args.mode == "generate":
-            raw_profiles = Path("/profiles-out") / variant
-            raw_profiles.mkdir()
-            flags += ["-C", "profile-generate=" + str(raw_profiles)]
-        elif args.mode == "use":
-            profile = args.profiles / (variant + ".profdata")
-            supplied = json.loads((args.profiles / (variant + ".json")).read_text())
-            for key, value in metadata.items():
-                if supplied.get(key) != value:
-                    raise ValueError("profile provenance mismatch: " + variant + ":" + key)
-            if supplied.get("profile_sha256") != sha(profile):
-                raise ValueError("profile checksum mismatch: " + variant)
-            flags += ["-C", "profile-use=" + str(profile), "-C",
-                      "llvm-args=-pgo-warn-missing-function -enable-ext-tsp-block-placement=true -ext-tsp-apply-without-profile=false"]
+        base = ['-C', 'target-cpu='+recipe['cpu']]
+        if settings['static']:
+            base += ['-C', 'target-feature=+crt-static']
+        flags = list(base)
+        profile_hash = None
+        if a.mode == 'generate':
+            raw = Path('/profiles-out')/variant
+            raw.mkdir()
+            flags += ['-C', 'profile-generate='+str(raw)]
+        elif a.mode == 'release':
+            text = a.source/settings['profileText']
+            if sha(text) != settings['profileTextSha256']:
+                raise ValueError('profile text checksum mismatch: '+variant)
+            profile = Path(settings['profilePath'])
+            profile.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(['llvm-profdata-19', 'merge', str(text), '-o', str(profile)], check=True)
+            profile_hash = sha(profile)
+            flags += ['-C', 'profile-use='+str(profile), '-C',
+                      'llvm-args=-pgo-warn-missing-function -enable-ext-tsp-block-placement=true -ext-tsp-apply-without-profile=false']
         artifacts = {}
-        programs = [("rook", "rook2", source / "Cargo.toml", flags, "build"),
-                    ("rook-diag", "rook2-diag", source / "diagnostic/Cargo.toml", metadata["base_flags"], "diagnostic-build")]
-        for filename, binary, manifest, program_flags, prefix in programs:
-            # The diagnostic transport has no main-search PGO input, even in generate/use mode.
-            build_env = {**env, "RUSTFLAGS": " ".join(program_flags), "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(program_flags)}
-            target_dir = Path("/build/target") / variant / filename
-            command = ["cargo", "build", "--offline", "--locked", "--release", "--verbose", "--target", target,
-                       "--target-dir", str(target_dir), "--jobs", str(args.jobs), "--manifest-path", str(manifest), "--bin", binary]
-            with (out / (prefix + ".stdout")).open("xb") as stdout, (out / (prefix + ".stderr")).open("xb") as stderr:
-                subprocess.run(command, cwd=source, env=build_env, stdout=stdout, stderr=stderr, check=True)
-            log = (out / (prefix + ".stderr")).read_text().lower()
-            if filename == "rook" and args.mode == "use" and any(s in log for s in
-                    ("no profile data available for function", "profile data may be out of date", "profile data mismatch",
-                     "malformed instrumentation profile data", "hash mismatch", "unprofiled function")):
-                raise ValueError("missing/stale PGO diagnostics: " + variant)
-            image = out / filename
-            shutil.copyfile(target_dir / target / "release" / binary, image)
+        for name, binary, manifest, program_flags in [
+            ('rook', 'rook2', source/'Cargo.toml', flags),
+            ('rook-diag', 'rook2-diag', source/'diagnostic/Cargo.toml', base),
+        ]:
+            command = ['/usr/bin/cargo', 'build', '--offline', '--locked', '--release', '--verbose',
+                       '--target', recipe['target'], '--jobs', str(a.jobs), '--target-dir',
+                       '/build/target/'+variant+'/'+name, '--manifest-path', str(manifest), '--bin', binary]
+            child_env = dict(env, RUSTFLAGS=' '.join(program_flags), CARGO_ENCODED_RUSTFLAGS='\x1f'.join(program_flags))
+            with (out/(name+'.stdout')).open('xb') as so, (out/(name+'.stderr')).open('xb') as se:
+                subprocess.run(command, cwd=source, env=child_env, stdout=so, stderr=se, check=True)
+            log = (out/(name+'.stderr')).read_text().lower()
+            if name == 'rook' and a.mode == 'release' and any(s in log for s in [
+                'no profile data available for function', 'profile data may be out of date',
+                'profile data mismatch', 'malformed instrumentation profile', 'hash mismatch', 'unprofiled function']):
+                raise ValueError('stale or missing PGO data: '+variant)
+            image = out/name
+            shutil.copyfile(Path('/build/target')/variant/name/recipe['target']/'release'/binary, image)
             image.chmod(0o755)
-            artifacts[filename] = {"argv": command, "flags": program_flags, "needed": check_elf(image, variant),
-                                   "mode": args.mode if filename == "rook" else "plain",
-                                   "sha256": sha(image), "bytes": image.stat().st_size}
-        if any(sha(source / name) != expected or sha(args.source / name) != expected for name, expected in snapshot.items()):
-            raise ValueError("source changed during build")
-        if args.mode == "use" and sha(profile) != supplied["profile_sha256"]:
-            raise ValueError("profile changed during build")
-        write(out / "profile-template.json", metadata)
-        write(out / "build.json", {**metadata, "mode": args.mode, "artifacts": artifacts,
-              "vendor_lock_sha256": sha(lock), "qualification": "new unqualified builds; no engine execution or promotion"})
-        (out / "SHA256SUMS").write_text("".join(a["sha256"] + "  " + name + "\n" for name, a in artifacts.items()))
-        print(json.dumps({"variant": variant, "artifacts": artifacts}), flush=True)
+            programs = subprocess.check_output(['readelf', '-lW', str(image)], text=True)
+            dynamic = subprocess.check_output(['readelf', '-dW', str(image)], text=True)
+            sections = subprocess.check_output(['readelf', '-SW', str(image)], text=True)
+            if '.debug_info' not in sections or '.symtab' not in sections:
+                raise ValueError('debug information or symbols missing: '+name)
+            if settings['static']:
+                if ' INTERP ' in programs or '(NEEDED)' in dynamic:
+                    raise ValueError('static artifact requires a dynamic runtime')
+            elif '/lib64/ld-linux-x86-64.so.2' not in programs or 'libc.so.6' not in dynamic:
+                raise ValueError('unexpected dynamic runtime')
+            artifacts[name] = dict(sha256=sha(image), bytes=image.stat().st_size,
+                                   flags=program_flags, argv=command, debugInformationRetained=True)
+        if any(sha(source/n) != h or sha(a.source/n) != h for n, h in snapshot.items()):
+            raise ValueError('source changed during compilation')
+        if a.mode == 'release' and sha(profile) != profile_hash:
+            raise ValueError('profile changed during compilation')
+        write(out/'build.json', dict(schema='rook-linux-build-v1', variant=variant, mode=a.mode,
+            recipeSha256=sha(recipe_path), sourceGraphSha256=graph, sourceSha256=snapshot,
+            rustc=version, profileSha256=profile_hash, artifacts=artifacts))
+        (out/'SHA256SUMS').write_text(''.join(v['sha256']+'  '+k+'\n' for k, v in artifacts.items()))
+        print(json.dumps(dict(variant=variant, artifacts={k:v['sha256'] for k,v in artifacts.items()})), flush=True)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

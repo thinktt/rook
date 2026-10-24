@@ -1,6 +1,12 @@
 # Current local production candidate
 
-The separate [Debian dual-target builder](../build/linux-builder/README.md) can build dynamic-glibc, static-glibc and dynamic-musl main engines and diagnostic companions in one container. It pins an upstream Rust toolchain and isolated target sysroots. Its new outputs are unqualified; it does not automatically reproduce or replace the archived candidate below, and profiles must belong to its own target/toolchain/source.
+The [release builder](../build/linux-builder/README.md) now uses pinned Debian
+Rust and produces dynamic/static glibc main engines and diagnostics. Its dynamic
+pair reproduces the archived candidate below exactly. The static pair is
+qualified separately. [release/qualification.json](../release/qualification.json)
+is the current artifact manifest; [release tooling](../release/README.md) describes
+local builds and the tag-only pipeline. Historical upstream-Rust/musl trials are
+preserved experiments and are not the selected release recipe.
 
 The **first-main corrected build** is the current locally adopted candidate for continuing qualification. The source is the tested correction with its test additions; the existing exact ordinary and diagnostic artifacts remain at their isolated build paths. Adoption did not rebuild either artifact. Retained62 is preserved as the initial comparison control.
 

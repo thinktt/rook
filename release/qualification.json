@@ -1,0 +1,131 @@
+{
+  "schema": "rook-artifact-qualification-v1",
+  "status": "qualified-locally",
+  "specification": "KingRE v2.5.0",
+  "sourceGraphSha256": "2407e8961c77c34b64a22eaad1a0245257dae509bd167138d8ec8583d1e3bcd5",
+  "artifacts": [
+    {
+      "path": "glibc/rook",
+      "releaseName": "rook-{version}-linux-x86_64",
+      "sha256": "5cf0120892065f80bbf4a22297596358bfc28c4945c86c0bf3f65d38b8bff82a",
+      "bytes": 7118416,
+      "debugInformationRetained": true,
+      "origin": "candidate68 qualified bytes; reproduced in release container",
+      "buildBinding": {
+        "path": "experiments/first-main-cutoff-adoption/manifest.json",
+        "sha256": "ab9dca0bb96f9c843803f6a0925433f6e15d9927aa9840f166778f4d9adde2f4"
+      },
+      "qualifications": [
+        {
+          "id": "local-pre-gate",
+          "status": "passed",
+          "evidence": {
+            "path": "experiments/first-main-cutoff-gameplay/result.json",
+            "sha256": "a7930808710db5e77492270da73092ef162ee49046d3b259f289ba01031bb8ae"
+          }
+        },
+        {
+          "id": "external-recorded-oracle",
+          "status": "passed-with-recorded-limits",
+          "evidence": {
+            "repository": "spec-issues",
+            "commit": "8e5d4e385c8bf07f4d7fad8682fa06984f911ae6",
+            "path": "v2.5.0/2026-10-21-candidate68-full-recorded-oracle-results/results.json",
+            "sha256": "384f3bcdfb89304919761c65ff1e5ed90ce06d841eb03114b23f8196537c5c3d"
+          },
+          "games": 3288
+        }
+      ]
+    },
+    {
+      "path": "glibc/rook-diag",
+      "releaseName": "rook-diag-{version}-linux-x86_64",
+      "sha256": "68a1c304f76435e4c100086d1a303b8dc94d8b5ecd63d26be834e3737bca2dda",
+      "bytes": 14038952,
+      "debugInformationRetained": true,
+      "origin": "candidate68 qualified bytes; reproduced in release container",
+      "buildBinding": {
+        "path": "experiments/first-main-cutoff-adoption/manifest.json",
+        "sha256": "ab9dca0bb96f9c843803f6a0925433f6e15d9927aa9840f166778f4d9adde2f4"
+      },
+      "qualifications": [
+        {
+          "id": "mandatory-conformance",
+          "status": "passed",
+          "cases": 7673,
+          "files": 115,
+          "evidence": {
+            "path": "experiments/first-main-cutoff-correction/mandatory-completion/result.json",
+            "sha256": "8cf63cf72f4ad2e57c1b7683ecf820890383d00bf34b4064cc481f0c84d4bf7a"
+          }
+        }
+      ]
+    },
+    {
+      "path": "glibc-static/rook",
+      "releaseName": "rook-{version}-linux-x86_64-static",
+      "sha256": "afe8546600a35d7a08ce90ac51d70e603fc2aa0b43861408f9a16d4e105eca00",
+      "bytes": 8020936,
+      "debugInformationRetained": true,
+      "origin": "static-glibc companion from the same pinned toolchain and source; own main-engine PGO",
+      "qualifications": [
+        {
+          "id": "standard54-correctness",
+          "status": "passed",
+          "cases": 54
+        },
+        {
+          "id": "local-pre-gate",
+          "status": "passed",
+          "games": 12,
+          "searches": 632,
+          "semanticPosts": 5801,
+          "continuitySearches": 8,
+          "seedControls": true,
+          "persistenceControls": true,
+          "wireSessions": 8,
+          "wireSearches": 24
+        },
+        {
+          "id": "external-recorded-oracle",
+          "status": "not-run",
+          "requiredForThisVariant": false
+        }
+      ],
+      "buildBinding": {
+        "path": "release/local-verification.json",
+        "sha256": "e16f3075a9c7b5fd9cc1a2f51aeb4f7893a56dfa96239bb4f6a03e8f9400d648"
+      }
+    },
+    {
+      "path": "glibc-static/rook-diag",
+      "releaseName": "rook-diag-{version}-linux-x86_64-static",
+      "sha256": "d4872390803d011a22ec817c08f6ac6f572df1e6fc086422ee9c3500ca5ece2e",
+      "bytes": 14949424,
+      "debugInformationRetained": true,
+      "origin": "static-glibc companion from the same pinned toolchain and source; own main-engine PGO",
+      "qualifications": [
+        {
+          "id": "mandatory-conformance",
+          "status": "passed",
+          "cases": 7673,
+          "files": 115
+        }
+      ],
+      "buildBinding": {
+        "path": "release/local-verification.json",
+        "sha256": "e16f3075a9c7b5fd9cc1a2f51aeb4f7893a56dfa96239bb4f6a03e8f9400d648"
+      }
+    }
+  ],
+  "limits": [
+    "Artifact-hash checks reuse the recorded local qualifications; they do not execute tests in CI.",
+    "External recorded-oracle results apply only to the original dynamic main image.",
+    "Final specification/performance qualification remains separate from these finite artifact records.",
+    "The historical external main-image packet discloses unavailable queue exit codes and board-derived terminal expectations; it is not a performance or blanket acceptance statement."
+  ],
+  "verification": {
+    "path": "release/local-verification.json",
+    "sha256": "e16f3075a9c7b5fd9cc1a2f51aeb4f7893a56dfa96239bb4f6a03e8f9400d648"
+  }
+}
