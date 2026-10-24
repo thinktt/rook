@@ -51,3 +51,6 @@ pub mod work_clock;
 pub mod branch_transactions;
 #[cfg(feature = "branch-transactions")]
 pub(crate) mod branch_journal;
+
+#[cfg(feature = "child-preparation")]
+pub(crate) mod child_preparation;

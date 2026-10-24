@@ -66,11 +66,19 @@ fn run() -> Result<(), Failure> {
     let mut diagnostic_seed = false;
     let mut fine_work = false;
     let mut research_threads = 1;
+    #[cfg(feature = "child-preparation")]
+    let mut child_budget = None;
     for option in std::env::args().skip(1) {
         match option.as_str() {
             "--diagnostic-seed-command" => diagnostic_seed = true,
             "--work-clock=kingwcr" => {}
             "--work-clock-post=work" => fine_work = true,
+            #[cfg(feature = "child-preparation")]
+            "--child-preparation=1" => child_budget=Some(1),
+            #[cfg(feature = "child-preparation")]
+            "--child-preparation=2" => child_budget=Some(2),
+            #[cfg(feature = "child-preparation")]
+            "--child-preparation=4" => child_budget=Some(4),
             "--research-threads=1" => research_threads = 1,
             "--research-threads=2" => research_threads = 2,
             _ => {
@@ -87,6 +95,9 @@ fn run() -> Result<(), Failure> {
     let mut session = Session::<false>::default();
     session.set_research_thread_budget(research_threads)
         .map_err(|message| Failure::Message(format!("rook2: {message}\n")))?;
+    #[cfg(feature = "child-preparation")]
+    if let Some(budget)=child_budget {session.set_child_preparation_budget(budget)
+        .map_err(|message|Failure::Message(message))?;}
     while let Some(line) = input.line()? {
         if diagnostic_seed {
             if let Some(assignment) = wire::seed_assignment(&line) {
@@ -100,7 +111,7 @@ fn run() -> Result<(), Failure> {
             }
         }
         match session.idle(&line)? {
-            Action::Quit => return Ok(()),
+            Action::Quit => break,
             Action::Reply(replies) => {
                 for reply in replies {
                     output.write_all(reply.as_bytes())?;
@@ -119,6 +130,14 @@ fn run() -> Result<(), Failure> {
                 result?;
             }
         }
+    }
+    #[cfg(feature = "child-preparation")]
+    if child_budget.is_some() {
+        let stats=session.finish_child_preparation().map_err(Failure::Message)?;
+        if let Some(path)=std::env::var_os("ROOK2_CHILD_PREPARATION_REPORT") {
+            let mut file=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+            writeln!(file,"{stats}")?;
+        } else {writeln!(errors,"CHILD_PREPARATION_STATS {stats}")?;}
     }
     Ok(())
 }

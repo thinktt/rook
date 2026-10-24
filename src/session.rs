@@ -142,6 +142,15 @@ impl<const D: bool> Session<D> {
             .evaluator.set_research_thread_budget(budget)
     }
 
+    #[cfg(feature = "child-preparation")]
+    pub fn set_child_preparation_budget(&mut self,budget:usize)->Result<(),String> {
+        self.search.as_mut().ok_or("search is active")?.evaluator.set_child_preparation_budget(budget)
+    }
+    #[cfg(feature = "child-preparation")]
+    pub fn finish_child_preparation(&mut self)->Result<String,String> {
+        self.search.as_mut().ok_or("search is active")?.evaluator.finish_child_preparation()
+    }
+
     pub fn position(&self) -> Position {
         *self.states.last().unwrap()
     }

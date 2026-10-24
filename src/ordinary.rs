@@ -964,6 +964,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         {
             self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 0)?;
         }
+        #[cfg(feature = "child-preparation")]
+        let _preparation_scope = if request.depth == 2 && coherent_geometry {
+            self.evaluator.prepare_children(&position, self.candidates[p].as_slice())
+        } else {None};
         let mut best = effective_lower;
         let mut lower = request.lower;
         // Main extensions depend on the complete inventory, whose contents do

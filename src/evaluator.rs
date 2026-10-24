@@ -277,6 +277,8 @@ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
     weights: Weights,
     pawns: PawnCache,
     research_worker: Option<ActivityShelterWorker>,
+    #[cfg(feature = "child-preparation")]
+    child_preparation: Option<crate::child_preparation::ChildPreparation>,
     pub stats: EvalStats,
 }
 
@@ -297,6 +299,8 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             weights: self.weights,
             pawns: self.pawns.research_clone(),
             research_worker: None,
+            #[cfg(feature = "child-preparation")]
+            child_preparation: None,
             stats: self.stats,
         }
     }
@@ -327,6 +331,8 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             variation_range,
             pawns: PawnCache::new(),
             research_worker: None,
+            #[cfg(feature = "child-preparation")]
+            child_preparation: None,
             stats: EvalStats::default(),
         }
     }
@@ -336,6 +342,10 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
     /// The worker is pinned to Linux CPU6 and busy-spins even between calls and
     /// searches. Switching to 1 joins it; dropping the evaluator also joins it.
     pub fn set_research_thread_budget(&mut self, budget: usize) -> Result<(), String> {
+        #[cfg(feature = "child-preparation")]
+        if budget != 1 && self.child_preparation.is_some() {
+            return Err("child preparation and FULL worker cannot be nested".into());
+        }
         match budget {
             1 => {
                 if let Some(mut worker) = self.research_worker.take() {
@@ -352,7 +362,45 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         Ok(())
     }
 
+    #[cfg(feature = "child-preparation")]
+    pub fn set_child_preparation_budget(&mut self, budget: usize) -> Result<(), String> {
+        if ![1,2,4].contains(&budget) {return Err("child preparation budget must be1,2,4".into());}
+        if self.research_worker.is_some() {return Err("child preparation requires inline FULL mode".into());}
+        if let Some(mut old)=self.child_preparation.take() {old.shutdown()?;}
+        if budget>1 {self.child_preparation=Some(crate::child_preparation::ChildPreparation::start(budget-1)?);}
+        Ok(())
+    }
+
+    #[cfg(feature = "child-preparation")]
+    pub fn finish_child_preparation(&mut self) -> Result<String,String> {
+        if let Some(mut pool)=self.child_preparation.take() {
+            let reserved=pool.estimated_bytes();
+            pool.shutdown()?;
+            let mut json=pool.stats().json();json.pop();
+            Ok(format!("{json},\"pool_reserved_bytes\":{reserved}}}"))
+        } else {Ok(crate::child_preparation::Stats::default().json())}
+    }
+
+    #[cfg(feature = "child-preparation")]
+    pub(crate) fn prepare_children(&mut self, position: &Position, moves: &[Move])
+        -> Option<crate::child_preparation::ScopeGuard> {
+        let pool=self.child_preparation.as_mut()?;
+        // Native legal inventory plus guarded descendant ancestry supplies coherent geometry.
+        // Restrict this initial domain to ordinary moves; no exceptional projections.
+        let jobs=moves.iter().filter(|m|m.kind()==MoveKind::Ordinary && {
+            let victim=position.board[m.to().0 as usize];
+            victim.is_empty() || victim.kind()!=PieceKind::King
+        }).take(6).map(|m| {
+            let child=position.played_unchecked(*m);
+            crate::child_preparation::Job {position:child,material:self.root.material(&child),
+                mobility_weights:self.weights.mobility,shelter_weights:self.weights.shelter,coherent:true}
+        }).collect();
+        pool.begin(jobs)
+    }
+
     pub fn begin_search(&mut self, position: &Position) {
+        #[cfg(feature = "child-preparation")]
+        if let Some(pool)=self.child_preparation.as_mut() {pool.reset();}
         (
             self.root,
             self.weights,
@@ -380,7 +428,13 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         coherent_geometry: bool,
     ) -> &'a Influence {
         if scratch.is_none() {
-            *scratch = Some(if coherent_geometry {
+            #[cfg(feature = "child-preparation")]
+            let prepared = if coherent_geometry {
+                self.child_preparation.as_mut().and_then(|pool|pool.take_map(position))
+            } else {None};
+            #[cfg(not(feature = "child-preparation"))]
+            let prepared: Option<Influence> = None;
+            *scratch = Some(if let Some(map)=prepared {map} else if coherent_geometry {
                 let map = Influence::build_coherent(position);
                 #[cfg(test)]
                 COHERENT_BUILDS.with(|count| count.set(count.get() + 1));
@@ -473,14 +527,19 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         let pawn = pawn_terms::compute(position, influence, &selected.structure);
         // Keep inline execution at the original chain position. Both routes
         // invoke the same numerical kernels and share the composition below.
+        #[cfg(feature = "child-preparation")]
+        let prepared_chain=self.child_preparation.as_mut().and_then(|pool|pool.take_chain(
+            position,influence,material,self.weights.mobility,self.weights.shelter));
+        #[cfg(not(feature = "child-preparation"))]
+        let prepared_chain: Option<evaluator_worker::ActivityShelter> = None;
         let inline_chain = if self.research_worker.is_none() {
-            Some(evaluator_worker::compute(
+            Some(prepared_chain.unwrap_or_else(||evaluator_worker::compute(
                 position,
                 influence,
                 material,
                 self.weights.mobility,
                 self.weights.shelter,
-            ))
+            )))
         } else {
             None
         };
@@ -1112,3 +1171,7 @@ mod tests {
         verify::<true>();
     }
 }
+
+#[cfg(all(test, feature = "child-preparation"))]
+#[path = "evaluator/child_preparation_tests.rs"]
+mod child_preparation_tests;
