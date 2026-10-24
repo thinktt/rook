@@ -1,5 +1,12 @@
 # Rook2
 
+**This worktree is the deterministic multicore research branch.** The
+[research outcome](docs/research/deterministic-multicore-outcome.md) recommends
+retaining the opt-in two-thread FULL split: 6.79% lower elapsed time in the
+54-case survey, with 1.863x CPU and 1.12% one-thread overhead. Selected local
+behavioral checks pass; scaling beyond 2 and external qualification of the new
+image remain open. The accepted serial release described below is unchanged.
+
 An independent Rust implementation of the released KingRE ordinary-play specification. The [mission](../imp-perf-mission.md) and [KingRE v2.5.0 contracts](../king-spec/README.md) guide behavior and qualification.
 
 **Current local candidate: the first-main corrected build.** The tested first-main cutoff correction and test additions are adopted with the existing exact own-PGO ordinary image `5cf01208…` and separate diagnostic `68a1c304…`. Retained62 remains the initial comparison control. Position owns coherent attack planes; search retains copied-child state, retained evaluation and ordinary/tactical recursion. No additional architectural optimization is selected.

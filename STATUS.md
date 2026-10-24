@@ -1,5 +1,13 @@
 # Current implementation status
 
+**Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
+split is retained for an adoption decision after passing the selected local
+behavioral checks. The [lead research outcome](docs/research/deterministic-multicore-outcome.md)
+records the 6.79% elapsed gain, CPU/serial costs, unsuccessful approaches and
+remaining external qualification and scaling limits. Default execution remains
+one thread; this does not promote the new image to the accepted release. The
+serial checkpoint below retains its historical scope.
+
 **Current local candidate: first-main corrected build.** Updated2026-10-20. Retained62 is preserved as the initial comparison control. This is local adoption for continuing qualification; no qualified release or external action is implied.
 
 The [working agreement](docs/leadership-working-agreement-last-mile.md) assigns strategy/architecture to imp2-lead and implementation/execution to Imp2. The optimization batch is closed. The tested first-main correction, full mandatory completion, fresh own-PGO/full54 comparison and exact-image behavioral lane are now complete. No engine/build/profile job is active. The lead owns the [review map](docs/reviews/retained62-owner-review.md), [strategy](docs/last-mile-strategy.md) and qualification dispositions; their historical62 headings retain their documented scopes until updated.
