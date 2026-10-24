@@ -339,8 +339,9 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
 
     /// Research-only FULL-evaluation budget: coordinator alone (1, the default)
     /// or coordinator plus one persistent Activity/Shelter worker (2).
-    /// The worker is pinned to Linux CPU6 and busy-spins even between calls and
-    /// searches. Switching to 1 joins it; dropping the evaluator also joins it.
+    /// The worker is pinned to Linux CPU6. It spins between FULL calls inside
+    /// an owned search and parks at lexical search exit. Switching to 1 or
+    /// dropping the evaluator joins it.
     pub fn set_research_thread_budget(&mut self, budget: usize) -> Result<(), String> {
         #[cfg(feature = "child-preparation")]
         if budget != 1 && self.child_preparation.is_some() {
@@ -396,6 +397,12 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
                 mobility_weights:self.weights.mobility,shelter_weights:self.weights.shelter,coherent:true}
         }).collect();
         pool.begin(jobs)
+    }
+
+    /// Owns one lexical search activation; the guard parks the helper on every exit.
+    pub(crate) fn full_worker_scope(&self) -> Option<crate::evaluator_worker::ActiveScope> {
+        self.research_worker.as_ref().map(|worker| worker.start_active_scope()
+            .unwrap_or_else(|error|panic!("research worker activation failed: {error}")))
     }
 
     pub fn begin_search(&mut self, position: &Position) {
@@ -503,6 +510,10 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         let position = &node.position;
         let phase = position.phase();
         let material = self.root.material(position);
+        // Standalone public evaluator calls get a one-call lifetime. Search
+        // owners already hold an outer scope, so their handoff stays active.
+        let _call_scope = self.research_worker.as_ref().and_then(|worker|worker.start_call_scope()
+            .unwrap_or_else(|error|panic!("research worker call activation failed: {error}")));
         // Snapshot every worker input on every FULL, including authoritative
         // supplied maps and the current root-bound weights after begin_search.
         if let Some(worker) = self.research_worker.as_mut() {
@@ -1175,3 +1186,7 @@ mod tests {
 #[cfg(all(test, feature = "child-preparation"))]
 #[path = "evaluator/child_preparation_tests.rs"]
 mod child_preparation_tests;
+
+#[cfg(test)]
+#[path = "evaluator/lifecycle_tests.rs"]
+mod lifecycle_tests;

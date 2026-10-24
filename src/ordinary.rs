@@ -552,6 +552,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         completed: u8, limits: Limits, seed: u32, randomness: u32,
         observe_raw: F,
     ) -> Result<Outcome, Error> {
+        let _worker_scope = self.evaluator.full_worker_scope();
         self.clear_geometry_permission();
         let result = self.run_iterations_body::<SEEDED, F>(
             position, history, completed, limits, seed, randomness, observe_raw,

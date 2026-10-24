@@ -131,6 +131,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
     /// This preparation's relation work is excluded by `search_subtree`.
     pub fn prepare_root(&mut self, position: Position) -> Node {
+        let _worker_scope = self.evaluator.full_worker_scope();
         self.clear_geometry_permission();
         self.prepare_root_with_influence(position).0
     }
@@ -167,6 +168,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         entry: Entry,
         limits: Limits,
     ) -> Result<Outcome, Stopped> {
+        let _worker_scope = self.evaluator.full_worker_scope();
         self.begin_sequence(limits);
         self.continue_subtree(node, history, entry)
     }
@@ -177,6 +179,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         &mut self, node: &mut Node, history: &mut SearchHistory,
         entry: Entry, limits: Limits, parent_retained: &Retained, observer: &mut O,
     ) -> Result<Outcome, Stopped> {
+        let _worker_scope = self.evaluator.full_worker_scope();
         self.clear_geometry_permission();
         assert!((1..PLIES).contains(&entry.ply));
         assert_eq!(entry.ply, history.search_ply());
@@ -210,6 +213,7 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         history: &mut SearchHistory,
         entry: Entry,
     ) -> Result<Outcome, Stopped> {
+        let _worker_scope = self.evaluator.full_worker_scope();
         self.clear_geometry_permission();
         assert!((1..PLIES).contains(&entry.ply));
         assert_eq!(entry.ply, history.search_ply());

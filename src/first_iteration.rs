@@ -47,6 +47,7 @@ pub fn run<const DIAGNOSTICS: bool>(
     history: &mut SearchHistory,
     limits: Limits,
 ) -> Result<Outcome, Error> {
+    let _worker_scope = search.evaluator.full_worker_scope();
     assert_eq!(history.search_ply(), 0);
     let root = search.prepare_root(position);
     let mut candidates = MoveList::new();
