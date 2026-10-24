@@ -82,8 +82,6 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
 
     #[cfg(feature = "branch-transactions")]
     pub(crate) fn research_attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
-        assert!(sink.is_none() || self.evaluator.research_journal_compatible(),
-            "cannot attach a serial journal while the pawn helper owns its cache");
         self.learning.attach_sink(sink.clone());
         self.evaluator.research_attach_sink(sink.clone());
         if let Some(table) = &mut self.remembered {
@@ -142,6 +140,15 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
 }
 
 impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
+    /// Positive total request; the implemented capacity is at most two.
+    pub fn set_threads(&mut self, requested: usize) -> Result<(), String> {
+        self.evaluator.set_threads(requested)
+    }
+
+    pub fn requested_threads(&self) -> usize { self.evaluator.requested_threads() }
+
+    pub fn configured_threads(&self) -> usize { self.evaluator.configured_threads() }
+
     /// Transfer reusable storage; changing a host neither clones nor allocates search buffers.
     pub fn map_host<N: Host>(self, host: N) -> (Search<DIAGNOSTICS, N>, H) {
         let Self {

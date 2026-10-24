@@ -494,11 +494,12 @@ impl<const D: bool, H: crate::host::Host> Search<D, H> {
         controls: Controls,
         limits: Limits,
     ) -> Result<Outcome, Error> {
-        let _worker_scope = self.evaluator.full_worker_scope();
+        let worker_scope = self.evaluator.full_worker_scope();
         self.clear_geometry_permission();
         let result = self.run_work_timed_inner::<ALLOW_IIO>(position, history, controls, limits);
         self.clear_geometry_permission();
         self.timing = None;
+        crate::evaluator::Evaluator::<D>::finish_full_worker_scope(worker_scope);
         result
     }
 

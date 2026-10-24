@@ -14,8 +14,8 @@ const ENDING: &str = "6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40";
 fn evaluators<const D: bool>(position: &Position) -> (Evaluator<D>, Evaluator<D>) {
     let mut serial = Evaluator::new(position);
     let mut worker = Evaluator::new(position);
-    serial.set_research_thread_budget(1).unwrap();
-    worker.set_research_thread_budget(2).unwrap();
+    serial.set_threads(1).unwrap();
+    worker.set_threads(2).unwrap();
     (serial, worker)
 }
 
@@ -287,8 +287,8 @@ fn persistent_worker_crosses_repeated_search_stop_retry_and_budget_changes() {
     let mut worker = Search::<true>::new(&position);
     serial.config.tts_bytes = 65536;
     worker.config.tts_bytes = 65536;
-    serial.evaluator.set_research_thread_budget(1).unwrap();
-    worker.evaluator.set_research_thread_budget(2).unwrap();
+    serial.evaluator.set_threads(1).unwrap();
+    worker.evaluator.set_threads(2).unwrap();
     let baseline = completed_pair(&mut serial, &mut worker, position);
     let repeated = completed_pair(&mut serial, &mut worker, position);
     assert_search_equal(&repeated, &baseline);
@@ -312,12 +312,60 @@ fn persistent_worker_crosses_repeated_search_stop_retry_and_budget_changes() {
         assert_eq!(worker.evaluator.stats, serial.evaluator.stats);
         assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
     }
-    assert!(worker.evaluator.set_research_thread_budget(0).is_err());
-    assert!(worker.evaluator.set_research_thread_budget(3).is_err());
+    assert!(worker.evaluator.set_threads(0).is_err());
+    worker.evaluator.set_threads(3).unwrap();
+    assert_eq!((worker.requested_threads(),worker.configured_threads()),(3,2));
     assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
-    worker.evaluator.set_research_thread_budget(1).unwrap();
+    worker.evaluator.set_threads(1).unwrap();
     assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
-    worker.evaluator.set_research_thread_budget(2).unwrap();
+    worker.evaluator.set_threads(2).unwrap();
     assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
     // Drop joins an active persistent worker after its last completed FULL.
+}
+
+#[test]
+fn positive_total_requests_saturate_without_changing_cache_or_evaluation() {
+    let first = Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
+    let collision = Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
+    assert_eq!(first.pawn,collision.pawn);
+    let (mut serial,mut worker)=(Evaluator::<true>::new(&first),Evaluator::<true>::new(&first));
+    assert_eq!((worker.requested_threads(),worker.configured_threads()),(1,1));
+    let first_map=Influence::build(&first);
+    let node=Node::root(first,&serial.root);
+    compare(&mut serial,&mut worker,node,&first_map,false,false);
+    let collision_map=Influence::build(&collision);
+    for requested in [2,3,usize::MAX,1,2,1] {
+        let before=worker.stats;
+        worker.set_threads(requested).unwrap();
+        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,requested.min(2)));
+        assert_eq!(worker.stats,before);
+        assert!(worker.set_threads(0).is_err());
+        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,requested.min(2)));
+        assert_eq!(worker.stats,before);
+        let node=Node::root(collision,&serial.root);
+        assert!(compare(&mut serial,&mut worker,node,&collision_map,false,false).details.pawn_entry_reused);
+        if let Some(helper)=&worker.full_worker {assert!(helper.is_parked());}
+    }
+}
+
+#[test]
+fn search_and_session_expose_requested_and_configured_budgets() {
+    let position=Position::from_fen(START).unwrap();
+    let mut search=Search::<false>::new(&position);
+    assert_eq!((search.requested_threads(),search.configured_threads()),(1,1));
+    search.set_threads(3).unwrap();
+    let (mut search,_)=search.map_host(crate::host::NoHost);
+    assert_eq!((search.requested_threads(),search.configured_threads()),(3,2));
+    assert!(search.set_threads(0).is_err());
+    assert_eq!((search.requested_threads(),search.configured_threads()),(3,2));
+    search.set_threads(1).unwrap();
+    assert_eq!((search.requested_threads(),search.configured_threads()),(1,1));
+    let mut session=crate::session::Session::<false>::default();
+    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(1,1));
+    session.set_threads(usize::MAX).unwrap();
+    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,2));
+    assert!(session.set_threads(0).is_err());
+    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,2));
+    session.set_threads(1).unwrap();
+    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(1,1));
 }

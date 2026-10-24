@@ -4,12 +4,10 @@
 use crate::evaluation::RootContext;
 use crate::evaluator_worker::{self, ActivityShelterWorker};
 use crate::influence::Influence;
-use crate::pawn_structure::PawnCache;
-#[cfg(test)]
-use crate::pawn_structure;
+use crate::pawn_structure::{self, PawnCache};
 use crate::position::Position;
 use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
-use crate::{endgame, pawn_branch, positional_terms};
+use crate::{endgame, pawn_progress, pawn_terms, positional_terms};
 
 #[cfg(test)]
 std::thread_local! {
@@ -271,17 +269,6 @@ pub struct FastDetails {
     pub finished: endgame::Finished,
 }
 
-/// One coordinator, optionally one CPU6 helper. The reversed mode moves the
-/// actual pawn cache to that helper; switching modes preserves its entries.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ResearchFullMode { Inline, Current, Reversed, Inventory }
-
-pub(crate) enum FullWorkerScope {
-    Current { _scope: crate::evaluator_worker::ActiveScope },
-    Reversed { _scope: crate::pawn_worker::PawnActiveScope },
-    Inventory { _scope: crate::inventory_worker::InventoryScope },
-}
-
 pub struct Evaluator<const DIAGNOSTICS: bool = true> {
     pub root: RootContext,
     pub parameters: Parameters,
@@ -289,9 +276,8 @@ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
     pub variation_range: u32,
     weights: Weights,
     pawns: PawnCache,
-    research_worker: Option<ActivityShelterWorker>,
-    pawn_worker: Option<crate::pawn_worker::PawnWorker>,
-    inventory_worker: Option<crate::inventory_worker::InventoryWorker>,
+    requested_threads: usize,
+    full_worker: Option<ActivityShelterWorker>,
     #[cfg(feature = "child-preparation")]
     child_preparation: Option<crate::child_preparation::ChildPreparation>,
     pub stats: EvalStats,
@@ -303,7 +289,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
     #[cfg(feature = "branch-transactions")]
     pub(crate) fn research_clone(&self) -> Self {
         assert!(
-            self.research_worker.is_none() && self.pawn_worker.is_none() && self.inventory_worker.is_none(),
+            self.full_worker.is_none(),
             "branch pilot requires inline evaluation"
         );
         Self {
@@ -313,9 +299,8 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             variation_range: self.variation_range,
             weights: self.weights,
             pawns: self.pawns.research_clone(),
-            research_worker: None,
-            pawn_worker: None,
-            inventory_worker: None,
+            requested_threads: self.requested_threads,
+            full_worker: None,
             #[cfg(feature = "child-preparation")]
             child_preparation: None,
             stats: self.stats,
@@ -324,24 +309,16 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
 
     #[cfg(feature = "branch-transactions")]
     pub(crate) fn research_pawns(&mut self) -> &mut PawnCache {
-        assert!(self.pawn_worker.is_none(), "pawn cache belongs to reversed FULL helper");
         &mut self.pawns
     }
 
     #[cfg(feature = "branch-transactions")]
     pub(crate) fn research_eq(&self, other: &Self) -> bool {
-        assert!(self.pawn_worker.is_none() && other.pawn_worker.is_none(),
-            "branch comparison requires coordinator-owned pawn caches");
         self.stats == other.stats && self.pawns.research_eq(&other.pawns)
     }
 
     #[cfg(feature = "branch-transactions")]
-    pub(crate) fn research_journal_compatible(&self) -> bool { self.pawn_worker.is_none() }
-
-    #[cfg(feature = "branch-transactions")]
     pub(crate) fn research_attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
-        assert!(sink.is_none() || self.pawn_worker.is_none(),
-            "reversed FULL cannot attach a serial journal to its placeholder cache");
         self.pawns.attach_sink(sink);
     }
 
@@ -355,82 +332,67 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             draw_preference,
             variation_range,
             pawns: PawnCache::new(),
-            research_worker: None,
-            pawn_worker: None,
-            inventory_worker: None,
+            requested_threads: 1,
+            full_worker: None,
             #[cfg(feature = "child-preparation")]
             child_preparation: None,
             stats: EvalStats::default(),
         }
     }
 
-    /// Research-only FULL-evaluation budget: coordinator alone (1, the default)
-    /// or coordinator plus one persistent Activity/Shelter worker (2).
-    /// The worker is pinned to Linux CPU6. It spins between FULL calls inside
-    /// an owned search and parks at lexical search exit. Switching to 1 or
-    /// dropping the evaluator joins it.
-    pub fn set_research_thread_budget(&mut self, budget: usize) -> Result<(), String> {
-        let mode = match budget {
-            1 => ResearchFullMode::Inline,
-            2 => ResearchFullMode::Current,
-            _ => return Err("research evaluator thread budget must be 1 or 2".into()),
-        };
-        self.set_research_full_mode(mode)
-    }
-
-    pub fn set_research_full_mode(&mut self, mode: ResearchFullMode) -> Result<(), String> {
+    /// Request a positive total thread budget. This engine configures at most
+    /// two threads: the coordinator and one Activity/Shelter helper. The helper
+    /// inherits allowed affinity and parks outside owned search/call scopes.
+    pub fn set_threads(&mut self, requested: usize) -> Result<(), String> {
+        if requested == 0 {
+            return Err("thread request must be positive".into());
+        }
+        let configured = requested.min(2);
         #[cfg(feature = "child-preparation")]
-        if mode != ResearchFullMode::Inline && self.child_preparation.is_some() {
+        if configured != 1 && self.child_preparation.is_some() {
             return Err("child preparation and FULL worker cannot be nested".into());
         }
-        #[cfg(feature = "branch-transactions")]
-        if mode == ResearchFullMode::Reversed && self.pawns.has_research_sink() {
-            return Err("reversed FULL cannot transfer a pawn cache with an active serial journal".into());
-        }
-        if (mode == ResearchFullMode::Current && self.research_worker.is_some())
-            || (mode == ResearchFullMode::Reversed && self.pawn_worker.is_some())
-            || (mode == ResearchFullMode::Inventory && self.inventory_worker.is_some()) {
-            return Ok(());
-        }
-        if let Some(mut worker) = self.research_worker.take() {
-            worker.shutdown()?;
-        }
-        if let Some(mut worker) = self.pawn_worker.take() {
-            let recovered = worker.shutdown_take();
-            self.pawns.install_core(recovered.core);
-            if let Some(error) = recovered.failure { return Err(error); }
-        }
-        if let Some(mut worker) = self.inventory_worker.take() { worker.shutdown()?; }
-        match mode {
-            ResearchFullMode::Inline => (),
-            ResearchFullMode::Current => self.research_worker = Some(ActivityShelterWorker::start()?),
-            ResearchFullMode::Reversed => {
-                // A spawn/start failure leaves the actual cache on the owner.
-                let mut worker = crate::pawn_worker::PawnWorker::start()?;
-                let core = self.pawns.take_core();
-                if let Err(error) = worker.install(core) {
-                    // install deposits the core into recoverable storage before
-                    // any fallible command. Never return to serial with a fresh
-                    // placeholder after an unsuccessful ownership transfer.
-                    let recovered = worker.shutdown_take();
-                    self.pawns.install_core(recovered.core);
-                    return Err(error);
+        match configured {
+            1 => {
+                if let Some(worker) = self.full_worker.as_mut() {
+                    worker.shutdown()?;
                 }
-                self.pawn_worker = Some(worker);
+                self.full_worker = None;
             }
-            ResearchFullMode::Inventory => {
-                self.inventory_worker = Some(crate::inventory_worker::InventoryWorker::start()?);
+            2 => {
+                if let Some(worker) = self.full_worker.as_ref() {
+                    worker.check_running()?;
+                } else {
+                    self.full_worker = Some(ActivityShelterWorker::start()?);
+                }
             }
+            _ => unreachable!(),
         }
+        self.requested_threads = requested;
         Ok(())
+    }
+
+    pub fn requested_threads(&self) -> usize { self.requested_threads }
+
+    /// Configured capacity, rather than a claim that both threads run at once.
+    pub fn configured_threads(&self) -> usize {
+        if self.full_worker.is_some() { 2 } else { 1 }
+    }
+
+    // The archived transaction prototype still calls its original strict API.
+    // Keep that spelling out of the normal public interface and CLI.
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn set_research_thread_budget(&mut self, budget: usize) -> Result<(), String> {
+        if ![1, 2].contains(&budget) {
+            return Err("transaction evaluator budget must be 1 or 2".into());
+        }
+        self.set_threads(budget)
     }
 
     #[cfg(feature = "child-preparation")]
     pub fn set_child_preparation_budget(&mut self, budget: usize) -> Result<(), String> {
         if ![1,2,4].contains(&budget) {return Err("child preparation budget must be1,2,4".into());}
-        if self.research_worker.is_some() || self.pawn_worker.is_some() || self.inventory_worker.is_some() {
-            return Err("child preparation requires inline FULL mode".into());
-        }
+        if self.full_worker.is_some() {return Err("child preparation requires inline FULL mode".into());}
         if let Some(mut old)=self.child_preparation.take() {old.shutdown()?;}
         if budget>1 {self.child_preparation=Some(crate::child_preparation::ChildPreparation::start(budget-1)?);}
         Ok(())
@@ -464,58 +426,16 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
     }
 
     /// Owns one lexical search activation; the guard parks the helper on every exit.
-    pub(crate) fn full_worker_scope(&self) -> Option<FullWorkerScope> {
-        if let Some(worker) = &self.research_worker {
-            Some(FullWorkerScope::Current { _scope: worker.start_active_scope()
-                .unwrap_or_else(|error|panic!("research worker activation failed: {error}")) })
-        } else if let Some(worker) = &self.pawn_worker {
-            Some(FullWorkerScope::Reversed { _scope: worker.start_active_scope()
-                .unwrap_or_else(|error|panic!("reversed FULL worker activation failed: {error}")) })
-        } else {
-            self.inventory_worker.as_ref().map(|worker| FullWorkerScope::Inventory {
-                _scope: worker.start_active_scope()
-                    .unwrap_or_else(|error|panic!("inventory worker activation failed: {error}")),
-            })
+    pub(crate) fn full_worker_scope(&self) -> Option<crate::evaluator_worker::ActiveScope> {
+        self.full_worker.as_ref().map(|worker| worker.start_active_scope()
+            .unwrap_or_else(|error|panic!("FULL worker activation failed: {error}")))
+    }
+
+    /// Normal returns check closure; Drop is only abandoned-path cleanup.
+    pub(crate) fn finish_full_worker_scope(scope: Option<crate::evaluator_worker::ActiveScope>) {
+        if let Some(scope) = scope {
+            scope.finish().unwrap_or_else(|error|panic!("FULL worker scope closure failed: {error}"));
         }
-    }
-
-    /// The guarded owned-root chain supplies canonical Position provenance.
-    /// Do not validate each Position again or run a producer on excluded input.
-    pub(crate) fn launch_inventory(&self, position: &Position, coherent: bool)
-        -> Option<crate::inventory_worker::Ticket> {
-        let worker = self.inventory_worker.as_ref()?;
-        if !inventory_domain(position,coherent) { worker.note_domain_skip(); return None; }
-        worker.launch(position).unwrap_or_else(|error|panic!("inventory worker launch failed: {error}"))
-    }
-
-    /// Joined lifetime diagnostics; no report is emitted into the wire streams.
-    pub fn finish_inventory_worker(&mut self) -> Result<String,String> {
-        let stats = if let Some(mut worker) = self.inventory_worker.take() {
-            worker.shutdown()?; worker.stats()
-        } else {crate::inventory_worker::Stats::default()};
-        Ok(format!("{{\"schema\":\"rook2-inventory-worker-v1\",\"processId\":{},\"stats\":{}}}",
-            std::process::id(),stats.json()))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn inventory_stats(&self) -> crate::inventory_worker::Stats {
-        self.inventory_worker.as_ref().map_or_else(crate::inventory_worker::Stats::default, |worker|worker.stats())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn inventory_is_parked(&self) -> bool {
-        self.inventory_worker.as_ref().is_none_or(|worker|worker.is_parked())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn inventory_fail_next(&self) {
-        self.inventory_worker.as_ref().expect("inventory mode").fail_next();
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_pawn_cache(&mut self) -> crate::pawn_structure::PawnCacheCore {
-        assert!(self.pawn_worker.is_none());
-        let core=self.pawns.take_core(); let copy=core.clone(); self.pawns.install_core(core); copy
     }
 
     pub fn begin_search(&mut self, position: &Position) {
@@ -527,11 +447,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             self.draw_preference,
             self.variation_range,
         ) = self.parameters.bind(position);
-        if let Some(worker) = &mut self.pawn_worker {
-            worker.reset().unwrap_or_else(|error|panic!("reversed FULL cache reset failed: {error}"));
-        } else {
-            self.pawns.clear();
-        }
+        self.pawns.clear();
         self.stats = EvalStats::default();
     }
 
@@ -629,13 +545,11 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         let material = self.root.material(position);
         // Standalone public evaluator calls get a one-call lifetime. Search
         // owners already hold an outer scope, so their handoff stays active.
-        let _call_scope = self.research_worker.as_ref().and_then(|worker|worker.start_call_scope()
-            .unwrap_or_else(|error|panic!("research worker call activation failed: {error}")));
-        let _pawn_call_scope = self.pawn_worker.as_ref().and_then(|worker|worker.start_call_scope()
-            .unwrap_or_else(|error|panic!("reversed FULL call activation failed: {error}")));
+        let call_scope = self.full_worker.as_ref().and_then(|worker|worker.start_call_scope()
+            .unwrap_or_else(|error|panic!("FULL worker call activation failed: {error}")));
         // Snapshot every worker input on every FULL, including authoritative
         // supplied maps and the current root-bound weights after begin_search.
-        if let Some(worker) = self.research_worker.as_mut() {
+        if let Some(worker) = self.full_worker.as_mut() {
             worker
                 .dispatch(
                     position,
@@ -644,25 +558,25 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
                     self.weights.mobility,
                     self.weights.shelter,
                 )
-                .unwrap_or_else(|error| panic!("research evaluator dispatch failed: {error}"));
+                .unwrap_or_else(|error| panic!("FULL evaluator dispatch failed: {error}"));
         }
-        if let Some(worker) = self.pawn_worker.as_mut() {
-            worker.dispatch::<FRESH>(position, influence, phase, material,
-                self.weights.structure, self.weights.progress)
-                .unwrap_or_else(|error|panic!("reversed FULL dispatch failed: {error}"));
-        }
-        let inline_pawn = if self.pawn_worker.is_none() {
-            Some(pawn_branch::compute::<FRESH>(&mut self.pawns, position, influence,
-                phase, material, self.weights.structure, self.weights.progress))
-        } else {None};
-        // Inline and reversed modes keep Activity/Shelter local; current mode
-        // joins the unchanged helper. All use the same numerical chain.
+        let selected = if FRESH {
+            pawn_structure::Selection {
+                structure: pawn_structure::fresh(position, influence, [1024; 2]),
+                reused: false,
+            }
+        } else {
+            self.pawns.select(position, influence)
+        };
+        let pawn = pawn_terms::compute(position, influence, &selected.structure);
+        // Keep inline execution at the original chain position. Both routes
+        // invoke the same numerical kernels and share the composition below.
         #[cfg(feature = "child-preparation")]
         let prepared_chain=self.child_preparation.as_mut().and_then(|pool|pool.take_chain(
             position,influence,material,self.weights.mobility,self.weights.shelter));
         #[cfg(not(feature = "child-preparation"))]
         let prepared_chain: Option<evaluator_worker::ActivityShelter> = None;
-        let inline_chain = if self.research_worker.is_none() {
+        let inline_chain = if self.full_worker.is_none() {
             Some(prepared_chain.unwrap_or_else(||evaluator_worker::compute(
                 position,
                 influence,
@@ -673,22 +587,40 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         } else {
             None
         };
+        let structure = pawn_progress::structure_weighted(
+            phase,
+            pawn.structure,
+            pawn.piece,
+            self.weights.structure,
+        );
+        // This producer has no state or charged relation work. At a zero final
+        // phase factor, its weighted result is identically zero.
+        let progress = if phase.middlegame == 0 && phase.endgame == 0 {
+            0
+        } else {
+            pawn_progress::selected(
+                position,
+                influence,
+                &selected.structure,
+                phase,
+                material,
+                self.weights.progress,
+            )
+            .weighted
+        };
         let central = positional_terms::central(influence, phase, self.weights.central);
         let patterns = positional_terms::patterns(position);
         let squares = self.root.square_balance_from(position, node.retained.nonking_squares);
         // No retained changes, tempo, relation-ledger publication or finishing
         // occurs until the actual worker output has joined the owner branch.
-        let chain = if let Some(worker) = self.research_worker.as_mut() {
+        let chain = if let Some(worker) = self.full_worker.as_mut() {
             worker
                 .complete()
-                .unwrap_or_else(|error| panic!("research evaluator completion failed: {error}"))
+                .unwrap_or_else(|error| panic!("FULL evaluator completion failed: {error}"))
         } else {
             inline_chain.unwrap()
         };
-        let pawn = if let Some(worker) = self.pawn_worker.as_mut() {
-            worker.complete().unwrap_or_else(|error|panic!("reversed FULL completion failed: {error}"))
-        } else {inline_pawn.unwrap()};
-        let (structure, progress) = (pawn.structure, pawn.progress);
+        Self::finish_full_worker_scope(call_scope);
         let activity = chain.activity;
         let shelter = chain.shelter;
         let tempo = if in_check {
@@ -724,7 +656,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         let queries = pawn.relation_queries + activity.relation_queries;
         if DIAGNOSTICS {
             self.stats.full += 1;
-            if pawn.reused {
+            if selected.reused {
                 self.stats.pawn_reuses += 1;
             } else {
                 self.stats.pawn_replacements += 1;
@@ -738,7 +670,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
                 components,
                 base,
                 finished,
-                pawn_entry_reused: pawn.reused,
+                pawn_entry_reused: selected.reused,
             });
         })
     }
@@ -969,11 +901,6 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             refreshed: refresh,
         }
     }
-}
-
-pub(crate) fn inventory_domain(position: &Position, coherent: bool) -> bool {
-    coherent && position.counts.iter().all(|counts|counts[PieceKind::King.index()]==1)
-        && !crate::movegen::in_check(position,position.side.opponent())
 }
 
 #[cfg(test)]
@@ -1297,7 +1224,3 @@ mod child_preparation_tests;
 #[cfg(test)]
 #[path = "evaluator/lifecycle_tests.rs"]
 mod lifecycle_tests;
-
-#[cfg(test)]
-#[path = "evaluator/reversed_tests.rs"]
-mod reversed_tests;

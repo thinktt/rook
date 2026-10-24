@@ -32,6 +32,6 @@ fn child_pool_cannot_nest_the_full_worker() {
     let p=Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
     let mut e=Evaluator::<true>::new(&p);
     e.set_child_preparation_budget(2).unwrap();
-    assert!(e.set_research_thread_budget(2).is_err());
+    assert!(e.set_threads(2).is_err());
     e.finish_child_preparation().unwrap();
 }

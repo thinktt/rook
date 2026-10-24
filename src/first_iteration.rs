@@ -47,7 +47,18 @@ pub fn run<const DIAGNOSTICS: bool>(
     history: &mut SearchHistory,
     limits: Limits,
 ) -> Result<Outcome, Error> {
-    let _worker_scope = search.evaluator.full_worker_scope();
+    let worker_scope = search.evaluator.full_worker_scope();
+    let result = run_inner(search, position, history, limits);
+    crate::evaluator::Evaluator::<DIAGNOSTICS>::finish_full_worker_scope(worker_scope);
+    result
+}
+
+fn run_inner<const DIAGNOSTICS: bool>(
+    search: &mut Quiescence<DIAGNOSTICS>,
+    position: Position,
+    history: &mut SearchHistory,
+    limits: Limits,
+) -> Result<Outcome, Error> {
     assert_eq!(history.search_ply(), 0);
     let root = search.prepare_root(position);
     let mut candidates = MoveList::new();

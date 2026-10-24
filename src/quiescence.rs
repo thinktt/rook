@@ -5,7 +5,7 @@
 //! The separate development node budget returns an error, never a partial score.
 
 pub use crate::engine::Search as Quiescence;
-use crate::evaluator::{EvalStats, EvaluationStage, Node, Retained};
+use crate::evaluator::{EvalStats, EvaluationStage, Evaluator, Node, Retained};
 use crate::history::SearchHistory;
 use crate::movegen;
 #[cfg(test)]
@@ -131,9 +131,13 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
     /// Begin one fresh ordinary-search lifetime and fully evaluate its root.
     /// This preparation's relation work is excluded by `search_subtree`.
     pub fn prepare_root(&mut self, position: Position) -> Node {
-        let _worker_scope = self.evaluator.full_worker_scope();
-        self.clear_geometry_permission();
-        self.prepare_root_with_influence(position).0
+        let worker_scope = self.evaluator.full_worker_scope();
+        let result = (|| {
+            self.clear_geometry_permission();
+            self.prepare_root_with_influence(position).0
+        })();
+        Evaluator::<DIAGNOSTICS>::finish_full_worker_scope(worker_scope);
+        result
     }
 
     pub(crate) fn prepare_root_with_influence(
@@ -168,9 +172,13 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         entry: Entry,
         limits: Limits,
     ) -> Result<Outcome, Stopped> {
-        let _worker_scope = self.evaluator.full_worker_scope();
-        self.begin_sequence(limits);
-        self.continue_subtree(node, history, entry)
+        let worker_scope = self.evaluator.full_worker_scope();
+        let result = (|| {
+            self.begin_sequence(limits);
+            self.continue_subtree(node, history, entry)
+        })();
+        Evaluator::<DIAGNOSTICS>::finish_full_worker_scope(worker_scope);
+        result
     }
 
     /// Observe a selected subtree with caller-owned typed storage. Parent retained
@@ -179,16 +187,20 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         &mut self, node: &mut Node, history: &mut SearchHistory,
         entry: Entry, limits: Limits, parent_retained: &Retained, observer: &mut O,
     ) -> Result<Outcome, Stopped> {
-        let _worker_scope = self.evaluator.full_worker_scope();
-        self.clear_geometry_permission();
-        assert!((1..PLIES).contains(&entry.ply));
-        assert_eq!(entry.ply, history.search_ply());
-        assert!(entry.iteration_depth >= 1 && entry.target >= 0);
-        assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
-        self.begin_sequence(limits);
-        let parent = if O::ENABLED { O::parent(parent_retained) } else { O::Parent::default() };
-        let score = self.visit_q_impl(node, history, entry, None, false, parent, observer)?;
-        Ok(self.outcome(entry.ply, score))
+        let worker_scope = self.evaluator.full_worker_scope();
+        let result = (|| {
+            self.clear_geometry_permission();
+            assert!((1..PLIES).contains(&entry.ply));
+            assert_eq!(entry.ply, history.search_ply());
+            assert!(entry.iteration_depth >= 1 && entry.target >= 0);
+            assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
+            self.begin_sequence(limits);
+            let parent = if O::ENABLED { O::parent(parent_retained) } else { O::Parent::default() };
+            let score = self.visit_q_impl(node, history, entry, None, false, parent, observer)?;
+            Ok(self.outcome(entry.ply, score))
+        })();
+        Evaluator::<DIAGNOSTICS>::finish_full_worker_scope(worker_scope);
+        result
     }
 
     /// Start the measured/search-work segment without clearing shared pawns.
@@ -213,14 +225,18 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
         history: &mut SearchHistory,
         entry: Entry,
     ) -> Result<Outcome, Stopped> {
-        let _worker_scope = self.evaluator.full_worker_scope();
-        self.clear_geometry_permission();
-        assert!((1..PLIES).contains(&entry.ply));
-        assert_eq!(entry.ply, history.search_ply());
-        assert!(entry.iteration_depth >= 1 && entry.target >= 0);
-        assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
-        let score = self.visit_q(node, history, entry, None, false)?;
-        Ok(self.outcome(entry.ply, score))
+        let worker_scope = self.evaluator.full_worker_scope();
+        let result = (|| {
+            self.clear_geometry_permission();
+            assert!((1..PLIES).contains(&entry.ply));
+            assert_eq!(entry.ply, history.search_ply());
+            assert!(entry.iteration_depth >= 1 && entry.target >= 0);
+            assert!(-10000 <= entry.lower && entry.lower < entry.upper && entry.upper <= 10000);
+            let score = self.visit_q(node, history, entry, None, false)?;
+            Ok(self.outcome(entry.ply, score))
+        })();
+        Evaluator::<DIAGNOSTICS>::finish_full_worker_scope(worker_scope);
+        result
     }
 
     pub(crate) fn visit_q(

@@ -54,9 +54,3 @@ pub(crate) mod branch_journal;
 
 #[cfg(feature = "child-preparation")]
 pub(crate) mod child_preparation;
-pub(crate) mod pawn_branch;
-pub(crate) mod pawn_worker;
-
-#[cfg(feature = "inventory-census")]
-pub mod inventory_census;
-pub(crate) mod inventory_worker;

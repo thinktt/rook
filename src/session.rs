@@ -136,20 +136,18 @@ impl<const D: bool> Default for Session<D> {
 }
 
 impl<const D: bool> Session<D> {
-    /// Research-only total budget: coordinator alone, or coordinator + CPU6 worker.
-    pub fn set_research_thread_budget(&mut self, budget: usize) -> Result<(), String> {
+    /// Positive total request, configured to at most two engine threads.
+    pub fn set_threads(&mut self, requested: usize) -> Result<(), String> {
         self.search.as_mut().ok_or("search is currently active")?
-            .evaluator.set_research_thread_budget(budget)
+            .set_threads(requested)
     }
 
-    pub fn set_research_full_mode(&mut self, mode: crate::evaluator::ResearchFullMode) -> Result<(), String> {
-        self.search.as_mut().ok_or("search is currently active")?
-            .evaluator.set_research_full_mode(mode)
+    pub fn requested_threads(&self) -> Result<usize, String> {
+        Ok(self.search.as_ref().ok_or("search is currently active")?.requested_threads())
     }
 
-    pub fn finish_inventory_worker(&mut self) -> Result<String,String> {
-        self.search.as_mut().ok_or("search is currently active")?
-            .evaluator.finish_inventory_worker()
+    pub fn configured_threads(&self) -> Result<usize, String> {
+        Ok(self.search.as_ref().ok_or("search is currently active")?.configured_threads())
     }
 
     #[cfg(feature = "child-preparation")]
