@@ -69,3 +69,44 @@ dependencies and interprets the results. Initial timing placement proposed by
 Imp2 is coordinator14/worker6, with guest siblings15/7 idle and helpers0-5,8-13.
 This is guest placement evidence, not a host-isolation claim. No full-suite or
 PGO campaign is needed to answer this first mechanism question.
+
+## Checkpoint and next research priority
+
+The initial investigation and first integration are complete at `a27b7758`.
+The [integrated report](../../experiments/multicore-feasibility/integration/report.md)
+records real owned-packet publication and actual search: budget2 reduced elapsed
+time by 9.92%, 3.20% and 7.04% against same-image budget1 on cases35/08/04.
+Their summed medians fell 8.27%, with 1.835x whole-process CPU. Fifteen evaluator
+tests and 36 original replay executions passed. These are selected generic-build
+results, not broad fidelity, production-PGO or KingWCR performance qualification.
+Budget1 had no resolved aggregate regression in this small comparison. Preserve
+this positive research baseline; idle spinning, broader coverage and production
+economics remain unresolved. No additional execution is needed merely to close
+this checkpoint.
+
+Toby requests **branch tasks feeding a shared worker queue** as a priority for
+the next research phase: starting a branch creates a work unit; that work may
+create further branch tasks; available threads consume the queue. Investigate
+this directly, rather than restricting the research to small evaluation splits.
+Larger tasks could amortize communication and expose parallelism beyond two
+threads. Neither useful concurrency nor faithful whole-branch reuse is established.
+
+Start with the actual ordinary/quiescence dependency boundaries. Identify which
+branch inputs are settled at enqueue time, which change after earlier branches,
+and where results and side effects must become authoritative. Compare ready-only
+tasks with speculative branch execution and ordered validation/commit. A matching
+score alone is insufficient: bounds, remembered-table and learning reads, pawn-cache
+chronology, retained state, prescribed work, posts and stopping decisions matter.
+Ordered result publication alone does not repair stale inputs. Conversely, these
+dependencies are research questions, not grounds to dismiss the queue architecture
+without examining useful independent regions or validation mechanisms.
+
+Evaluate available task size/concurrency, queue and snapshot costs, discarded work,
+validation/replay costs and scaling with the total thread budget. Pure preparation
+for future children is a possible intermediate design, but must be distinguished
+from demonstrating whole-branch parallel execution. Keep same-node inventory/FULL
+overlap as another reserve. Do not expand the completed experiment into an open-ended
+transport-tuning exercise before addressing this larger architectural direction.
+
+The lead's goal is paused for discussion. This checkpoint records the next priority;
+it does not start a new implementation or native measurement campaign.
