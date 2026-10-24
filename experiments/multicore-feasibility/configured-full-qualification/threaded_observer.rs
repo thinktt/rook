@@ -59,7 +59,6 @@ struct Observed {
     trace: Trace,
     node: Node,
     work: Work,
-    stats: Stats,
     evaluations: EvalStats,
 }
 
@@ -80,7 +79,7 @@ fn run(budget: usize, fen: &str, token: &str, limits: Limits) -> Observed {
         &root.retained,&mut trace).map(|o|(o.score,o.pv,o.work,o.stats,o.evaluations));
     assert_eq!(history.search_ply(),1);
     if returned.is_ok() { assert!(trace.stack.is_empty()); }
-    Observed{returned,trace,node,work:search.work(),stats:search.stats,evaluations:search.evaluator.stats}
+    Observed{returned,trace,node,work:search.work(),evaluations:search.evaluator.stats}
 }
 
 #[test]
