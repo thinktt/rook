@@ -2,8 +2,11 @@
 
 ## Mission and authority
 
-Build an independent high-performance Rust implementation of KingRE. The guiding
-mission is `/home/legolas/imp-perf-mission.md`; behavioral authority is the released
+For deterministic multicore research in this worktree, the guiding mission is
+[docs/deterministic-multicore-mission.md](docs/deterministic-multicore-mission.md).
+Preserve the accepted serial engine as the reference and keep research on
+`research/deterministic-multicore`. The earlier serial performance mission is
+`/home/legolas/imp-perf-mission.md`; behavioral authority remains the released
 package at `/home/legolas/king-spec`. Revisit the mission at major milestones or
 when the owner changes it, rather than on every task.
 
@@ -26,12 +29,15 @@ engine and never use expected answers as a runtime answer database.
 
 ## Ownership and collaboration
 
-The owner's current direction supersedes the historical last-mile working
-agreement: the implementation owner owns architecture, engineering and execution.
-`imp2-lead` is an independent reviewer/advisor, consulted selectively for
-consequential decisions or significant uncertainty, not routine approval.
-Imp3 owns the current release-builder/pipeline task. This task does not reopen
-engine optimization or expand the owner's selected qualification scope.
+For this deterministic multicore research task, `imp2-lead` owns architecture,
+strategy and critical review. Imp2 carries out delegated implementation and
+experiments, makes routine engineering decisions independently, and may delegate
+bounded work to its Sol team. Keep coordination lightweight; routine execution
+does not require another approval round. The current assignment is workspace
+setup only; experiments await a subsequent assignment.
+
+Imp3 retains ownership of the separate release-builder/pipeline task. This
+research instruction does not redirect that work or expand qualification scope.
 
 Top-level agents use Herdr native prompts to other Herdr agents with their
 centrally assigned sender identity. Follow the standard local AGENTS.md
@@ -50,6 +56,10 @@ that updating this policy switches or verifies a live runtime.
 Assign disjoint write ownership and integrate/review contributions centrally.
 
 ## Measurement environment
+
+Multicore benchmark CPU allocation must be specified by the actual experiment
+plan; workspace setup changes no affinity or measurement configuration. The
+following records the existing serial measurement arrangement.
 
 Vic is the clean-room KVM VM. Its vCPUs 0–15 are pinned one-to-one to Ryz host
 CPUs 0–15. Use vCPU14 for engine measurements and keep sibling15 idle. Run build
