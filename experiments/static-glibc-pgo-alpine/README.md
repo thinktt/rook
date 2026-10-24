@@ -58,3 +58,24 @@ verified vendored crates and standalone upstream compiler from the earlier
 builder checks. Full Docker image assembly remains untested. Source and builder
 inputs are frozen separately for this run; generated adapters bind the existing
 measurement code while changing only admitted build-mode paths and labels.
+
+
+Completed local result (2026-10-23): all six supervised stages exited 0.
+Training produced 54 verified native profiles. The own-PGO main binary is
+`22ccc29b1fc9bb0981e8ccf98cd61704132e220c496df90be53ddec18bbd2ce1`;
+its static ELF has no loader/shared-library requirement. The diagnostic
+remains non-PGO and exactly matches the earlier plain diagnostic.
+
+| Workload | Native CPU | Native wall | Outcome |
+|---|---:|---:|---|
+| Standard54 median sums |67.192095 s|67.553958 s|216 fresh processes, 162 measured samples pass|
+| One complete 12-game pass |676.375347 s|680.527493 s|632 searches / 5801 posts pass|
+
+This is 13.36% less CPU on standard54 and 13.48% less on the 12-game run than
+the earlier non-PGO static build. Windows are separate; the 12-game total is
+one pass, not a median estimate. All container processes shared CPU14.
+Native lifetime timings differ from Bee's sampled search-only boundary.
+[results.json](results.json) binds the profile, build and reconciled receipts.
+These checks do not establish final performance or full qualification for these
+new bytes, and no packaged candidate was replaced. The supervisor recorded a
+successful completion notification; no case-by-case monitoring was required.
