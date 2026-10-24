@@ -1,5 +1,10 @@
 # Configured FULL: Linux affinity cap and own-PGO comparison
 
+[Completed own-PGO study](report.md): original54 search wall64.369022s versus
+69.056196s accepted serial (6.79% lower),1.863x total CPU;0.15% above previous
+two-thread PGO. All388 training/comparison lives and4608 posts pass. Retain for
+behavioral qualification; no adoption or scaling claim. [54-case table](full54-timings.csv).
+
 At each thread-budget configuration, positive requests above1 query the calling
 thread's permitted Linux affinity. Exactly one allowed CPU configures1, preserving
 the requested number; otherwise configured capacity is at most2. Requested1
