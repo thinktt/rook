@@ -45,6 +45,22 @@ state on interruption, and the cost of its validation or replay before claiming
 faithful whole-branch reuse. Serializing every node through the coordinator can
 also erase the scheduling benefit, even if mathematically correct.
 
+Two concrete source observations sharpen the first experiment:
+
+- `root_schedule::Iteration` freezes its Restricted policy and orders its tail
+  after the first completed candidate. Remaining initial attempts use
+  `aspiration(best, previous)`; a completion that does not improve best leaves
+  that window unchanged. A queued restricted tail therefore has a plausible
+  window prediction, though shared state can still invalidate it. In Unrestricted
+  mode the first two windows are both `[-10000, 10000]`, with a likely smaller
+  opportunity. Neither fact establishes branch independence.
+- `timed::work_poll` reports Status from `history.search_path()`, and handles
+  Time/Post/Easy controls as well as stopping. Polls occur every 4096 absolute
+  charged nodes. A changed starting node count can shift the poll's location
+  inside an otherwise identical branch. Replaying only the speculative task's
+  original poll events or final N/R totals is insufficient. Initial fixed-work,
+  no-live-host research may omit this support explicitly; adoption cannot.
+
 ## Salvage useful work when a branch cannot commit
 
 A distinct alternative is a speculative branch that produces reusable pure
