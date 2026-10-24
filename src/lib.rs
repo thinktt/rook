@@ -13,6 +13,7 @@ pub mod engine;
 mod eval_basis;
 pub mod evaluation;
 pub mod evaluator;
+mod evaluator_worker;
 pub mod first_iteration;
 mod geometry;
 pub mod history;

@@ -2,11 +2,12 @@
 //! Component correctness and complete engine qualification remain separate.
 
 use crate::evaluation::RootContext;
+use crate::evaluator_worker::{self, ActivityShelterWorker};
 use crate::influence::Influence;
 use crate::pawn_structure::{self, PawnCache};
 use crate::position::Position;
 use crate::types::{Color, Move, MoveKind, Piece, PieceKind, Square};
-use crate::{activity, endgame, pawn_progress, pawn_terms, positional_terms, shelter};
+use crate::{endgame, pawn_progress, pawn_terms, positional_terms};
 
 #[cfg(test)]
 std::thread_local! {
@@ -275,6 +276,7 @@ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
     pub variation_range: u32,
     weights: Weights,
     pawns: PawnCache,
+    research_worker: Option<ActivityShelterWorker>,
     pub stats: EvalStats,
 }
 
@@ -289,9 +291,32 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             draw_preference,
             variation_range,
             pawns: PawnCache::new(),
+            research_worker: None,
             stats: EvalStats::default(),
         }
     }
+
+    /// Research-only FULL-evaluation budget: coordinator alone (1, the default)
+    /// or coordinator plus one persistent Activity/Shelter worker (2).
+    /// The worker is pinned to Linux CPU6 and busy-spins even between calls and
+    /// searches. Switching to 1 joins it; dropping the evaluator also joins it.
+    pub fn set_research_thread_budget(&mut self, budget: usize) -> Result<(), String> {
+        match budget {
+            1 => {
+                if let Some(mut worker) = self.research_worker.take() {
+                    worker.shutdown()?;
+                }
+            }
+            2 => {
+                if self.research_worker.is_none() {
+                    self.research_worker = Some(ActivityShelterWorker::start()?);
+                }
+            }
+            _ => return Err("research evaluator thread budget must be 1 or 2".into()),
+        }
+        Ok(())
+    }
+
     pub fn begin_search(&mut self, position: &Position) {
         (
             self.root,
@@ -389,6 +414,19 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         let position = &node.position;
         let phase = position.phase();
         let material = self.root.material(position);
+        // Snapshot every worker input on every FULL, including authoritative
+        // supplied maps and the current root-bound weights after begin_search.
+        if let Some(worker) = self.research_worker.as_mut() {
+            worker
+                .dispatch(
+                    position,
+                    influence,
+                    material,
+                    self.weights.mobility,
+                    self.weights.shelter,
+                )
+                .unwrap_or_else(|error| panic!("research evaluator dispatch failed: {error}"));
+        }
         let selected = if FRESH {
             pawn_structure::Selection {
                 structure: pawn_structure::fresh(position, influence, [1024; 2]),
@@ -398,14 +436,19 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
             self.pawns.select(position, influence)
         };
         let pawn = pawn_terms::compute(position, influence, &selected.structure);
-        let activity = activity::compute(position, influence, material, self.weights.mobility);
-        let shelter = shelter::compute(
-            position,
-            influence,
-            activity.pressure,
-            material,
-            self.weights.shelter,
-        );
+        // Keep inline execution at the original chain position. Both routes
+        // invoke the same numerical kernels and share the composition below.
+        let inline_chain = if self.research_worker.is_none() {
+            Some(evaluator_worker::compute(
+                position,
+                influence,
+                material,
+                self.weights.mobility,
+                self.weights.shelter,
+            ))
+        } else {
+            None
+        };
         let structure = pawn_progress::structure_weighted(
             phase,
             pawn.structure,
@@ -429,6 +472,18 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         };
         let central = positional_terms::central(influence, phase, self.weights.central);
         let patterns = positional_terms::patterns(position);
+        let squares = self.root.square_balance_from(position, node.retained.nonking_squares);
+        // No retained changes, tempo, relation-ledger publication or finishing
+        // occurs until the actual worker output has joined the owner branch.
+        let chain = if let Some(worker) = self.research_worker.as_mut() {
+            worker
+                .complete()
+                .unwrap_or_else(|error| panic!("research evaluator completion failed: {error}"))
+        } else {
+            inline_chain.unwrap()
+        };
+        let activity = chain.activity;
+        let shelter = chain.shelter;
         let tempo = if in_check {
             0
         } else {
@@ -446,9 +501,7 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         };
         let components = Components {
             material,
-            squares: self
-                .root
-                .square_balance_from(position, node.retained.nonking_squares),
+            squares,
             pawn_structure: structure,
             pawn_progress: progress,
             activity: activity.weighted,
@@ -710,6 +763,10 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "evaluator/parallel_tests.rs"]
+mod parallel_tests;
 
 #[cfg(test)]
 mod tests {

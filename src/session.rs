@@ -136,6 +136,12 @@ impl<const D: bool> Default for Session<D> {
 }
 
 impl<const D: bool> Session<D> {
+    /// Research-only total budget: coordinator alone, or coordinator + CPU6 worker.
+    pub fn set_research_thread_budget(&mut self, budget: usize) -> Result<(), String> {
+        self.search.as_mut().ok_or("search is currently active")?
+            .evaluator.set_research_thread_budget(budget)
+    }
+
     pub fn position(&self) -> Position {
         *self.states.last().unwrap()
     }

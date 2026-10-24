@@ -65,11 +65,14 @@ impl From<Error> for Failure {
 fn run() -> Result<(), Failure> {
     let mut diagnostic_seed = false;
     let mut fine_work = false;
+    let mut research_threads = 1;
     for option in std::env::args().skip(1) {
         match option.as_str() {
             "--diagnostic-seed-command" => diagnostic_seed = true,
             "--work-clock=kingwcr" => {}
             "--work-clock-post=work" => fine_work = true,
+            "--research-threads=1" => research_threads = 1,
+            "--research-threads=2" => research_threads = 2,
             _ => {
                 return Err(Failure::Message(format!(
                     "rook2: unsupported option: {option}\n"
@@ -82,6 +85,8 @@ fn run() -> Result<(), Failure> {
     let mut errors = io::stderr().lock();
     // Disable development counters and root traces in the ordinary binary.
     let mut session = Session::<false>::default();
+    session.set_research_thread_budget(research_threads)
+        .map_err(|message| Failure::Message(format!("rook2: {message}\n")))?;
     while let Some(line) = input.line()? {
         if diagnostic_seed {
             if let Some(assignment) = wire::seed_assignment(&line) {
