@@ -809,14 +809,21 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                 }
             }
         }
+        #[cfg(feature = "inventory-census")]
+        let mut inventory_census = crate::inventory_census::Frame::launch(
+            &position, coherent_geometry, checked, p, request.depth, scratch.is_some());
         let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
         let evaluation = self.evaluator.full(node, map, checked);
+        #[cfg(feature = "inventory-census")]
+        inventory_census.full_done();
         if DIAGNOSTICS {
             self.stats.late_endgame_evaluations += u64::from(evaluation.late_endgame_applied);
         }
         let bounds = policy::evaluation_bounds(p as i32,target,evaluation.lower,evaluation.upper);
         let (effective_lower,effective_upper) = (bounds.lower,bounds.upper);
         if let Some(bound) = bounds.cutoff(request.lower,request.upper) {
+            #[cfg(feature = "inventory-census")]
+            inventory_census.full_bound();
             return Ok(bound.score());
         }
         let current = Predecessor {
@@ -826,15 +833,17 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
             movement: None,
         };
         if request.depth <= adjustment && evaluation.score >= request.upper && !checked {
-            let trial = if request.depth <= 2
+            let cheap_trial = request.depth <= 2
                 && !previous.checked
-                && !policy::king_pressure(&position, previous.influence, map)
-            {
+                && !policy::king_pressure(&position, previous.influence, map);
+            let trial = if cheap_trial {
                 evaluation.score - self.threat(node, map) - if request.depth <= 1 { 25 } else { 40 }
             } else {
                 if DIAGNOSTICS {
                     self.stats.null_trials += 1;
                 }
+                #[cfg(feature = "inventory-census")]
+                inventory_census.null_entered();
                 let mut child = node.null_child();
                 history.push(&child.position, None);
                 let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
@@ -852,18 +861,30 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                     current,
                 );
                 history.pop();
-                -returned?
+                #[cfg(feature = "inventory-census")]
+                if returned.is_err() { inventory_census.null_stopped(); }
+                let score = -returned?;
+                #[cfg(feature = "inventory-census")]
+                inventory_census.null_returned(score >= request.upper);
+                score
             };
             if trial >= request.upper {
                 if DIAGNOSTICS {
                     self.stats.shallow_cutoffs += 1;
                 }
                 self.store_ordinary(query, trial, preferred, quiet_checked, false);
+                #[cfg(feature = "inventory-census")]
+                if cheap_trial { inventory_census.cheap_threat_return(); }
+                else { inventory_census.recursive_null_cutoff(); }
                 return Ok(trial);
             }
         }
 
+        #[cfg(feature = "inventory-census")]
+        let generation_start = inventory_census.inventory_start();
         movegen::generate_legal(&position, &mut self.candidates[p]);
+        #[cfg(feature = "inventory-census")]
+        inventory_census.native_inventory(generation_start, &self.candidates[p]);
         let count = self.candidates[p].len;
         if DIAGNOSTICS {
             self.stats.generated += count as u64;

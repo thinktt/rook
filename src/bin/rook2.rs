@@ -68,6 +68,8 @@ fn run() -> Result<(), Failure> {
     let mut research_threads = 1;
     let mut explicit_threads = false;
     let mut research_full = None;
+    #[cfg(feature = "inventory-census")]
+    let mut inventory_census = false;
     #[cfg(feature = "child-preparation")]
     let mut child_budget = None;
     for option in std::env::args().skip(1) {
@@ -75,6 +77,8 @@ fn run() -> Result<(), Failure> {
             "--diagnostic-seed-command" => diagnostic_seed = true,
             "--work-clock=kingwcr" => {}
             "--work-clock-post=work" => fine_work = true,
+            #[cfg(feature = "inventory-census")]
+            "--inventory-census" => inventory_census = true,
             #[cfg(feature = "child-preparation")]
             "--child-preparation=1" => child_budget=Some(1),
             #[cfg(feature = "child-preparation")]
@@ -100,6 +104,24 @@ fn run() -> Result<(), Failure> {
     if research_full.is_some() && child_budget.is_some() {
         return Err(Failure::Message("rook2: --research-full and --child-preparation are mutually exclusive\n".into()));
     }
+    #[cfg(feature = "inventory-census")]
+    let inventory_report = if inventory_census {
+        if research_threads != 1 || research_full.is_some_and(|mode|
+            mode != rook2::evaluator::ResearchFullMode::Inline) {
+            return Err(Failure::Message("rook2: inventory census requires inline evaluation\n".into()));
+        }
+        #[cfg(feature = "child-preparation")]
+        if child_budget.is_some() {
+            return Err(Failure::Message("rook2: inventory census cannot enable child preparation\n".into()));
+        }
+        let path = std::env::var_os("ROOK2_INVENTORY_CENSUS_REPORT").ok_or_else(||
+            Failure::Message("rook2: inventory census requires ROOK2_INVENTORY_CENSUS_REPORT\n".into()))?;
+        if std::path::Path::new(&path).exists() {
+            return Err(Failure::Message("rook2: inventory census report must be a fresh path\n".into()));
+        }
+        rook2::inventory_census::enable().map_err(Failure::Message)?;
+        Some(path)
+    } else {None};
     let mut input = Input::stdin()?;
     let mut output = io::stdout().lock();
     let mut errors = io::stderr().lock();
@@ -151,6 +173,12 @@ fn run() -> Result<(), Failure> {
             let mut file=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
             writeln!(file,"{stats}")?;
         } else {writeln!(errors,"CHILD_PREPARATION_STATS {stats}")?;}
+    }
+    #[cfg(feature = "inventory-census")]
+    if let Some(path) = inventory_report {
+        let report = rook2::inventory_census::finish_json().map_err(Failure::Message)?;
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+        writeln!(file,"{report}")?;
     }
     Ok(())
 }
