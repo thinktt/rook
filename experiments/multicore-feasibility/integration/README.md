@@ -59,3 +59,5 @@ by30 minutes and existing original replay limits, with raw stream caps and owned
 cleanup on failure. No full suite, full54/12 collection, PGO or new transport is
 selected. Raw runs/build products go outside Git under
 `/home/legolas/rook2-experiments/multicore-first-integration-20261024-01/`.
+
+Completed outcome: [report.md](report.md) and [results.json](results.json). `reconcile.py RAW-MEASUREMENT-DIR` rechecks the original captured receipts without running an engine.

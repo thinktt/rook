@@ -33,8 +33,8 @@ For this deterministic multicore research task, `imp2-lead` owns architecture,
 strategy and critical review. Imp2 carries out delegated implementation and
 experiments, makes routine engineering decisions independently, and may delegate
 bounded work to its Sol team. Keep coordination lightweight; routine execution
-does not require another approval round. Source investigation and bounded
-standalone feasibility experiments are now authorized by the first assignment.
+does not require another approval round. Follow the lead's current bounded
+implementation and experiment assignments.
 
 Imp3 retains ownership of the separate release-builder/pipeline task. This
 research instruction does not redirect that work or expand qualification scope.
