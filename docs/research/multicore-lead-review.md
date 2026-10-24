@@ -81,3 +81,33 @@ prepare work, not to commit independently searched branches. Examine whole-branc
 execution directly before selecting a smaller mechanism. Neither approach is
 selected for implementation by this review; Imp2's source investigation should
 recommend the strongest concrete experiment and expose its limitations.
+
+## Independent transaction soundness challenge
+
+A single bounded Astra source review of the prototype over `adac8b03` found no
+concrete false-accept counterexample within fixed-completion, NoHost, timing-absent,
+zero-root-randomness execution. No builds, runs or edits were performed by that
+reviewer. Reviewed SHA-256 prefixes include `branch_transactions.rs` `8311f8769984`,
+`branch_journal.rs` `8c3bdffdca0dd`, `engine.rs` `895a533fa7b1`, `ordinary.rs`
+`bc0af2a405fe` and `quiescence.rs` `15fb962a9910`. These identify an in-progress
+source review, not certification of a later frozen image.
+
+The important prerequisite is lifetime binding: root Position/retained state,
+predecessor Influence, configuration, evaluator parameters and table geometry stay
+immutable within the private run. The request/history comparison is not sufficient
+as a general cross-root or cross-activation task certificate. A future executor
+must bind those additional inputs explicitly.
+
+The review found native replay covers the consumed mutable dependencies; private
+scratch is initialized before use, including Q reply-list provenance; the same
+child survives retry; current statistics are rebased; and canonical scheduling
+does not install speculative ranking. Full ProbeResult/Selection equality remains
+conservative. Focused tests still need to establish behavior; the source review
+does not replace them or qualify live interruption support. Before removing the
+independent canonical audit, evidence should exercise difficult interactions such
+as learning rescaling, mate-depth probe mutation, retries and reply-list reuse.
+
+The lead also identified and the evolving driver corrected two audit defects:
+rollback must compare against a witness saved before validation, and a semantic
+pass followed by canonical disagreement must terminate the experiment rather than
+be classified as an ordinary transaction rejection.

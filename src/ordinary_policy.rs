@@ -382,6 +382,8 @@ pub struct Learning {
     pub history: [[[u32; 64]; 6]; 2],
     pub killers: [[Move; 2]; 65],
     pub total: u32,
+    #[cfg(feature = "branch-transactions")]
+    research_sink: Option<crate::branch_journal::Sink>,
 }
 
 impl Default for Learning {
@@ -390,6 +392,8 @@ impl Default for Learning {
             history: [[[0; 64]; 6]; 2],
             killers: [[Move::NONE; 2]; 65],
             total: 0,
+            #[cfg(feature = "branch-transactions")]
+            research_sink: None,
         }
     }
 }
@@ -401,9 +405,19 @@ impl Learning {
         self.total = 0;
     }
     pub fn clear_next(&mut self, ply: usize) {
+        #[cfg(feature = "branch-transactions")]
+        if let Some(sink) = &self.research_sink {
+            sink.record(crate::branch_journal::Event::LearningClearNext { ply });
+        }
         self.killers[ply + 1] = [Move::NONE; 2];
     }
     pub fn record(&mut self, position: &Position, ply: usize, depth: i32, movement: Option<Move>) {
+        #[cfg(feature = "branch-transactions")]
+        if let Some(sink) = &self.research_sink {
+            sink.record(crate::branch_journal::Event::LearningRecord {
+                position: *position, ply, depth, movement,
+            });
+        }
         let Some(movement) = movement.filter(|m| *m != Move::NONE) else {
             return;
         };
@@ -436,6 +450,29 @@ impl Learning {
                 self.total += *value;
             }
         }
+    }
+}
+
+#[cfg(feature = "branch-transactions")]
+impl Learning {
+    pub(crate) fn attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
+        self.research_sink = sink;
+    }
+
+    pub(crate) fn research_sink(&self) -> Option<crate::branch_journal::Sink> {
+        self.research_sink.clone()
+    }
+
+    pub(crate) fn research_clone(&self) -> Self {
+        Self { history: self.history, killers: self.killers, total: self.total, research_sink: None }
+    }
+
+    pub(crate) fn research_eq(&self, other: &Self) -> bool {
+        self.history == other.history && self.killers == other.killers && self.total == other.total
+    }
+
+    pub(crate) fn research_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
     }
 }
 

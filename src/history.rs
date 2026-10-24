@@ -36,6 +36,7 @@ impl Boundary {
     }
 }
 
+#[cfg_attr(feature = "branch-transactions", derive(Clone, Debug, PartialEq, Eq))]
 pub struct SearchHistory {
     boundaries: Vec<Boundary>,
     arrivals: Vec<Option<Move>>,
@@ -43,6 +44,13 @@ pub struct SearchHistory {
 }
 
 impl SearchHistory {
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.boundaries.capacity() * std::mem::size_of::<Boundary>()
+            + self.arrivals.capacity() * std::mem::size_of::<Option<Move>>()
+    }
+
     pub fn new(initial: &Position) -> Self {
         let mut boundaries = Vec::with_capacity(864);
         let mut arrivals = Vec::with_capacity(864);

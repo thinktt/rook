@@ -52,6 +52,71 @@ pub struct Search<const DIAGNOSTICS: bool = true, H: Host = NoHost> {
 }
 
 impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_clone(&self) -> Self {
+        assert!(self.timing.is_none() && self.limits.nodes.is_none() && self.control.is_none());
+        Self {
+            evaluator: self.evaluator.research_clone(),
+            config: self.config,
+            candidates: self.candidates.clone(),
+            extension_flags: self.extension_flags.clone(),
+            // Sorting writes its scratch before reading it. It is not shared
+            // search state and need not preserve unused bytes from an earlier call.
+            ordering: OrderingScratch::new(),
+            learning: self.learning.research_clone(),
+            remembered: self
+                .remembered
+                .as_ref()
+                .map(RememberedTable::research_clone),
+            table_bytes: self.table_bytes,
+            coherent_geometry: self.coherent_geometry,
+            pv: self.pv,
+            pv_len: self.pv_len,
+            stats: self.stats,
+            limits: self.limits,
+            timing: None,
+            host: NoHost,
+            control: None,
+        }
+    }
+
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
+        self.learning.attach_sink(sink.clone());
+        self.evaluator.research_attach_sink(sink.clone());
+        if let Some(table) = &mut self.remembered {
+            table.attach_sink(sink);
+        }
+    }
+
+    /// Relevant persistent state and the selected root child's output PV.
+    /// Deeper PV rows, generated lists and extension/ordering arrays are private
+    /// recursive scratch: a fresh entry initializes them before consumption.
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_eq(&self, other: &Self) -> bool {
+        self.stats == other.stats
+            && self.evaluator.research_eq(&other.evaluator)
+            && self.learning.research_eq(&other.learning)
+            && (match (&self.remembered, &other.remembered) {
+                (Some(a), Some(b)) => a.research_eq(b),
+                (None, None) => true,
+                _ => false,
+            })
+            && self.pv[1][..self.pv_len[1]] == other.pv[1][..other.pv_len[1]]
+    }
+
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_bytes(&self) -> usize {
+        // Embedded evaluator, pawn and learning storage are already in Self.
+        std::mem::size_of::<Self>()
+            + self.candidates.len() * std::mem::size_of::<MoveList>()
+            + self.extension_flags.len() * std::mem::size_of::<[u8; MOVE_CAPACITY]>()
+            + self
+                .remembered
+                .as_ref()
+                .map_or(0, |table| table.research_bytes() - std::mem::size_of::<RememberedTable>())
+    }
+
     pub fn new(root: &Position) -> Self {
         Self {
             evaluator: Evaluator::new(root),

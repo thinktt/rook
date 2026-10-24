@@ -68,6 +68,7 @@ struct Pending {
 
 /// One iteration owns the existing exploration and completed-ranking vectors.
 /// Drop an interrupted instance without returning a score for its pending pass.
+#[cfg_attr(feature = "branch-transactions", derive(Clone))]
 pub struct Iteration {
     rows: Vec<Row>,
     ranked: Vec<Row>,
@@ -79,6 +80,34 @@ pub struct Iteration {
 }
 
 impl Iteration {
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.rows.capacity() * std::mem::size_of::<Row>()
+            + self.ranked.capacity() * std::mem::size_of::<Row>()
+    }
+
+    /// Predict a fixed restricted-tail request while retaining the current best.
+    /// No preceding sibling answer or work is fabricated. The returned private
+    /// scheduler owns only this proposed call and its native retry decision.
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_proposal(
+        &self,
+        ahead: usize,
+        search_count: u64,
+    ) -> Option<(Self, Attempt)> {
+        assert!(self.pending.is_none());
+        assert_eq!(self.policy, Policy::Restricted);
+        assert!(self.index >= 1);
+        let mut projected = self.clone();
+        if projected.index == 1 {
+            order_tail(&mut projected.rows, projected.policy);
+        }
+        projected.index = projected.index.checked_add(ahead)?;
+        let attempt = projected.next(search_count)?;
+        Some((projected, attempt))
+    }
+
     pub fn new(rows: Vec<Row>, search_count: u64, previous: i32) -> Self {
         assert!(!rows.is_empty());
         let ranked = Vec::with_capacity(rows.len());

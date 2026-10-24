@@ -281,6 +281,41 @@ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
 }
 
 impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+    /// Detached copies are deliberately expensive in the bounded transaction
+    /// pilot. They never start or share the separate evaluator worker.
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_clone(&self) -> Self {
+        assert!(
+            self.research_worker.is_none(),
+            "branch pilot requires inline evaluation"
+        );
+        Self {
+            root: self.root.clone(),
+            parameters: self.parameters.clone(),
+            draw_preference: self.draw_preference,
+            variation_range: self.variation_range,
+            weights: self.weights,
+            pawns: self.pawns.research_clone(),
+            research_worker: None,
+            stats: self.stats,
+        }
+    }
+
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_pawns(&mut self) -> &mut PawnCache {
+        &mut self.pawns
+    }
+
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_eq(&self, other: &Self) -> bool {
+        self.stats == other.stats && self.pawns.research_eq(&other.pawns)
+    }
+
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn research_attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
+        self.pawns.attach_sink(sink);
+    }
+
     pub fn new(position: &Position) -> Self {
         let parameters = Parameters::default();
         let (root, weights, draw_preference, variation_range) = parameters.bind(position);

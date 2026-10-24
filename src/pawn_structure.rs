@@ -65,6 +65,7 @@ pub struct Selection {
 }
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "branch-transactions", derive(Debug, PartialEq, Eq))]
 struct Retained {
     identity: u32,
     structure: PawnStructure,
@@ -79,12 +80,16 @@ impl Retained {
 
 pub struct PawnCache {
     groups: [Retained; 128],
+    #[cfg(feature = "branch-transactions")]
+    research_sink: Option<crate::branch_journal::Sink>,
 }
 
 impl PawnCache {
     pub const fn new() -> Self {
         Self {
             groups: [Retained::EMPTY; 128],
+            #[cfg(feature = "branch-transactions")]
+            research_sink: None,
         }
     }
 
@@ -119,20 +124,61 @@ impl PawnCache {
     {
         let retained = &mut self.groups[(identity % 128) as usize];
         if retained.identity == identity {
-            return Selection {
+            let selection = Selection {
                 structure: retained.structure,
                 reused: true,
             };
+            #[cfg(feature = "branch-transactions")]
+            if let Some(sink) = &self.research_sink {
+                sink.record(crate::branch_journal::Event::PawnSelect { identity, expected: selection });
+            }
+            return selection;
         }
         let structure = build();
         *retained = Retained {
             identity,
             structure,
         };
-        Selection {
+        let selection = Selection {
             structure,
             reused: false,
+        };
+        #[cfg(feature = "branch-transactions")]
+        if let Some(sink) = &self.research_sink {
+            sink.record(crate::branch_journal::Event::PawnSelect { identity, expected: selection });
         }
+        selection
+    }
+}
+
+#[cfg(feature = "branch-transactions")]
+impl PawnCache {
+    pub(crate) fn attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
+        self.research_sink = sink;
+    }
+
+    pub(crate) fn research_clone(&self) -> Self {
+        Self { groups: self.groups, research_sink: None }
+    }
+
+    pub(crate) fn research_eq(&self, other: &Self) -> bool {
+        self.groups == other.groups
+    }
+
+    pub(crate) fn research_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Reuses the native hit/miss/write boundary. Fresh construction is pure in
+    /// immutable branch inputs, so only its already-computed miss payload is
+    /// needed here. A prior slot's payload is irrelevant when both sides miss.
+    pub(crate) fn research_replay_select(&mut self, identity: u32, expected: Selection) -> Selection {
+        self.select_with_builder(identity, || expected.structure)
+    }
+
+    /// Intentional conflict fixture; never used by branch execution or replay.
+    pub(crate) fn research_overwrite_slot(&mut self, identity: u32, structure: PawnStructure) {
+        self.groups[(identity % 128) as usize] = Retained { identity, structure };
     }
 }
 
@@ -539,7 +585,10 @@ mod tests {
         assert!(cache.select(&empty, &ie).reused);
         assert_eq!(std::mem::size_of::<PawnDescriptor>(), 3);
         assert_eq!(std::mem::size_of::<PawnStructure>(), 60);
+        #[cfg(not(feature = "branch-transactions"))]
         assert_eq!(std::mem::size_of::<PawnCache>(), 8192);
+        #[cfg(feature = "branch-transactions")]
+        assert_eq!(std::mem::size_of::<PawnCache>(), 8192 + std::mem::size_of::<Option<crate::branch_journal::Sink>>());
     }
 
     #[test]

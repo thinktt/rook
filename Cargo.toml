@@ -20,3 +20,13 @@ debug = 1
 inherits = "release"
 
 [dependencies]
+
+[features]
+# Serial simulation and state journals for isolated branch-transaction research.
+# Disabled in normal engine builds.
+branch-transactions = []
+
+[[bin]]
+name = "rook2-branch-tx"
+path = "src/bin/rook2-branch-tx.rs"
+required-features = ["branch-transactions"]

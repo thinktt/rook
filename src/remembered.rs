@@ -22,6 +22,7 @@ pub enum Bound {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "branch-transactions", derive(PartialEq, Eq))]
 pub struct Query {
     pub group: usize,
     pub identity: u32,
@@ -40,6 +41,7 @@ impl Query {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "branch-transactions", derive(PartialEq, Eq))]
 pub struct Store {
     pub query: Query,
     pub score: i32,
@@ -58,6 +60,7 @@ pub struct ProbeResult {
 }
 
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(feature = "branch-transactions", derive(Debug, PartialEq, Eq))]
 #[repr(C)]
 struct Record {
     identity: u32,
@@ -137,6 +140,7 @@ impl Record {
 }
 
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(feature = "branch-transactions", derive(Debug, PartialEq, Eq))]
 #[repr(C)]
 struct Group {
     records: [Record; 4],
@@ -150,12 +154,18 @@ pub struct RememberedTable {
     // Zero always denotes an invalid record. Reuse of a live byte value is
     // preceded by a physical clear so old identities cannot become valid.
     generation: u8,
+    #[cfg(feature = "branch-transactions")]
+    research_sink: Option<crate::branch_journal::Sink>,
 }
 
 impl RememberedTable {
     pub fn with_groups(count: usize) -> Self {
         assert!(count >= 1, "remembered table needs at least one group");
-        Self { groups: vec![Group::default(); count], generation: 1 }
+        Self {
+            groups: vec![Group::default(); count], generation: 1,
+            #[cfg(feature = "branch-transactions")]
+            research_sink: None,
+        }
     }
 
     pub fn from_tts(tts: usize) -> Result<Self, String> {
@@ -163,7 +173,11 @@ impl RememberedTable {
         let mut groups = Vec::new();
         groups.try_reserve_exact(count).map_err(|e| format!("cannot allocate remembered groups: {e}"))?;
         groups.resize(count, Group::default());
-        Ok(Self { groups, generation: 1 })
+        Ok(Self {
+            groups, generation: 1,
+            #[cfg(feature = "branch-transactions")]
+            research_sink: None,
+        })
     }
 
     #[inline]
@@ -190,6 +204,10 @@ impl RememberedTable {
     }
 
     pub fn store(&mut self, store: Store) {
+        #[cfg(feature = "branch-transactions")]
+        if let Some(sink) = &self.research_sink {
+            sink.record(crate::branch_journal::Event::TTStore { store });
+        }
         let record = Record::from_store(store, self.generation);
         let group = &mut self.groups[store.query.group];
 
@@ -235,6 +253,10 @@ impl RememberedTable {
         if recent.matches(self.generation, query.identity)
             && recent.consider(query, required, &mut result)
         {
+            #[cfg(feature = "branch-transactions")]
+            if let Some(sink) = &self.research_sink {
+                sink.record(crate::branch_journal::Event::TTProbe { query, expected: result });
+            }
             return result;
         }
         for record in &mut group.records[..RECENT] {
@@ -243,7 +265,31 @@ impl RememberedTable {
                 break;
             }
         }
+        #[cfg(feature = "branch-transactions")]
+        if let Some(sink) = &self.research_sink {
+            sink.record(crate::branch_journal::Event::TTProbe { query, expected: result });
+        }
         result
+    }
+}
+
+#[cfg(feature = "branch-transactions")]
+impl RememberedTable {
+    pub(crate) fn attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
+        self.research_sink = sink;
+    }
+
+    pub(crate) fn research_clone(&self) -> Self {
+        Self { groups: self.groups.clone(), generation: self.generation, research_sink: None }
+    }
+
+    pub(crate) fn research_eq(&self, other: &Self) -> bool {
+        self.generation == other.generation && self.groups == other.groups
+    }
+
+    pub(crate) fn research_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.groups.capacity() * std::mem::size_of::<Group>()
     }
 }
 

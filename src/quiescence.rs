@@ -314,6 +314,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
             if checked && ply as i32 - 9998 >= entry.upper {
                 return Ok(ply as i32 - 9998);
             }
+            #[cfg(feature = "branch-transactions")]
+            let order_journal = self.learning.research_sink();
+            #[cfg(feature = "branch-transactions")]
+            let order_input = order_journal.as_ref().map(|_| self.candidates[ply].as_slice().to_vec());
             tactical::order_with_scratch(
                 &position,
                 &self.evaluator.root,
@@ -321,6 +325,14 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
                 &mut self.candidates[ply],
                 &mut self.ordering,
             );
+            #[cfg(feature = "branch-transactions")]
+            if let (Some(sink), Some(input)) = (order_journal, order_input) {
+                sink.record(crate::branch_journal::Event::OrderQ {
+                    position,
+                    input,
+                    expected: self.candidates[ply].as_slice().to_vec(),
+                });
+            }
             if O::ENABLED { observer.ordered(); }
 
             let previous = history.previous_move();

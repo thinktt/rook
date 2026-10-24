@@ -46,3 +46,8 @@ pub mod timing;
 pub mod types;
 pub mod wire;
 pub mod work_clock;
+
+#[cfg(feature = "branch-transactions")]
+pub mod branch_transactions;
+#[cfg(feature = "branch-transactions")]
+pub(crate) mod branch_journal;

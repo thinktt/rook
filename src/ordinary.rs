@@ -873,6 +873,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
         if p as i32 - 9998 >= request.upper {
             return Ok(p as i32 - 9998);
         }
+        #[cfg(feature = "branch-transactions")]
+        let order_journal = self.learning.research_sink();
+        #[cfg(feature = "branch-transactions")]
+        let order_input = order_journal.as_ref().map(|_| self.candidates[p].as_slice().to_vec());
         tactical::order_by(&mut self.candidates[p], &mut self.ordering, |movement| {
             policy::priority(
                 &position,
@@ -884,6 +888,17 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
                 movement,
             )
         });
+        #[cfg(feature = "branch-transactions")]
+        if let (Some(sink), Some(input)) = (order_journal, order_input) {
+            sink.record(crate::branch_journal::Event::OrderMain {
+                position,
+                influence: *map,
+                ply: p,
+                preferred: remembered.move_hint,
+                input,
+                expected: self.candidates[p].as_slice().to_vec(),
+            });
+        }
         self.extension_flags[p][..count].fill(0);
         let encoded = position.counts[position.side.index()][..5]
             .iter()
