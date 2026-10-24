@@ -108,5 +108,6 @@ from demonstrating whole-branch parallel execution. Keep same-node inventory/FUL
 overlap as another reserve. Do not expand the completed experiment into an open-ended
 transport-tuning exercise before addressing this larger architectural direction.
 
-The lead's goal is paused for discussion. This checkpoint records the next priority;
-it does not start a new implementation or native measurement campaign.
+Begin with a bounded source-only architectural investigation. Select an implementation
+experiment from its findings; this checkpoint does not itself select another native
+measurement campaign.
