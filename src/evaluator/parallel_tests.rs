@@ -336,7 +336,7 @@ fn positive_total_requests_saturate_without_changing_cache_or_evaluation() {
     let collision_map=Influence::build(&collision);
     for requested in [2,3,usize::MAX,1,2,1] {
         let before=worker.stats;
-        worker.set_threads(requested).unwrap();
+        worker.set_threads_with_affinity(requested,||Ok(2)).unwrap();
         assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,requested.min(2)));
         assert_eq!(worker.stats,before);
         assert!(worker.set_threads(0).is_err());
@@ -368,4 +368,40 @@ fn search_and_session_expose_requested_and_configured_budgets() {
     assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,2));
     session.set_threads(1).unwrap();
     assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(1,1));
+}
+
+#[test]
+fn affinity_cap_queries_before_mutation_and_preserves_active_cache_on_failure() {
+    let first=Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
+    let collision=Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
+    assert_eq!(first.pawn,collision.pawn);
+    let (mut serial,mut worker)=(Evaluator::<true>::new(&first),Evaluator::<true>::new(&first));
+    assert!(worker.set_threads_with_affinity(0,||panic!("invalid request queried affinity")).is_err());
+    worker.set_threads_with_affinity(1,||panic!("one thread queried affinity")).unwrap();
+    worker.set_threads_with_affinity(2,||Ok(2)).unwrap();
+    let node=Node::root(first,&serial.root);
+    compare(&mut serial,&mut worker,node,&Influence::build(&first),false,false);
+    let before=worker.stats;
+    assert_eq!(worker.set_threads_with_affinity(8,||Err("affinity query failed".into())),
+        Err("affinity query failed".into()));
+    assert_eq!((worker.requested_threads(),worker.configured_threads()),(2,2));
+    assert_eq!(worker.stats,before);
+    assert!(worker.full_worker.as_ref().unwrap().is_parked());
+    assert!(worker.set_threads_with_affinity(0,||panic!("invalid request queried affinity")).is_err());
+    assert!(worker.set_threads_with_affinity(8,||Ok(0)).is_err());
+    assert_eq!((worker.requested_threads(),worker.configured_threads()),(2,2));
+    assert_eq!(worker.stats,before);
+    let map=Influence::build(&collision);
+    let node=Node::root(collision,&serial.root);
+    assert!(compare(&mut serial,&mut worker,node,&map,false,false).details.pawn_entry_reused);
+    for (requested,allowed,configured) in [(8,1,1),(usize::MAX,2,2),(2,1,1),(3,4,2)] {
+        let before=worker.stats;
+        worker.set_threads_with_affinity(requested,||Ok(allowed)).unwrap();
+        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,configured));
+        assert_eq!(worker.stats,before);
+        assert_eq!(worker.full_worker.is_some(),configured==2);
+        assert!(compare(&mut serial,&mut worker,node,&map,false,false).details.pawn_entry_reused);
+    }
+    worker.set_threads_with_affinity(1,||panic!("one thread queried affinity")).unwrap();
+    assert_eq!((worker.requested_threads(),worker.configured_threads()),(1,1));
 }

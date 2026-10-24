@@ -340,14 +340,32 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
         }
     }
 
-    /// Request a positive total thread budget. This engine configures at most
-    /// two threads: the coordinator and one Activity/Shelter helper. The helper
-    /// inherits allowed affinity and parks outside owned search/call scopes.
+    /// Request a positive total thread budget. Requests above one query the
+    /// configuring thread's permitted affinity before changing configuration.
+    /// Exactly one permitted CPU caps execution at one; otherwise the capacity
+    /// is min(requested, 2). Later external placement does not change this cap.
+    /// The helper inherits allowed affinity and parks outside owned scopes.
     pub fn set_threads(&mut self, requested: usize) -> Result<(), String> {
+        self.set_threads_with_affinity(requested, crate::thread_budget::permitted_cpus)
+    }
+
+    fn set_threads_with_affinity(
+        &mut self,
+        requested: usize,
+        permitted_cpus: impl FnOnce() -> Result<usize, String>,
+    ) -> Result<(), String> {
         if requested == 0 {
             return Err("thread request must be positive".into());
         }
-        let configured = requested.min(2);
+        let configured = if requested == 1 {
+            1
+        } else {
+            match permitted_cpus()? {
+                0 => return Err("permitted CPU affinity is empty".into()),
+                1 => 1,
+                _ => requested.min(2),
+            }
+        };
         #[cfg(feature = "child-preparation")]
         if configured != 1 && self.child_preparation.is_some() {
             return Err("child preparation and FULL worker cannot be nested".into());

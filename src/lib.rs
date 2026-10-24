@@ -39,6 +39,7 @@ pub mod root_schedule;
 pub mod session;
 pub mod shelter;
 pub mod tactical;
+mod thread_budget;
 mod time_powers;
 pub mod timed;
 pub mod timed_sequence;
