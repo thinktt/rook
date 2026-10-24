@@ -66,6 +66,8 @@ fn run() -> Result<(), Failure> {
     let mut diagnostic_seed = false;
     let mut fine_work = false;
     let mut research_threads = 1;
+    let mut explicit_threads = false;
+    let mut research_full = None;
     #[cfg(feature = "child-preparation")]
     let mut child_budget = None;
     for option in std::env::args().skip(1) {
@@ -79,8 +81,11 @@ fn run() -> Result<(), Failure> {
             "--child-preparation=2" => child_budget=Some(2),
             #[cfg(feature = "child-preparation")]
             "--child-preparation=4" => child_budget=Some(4),
-            "--research-threads=1" => research_threads = 1,
-            "--research-threads=2" => research_threads = 2,
+            "--research-threads=1" => {research_threads = 1; explicit_threads = true;},
+            "--research-threads=2" => {research_threads = 2; explicit_threads = true;},
+            "--research-full=inline" => research_full = Some(rook2::evaluator::ResearchFullMode::Inline),
+            "--research-full=current" => research_full = Some(rook2::evaluator::ResearchFullMode::Current),
+            "--research-full=reversed" => research_full = Some(rook2::evaluator::ResearchFullMode::Reversed),
             _ => {
                 return Err(Failure::Message(format!(
                     "rook2: unsupported option: {option}\n"
@@ -88,12 +93,20 @@ fn run() -> Result<(), Failure> {
             }
         }
     }
+    if research_full.is_some() && explicit_threads {
+        return Err(Failure::Message("rook2: --research-full and --research-threads are mutually exclusive\n".into()));
+    }
+    #[cfg(feature = "child-preparation")]
+    if research_full.is_some() && child_budget.is_some() {
+        return Err(Failure::Message("rook2: --research-full and --child-preparation are mutually exclusive\n".into()));
+    }
     let mut input = Input::stdin()?;
     let mut output = io::stdout().lock();
     let mut errors = io::stderr().lock();
     // Disable development counters and root traces in the ordinary binary.
     let mut session = Session::<false>::default();
-    session.set_research_thread_budget(research_threads)
+    (if let Some(mode) = research_full {session.set_research_full_mode(mode)}
+        else {session.set_research_thread_budget(research_threads)})
         .map_err(|message| Failure::Message(format!("rook2: {message}\n")))?;
     #[cfg(feature = "child-preparation")]
     if let Some(budget)=child_budget {session.set_child_preparation_budget(budget)

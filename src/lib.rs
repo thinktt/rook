@@ -54,3 +54,5 @@ pub(crate) mod branch_journal;
 
 #[cfg(feature = "child-preparation")]
 pub(crate) mod child_preparation;
+pub(crate) mod pawn_branch;
+pub(crate) mod pawn_worker;

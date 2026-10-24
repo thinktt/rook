@@ -142,6 +142,11 @@ impl<const D: bool> Session<D> {
             .evaluator.set_research_thread_budget(budget)
     }
 
+    pub fn set_research_full_mode(&mut self, mode: crate::evaluator::ResearchFullMode) -> Result<(), String> {
+        self.search.as_mut().ok_or("search is currently active")?
+            .evaluator.set_research_full_mode(mode)
+    }
+
     #[cfg(feature = "child-preparation")]
     pub fn set_child_preparation_budget(&mut self,budget:usize)->Result<(),String> {
         self.search.as_mut().ok_or("search is active")?.evaluator.set_child_preparation_budget(budget)

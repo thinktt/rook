@@ -64,8 +64,7 @@ pub struct Selection {
     pub reused: bool,
 }
 
-#[derive(Clone, Copy)]
-#[cfg_attr(feature = "branch-transactions", derive(Debug, PartialEq, Eq))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Retained {
     identity: u32,
     structure: PawnStructure,
@@ -79,22 +78,30 @@ impl Retained {
 }
 
 pub struct PawnCache {
-    groups: [Retained; 128],
+    core: PawnCacheCore,
     #[cfg(feature = "branch-transactions")]
     research_sink: Option<crate::branch_journal::Sink>,
+}
+
+/// The actual retained entries, without the serial journal's Rc observer.
+/// Moving this core transfers exclusive cache ownership; no unsafe Send
+/// assertion or per-evaluation cache copy is needed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PawnCacheCore {
+    groups: [Retained; 128],
 }
 
 impl PawnCache {
     pub const fn new() -> Self {
         Self {
-            groups: [Retained::EMPTY; 128],
+            core: PawnCacheCore::new(),
             #[cfg(feature = "branch-transactions")]
             research_sink: None,
         }
     }
 
     pub fn clear(&mut self) {
-        self.groups.fill(Retained::EMPTY);
+        self.core.clear();
     }
 
     pub fn select(&mut self, position: &Position, influence: &Influence) -> Selection {
@@ -122,32 +129,61 @@ impl PawnCache {
     where
         F: FnOnce() -> PawnStructure,
     {
+        let selection = self.core.select_with_builder(identity, build);
+        #[cfg(feature = "branch-transactions")]
+        if let Some(sink) = &self.research_sink {
+            sink.record(crate::branch_journal::Event::PawnSelect { identity, expected: selection });
+        }
+        selection
+    }
+
+    pub(crate) fn take_core(&mut self) -> PawnCacheCore {
+        #[cfg(feature = "branch-transactions")]
+        assert!(self.research_sink.is_none(), "pawn worker cannot own a serial journal sink");
+        std::mem::replace(&mut self.core, PawnCacheCore::new())
+    }
+
+    pub(crate) fn install_core(&mut self, core: PawnCacheCore) {
+        self.core = core;
+    }
+
+    #[cfg(feature = "branch-transactions")]
+    pub(crate) fn has_research_sink(&self) -> bool {
+        self.research_sink.is_some()
+    }
+}
+
+impl PawnCacheCore {
+    pub(crate) const fn new() -> Self {
+        Self { groups: [Retained::EMPTY; 128] }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.groups.fill(Retained::EMPTY);
+    }
+
+    pub(crate) fn select(&mut self, position: &Position, influence: &Influence) -> Selection {
+        self.select_with_builder(position.pawn, || fresh(position, influence, [1024; 2]))
+    }
+
+    fn select_with_builder<F>(&mut self, identity: u32, build: F) -> Selection
+    where F: FnOnce() -> PawnStructure {
         let retained = &mut self.groups[(identity % 128) as usize];
         if retained.identity == identity {
-            let selection = Selection {
+            return Selection {
                 structure: retained.structure,
                 reused: true,
             };
-            #[cfg(feature = "branch-transactions")]
-            if let Some(sink) = &self.research_sink {
-                sink.record(crate::branch_journal::Event::PawnSelect { identity, expected: selection });
-            }
-            return selection;
         }
         let structure = build();
         *retained = Retained {
             identity,
             structure,
         };
-        let selection = Selection {
+        Selection {
             structure,
             reused: false,
-        };
-        #[cfg(feature = "branch-transactions")]
-        if let Some(sink) = &self.research_sink {
-            sink.record(crate::branch_journal::Event::PawnSelect { identity, expected: selection });
         }
-        selection
     }
 }
 
@@ -158,11 +194,11 @@ impl PawnCache {
     }
 
     pub(crate) fn research_clone(&self) -> Self {
-        Self { groups: self.groups, research_sink: None }
+        Self { core: PawnCacheCore { groups: self.core.groups }, research_sink: None }
     }
 
     pub(crate) fn research_eq(&self, other: &Self) -> bool {
-        self.groups == other.groups
+        self.core.groups == other.core.groups
     }
 
     pub(crate) fn research_bytes(&self) -> usize {
@@ -178,7 +214,7 @@ impl PawnCache {
 
     /// Intentional conflict fixture; never used by branch execution or replay.
     pub(crate) fn research_overwrite_slot(&mut self, identity: u32, structure: PawnStructure) {
-        self.groups[(identity % 128) as usize] = Retained { identity, structure };
+        self.core.groups[(identity % 128) as usize] = Retained { identity, structure };
     }
 }
 

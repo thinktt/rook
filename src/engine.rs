@@ -82,6 +82,8 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
 
     #[cfg(feature = "branch-transactions")]
     pub(crate) fn research_attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
+        assert!(sink.is_none() || self.evaluator.research_journal_compatible(),
+            "cannot attach a serial journal while the pawn helper owns its cache");
         self.learning.attach_sink(sink.clone());
         self.evaluator.research_attach_sink(sink.clone());
         if let Some(table) = &mut self.remembered {
