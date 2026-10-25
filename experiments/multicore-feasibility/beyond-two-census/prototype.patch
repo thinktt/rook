@@ -611,10 +611,10 @@ index f206e827..009bda85 100644
      }
 diff --git a/src/branch_work_census.rs b/src/branch_work_census.rs
 new file mode 100644
-index 00000000..011c6676
+index 00000000..9f716b44
 --- /dev/null
 +++ b/src/branch_work_census.rs
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,269 @@
 +//! Opt-in coordinator counts. Inclusive populations overlap; only forest,
 +//! exclusive totals and each separate fixed-ply cut are additive partitions.
 +use crate::quiescence::Work;
@@ -845,10 +845,24 @@ index 00000000..011c6676
 +        let position=Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
 +        let mut baseline=Search::<D>::new(&position);baseline.config.tts_bytes=65536;
 +        let mut observed=Search::<D>::new(&position);observed.config.tts_bytes=65536;
-+        let mut a=SearchHistory::new(&position);let mut b=a.clone();
++        let mut a=SearchHistory::new(&position);let mut b=SearchHistory::new(&position);
 +        let expected=baseline.run_iterations(position,&mut a,depth,Limits{nodes:limit});
 +        enable().unwrap();let returned=observed.run_iterations(position,&mut b,depth,Limits{nodes:limit});
-+        assert_eq!(format!("{returned:?}"),format!("{expected:?}"));assert_eq!(observed.work(),baseline.work());assert_eq!(observed.stats,baseline.stats);assert_eq!(observed.evaluator.stats,baseline.evaluator.stats);assert_eq!(a,b);
++        match (returned,expected) {
++            (Ok(actual),Ok(expected)) => {
++                assert_eq!((&actual.initial_candidates,actual.score,&actual.pv,actual.work,actual.stats,actual.evaluations),
++                    (&expected.initial_candidates,expected.score,&expected.pv,expected.work,expected.stats,expected.evaluations));
++                assert_eq!(actual.iterations.len(),expected.iterations.len());
++                for (a,b) in actual.iterations.iter().zip(&expected.iterations) {
++                    assert_eq!((a.depth,&a.candidates,&a.steps,a.score,&a.pv,a.work),(b.depth,&b.candidates,&b.steps,b.score,&b.pv,b.work));
++                }
++            },
++            (Err(a),Err(b)) => assert_eq!(format!("{a:?}"),format!("{b:?}")),
++            _ => panic!("census changed successful/stopped result"),
++        }
++        assert_eq!(observed.work(),baseline.work());assert_eq!(observed.stats,baseline.stats);assert_eq!(observed.evaluator.stats,baseline.evaluator.stats);
++        assert_eq!((a.search_ply(),a.pre_root_len(),a.previous_move(),a.search_path()),(b.search_ply(),b.pre_root_len(),b.previous_move(),b.search_path()));
++        assert_eq!(a.search_ply(),0);
 +        assert_eq!(observed.learning.history,baseline.learning.history);assert_eq!(observed.learning.killers,baseline.learning.killers);assert_eq!(observed.learning.total,baseline.learning.total);
 +        native_boundary(observed.work());check_partition();
 +        STATE.with(|s|{let s=s.borrow();assert_eq!(s.total.0[..2],[observed.work().charged_search_units,observed.work().charged_relation_queries]);assert_eq!(s.native_boundaries,1);if limit!=Some(0){assert!(s.edges[0][1].handoffs>0);}if limit.is_none(){assert!(s.total.0[2]>0);assert!(s.groups[0].groups>0);if !D{assert_eq!(observed.evaluator.stats.full,0);}}});

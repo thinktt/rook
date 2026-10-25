@@ -54,7 +54,11 @@ hashes. `collect.py` retains original streams, native accounting, placement and
 bounded census JSON. `reconcile.py` independently checks source/artifact pins,
 raw replay, native lifetimes, and count partitions. `pipeline.py` supervises the
 finite lane without retries. Raw receipts, binaries and build trees remain under
-`/home/legolas/rook2-experiments/beyond-two-census-20261025-01`.
+`/home/legolas/rook2-experiments/beyond-two-census-20261025-02`.
 
-Status: prepared and frozen; no new native execution yet. Results and the next queue
+The first focused-test compilation failed before tests or workload lives ran;
+its01 receipts are preserved and bound in `preparation.json`. The repair changes
+only test-body type assumptions. The continuation uses fresh02 evidence.
+
+Status: prepared for the continuation. Results and the next queue
 recommendation will be recorded after independent closure.
