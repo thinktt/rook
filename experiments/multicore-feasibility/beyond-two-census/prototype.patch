@@ -1,0 +1,872 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index acddcac5..0e3118f0 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -26,6 +26,7 @@ inherits = "release"
+ # Disabled in normal engine builds.
+ branch-transactions = []
+ child-preparation = []
++branch-work-census = []
+ 
+ [[bin]]
+ name = "rook2-branch-tx"
+diff --git a/src/bin/rook2.rs b/src/bin/rook2.rs
+index 1c99bcad..7742f4b3 100644
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -96,6 +96,13 @@ fn run() -> Result<(), Failure> {
+             }
+         }
+     }
++    #[cfg(feature = "branch-work-census")]
++    let census_report = if let Some(path)=std::env::var_os("ROOK2_BRANCH_WORK_CENSUS_REPORT") {
++        let path=std::path::PathBuf::from(path);
++        if !path.is_absolute() || path.exists() {return Err(Failure::Message("rook2: branch work census report needs a fresh absolute path\n".into()));}
++        rook2::branch_work_census::enable().map_err(Failure::Message)?;
++        Some(path)
++    } else {None};
+     // Disable development counters and root traces in the ordinary binary.
+     let mut session = Session::<false>::default();
+     session.set_threads(requested_threads)
+@@ -142,6 +149,8 @@ fn run() -> Result<(), Failure> {
+                 };
+                 let (result, _) = session.go_live(host, 0, Limits::default(), 62, fine_work);
+                 result?;
++                #[cfg(feature = "branch-work-census")]
++                if let Some(work)=session.census_work() {rook2::branch_work_census::native_boundary(work);}
+             }
+         }
+     }
+@@ -153,6 +162,13 @@ fn run() -> Result<(), Failure> {
+             writeln!(file,"{stats}")?;
+         } else {writeln!(errors,"CHILD_PREPARATION_STATS {stats}")?;}
+     }
++    #[cfg(feature = "branch-work-census")]
++    if let Some(path)=census_report {
++        let report=rook2::branch_work_census::finish_json().map_err(Failure::Message)?;
++        if report.len()>=4*1024*1024 {return Err(Failure::Message("rook2: branch work census report exceeded 4MiB\n".into()));}
++        let mut file=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
++        writeln!(file,"{report}")?;
++    }
+     Ok(())
+ }
+ 
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+index 0e18f028..96bc3132 100644
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -493,11 +493,15 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+             #[cfg(not(feature = "child-preparation"))]
+             let prepared: Option<Influence> = None;
+             *scratch = Some(if let Some(map)=prepared {map} else if coherent_geometry {
++                #[cfg(feature = "branch-work-census")]
++                crate::branch_work_census::map();
+                 let map = Influence::build_coherent(position);
+                 #[cfg(test)]
+                 COHERENT_BUILDS.with(|count| count.set(count.get() + 1));
+                 map
+             } else {
++                #[cfg(feature = "branch-work-census")]
++                crate::branch_work_census::map();
+                 Influence::build(position)
+             });
+             if DIAGNOSTICS {
+@@ -558,6 +562,8 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+         observer: F,
+         details: D,
+     ) -> Evaluation {
++        #[cfg(feature = "branch-work-census")]
++        crate::branch_work_census::full();
+         let position = &node.position;
+         let phase = position.phase();
+         let material = self.root.material(position);
+@@ -739,6 +745,8 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+         in_check: bool,
+         observer: F,
+     ) -> Evaluation {
++        #[cfg(feature = "branch-work-census")]
++        crate::branch_work_census::fast();
+         if DIAGNOSTICS {
+             self.stats.fast += 1;
+         }
+diff --git a/src/lib.rs b/src/lib.rs
+index 064e15eb..835ced02 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -55,3 +55,5 @@ pub(crate) mod branch_journal;
+ 
+ #[cfg(feature = "child-preparation")]
+ pub(crate) mod child_preparation;
++#[cfg(feature = "branch-work-census")]
++pub mod branch_work_census;
+diff --git a/src/ordinary.rs b/src/ordinary.rs
+index 2d7419bc..ab821a68 100644
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -719,6 +719,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+         if policy::quiescence_handoff(request.depth, p, self.config.maximum_depth) {
++            #[cfg(feature = "branch-work-census")]
++            crate::branch_work_census::handoff();
+             return self.visit_q(
+                 node,
+                 history,
+@@ -737,7 +739,14 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 false,
+             );
+         }
++        #[cfg(feature = "branch-work-census")]
++        let census_frame = crate::branch_work_census::Frame::enter(crate::branch_work_census::Kind::Ordinary,p,request.depth,request.checked,self.work());
++        #[cfg(feature = "branch-work-census")]
++        let mut census_exit = crate::branch_work_census::Exit::Unfinished;
++        let census_returned = (|| {
+         self.charge_node(history)?;
++            #[cfg(feature = "branch-work-census")]
++            census_frame.charged();
+         if DIAGNOSTICS {
+             self.stats.ordinary_nodes += 1;
+         }
+@@ -746,7 +755,11 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+         let checked = request
+             .checked
+             .unwrap_or_else(|| movegen::in_check(&position, position.side));
++        #[cfg(feature = "branch-work-census")]
++        census_frame.checked(checked);
+         if policy::early_draw(history,p,checked,self.config.analysis,request.upper,&mut self.learning) {
++            #[cfg(feature = "branch-work-census")]
++            { census_exit = crate::branch_work_census::Exit::Draw; }
+             return Ok(0);
+         }
+         let table = self.remembered.as_mut().unwrap();
+@@ -766,6 +779,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+             if DIAGNOSTICS {
+                 self.stats.table_hits += 1;
+             }
++            #[cfg(feature = "branch-work-census")]
++            { census_exit = crate::branch_work_census::Exit::Tt; }
+             return Ok(score);
+         }
+         let mut preferred = remembered.move_hint;
+@@ -805,7 +820,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                             self.stats.fast_cutoffs += 1;
+                         }
+                         self.store_ordinary(query, trial, preferred, quiet_checked, false);
+-                        return Ok(trial);
++                        #[cfg(feature = "branch-work-census")]
++            { census_exit = crate::branch_work_census::Exit::Fast; }
++            return Ok(trial);
+                     }
+                 }
+             }
+@@ -818,6 +835,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+         let bounds = policy::evaluation_bounds(p as i32,target,evaluation.lower,evaluation.upper);
+         let (effective_lower,effective_upper) = (bounds.lower,bounds.upper);
+         if let Some(bound) = bounds.cutoff(request.lower,request.upper) {
++            #[cfg(feature = "branch-work-census")]
++            { census_exit = crate::branch_work_census::Exit::FullBound; }
+             return Ok(bound.score());
+         }
+         let current = Predecessor {
+@@ -827,10 +846,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+             movement: None,
+         };
+         if request.depth <= adjustment && evaluation.score >= request.upper && !checked {
+-            let trial = if request.depth <= 2
++            let cheap_trial = request.depth <= 2
+                 && !previous.checked
+-                && !policy::king_pressure(&position, previous.influence, map)
+-            {
++                && !policy::king_pressure(&position, previous.influence, map);
++            let trial = if cheap_trial {
+                 evaluation.score - self.threat(node, map) - if request.depth <= 1 { 25 } else { 40 }
+             } else {
+                 if DIAGNOSTICS {
+@@ -838,6 +857,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 }
+                 let mut child = node.null_child();
+                 history.push(&child.position, None);
++                #[cfg(feature = "branch-work-census")]
++                let census_edge = crate::branch_work_census::Edge::new(crate::branch_work_census::Incoming::Null);
+                 let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+@@ -852,6 +873,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                     },
+                     current,
+                 );
++                #[cfg(feature = "branch-work-census")]
++                drop(census_edge);
+                 history.pop();
+                 -returned?
+             };
+@@ -860,6 +883,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                     self.stats.shallow_cutoffs += 1;
+                 }
+                 self.store_ordinary(query, trial, preferred, quiet_checked, false);
++                #[cfg(feature = "branch-work-census")]
++                { census_exit = if cheap_trial {crate::branch_work_census::Exit::Threat}else{crate::branch_work_census::Exit::Null}; }
+                 return Ok(trial);
+             }
+         }
+@@ -870,9 +895,13 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+             self.stats.generated += count as u64;
+         }
+         if count == 0 {
++            #[cfg(feature = "branch-work-census")]
++            { census_exit = crate::branch_work_census::Exit::Terminal; }
+             return Ok(if checked { policy::mate_score(p) } else { 0 });
+         }
+         if p as i32 - 9998 >= request.upper {
++            #[cfg(feature = "branch-work-census")]
++            { census_exit = crate::branch_work_census::Exit::Terminal; }
+             return Ok(p as i32 - 9998);
+         }
+         #[cfg(feature = "branch-transactions")]
+@@ -913,14 +942,22 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+             && p as i32 <= target - 3
+             && encoded >= 4112
+         {
++            #[cfg(feature = "branch-work-census")]
++            let census_mates = crate::branch_work_census::Group::new(crate::branch_work_census::Batch::Mate,p,request.depth,checked,count);
+             for index in 0..count {
++                #[cfg(feature = "branch-work-census")]
++                census_mates.examined();
+                 let movement = self.candidates[p].moves[index];
+                 if movement.kind() != MoveKind::Ordinary {
++                    #[cfg(feature = "branch-work-census")]
++                    census_mates.skip(6);
+                     continue;
+                 }
+                 let projected = position.attack_view().projected(&position, movement);
+                 let king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
+                 if !projected.attacked(king, position.side) {
++                    #[cfg(feature = "branch-work-census")]
++                    census_mates.skip(7);
+                     continue;
+                 }
+                 if DIAGNOSTICS {
+@@ -928,6 +965,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 }
+                 let mut child = node.child(&self.evaluator.root, movement);
+                 history.push(&child.position, Some(movement));
++                #[cfg(feature = "branch-work-census")]
++                let census_task = census_mates.task(index,-9000,-8999,self.work());
++                #[cfg(feature = "branch-work-census")]
++                let census_edge = crate::branch_work_census::Edge::new(crate::branch_work_census::Incoming::Mate);
+                 let returned = self.visit_q(
+                     &mut child,
+                     history,
+@@ -945,6 +986,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                     Some(true),
+                     false,
+                 );
++                #[cfg(feature = "branch-work-census")]
++                { drop(census_edge); census_task.finish(self.work(),returned.is_ok()); }
+                 history.pop();
+                 let score = -returned?;
+                 if score >= 9000 {
+@@ -956,6 +999,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                     break;
+                 }
+             }
++            #[cfg(feature = "branch-work-census")]
++            census_mates.complete();
+             quiet_checked = true;
+         }
+ 
+@@ -970,6 +1015,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+         let _preparation_scope = if request.depth == 2 && coherent_geometry {
+             self.evaluator.prepare_children(&position, self.candidates[p].as_slice())
+         } else {None};
++        #[cfg(feature = "branch-work-census")]
++        let census_main = crate::branch_work_census::Group::new(crate::branch_work_census::Batch::Main,p,request.depth,checked,count);
+         let mut best = effective_lower;
+         let mut lower = request.lower;
+         // Main extensions depend on the complete inventory, whose contents do
+@@ -984,6 +1031,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+         );
+         let mut index = 0;
+         while index < count {
++            #[cfg(feature = "branch-work-census")]
++            census_main.examined();
+             let movement = self.candidates[p].moves[index];
+             if DIAGNOSTICS {
+                 self.stats.examined += 1;
+@@ -1022,6 +1071,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 if DIAGNOSTICS {
+                     self.stats.frontier_skips += 1;
+                 }
++                #[cfg(feature = "branch-work-census")]
++                census_main.skip(5);
+                 estimate.unwrap()
+             } else {
+                 let mut child = node.child(&self.evaluator.root, movement);
+@@ -1054,7 +1105,15 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
++                #[cfg(feature = "branch-work-census")]
++                let census_task = census_main.task(index,child_request.lower,child_request.upper,self.work());
++                #[cfg(feature = "branch-work-census")]
++                census_task.window(full_window);
++                let returned = {
++                    #[cfg(feature = "branch-work-census")]
++                    let _edge = crate::branch_work_census::Edge::new(crate::branch_work_census::Incoming::Main);
++                    self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor)
++                };
+                 let returned = match returned {
+                     Ok(value) => Ok(-value),
+                     Err(stop) => Err(stop),
+@@ -1067,6 +1126,11 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
++                        #[cfg(feature = "branch-work-census")]
++                        census_task.retry();
++                        let retry = {
++                        #[cfg(feature = "branch-work-census")]
++                        let _edge = crate::branch_work_census::Edge::new(crate::branch_work_census::Incoming::Main);
+                         self.visit_ordinary_impl::<ALLOW_IIO>(
+                             &mut child,
+                             history,
+@@ -1078,12 +1142,16 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                             predecessor,
+                         )
+                         .map(|s| -s)
++                        };
++                        retry
+                     } else {
+                         Ok(score)
+                     }
+                 } else {
+                     returned
+                 };
++                #[cfg(feature = "branch-work-census")]
++                census_task.finish(self.work(),returned.is_ok());
+                 history.pop();
+                 returned?
+             };
+@@ -1113,15 +1181,25 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+             index += 1;
+             if index == 1 && index < count && request.depth >= 5 && remembered.bound == Bound::Lower
+             {
++                #[cfg(feature = "branch-work-census")]
++                census_main.tail_iio();
+                 self.ordering_phase::<ALLOW_IIO>(node, history, request, previous, map, checked, 1)?;
+             }
+         }
++        #[cfg(feature = "branch-work-census")]
++        census_main.complete();
+         best = best.min(effective_upper);
+         if best > request.lower {
+             self.learning.record(&position, p, request.depth, preferred);
+         }
+         self.store_ordinary(query, best, preferred, quiet_checked, true);
++        #[cfg(feature = "branch-work-census")]
++        { census_exit = crate::branch_work_census::Exit::Main; }
+         Ok(best)
++        })();
++        #[cfg(feature = "branch-work-census")]
++        census_frame.finish(self.work(),census_returned.is_ok(),census_exit);
++        census_returned
+     }
+ 
+     fn ordering_phase<const ALLOW_IIO: bool>(
+@@ -1156,6 +1234,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+             if DIAGNOSTICS {
+                 self.stats.iio_passes += 1;
+             }
++            #[cfg(feature = "branch-work-census")]
++            let census_iio = crate::branch_work_census::Group::new(crate::branch_work_census::Batch::Iio,p,shallow_target-p as i32,checked,count-start);
+             let extensions = Extensions::new(
+                 position,
+                 &self.candidates[p].moves[start..count],
+@@ -1166,6 +1246,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+             );
+             let mut best = -10000;
+             for index in start..count {
++                #[cfg(feature = "branch-work-census")]
++                census_iio.examined();
+                 let movement = self.candidates[p].moves[index];
+                 let fresh = extensions.for_move(position, movement);
+                 if DIAGNOSTICS && fresh != 0 {
+@@ -1181,6 +1263,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 if DIAGNOSTICS {
+                     self.stats.iio_children += 1;
+                 }
++                #[cfg(feature = "branch-work-census")]
++                let census_task = census_iio.task(index,-request.upper,-best.max(request.lower),self.work());
++                #[cfg(feature = "branch-work-census")]
++                let census_edge = crate::branch_work_census::Edge::new(crate::branch_work_census::Incoming::Iio);
+                 let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+@@ -1200,6 +1286,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                         movement: Some(movement),
+                     },
+                 );
++                #[cfg(feature = "branch-work-census")]
++                { drop(census_edge); census_task.finish(self.work(),returned.is_ok()); }
+                 history.pop();
+                 let score = -returned?;
+                 if score > best {
+@@ -1218,6 +1306,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                     }
+                 }
+             }
++            #[cfg(feature = "branch-work-census")]
++            census_iio.complete();
+         }
+         Ok(())
+     }
+diff --git a/src/quiescence.rs b/src/quiescence.rs
+index ec02d723..a49910ce 100644
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -217,6 +217,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+         self.evaluator.stats = EvalStats::default();
+         self.pv_len.fill(0);
+         self.limits = limits;
++        #[cfg(feature = "branch-work-census")]
++        crate::branch_work_census::epoch(self.work());
+     }
+ 
+     pub fn continue_subtree(
+@@ -255,21 +257,31 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+         entry: Entry, checked: Option<bool>, replies_available: bool,
+         parent: O::Parent, observer: &mut O,
+     ) -> Result<i32, Stopped> {
++        #[cfg(feature = "branch-work-census")]
++        let census_frame = crate::branch_work_census::Frame::enter(crate::branch_work_census::Kind::Q,entry.ply,entry.target-entry.ply as i32,checked,self.work());
++        #[cfg(feature = "branch-work-census")]
++        let mut census_exit = crate::branch_work_census::Exit::Unfinished;
+         let entry_work = if O::ENABLED { self.work() } else { Work::default() };
+         let mut frame = O::Frame::default();
+         // The one shared body retains all early returns. The wrapper observes
+         // every successful return; stopped searches never produce partial output.
+         let returned = (|| {
+             self.charge_node(history)?;
++            #[cfg(feature = "branch-work-census")]
++            census_frame.charged();
+             let ply = entry.ply;
+             self.pv_len[ply] = 0;
+             let position = node.position;
+             let checked = checked.unwrap_or_else(|| movegen::in_check(&position, position.side));
++            #[cfg(feature = "branch-work-census")]
++            census_frame.checked(checked);
+             if O::ENABLED {
+                 frame = observer.enter(&position, entry, history.previous_move(),
+                     parent, node.retained, checked, entry_work);
+             }
+             if crate::ordinary_policy::early_draw(history,ply,checked,entry.analysis,entry.upper,&mut self.learning) {
++                #[cfg(feature = "branch-work-census")]
++                { census_exit = crate::branch_work_census::Exit::QDraw; }
+                 return Ok(0);
+             }
+             if ply == PLIES - 1 {
+@@ -281,6 +293,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                 if DIAGNOSTICS {
+                     self.stats.late_endgame_evaluations += u64::from(value.late_endgame_applied);
+                 }
++                #[cfg(feature = "branch-work-census")]
++                { census_exit = crate::branch_work_census::Exit::QMax; }
+                 return Ok(value.score);
+             }
+ 
+@@ -307,7 +321,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                 if let Some(returned) = policy::evaluation_return(
+                     value.lower, value.upper, value.score, lower, entry.upper,
+                 ) {
+-                    return Ok(returned.score());
++                    #[cfg(feature = "branch-work-census")]
++                { census_exit = crate::branch_work_census::Exit::QStatic; }
++                return Ok(returned.score());
+                 }
+                 lower = lower.max(value.score);
+                 (value.score, value.score, value.upper)
+@@ -329,9 +345,13 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                 self.stats.generated += count as u64;
+             }
+             if count == 0 {
++                #[cfg(feature = "branch-work-census")]
++                { census_exit = crate::branch_work_census::Exit::QEmpty; }
+                 return Ok(if checked { crate::ordinary_policy::mate_score(ply) } else { best });
+             }
+             if checked && ply as i32 - 9998 >= entry.upper {
++                #[cfg(feature = "branch-work-census")]
++                { census_exit = crate::branch_work_census::Exit::QBound; }
+                 return Ok(ply as i32 - 9998);
+             }
+             #[cfg(feature = "branch-transactions")]
+@@ -355,10 +375,14 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+             }
+             if O::ENABLED { observer.ordered(); }
+ 
++            #[cfg(feature = "branch-work-census")]
++            let census_group = crate::branch_work_census::Group::new(crate::branch_work_census::Batch::Q,ply,entry.target-ply as i32,checked,count);
+             let previous = history.previous_move();
+             let king = position.piece_squares(position.side, PieceKind::King)[0];
+             let enemy_king = position.piece_squares(position.side.opponent(), PieceKind::King)[0];
+             for index in 0..count {
++                #[cfg(feature = "branch-work-census")]
++                census_group.examined();
+                 let movement = self.candidates[ply].moves[index];
+                 if DIAGNOSTICS {
+                     self.stats.examined += 1;
+@@ -369,6 +393,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                 if !checked {
+                     let recapture = policy::is_recapture(&movement, previous);
+                     if ply as i32 > entry.target + entry.iteration_depth && !recapture {
++                        #[cfg(feature = "branch-work-census")]
++                        census_group.skip(0);
+                         continue;
+                     }
+                     let victim = position.board[movement.to().0 as usize];
+@@ -430,10 +456,14 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                         entry.target,
+                         entry.iteration_depth,
+                     ) {
++                        #[cfg(feature = "branch-work-census")]
++                        census_group.skip(1);
+                         continue;
+                     }
+                     if !forced {
+                         if !checking {
++                            #[cfg(feature = "branch-work-census")]
++                            census_group.skip(2);
+                             continue;
+                         }
+                         if !double_check && !recapture {
+@@ -450,6 +480,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                                 );
+                                 if replies > 1 {
+                                     history.pop();
++                                    #[cfg(feature = "branch-work-census")]
++                                    census_group.skip(3);
+                                     continue;
+                                 }
+                                 complete_replies = true;
+@@ -468,6 +500,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                         if DIAGNOSTICS {
+                             self.stats.unsafe_rejections += 1;
+                         }
++                        #[cfg(feature = "branch-work-census")]
++                        census_group.skip(4);
+                         continue;
+                     }
+                 }
+@@ -486,6 +520,10 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                     capture_exception,
+                     ..entry
+                 };
++                #[cfg(feature = "branch-work-census")]
++                let census_task = census_group.task(index,child_entry.lower,child_entry.upper,self.work());
++                #[cfg(feature = "branch-work-census")]
++                let census_edge = crate::branch_work_census::Edge::new(crate::branch_work_census::Incoming::Q);
+                 let returned = if O::ENABLED {
+                     let parent = O::parent(&node.retained);
+                     self.visit_q_impl(&mut child, history, child_entry, child_checked,
+@@ -493,6 +531,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                 } else {
+                     self.visit_q(&mut child, history, child_entry, child_checked, complete_replies)
+                 };
++                #[cfg(feature = "branch-work-census")]
++                { drop(census_edge); census_task.finish(self.work(),returned.is_ok()); }
+                 history.pop();
+                 let score = -returned?;
+                 if score > best {
+@@ -515,6 +555,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                     }
+                 }
+             }
++            #[cfg(feature = "branch-work-census")]
++            { census_group.complete(); census_exit = crate::branch_work_census::Exit::QRecurse; }
+             Ok(best.min(evaluation_upper))
+         })();
+         if O::ENABLED {
+@@ -523,6 +565,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                     &self.pv[entry.ply][..self.pv_len[entry.ply]], self.work());
+             }
+         }
++        #[cfg(feature = "branch-work-census")]
++        census_frame.finish(self.work(),returned.is_ok(),census_exit);
+         returned
+     }
+ }
+diff --git a/src/session.rs b/src/session.rs
+index f206e827..009bda85 100644
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -159,6 +159,9 @@ impl<const D: bool> Session<D> {
+         self.search.as_mut().ok_or("search is active")?.evaluator.finish_child_preparation()
+     }
+ 
++    #[cfg(feature = "branch-work-census")]
++    pub fn census_work(&self) -> Option<Work> {self.search.as_ref().map(|search|search.work())}
++
+     pub fn position(&self) -> Position {
+         *self.states.last().unwrap()
+     }
+diff --git a/src/branch_work_census.rs b/src/branch_work_census.rs
+new file mode 100644
+index 00000000..011c6676
+--- /dev/null
++++ b/src/branch_work_census.rs
+@@ -0,0 +1,255 @@
++//! Opt-in coordinator counts. Inclusive populations overlap; only forest,
++//! exclusive totals and each separate fixed-ply cut are additive partitions.
++use crate::quiescence::Work;
++use std::cell::{Cell, RefCell};
++use std::fmt::Write;
++
++const LIMIT: usize = crate::movegen::MOVE_CAPACITY;
++const THRESHOLDS: [u64;5] = [32,128,512,2048,8192];
++const CUTS: [usize;3] = [0,2,4];
++const EDGE_NAMES: [&str;7] = ["root","ordinary-main","null","iio","mate-q","q-main","other"];
++const GROUP_NAMES: [&str;4] = ["ordinary-main","iio-pass","mate-q","q-main"];
++const MAIN_CLASSES: [&str;5] = ["all-direct-q-full-window-no-retry-no-tail-iio", "all-direct-q-other", "all-ordinary", "mixed", "no-demand"];
++const REASONS: [&str;16] = ["draw","tt","fast","full-bound","threat","null","terminal","main-complete",
++    "q-draw","q-max-ply","q-static","q-empty","q-check-bound","q-recurse","stopped","unfinished"];
++
++thread_local! {
++    static STATE: RefCell<State> = RefCell::new(State::default());
++    static OVERFLOW: Cell<bool> = const {Cell::new(false)};
++}
++fn add(to:&mut u64,n:u64) { *to=to.checked_add(n).unwrap_or_else(||{OVERFLOW.with(|o|o.set(true));u64::MAX}); }
++#[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
++struct C([u64;5]);
++impl C {
++    fn plus(&mut self,other:C) {for i in 0..5 {add(&mut self.0[i],other.0[i]);}}
++    fn minus(self,other:C)->C {let mut out=self;for i in 0..5 {out.0[i]=self.0[i].checked_sub(other.0[i]).unwrap_or_else(||{OVERFLOW.with(|o|o.set(true));0});}out}
++    fn json(self)->String {format!("{:?}",self.0)}
++}
++fn bucket(n:u64)->usize {match n {0=>0,1=>1,2..=7=>2,8..=31=>3,32..=127=>4,128..=511=>5,512..=2047=>6,2048..=8191=>7,_=>8}}
++fn width(n:usize)->usize {match n {0=>0,1=>1,2=>2,3=>3,4..=6=>4,_=>5}}
++#[derive(Clone,Copy)] pub(crate) enum Kind {Ordinary=0,Q=1}
++#[derive(Clone,Copy)] pub(crate) enum Incoming {Root=0,Main=1,Null=2,Iio=3,Mate=4,Q=5}
++#[derive(Clone,Copy)] pub(crate) enum Exit {Draw=0,Tt=1,Fast=2,FullBound=3,Threat=4,Null=5,Terminal=6,Main=7,QDraw=8,QMax=9,QStatic=10,QEmpty=11,QBound=12,QRecurse=13,Stopped=14,Unfinished=15}
++#[derive(Clone,Copy)] pub(crate) enum Batch {Main=0,Iio=1,Mate=2,Q=3}
++#[derive(Default)] struct Cohort {calls:u64,complete:u64,partial:u64,admission_zero:u64,credited_stop:u64,checked:u64,unknown_check:u64,
++    inclusive:C,exclusive:C,hist:[[u64;9];2],demand:[[u64;2];2],depth:[u64;6]}
++#[derive(Default)] struct EdgeStats {calls:u64,hist:[[u64;9];2],work:C,demand:[u64;8],handoffs:u64}
++#[derive(Default)] struct WidthStats {boundaries:[u64;6],current_future3:u64,current_future7:u64,full_future3:u64,full_future7:u64,
++    after_first:[u64;6],after_first_same_window:[u64;6],future_nodes:u64,max_future_nodes:u64,handoff_widths:[u64;6],handoff_current3:u64,handoff_current7:u64,handoff_no_iio3:u64,handoff_no_iio7:u64}
++#[derive(Default)] struct GroupStats {groups:u64,complete:u64,partial:u64,inventory:u64,examined:u64,skips:[u64;8],entered:u64,retries:u64,
++    untouched:u64,work:C,child_hist:[[u64;9];2],widths:[WidthStats;5],stable_tail:u64,with_tail:u64,same_first:u64,changed_first:u64,selected:u64,selected_complete:u64,nonempty:u64,ordinary_attempts:u64,q_attempts:u64,handoff_attempts:u64,main_window_callee:[[u64;3];2],retried_tasks:u64,tail_iio_groups:u64}
++#[derive(Default)] struct MainClass {groups:u64,complete:u64,partial:u64,tasks:u64,work:C,hist:[[u64;9];2],barriers:[u64;4],widths:[WidthStats;5]}
++#[derive(Clone,Copy,Default)] struct Item {rank:usize,attempts:u64,lower:i32,upper:i32,work:C,complete:bool,ordinary_attempts:u64,q_attempts:u64,handoff_attempts:u64,full_window:Option<bool>}
++struct GroupData {kind:usize,ordinal:u64,ply:usize,depth:i32,checked:bool,inventory:usize,examined:usize,skips:[u64;8],len:usize,complete:bool,selected:bool,tail_iio:bool,items:Box<[Item]>}
++impl GroupData {fn new()->Self {Self {kind:0,ordinal:0,ply:0,depth:0,checked:false,inventory:0,examined:0,skips:[0;8],len:0,complete:false,selected:false,tail_iio:false,items:vec![Item::default();LIMIT].into_boxed_slice()}}}
++struct Sample {kind:usize,ordinal:u64,ply:usize,depth:i32,checked:bool,inventory:usize,examined:usize,skips:[u64;8],tail_iio:bool,items:Vec<Item>}
++struct FrameData {id:u64,kind:usize,ply:usize,depth:i32,checked:Option<bool>,incoming:usize,handoff:bool,before:C,children:C,child_calls:u64,max_q_span:u64,charged_ok:bool}
++#[derive(Default)] struct Epoch {ordinal:u64,baseline:C,last:C,forest:C,exclusive:C,cuts:[(C,C);3],roots:u64,complete_roots:u64,partial_roots:u64,native:Option<C>}
++#[derive(Default)] struct QRoot {complete:u64,partial:u64,nodes:[u64;2],span:[u64;2],hist:[[u64;9];2]}
++struct State {enabled:bool,demand:C,frames:Vec<FrameData>,ordinal:u64,next_edge:usize,handoff:bool,cohorts:[[Cohort;16];2],edges:[[EdgeStats;2];7],
++    groups:[GroupStats;4],main_classes:[MainClass;5],storage:Vec<Option<GroupData>>,free:Vec<usize>,group_ordinal:u64,task_stack:Vec<(usize,usize,usize)>,samples:Vec<Sample>,epoch:Option<Epoch>,epochs:Vec<Epoch>,epoch_count:u64,
++    total:C,exclusive:C,forest:C,cuts:[(C,C);3],accounting_failures:u64,q_roots:[[QRoot;2];7],max_live_groups:usize,epoch_rows_skipped:u64,native_boundaries:u64,native_work:C}
++impl Default for State {fn default()->Self {Self {enabled:false,demand:C::default(),frames:Vec::new(),ordinal:0,next_edge:0,handoff:false,
++    cohorts:std::array::from_fn(|_|std::array::from_fn(|_|Cohort::default())),edges:std::array::from_fn(|_|std::array::from_fn(|_|EdgeStats::default())),
++    groups:std::array::from_fn(|_|GroupStats::default()),main_classes:std::array::from_fn(|_|MainClass::default()),storage:Vec::new(),free:Vec::new(),group_ordinal:0,task_stack:Vec::new(),samples:Vec::new(),epoch:None,epochs:Vec::new(),epoch_count:0,
++    total:C::default(),exclusive:C::default(),forest:C::default(),cuts:[(C::default(),C::default());3],accounting_failures:0,
++    q_roots:std::array::from_fn(|_|std::array::from_fn(|_|QRoot::default())),max_live_groups:0,epoch_rows_skipped:0,native_boundaries:0,native_work:C::default()}}}
++impl State {
++    fn point(&self,work:Work)->C {C([work.charged_search_units,work.charged_relation_queries,self.demand.0[2],self.demand.0[3],self.demand.0[4]])}
++    fn close_epoch(&mut self) {if let Some(epoch)=self.epoch.take() {
++        let total=epoch.last.minus(epoch.baseline);
++        if epoch.native.is_some_and(|n|n!=epoch.last)||total!=epoch.forest||total!=epoch.exclusive||epoch.cuts.iter().any(|(a,b)|{let mut v=*a;v.plus(*b);v!=total}) {add(&mut self.accounting_failures,1);}
++        self.total.plus(total);self.forest.plus(epoch.forest);self.exclusive.plus(epoch.exclusive);
++        for i in 0..3 {self.cuts[i].0.plus(epoch.cuts[i].0);self.cuts[i].1.plus(epoch.cuts[i].1);}
++        if self.epochs.len()<128 {self.epochs.push(epoch);} else {add(&mut self.epoch_rows_skipped,1);}
++    }}
++}
++
++pub fn enable()->Result<(),String> {STATE.with(|s|{let mut s=s.borrow_mut();if s.enabled {return Err("branch work census already enabled".into());}*s=State::default();s.enabled=true;OVERFLOW.with(|o|o.set(false));Ok(())})}
++pub(crate) fn epoch(work:Work) {STATE.with(|s|{let mut s=s.borrow_mut();if !s.enabled{return;}assert!(s.frames.is_empty());s.close_epoch();add(&mut s.epoch_count,1);let point=s.point(work);s.epoch=Some(Epoch{ordinal:s.epoch_count,baseline:point,last:point,..Epoch::default()});});}
++pub fn native_boundary(work:Work) {STATE.with(|s|{let mut s=s.borrow_mut();if !s.enabled{return;}let point=s.point(work);if let Some(epoch)=s.epoch.as_mut(){epoch.native=Some(point);}add(&mut s.native_boundaries,1);s.native_work.plus(C([work.charged_search_units,work.charged_relation_queries,0,0,0]));s.close_epoch();});}
++pub(crate) fn full() {demand(2)}
++pub(crate) fn fast() {demand(3)}
++pub(crate) fn map() {demand(4)}
++fn demand(index:usize) {STATE.with(|s|{let mut s=s.borrow_mut();if s.enabled {add(&mut s.demand.0[index],1);}})}
++pub(crate) fn handoff() {STATE.with(|s|{let mut s=s.borrow_mut();if s.enabled{s.handoff=true;}})}
++pub(crate) struct Edge {old:Option<(usize,bool)>}
++impl Edge {pub(crate) fn new(edge:Incoming)->Self {Self {old:STATE.with(|s|{let mut s=s.borrow_mut();if !s.enabled {return None;}let old=(s.next_edge,s.handoff);s.next_edge=edge as usize;s.handoff=false;Some(old)})}}}
++impl Drop for Edge {fn drop(&mut self){if let Some((edge,handoff))=self.old {STATE.with(|s|{let mut s=s.borrow_mut();s.next_edge=edge;s.handoff=handoff;});}}}
++pub(crate) struct Frame {id:Option<u64>}
++impl Frame {
++    pub(crate) fn enter(kind:Kind,ply:usize,depth:i32,checked:Option<bool>,work:Work)->Self {Self {id:STATE.with(|s|{let mut s=s.borrow_mut();if !s.enabled{return None;}
++        if s.epoch.is_none(){add(&mut s.epoch_count,1);let p=s.point(work);s.epoch=Some(Epoch{ordinal:s.epoch_count,baseline:p,last:p,..Epoch::default()});}
++        assert!(s.frames.len()<64);add(&mut s.ordinal,1);let id=s.ordinal;let before=s.point(work);let incoming=s.next_edge;let handoff=s.handoff;s.next_edge=0;s.handoff=false;
++        s.frames.push(FrameData{id,kind:kind as usize,ply,depth,checked,incoming,handoff,before,children:C::default(),child_calls:0,max_q_span:0,charged_ok:false});Some(id)})}}
++    pub(crate) fn charged(&self) {if self.id.is_some(){STATE.with(|s|s.borrow_mut().frames.last_mut().unwrap().charged_ok=true);}}
++    pub(crate) fn checked(&self,checked:bool) {if self.id.is_some(){STATE.with(|s|s.borrow_mut().frames.last_mut().unwrap().checked=Some(checked));}}
++    pub(crate) fn finish(self,work:Work,complete:bool,reason:Exit) {if let Some(id)=self.id {STATE.with(|s|{let mut s=s.borrow_mut();let frame=s.frames.pop().unwrap();assert_eq!(frame.id,id);
++        let after=s.point(work);let inclusive=after.minus(frame.before);let exclusive=inclusive.minus(frame.children);let partial=usize::from(!complete);
++        let reason=if complete {reason as usize}else{Exit::Stopped as usize};
++        let c=&mut s.cohorts[frame.kind][reason];add(&mut c.calls,1);add(if complete{&mut c.complete}else{&mut c.partial},1);
++        add(&mut c.admission_zero,u64::from(inclusive.0[0]==0));add(&mut c.credited_stop,u64::from(!complete&&!frame.charged_ok&&exclusive.0[0]>0));
++        add(&mut c.checked,u64::from(frame.checked==Some(true)));add(&mut c.unknown_check,u64::from(frame.checked.is_none()));
++        c.inclusive.plus(inclusive);c.exclusive.plus(exclusive);add(&mut c.hist[partial][bucket(inclusive.0[0])],1);
++        add(&mut c.demand[usize::from(exclusive.0[2]>0)][usize::from(frame.child_calls>0)],1);
++        let depth=match frame.depth {i if i<=0=>0,1=>1,2=>2,3=>3,4|5=>4,_=>5};add(&mut c.depth[depth],1);
++        let e=&mut s.edges[frame.incoming][frame.kind];add(&mut e.calls,1);e.work.plus(inclusive);add(&mut e.hist[partial][bucket(inclusive.0[0])],1);
++        add(&mut e.handoffs,u64::from(frame.handoff));let bits=usize::from(inclusive.0[1]>0)+2*usize::from(inclusive.0[2]>0)+4*usize::from(inclusive.0[4]>0);add(&mut e.demand[bits],1);
++        let parent_depth=s.frames.len();
++        if let Some(&(group,index,depth))=s.task_stack.last(){if depth==parent_depth {let item=&mut s.storage[group].as_mut().unwrap().items[index];add(if frame.kind==0{&mut item.ordinary_attempts}else{&mut item.q_attempts},1);add(&mut item.handoff_attempts,u64::from(frame.handoff));}}
++        let parent=s.frames.last().map(|p|(p.kind,p.ply));let span=exclusive.0[0].checked_add(frame.max_q_span).unwrap_or_else(||{OVERFLOW.with(|o|o.set(true));u64::MAX});
++        if frame.kind==1&&parent.is_none_or(|p|p.0!=1) {let q=&mut s.q_roots[frame.incoming][usize::from(frame.handoff)];add(if complete{&mut q.complete}else{&mut q.partial},1);add(&mut q.nodes[partial],inclusive.0[0]);add(&mut q.span[partial],span);add(&mut q.hist[partial][bucket(inclusive.0[0])],1);}
++        let epoch=s.epoch.as_mut().unwrap();epoch.last=after;epoch.exclusive.plus(exclusive);
++        for i in 0..3 {if frame.ply<=CUTS[i] {epoch.cuts[i].0.plus(exclusive);}else if parent.is_none_or(|p|p.1<=CUTS[i]) {epoch.cuts[i].1.plus(inclusive);}}
++        if parent.is_none(){epoch.forest.plus(inclusive);add(&mut epoch.roots,1);add(if complete{&mut epoch.complete_roots}else{&mut epoch.partial_roots},1);}
++        if let Some(parent)=s.frames.last_mut(){parent.children.plus(inclusive);add(&mut parent.child_calls,1);if frame.kind==1 {parent.max_q_span=parent.max_q_span.max(span);}}
++    });}}
++}
++
++pub(crate) struct Group {id:Option<usize>}
++pub(crate) struct Task {id:Option<(usize,usize,C)>}
++impl Group {
++    pub(crate) fn new(kind:Batch,ply:usize,depth:i32,checked:bool,inventory:usize)->Self {Self {id:STATE.with(|s|{let mut s=s.borrow_mut();if !s.enabled{return None;}assert!(inventory<=LIMIT);
++        let index=if let Some(index)=s.free.pop(){index}else{assert!(s.storage.len()<192);let index=s.storage.len();s.storage.push(None);index};
++        let mut data=s.storage[index].take().unwrap_or_else(GroupData::new);add(&mut s.group_ordinal,1);data.kind=kind as usize;data.ordinal=s.group_ordinal;data.ply=ply;data.depth=depth;data.checked=checked;
++        data.inventory=inventory;data.examined=0;data.skips=[0;8];data.len=0;data.complete=false;data.tail_iio=false;data.selected=data.ordinal%512==0; s.storage[index]=Some(data);
++        s.max_live_groups=s.max_live_groups.max(s.storage.len()-s.free.len());Some(index)})}}
++    pub(crate) fn examined(&self) {if let Some(id)=self.id {STATE.with(|s|s.borrow_mut().storage[id].as_mut().unwrap().examined+=1);}}
++    pub(crate) fn skip(&self,reason:usize) {if let Some(id)=self.id {STATE.with(|s|add(&mut s.borrow_mut().storage[id].as_mut().unwrap().skips[reason],1));}}
++    pub(crate) fn task(&self,rank:usize,lower:i32,upper:i32,work:Work)->Task {Task {id:self.id.map(|id|STATE.with(|s|{let mut s=s.borrow_mut();let point=s.point(work);let g=s.storage[id].as_mut().unwrap();assert!(g.len<LIMIT);let index=g.len;g.len+=1;g.items[index]=Item{rank,attempts:1,lower,upper,..Item::default()};let depth=s.frames.len();s.task_stack.push((id,index,depth));(id,index,point)}))}}
++    pub(crate) fn tail_iio(&self) {if let Some(id)=self.id {STATE.with(|s|s.borrow_mut().storage[id].as_mut().unwrap().tail_iio=true);}}
++    pub(crate) fn complete(&self) {if let Some(id)=self.id {STATE.with(|s|s.borrow_mut().storage[id].as_mut().unwrap().complete=true);}}
++}
++impl Task {
++    pub(crate) fn window(&self,full:bool) {if let Some((id,index,_))=self.id {STATE.with(|s|s.borrow_mut().storage[id].as_mut().unwrap().items[index].full_window=Some(full));}}
++    pub(crate) fn retry(&self) {if let Some((id,index,_))=self.id {STATE.with(|s|add(&mut s.borrow_mut().storage[id].as_mut().unwrap().items[index].attempts,1));}}
++    pub(crate) fn finish(self,work:Work,complete:bool) {if let Some((id,index,before))=self.id {STATE.with(|s|{let mut s=s.borrow_mut();let after=s.point(work);let active=s.task_stack.pop().unwrap();assert_eq!((active.0,active.1),(id,index));let task=&mut s.storage[id].as_mut().unwrap().items[index];task.work=after.minus(before);task.complete=complete;});}}
++}
++fn count_widths(tasks:&[Item],tail_iio:bool,widths:&mut [WidthStats;5]) {
++    for (threshold,stats) in THRESHOLDS.iter().zip(widths.iter_mut()) {
++        let mut count=0;let mut full=0;let mut handoffs=0;let mut nodes=0;let mut max=0;
++        for (i,current) in tasks.iter().enumerate().rev() {
++            add(&mut stats.boundaries[width(count)],1);add(&mut stats.handoff_widths[width(handoffs)],1);add(&mut stats.future_nodes,nodes);add(&mut stats.max_future_nodes,max);
++            if current.complete&&current.work.0[0]>=*threshold&&current.handoff_attempts==current.attempts {add(&mut stats.handoff_current3,u64::from(handoffs>=3));add(&mut stats.handoff_current7,u64::from(handoffs>=7));if !tail_iio {add(&mut stats.handoff_no_iio3,u64::from(handoffs>=3));add(&mut stats.handoff_no_iio7,u64::from(handoffs>=7));}}
++            if current.complete&&current.work.0[0]>=*threshold {add(&mut stats.current_future3,u64::from(count>=3));add(&mut stats.current_future7,u64::from(count>=7));add(&mut stats.full_future3,u64::from(full>=3));add(&mut stats.full_future7,u64::from(full>=7));}
++            if i==0 {add(&mut stats.after_first[width(count)],1);let stable=tasks.get(1).map_or(0,|base|tasks[1..].iter().filter(|t|t.complete&&t.work.0[0]>=*threshold&&(t.lower,t.upper)==(base.lower,base.upper)).count());add(&mut stats.after_first_same_window[width(stable)],1);}
++            if current.complete&&current.work.0[0]>=*threshold {count+=1;full+=usize::from(current.work.0[2]>0);handoffs+=usize::from(current.handoff_attempts==current.attempts);add(&mut nodes,current.work.0[0]);max=max.max(current.work.0[0]);}
++        }
++    }
++}
++fn main_class(data:&GroupData)->usize {
++    let tasks=&data.items[..data.len];
++    if tasks.is_empty(){return 4;}
++    if tasks.iter().all(|t|t.handoff_attempts==t.attempts) {
++        if data.complete&&!data.tail_iio&&tasks.iter().all(|t|t.attempts==1&&t.full_window==Some(true)){0}else{1}
++    } else if tasks.iter().all(|t|t.ordinary_attempts==t.attempts){2}else{3}
++}
++
++impl Drop for Group {fn drop(&mut self){if let Some(id)=self.id {STATE.with(|s|{let mut s=s.borrow_mut();let data=s.storage[id].take().unwrap();let g=&mut s.groups[data.kind];
++    add(&mut g.groups,1);add(if data.complete{&mut g.complete}else{&mut g.partial},1);add(&mut g.inventory,data.inventory as u64);add(&mut g.examined,data.examined as u64);add(&mut g.untouched,(data.inventory-data.examined) as u64);
++    for i in 0..8 {add(&mut g.skips[i],data.skips[i]);}add(&mut g.entered,data.len as u64);add(&mut g.selected,u64::from(data.selected));add(&mut g.selected_complete,u64::from(data.selected&&data.complete));add(&mut g.nonempty,u64::from(data.len>0));add(&mut g.tail_iio_groups,u64::from(data.tail_iio));
++    let tasks=&data.items[..data.len];for task in tasks {add(&mut g.retried_tasks,u64::from(task.attempts>1));if let Some(full)=task.full_window {let callee=if task.ordinary_attempts==task.attempts {0}else if task.handoff_attempts==task.attempts {1}else{2};add(&mut g.main_window_callee[usize::from(!full)][callee],1);}add(&mut g.ordinary_attempts,task.ordinary_attempts);add(&mut g.q_attempts,task.q_attempts);add(&mut g.handoff_attempts,task.handoff_attempts);g.work.plus(task.work);add(&mut g.retries,task.attempts-1);add(&mut g.child_hist[usize::from(!task.complete)][bucket(task.work.0[0])],1);}
++    if let Some(first)=tasks.first(){for task in &tasks[1..] {add(if(task.lower,task.upper)==(first.lower,first.upper){&mut g.same_first}else{&mut g.changed_first},1);}}
++    if tasks.len()>1 {add(&mut g.with_tail,1);add(&mut g.stable_tail,u64::from(tasks[1..].iter().all(|t|(t.lower,t.upper)==(tasks[1].lower,tasks[1].upper))));}
++    count_widths(tasks,data.tail_iio,&mut g.widths);
++    if data.kind==Batch::Main as usize {
++        let class=main_class(&data);let cohort=&mut s.main_classes[class];
++        add(&mut cohort.groups,1);add(if data.complete{&mut cohort.complete}else{&mut cohort.partial},1);add(&mut cohort.tasks,data.len as u64);
++        add(&mut cohort.barriers[0],u64::from(tasks.iter().any(|t|t.full_window==Some(false))));add(&mut cohort.barriers[1],u64::from(tasks.iter().any(|t|t.attempts>1)));add(&mut cohort.barriers[2],u64::from(data.tail_iio));add(&mut cohort.barriers[3],u64::from(!data.complete));
++        for task in tasks {cohort.work.plus(task.work);add(&mut cohort.hist[usize::from(!task.complete)][bucket(task.work.0[0])],1);}
++        count_widths(tasks,data.tail_iio,&mut cohort.widths);
++    }
++    if data.selected&&data.complete&&s.samples.len()<16 {s.samples.push(Sample{kind:data.kind,ordinal:data.ordinal,ply:data.ply,depth:data.depth,checked:data.checked,inventory:data.inventory,examined:data.examined,skips:data.skips,tail_iio:data.tail_iio,items:tasks.to_vec()});}
++    s.storage[id]=Some(data);s.free.push(id);
++});}}}
++
++fn width_json(w:&WidthStats,threshold:u64)->String {format!("{{\"threshold\":{},\"futureWidths\":{:?},\"substantialCurrentFuture3\":{},\"substantialCurrentFuture7\":{},\"substantialCurrentFullFuture3\":{},\"substantialCurrentFullFuture7\":{},\"afterFirstWidths\":{:?},\"afterFirstSameWindowWidths\":{:?},\"overlappingFutureNodes\":{},\"overlappingMaxFutureNodes\":{},\"handoffFutureWidths\":{:?},\"handoffCurrentFuture3\":{},\"handoffCurrentFuture7\":{},\"handoffCurrentFuture3NoTailIio\":{},\"handoffCurrentFuture7NoTailIio\":{}}}",threshold,w.boundaries,w.current_future3,w.current_future7,w.full_future3,w.full_future7,w.after_first,w.after_first_same_window,w.future_nodes,w.max_future_nodes,w.handoff_widths,w.handoff_current3,w.handoff_current7,w.handoff_no_iio3,w.handoff_no_iio7)}
++fn cohort_json(c:&Cohort)->String {format!("{{\"calls\":{},\"complete\":{},\"partial\":{},\"admissionZero\":{},\"creditedStop\":{},\"checked\":{},\"checkUnknown\":{},\"inclusive\":{},\"exclusive\":{},\"sizeHistCompletePartial\":{:?},\"fullByRecursiveChildDemand\":{:?},\"depthBins\":{:?}}}",c.calls,c.complete,c.partial,c.admission_zero,c.credited_stop,c.checked,c.unknown_check,c.inclusive.json(),c.exclusive.json(),c.hist,c.demand,c.depth)}
++pub fn finish_json()->Result<String,String> {STATE.with(|s|{let mut s=s.borrow_mut();if !s.enabled{return Err("branch work census not enabled".into());}if !s.frames.is_empty()||!s.task_stack.is_empty()||s.free.len()!=s.storage.len(){return Err("branch work census has unfinished owners".into());}s.close_epoch();
++    let outside=C([0,0,s.demand.0[2],s.demand.0[3],s.demand.0[4]]).minus(C([0,0,s.total.0[2],s.total.0[3],s.total.0[4]]));
++    let mut out=format!("{{\"schema\":\"rook2-branch-work-census-v1\",\"processId\":{},\"overflow\":{},\"accountingFailures\":{},\"counterOrder\":[\"N\",\"R\",\"FULL\",\"FAST\",\"map\"],\"totalEpochWork\":{},\"forestWork\":{},\"exclusiveWork\":{},\"processActualDemand\":{},\"outsideEpochDemand\":{},\"epochCount\":{},\"epochRowsSkipped\":{},\"maxLiveGroups\":{},\"thresholds\":{:?},\"widthBuckets\":[\"0\",\"1\",\"2\",\"3\",\"4-6\",\"7+\"],\"cuts\":[",std::process::id(),OVERFLOW.with(|o|o.get()),s.accounting_failures,s.total.json(),s.forest.json(),s.exclusive.json(),s.demand.json(),outside.json(),s.epoch_count,s.epoch_rows_skipped,s.max_live_groups,THRESHOLDS);
++    for i in 0..3 {if i>0{out.push(',');}write!(out,"{{\"ply\":{},\"exclusivePrefix\":{},\"inclusiveBoundary\":{}}}",CUTS[i],s.cuts[i].0.json(),s.cuts[i].1.json()).unwrap();}write!(out,"],\"nativeBoundaryCount\":{},\"nativeBoundaryWork\":{},\"sampleStride\":512,\"sampleCap\":16,\"sampleRetained\":{},\"sampleCompleteSkipped\":{},\"skipReasons\":[\"q-depth\",\"q-initial-eligibility\",\"q-not-checking\",\"q-many-replies\",\"q-unsafe\",\"ordinary-frontier\",\"mate-nonordinary\",\"mate-not-checking\"],\"epochs\":[",s.native_boundaries,s.native_work.json(),s.samples.len(),s.groups.iter().map(|g|g.selected_complete).sum::<u64>()-s.samples.len() as u64).unwrap();
++    for (i,e) in s.epochs.iter().enumerate(){if i>0{out.push(',');}write!(out,"{{\"ordinal\":{},\"work\":{},\"forest\":{},\"exclusive\":{},\"roots\":{},\"completeRoots\":{},\"partialRoots\":{}}}",e.ordinal,e.last.minus(e.baseline).json(),e.forest.json(),e.exclusive.json(),e.roots,e.complete_roots,e.partial_roots).unwrap();}out.push_str("],\"cohorts\":[");
++    let mut comma=false;for kind in 0..2 {for reason in 0..16 {if comma{out.push(',');}comma=true;write!(out,"{{\"kind\":\"{}\",\"exit\":\"{}\",\"counts\":{}}}",if kind==0{"ordinary"}else{"q"},REASONS[reason],cohort_json(&s.cohorts[kind][reason])).unwrap();}}out.push_str("],\"edges\":[");
++    comma=false;for edge in 0..7 {for kind in 0..2 {let e=&s.edges[edge][kind];if comma{out.push(',');}comma=true;write!(out,"{{\"incoming\":\"{}\",\"callee\":\"{}\",\"calls\":{},\"handoffs\":{},\"sizeHistCompletePartial\":{:?},\"inclusive\":{},\"demandRFullMapBits\":{:?}}}",EDGE_NAMES[edge],if kind==0{"ordinary"}else{"q"},e.calls,e.handoffs,e.hist,e.work.json(),e.demand).unwrap();}}out.push_str("],\"qRoots\":[");
++    comma=false;for (i,origins) in s.q_roots.iter().enumerate(){for (handoff,q) in origins.iter().enumerate(){if comma{out.push(',');}comma=true;write!(out,"{{\"incoming\":\"{}\",\"ordinaryHandoff\":{},\"complete\":{},\"partial\":{},\"nodesCompletePartial\":{:?},\"idealNodeSpanCompletePartial\":{:?},\"sizeHistCompletePartial\":{:?}}}",EDGE_NAMES[i],handoff==1,q.complete,q.partial,q.nodes,q.span,q.hist).unwrap();}}out.push_str("],\"groups\":[");
++    for (i,g) in s.groups.iter().enumerate(){if i>0{out.push(',');}write!(out,"{{\"kind\":\"{}\",\"groups\":{},\"complete\":{},\"partial\":{},\"inventory\":{},\"examined\":{},\"skips\":{:?},\"entered\":{},\"retries\":{},\"untouched\":{},\"inclusiveTaskWork\":{},\"childSizeHistCompletePartial\":{:?},\"withTail\":{},\"stableTailWindows\":{},\"sameFirstWindowTasks\":{},\"changedFirstWindowTasks\":{},\"sampleSelected\":{},\"sampleSelectedComplete\":{},\"nonEmptyGroups\":{},\"ordinaryAttempts\":{},\"qAttempts\":{},\"handoffAttempts\":{},\"mainWindowByCallee\":{:?},\"retriedTasks\":{},\"groupsWithTailIio\":{},\"thresholdRows\":[",GROUP_NAMES[i],g.groups,g.complete,g.partial,g.inventory,g.examined,g.skips,g.entered,g.retries,g.untouched,g.work.json(),g.child_hist,g.with_tail,g.stable_tail,g.same_first,g.changed_first,g.selected,g.selected_complete,g.nonempty,g.ordinary_attempts,g.q_attempts,g.handoff_attempts,g.main_window_callee,g.retried_tasks,g.tail_iio_groups).unwrap();
++        for (j,w) in g.widths.iter().enumerate(){if j>0{out.push(',');}out.push_str(&width_json(w,THRESHOLDS[j]));}out.push_str("]}");}out.push_str("],\"mainClasses\":[");
++    for (i,c) in s.main_classes.iter().enumerate(){if i>0{out.push(',');}write!(out,"{{\"class\":\"{}\",\"groups\":{},\"complete\":{},\"partial\":{},\"entered\":{},\"inclusiveTaskWork\":{},\"childSizeHistCompletePartial\":{:?},\"barriersScoutRetryTailIioPartial\":{:?},\"thresholdRows\":[",MAIN_CLASSES[i],c.groups,c.complete,c.partial,c.tasks,c.work.json(),c.hist,c.barriers).unwrap();for (j,w) in c.widths.iter().enumerate(){if j>0{out.push(',');}out.push_str(&width_json(w,THRESHOLDS[j]));}out.push_str("]}");}
++    out.push_str("],\"samples\":[");
++    for (i,g) in s.samples.iter().enumerate(){if i>0{out.push(',');}write!(out,"{{\"kind\":\"{}\",\"ordinal\":{},\"ply\":{},\"depth\":{},\"checked\":{},\"inventory\":{},\"examined\":{},\"skips\":{:?},\"tailIio\":{},\"tasks\":[",GROUP_NAMES[g.kind],g.ordinal,g.ply,g.depth,g.checked,g.inventory,g.examined,g.skips,g.tail_iio).unwrap();for (j,t) in g.items.iter().enumerate(){if j>0{out.push(',');}write!(out,"{{\"rank\":{},\"attempts\":{},\"window\":[{},{}],\"work\":{},\"complete\":{},\"ordinaryAttempts\":{},\"qAttempts\":{},\"handoffAttempts\":{},\"fullWindow\":{}}}",t.rank,t.attempts,t.lower,t.upper,t.work.json(),t.complete,t.ordinary_attempts,t.q_attempts,t.handoff_attempts,t.full_window.map_or("null",|v|if v{"true"}else{"false"})).unwrap();}out.push_str("]}");}
++    out.push_str("],\"scope\":\"Counts only. Inclusive histograms and all-parent widths overlap. Fixed-ply cuts are separate partitions. Retrospective siblings and stable windows do not prove independence, readiness, reuse, CPU span or speedup. Q ideal span is local charged N plus maximum immediate Q-child span. Sampling every512th group is selected before size; only complete groups, first16 retained. Window summaries use first-attempt requests; a retry stays one task and can use another window. mainWindowByCallee rows full-window/scout and columns ordinary/direct-Q-handoff/other. mainClasses are mutually exclusive Main group populations; class0 requires complete group and all admitted attempts directly hand off to Q, each full-window, no retry and no actual tail-IIO. Root candidate batches omitted; forest roots are actual call attempts.\"}");
++    s.enabled=false;Ok(out)
++})}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn work(n:u64,r:u64)->Work {Work{charged_search_units:n,charged_relation_queries:r}}
++    fn check_partition() {STATE.with(|s|{let s=s.borrow();assert_eq!(s.accounting_failures,0);assert_eq!(s.total,s.forest);assert_eq!(s.total,s.exclusive);for (prefix,boundary) in s.cuts {let mut sum=prefix;sum.plus(boundary);assert_eq!(sum,s.total);}assert!(s.frames.is_empty()&&s.task_stack.is_empty());});assert!(!OVERFLOW.with(|o|o.get()));}
++
++    #[test]
++    fn synthetic_partition_q_span_admission_and_credited_stop() {
++        enable().unwrap();epoch(work(0,0));
++        let root=Frame::enter(Kind::Ordinary,1,3,Some(false),work(0,0));root.charged();full();map();
++        let edge=Edge::new(Incoming::Mate);
++        let q=Frame::enter(Kind::Q,2,1,Some(true),work(1,2));q.charged();full();
++        let recursive=Edge::new(Incoming::Q);
++        let child=Frame::enter(Kind::Q,3,0,Some(false),work(2,5));child.charged();fast();
++        child.finish(work(3,7),true,Exit::QStatic);drop(recursive);
++        q.finish(work(3,8),true,Exit::QRecurse);drop(edge);
++        root.finish(work(3,10),true,Exit::Main);
++        Frame::enter(Kind::Q,1,0,None,work(3,10)).finish(work(3,10),false,Exit::Stopped);
++        Frame::enter(Kind::Q,1,0,None,work(3,10)).finish(work(4,10),false,Exit::Stopped);
++        native_boundary(work(4,10));check_partition();
++        STATE.with(|s|{let s=s.borrow();assert_eq!(s.total,C([4,10,2,1,1]));assert_eq!(s.q_roots[Incoming::Mate as usize][0].nodes,[2,0]);assert_eq!(s.q_roots[Incoming::Mate as usize][0].span,[2,0]);let c=&s.cohorts[1][Exit::Stopped as usize];assert_eq!((c.admission_zero,c.credited_stop,c.partial),(1,1,2));});
++        assert!(finish_json().unwrap().contains("\"accountingFailures\":0"));
++    }
++
++    #[test]
++    fn synthetic_sibling_width_retry_window_waste_and_preselection() {
++        enable().unwrap();STATE.with(|s|s.borrow_mut().group_ordinal=511);
++        let group=Group::new(Batch::Q,2,0,true,10);
++        let mut n=0;
++        for rank in 0..8 {group.examined();let task=group.task(rank,-100,if rank==0{100}else{90},work(n,0));if rank==0 {task.retry();}n+=32;task.finish(work(n,0),true);}
++        group.examined();group.skip(3);group.complete();drop(group);
++        STATE.with(|s|{let s=s.borrow();let g=&s.groups[3];assert_eq!((g.inventory,g.examined,g.entered,g.untouched,g.skips[3],g.retries),(10,9,8,1,1,1));assert_eq!((g.with_tail,g.stable_tail,g.same_first,g.changed_first),(1,1,0,7));assert_eq!(g.widths[0].current_future3,5);assert_eq!(g.widths[0].current_future7,1);assert_eq!(g.widths[0].after_first[5],1);assert_eq!(g.widths[0].after_first_same_window[5],1);assert_eq!(g.widths[1].boundaries[0],8);assert_eq!(s.samples.len(),1);});
++        let mut data=GroupData::new();data.kind=0;data.len=2;data.complete=true;
++        for item in &mut data.items[..2] {*item=Item{attempts:1,q_attempts:1,handoff_attempts:1,full_window:Some(true),complete:true,work:C([128,0,1,0,0]),..Item::default()};}
++        assert_eq!(main_class(&data),0);data.tail_iio=true;assert_eq!(main_class(&data),1);data.tail_iio=false;
++        data.items[0].full_window=Some(false);assert_eq!(main_class(&data),1);data.items[0].full_window=Some(true);
++        data.items[0].ordinary_attempts=1;data.items[0].q_attempts=0;data.items[0].handoff_attempts=0;assert_eq!(main_class(&data),3);
++        data.items[1]=data.items[0];assert_eq!(main_class(&data),2);data.len=0;assert_eq!(main_class(&data),4);
++        finish_json().unwrap();
++    }
++
++    fn actual<const D:bool>(limit:Option<u64>,depth:u8) {
++        use crate::{engine::Search,history::SearchHistory,position::Position,quiescence::Limits};
++        let position=Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
++        let mut baseline=Search::<D>::new(&position);baseline.config.tts_bytes=65536;
++        let mut observed=Search::<D>::new(&position);observed.config.tts_bytes=65536;
++        let mut a=SearchHistory::new(&position);let mut b=a.clone();
++        let expected=baseline.run_iterations(position,&mut a,depth,Limits{nodes:limit});
++        enable().unwrap();let returned=observed.run_iterations(position,&mut b,depth,Limits{nodes:limit});
++        assert_eq!(format!("{returned:?}"),format!("{expected:?}"));assert_eq!(observed.work(),baseline.work());assert_eq!(observed.stats,baseline.stats);assert_eq!(observed.evaluator.stats,baseline.evaluator.stats);assert_eq!(a,b);
++        assert_eq!(observed.learning.history,baseline.learning.history);assert_eq!(observed.learning.killers,baseline.learning.killers);assert_eq!(observed.learning.total,baseline.learning.total);
++        native_boundary(observed.work());check_partition();
++        STATE.with(|s|{let s=s.borrow();assert_eq!(s.total.0[..2],[observed.work().charged_search_units,observed.work().charged_relation_queries]);assert_eq!(s.native_boundaries,1);if limit!=Some(0){assert!(s.edges[0][1].handoffs>0);}if limit.is_none(){assert!(s.total.0[2]>0);assert!(s.groups[0].groups>0);if !D{assert_eq!(observed.evaluator.stats.full,0);}}});
++        let json=finish_json().unwrap();assert!(json.len()<4*1024*1024);
++    }
++
++    #[test]
++    fn actual_search_preserves_work_state_and_uncounted_handoffs() {actual::<false>(None,3);actual::<true>(None,3);actual::<false>(Some(0),3);actual::<false>(Some(31),5);}
++
++    #[test]
++    fn actual_credited_poll_error_preserves_native_work_and_partition() {
++        use crate::{engine::Search,history::SearchHistory,host::Host,position::Position,quiescence::{Limits,Stopped},timed};
++        struct Failed;
++        impl Host for Failed {fn command(&mut self)->std::io::Result<Option<crate::host::Command>>{Err(std::io::Error::other("census credited poll"))}}
++        let p=Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
++        let controls=timed::Controls{average_cs:1000,maximum_cs:10000,origin:0,seed:0,randomness:0,maximum_entered_iterations:8};
++        let run=|enabled:bool| {let mut search=Search::<false>::new(&p);search.config.tts_bytes=65536;let (mut search,_)=search.map_host(Failed);let mut history=SearchHistory::new(&p);if enabled {enable().unwrap();}let returned=search.run_work_timed(p,&mut history,controls,Limits{nodes:Some(10000)});assert!(matches!(returned,Err(crate::ordinary::Error::Stopped(Stopped::HostIo(_)))));assert_eq!(history.search_ply(),0);search};
++        let baseline=run(false);let observed=run(true);assert_eq!(baseline.work(),observed.work());assert_eq!(observed.work().charged_search_units,4096);native_boundary(observed.work());check_partition();
++        STATE.with(|s|{let s=s.borrow();assert_eq!(s.cohorts.iter().map(|rows|rows[Exit::Stopped as usize].credited_stop).sum::<u64>(),1);});finish_json().unwrap();
++    }
++}
