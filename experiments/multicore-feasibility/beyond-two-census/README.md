@@ -60,5 +60,7 @@ The first focused-test compilation failed before tests or workload lives ran;
 its01 receipts are preserved and bound in `preparation.json`. The repair changes
 only test-body type assumptions. The continuation uses fresh02 evidence.
 
-Status: prepared for the continuation. Results and the next queue
-recommendation will be recorded after independent closure.
+Status: closed. Four focused controls, three original lives/35 posts and independent
+reconciliation pass; all jobs are stopped. See [results](report.md),
+[bound closure](closure.json) and the
+[next recommendation](../../../docs/research/beyond-two-queue-recommendation.md).
