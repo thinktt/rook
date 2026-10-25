@@ -1,5 +1,10 @@
 # Current implementation status
 
+**Active research, 2026-10-25:** resume queued-branch and broader scaling
+investigation under the [mission continuation](docs/deterministic-multicore-mission.md#continuation-scaling-beyond-two-threads).
+The two-thread result below is preserved as a baseline. No further adoption,
+release or external gate has been selected.
+
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
 behavioral checks. The [lead research outcome](docs/research/deterministic-multicore-outcome.md)

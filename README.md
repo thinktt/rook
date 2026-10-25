@@ -7,6 +7,11 @@ retaining the opt-in two-thread FULL split: 6.79% lower elapsed time in the
 behavioral checks pass; scaling beyond 2 and external qualification of the new
 image remain open. The accepted serial release described below is unchanged.
 
+Research resumed on 2026-10-25 under the
+[expanded mission](docs/deterministic-multicore-mission.md#continuation-scaling-beyond-two-threads):
+queued branch work and useful scaling beyond two threads. The earlier outcome
+is a checkpoint, not closure of that broader investigation.
+
 An independent Rust implementation of the released KingRE ordinary-play specification. The [mission](../imp-perf-mission.md) and [KingRE v2.5.0 contracts](../king-spec/README.md) guide behavior and qualification.
 
 **Current local candidate: the first-main corrected build.** The tested first-main cutoff correction and test additions are adopted with the existing exact own-PGO ordinary image `5cf01208…` and separate diagnostic `68a1c304…`. Retained62 remains the initial comparison control. Position owns coherent attack planes; search retains copied-child state, retained evaluation and ordinary/tactical recursion. No additional architectural optimization is selected.
