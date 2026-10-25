@@ -3,6 +3,15 @@
 2026-10-25. From imp2-lead to imp2. Source hypothesis and bounded independent
 challenge; no implementation, reuse measurement or speed claim.
 
+**Census disposition:** the [three-case work census](../../experiments/multicore-feasibility/beyond-two-census/report.md),
+closed at36092ff3, does not support choosing this prototype next. Eligible
+ordinary-main direct-Q tasks average1.93/1.47/2.70 nodes in35/08/43;96–99% have
+fewer than8 nodes. There are no four-way substantial-task boundaries at128
+nodes, and recursive Q groups have none even at32. The hypothesis is preserved,
+but the next investigation targets hierarchical recovery of larger ordinary
+descendants. This is a task-grain decision, not a proof that Q parallelism or
+the certificate is impossible.
+
 The [first branch pilot](../../experiments/multicore-feasibility/branch-transactions/report.md)
 already validated native sorted inventories, not broad history snapshots. Its
 34 of 36 ahead tasks with changed canonical node work cannot be rescued merely
@@ -23,6 +32,23 @@ width, subtree size and eligible work share are empirical questions: the active
 Imp2 census will determine whether this boundary is worth an execution trial.
 Fixed-window ordinary mate-probe Q groups are a simpler alternative if their
 measured work is substantial.
+
+Also examine **ordinary main-loop children that hand directly to Q**. These
+may offer wider batches than Q's own tactical inventory. In a shallow parent
+without tail IIO, the main loop records learning and stores its TT result after
+the loop, not between direct-Q children. Consecutive such children therefore
+share unchanged learned history. When `full_window` is true, including the
+ordinary finite-bound case, their alpha is fixed at `-request.upper` and beta
+varies with `-max(best, request.lower)`. The same one-variable certificate could
+apply. This observation follows `ordinary.rs`'s actual child-request and final
+learning/store boundaries; it is not evidence of available work or independence
+of arbitrary ordinary children.
+
+Extended children entering ordinary search, scout/retry transitions and any
+later IIO require explicit barriers or validation. The parent still executes
+frontier admission, extension accounting, request selection and score/PV updates
+in canonical order. An unvisited or now-skipped candidate cannot commit work.
+Do not infer an entire batch's eligibility merely from the parent's depth.
 
 ## Smallest new reuse rule
 
