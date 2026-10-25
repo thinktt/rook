@@ -74,8 +74,8 @@ any subtraction of measured nonoverlapping hook costs remains an estimate of
 native cost removed. Acceptance percentages or credited N alone do not establish
 profitability. Preserve separate ahead tasks and head tasks with no overlap.
 
-Status: first compilation passed; three critical controls passed and the
-changed-parent-order positive-reuse fixture failed its reuse assertion. The
-initial source and receipts are preserved in01 evidence. Routine diagnosis is
-in progress; no workload life has started. Source/caps and policy are bound by
-`preparation.json` and `prototype.patch`.
+Status: closed. The initial positive fixture failure and diagnostics are
+preserved; a fixture-only repair passes, followed by23 selected tests and the
+two unrepeated pilot lives. See [results](report.md), [bound closure](closure.json)
+and the [prefix assessment](../../../docs/research/hierarchical-recovery-prefix-assessment.md).
+Runtime source/caps and policy are bound by `preparation.json` and `prototype.patch`.

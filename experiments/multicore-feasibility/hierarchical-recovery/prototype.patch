@@ -1229,10 +1229,10 @@ index a5c3470e..7dd083c3 100644
      use super::*;
 diff --git a/src/hierarchical_recovery.rs b/src/hierarchical_recovery.rs
 new file mode 100644
-index 00000000..8268e960
+index 00000000..e05bb8af
 --- /dev/null
 +++ b/src/hierarchical_recovery.rs
-@@ -0,0 +1,337 @@
+@@ -0,0 +1,350 @@
 +//! Exact-window hierarchical reuse in the fixed-completion serial pilot only.
 +//! Shared effects are replayed with native owners; numerical outputs are reused
 +//! only at actual calls. The independent oracle is an audit, never admissibility.
@@ -1554,11 +1554,24 @@ index 00000000..8268e960
 +
 +    #[test]
 +    fn changed_parent_order_runs_native_parent_and_recovers_surviving_actual_children() {
-+        let mut fixture=Fixture::new(false);let score=fixture.base.evaluator.full(&mut fixture.node,&fixture.map,false).score;let lower=score+29;let upper=lower+100;
-+        let (forest,_,_,_)=fixture.record(&fixture.base,true,1,lower,upper,false,Caps::default());
++        let mut fixture=Fixture::new(false);let score=fixture.base.evaluator.full(&mut fixture.node,&fixture.map,false).score;let lower=score+500;let upper=score+1500;
++        let (forest,_,_,_)=fixture.record(&fixture.base,true,2,lower,upper,false,Caps::default());
 +        let changed=forest.log.as_ref().unwrap().events.iter().find_map(|e|if let Event::OrderMain{expected,..}=e {expected.last().copied()}else{None}).unwrap();
 +        let mut canonical=fixture.base.research_clone();let mover=fixture.node.position.board[changed.from().0 as usize];canonical.learning.history[mover.color().index()][mover.kind().index()][changed.to().0 as usize]=1000;canonical.learning.total=1000;
-+        let (oracle,reference,expected_node,expected_score)=fixture.record(&canonical,true,1,lower,upper,true,Caps::default());let (actual,node,result,metrics)=fixture.recover(canonical,forest,oracle,true,1,lower,upper);
++        let (oracle,reference,expected_node,expected_score)=fixture.record(&canonical,true,2,lower,upper,true,Caps::default());
++        // At depth1, changing the first move can raise best above the native
++        // frontier estimate and remove every common child demand. Use depth2
++        // and a high finite window to keep this control's actual child entries
++        // equal while changing only their canonical consumption order.
++        let recorded_children:Vec<_>=forest.segments.iter().filter(|s|s.parent==Some(0)).collect();
++        let canonical_children:Vec<_>=oracle.segments.iter().filter(|s|s.parent==Some(0)).collect();
++        assert!(recorded_children.len()>1);
++        assert_eq!(recorded_children.len(),canonical_children.len());
++        assert_ne!(recorded_children.iter().map(|s|s.key.history.previous_move()).collect::<Vec<_>>(),
++            canonical_children.iter().map(|s|s.key.history.previous_move()).collect::<Vec<_>>());
++        assert!(canonical_children.iter().all(|s|recorded_children.iter().any(|r|r.key==s.key)),
++            "fixture must preserve complete actual child entries despite changed parent order");
++        let (actual,node,result,metrics)=fixture.recover(canonical,forest,oracle,true,2,lower,upper);
 +        assert_eq!(result,Ok(expected_score));assert_eq!(node,expected_node);assert!(actual.research_eq(&reference));assert!(metrics.rejection_reasons.iter().any(|(r,n)|*r=="ordinary-order"&&*n>0));assert!(metrics.commits>0,"a rejected ordering parent must retain matching actual descendants");assert!(metrics.matching_depth[1]>0);assert!(metrics.maximal_ranges_disjoint);assert!(metrics.fatal_reason.is_none());
 +        let mut ranges=metrics.committed_ranges.clone();ranges.sort_unstable();assert!(ranges.windows(2).all(|p|p[0][1]<=p[1][0]));
 +    }

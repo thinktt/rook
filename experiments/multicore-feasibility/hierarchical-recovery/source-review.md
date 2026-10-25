@@ -1,6 +1,8 @@
 # Recovery source boundaries
 
-Preparation review,2026-10-25; native controls and final source pins pending.
+Review closed2026-10-25.23 selected native controls and both bounded pilots pass;
+source/image/receipt pins are in `closure.json`. No detected local output/work or
+root-state discrepancy within the limits below.
 
 The recorder collapses the uncharged ordinary-to-Q handoff and preserves its
 original request/predecessor annotation on the Q call. An entry key carries the
