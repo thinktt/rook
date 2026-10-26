@@ -90,14 +90,23 @@ their individual costs. Park this fixed design without PGO or retuning.
 
 The owner has explicitly expanded the mission to major redesigns, replacement
 subsystems and isolated greenfield implementations. Existing search architecture
-is not a requirement. The next source-only reassessment separates prescribed
-state/order dependencies from inherited execution boundaries, and asks each
-candidate design to identify a concrete source of useful overlap and its costs.
-Imp2's independent alternatives and the lead's replicated-control/collective-FULL
-hypothesis will be compared before choosing a prototype. The latter would trade
-duplicated control and private state for avoiding per-FULL input publication;
-it is unimplemented and has no speed claim. Intra-color reductions and frontier
-batching remain reserves rather than automatic next steps.
+is not a requirement. The [reassessment](post-fusion-execution-architectures.md)
+at `a7613525` separates prescribed state/order dependencies from inherited
+boundaries and compares three concrete execution models. The lead independently
+checked the arithmetic and commissioned one bounded Astra challenge of replicated
+control. That design remains semantically plausible but duplicates control and
+full-sized TT state to avoid per-FULL input publication; no speed claim follows.
+
+Select type-disjoint raw Activity reduction first because it exposes additional
+demanded arithmetic width. Three helpers own disjoint whole color/kind jobs and
+shelter geometry. Same-kind marks stay together; disjoint kind bits permit scalar
+pressure addition before one final subtraction/clamp. The owner retains original
+side rounding and weighted composition. Unlike fusion there is no peer barrier;
+unlike inventory this divides the currently late arithmetic. Extra scans, reader
+traffic, reduction, skew and layout can still erase savings. One prospective
+assignment and one preserved3/new1/new3/new4 fixed48+4 generic comparison are
+selected after focused controls, with no automatic PGO or retuning. Lexically
+borrowed inputs, replicated control and frontier batching remain separate reserves.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

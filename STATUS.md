@@ -104,13 +104,15 @@ probes pass; matching nonzero row epochs establish activation. The test-only
 compile repair is preserved. This measures the complete changed design, not an
 isolated barrier or copying cost. No PGO or rescue variant is selected.
 
-Next selected work is source-only architectural reassessment: distinguish
-specification-required ordering from inherited boundaries, then choose a concrete
-new overlap mechanism and a decisive prototype. Imp2 and its Sol team examine
-alternative designs; the lead independently examines execution models, with one
-selective Astra challenge of replicated control and collective evaluation. No new
-native lane, adoption or external work is selected; all positive artifacts remain
-preserved.
+The [architectural reassessment](docs/research/post-fusion-execution-architectures.md)
+closed at `a7613525`. Next selected is one integrated type-disjoint raw Activity
+reduction: three arithmetic helpers own whole color/kind jobs and independent
+shelter geometry, with one final owner reduction. Disjoint mark bits allow scalar
+pressure addition before the single clamp, without a peer barrier. Freeze one
+assignment, then compare preserved3/new1/new3/new4 in one fixed48+4 generic lane
+after focused admission. Borrowed inputs and replicated-control collectives remain
+distinct unselected reserves. No PGO, adoption or external work is selected; all
+positive artifacts remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

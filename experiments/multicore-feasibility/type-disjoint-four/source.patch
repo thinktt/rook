@@ -1,0 +1,2388 @@
+diff --git a/src/activity.rs b/src/activity.rs
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -21,0 +22,9 @@
++    pub relation_queries: u64,
++}
++
++/// Unrounded activity from whole color/kind jobs. Pressure sums are indexed by
++/// defender and have not yet had the single subtraction of 12 or clamp applied.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct RawActivity {
++    pub raw_scores: [i64; 2],
++    pub pressure_sums: [i32; 2],
+@@ -216,0 +226,80 @@
++    }
++}
++
++/// Mask bits 0..3 select knight, bishop, rook and queen jobs for each color.
++/// Every piece of a selected color/kind shares these fresh private marks, so
++/// same-kind duplicate presence remains an OR even for promoted inventory.
++pub(crate) fn compute_partition(
++    position: &Position,
++    influence: &Influence,
++    masks: [u8; 2],
++) -> RawActivity {
++    debug_assert!(masks.iter().all(|mask| *mask & !15 == 0));
++    let phase = position.phase();
++    let mut marks = [[0u8; 64]; 2];
++    let mut raw_scores = [0i64; 2];
++    let mut relation_queries = 0;
++    for color in [Color::White, Color::Black] {
++        let mask = masks[color.index()];
++        let values = &DESTINATION_VALUES[color.index()];
++        if mask & 1 != 0 {
++            accumulate_kind::<1>(
++                position, influence, color, values, &mut marks, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++        }
++        if mask & 2 != 0 {
++            accumulate_kind::<2>(
++                position, influence, color, values, &mut marks, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++        }
++        if mask & 4 != 0 {
++            accumulate_kind::<3>(
++                position, influence, color, values, &mut marks, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++        }
++        if mask & 8 != 0 {
++            accumulate_kind::<4>(
++                position, influence, color, values, &mut marks, phase.endgame,
++                &mut raw_scores[color.index()], &mut relation_queries,
++            );
++        }
++    }
++    RawActivity {
++        raw_scores,
++        pressure_sums: [
++            raw_king_pressure(position, Color::White, &marks, masks[Color::Black.index()]),
++            raw_king_pressure(position, Color::Black, &marks, masks[Color::White.index()]),
++        ],
++        relation_queries,
++    }
++}
++
++/// The caller supplies disjoint whole color/kind partitions covering all jobs.
++/// Integer score/query addition and disjoint mark-bit pressure addition are exact
++/// in the native position domain; side rounds and pressure clamps occur once.
++pub(crate) fn combine_partitions(
++    parts: [RawActivity; 3],
++    material_score: i32,
++    weights: [i32; 2],
++    phase: Phase,
++) -> Activity {
++    debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
++    let mut raw_scores = [0i64; 2];
++    let mut pressure_sums = [0i32; 2];
++    let mut relation_queries = 0;
++    for part in parts {
++        for side in 0..2 {
++            raw_scores[side] += part.raw_scores[side];
++            pressure_sums[side] += part.pressure_sums[side];
++        }
++        relation_queries += part.relation_queries;
++    }
++    let pieces = raw_scores.map(|score| (276 * score + 128).div_euclid(256) as i32);
++    Activity {
++        pieces,
++        pressure: pressure_sums.map(|sum| (sum - 12).max(0)),
++        weighted: weighted(pieces, material_score, weights, phase),
++        relation_queries,
+@@ -513,0 +603,7 @@
++    (raw_king_pressure(position, defender, marks, 15) - 12).max(0)
++}
++
++/// The original admission and occupancy traversal, before the single final clamp.
++/// A family with no owned kind has identically zero mark bits and is skipped;
++/// contributing families still use the original global inventory admission.
++fn raw_king_pressure(position: &Position, defender: Color, marks: &Marks, owned_kinds: u8) -> i32 {
+@@ -522 +618,2 @@
+-            counts[PieceKind::Rook.index()] != 0 || counts[PieceKind::Queen.index()] != 0,
++            owned_kinds & (4 | 8) != 0
++                && (counts[PieceKind::Rook.index()] != 0 || counts[PieceKind::Queen.index()] != 0),
+@@ -527 +624,2 @@
+-            counts[PieceKind::Bishop.index()] != 0 || counts[PieceKind::Queen.index()] != 0,
++            owned_kinds & (2 | 8) != 0
++                && (counts[PieceKind::Bishop.index()] != 0 || counts[PieceKind::Queen.index()] != 0),
+@@ -548 +646 @@
+-    if counts[PieceKind::Knight.index()] != 0 {
++    if owned_kinds & 1 != 0 && counts[PieceKind::Knight.index()] != 0 {
+@@ -558 +656 @@
+-    (pressure - 12).max(0)
++    pressure
+@@ -848,0 +947,162 @@
++    const TYPE_ROLES: [[u8; 2]; 3] = [[3, 8], [8, 3], [4, 4]];
++
++    fn raw_roles(pos: &Position, map: &Influence) -> [RawActivity; 3] {
++        TYPE_ROLES.map(|masks| compute_partition(pos, map, masks))
++    }
++
++    #[test]
++    fn type_disjoint_partitions_match_serial_with_supplied_maps_and_weights() {
++        let mut saw_relation_work = false;
++        for placement in [
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R",
++            "7k/8/8/3B4/2RRQ3/3B4/8/K7",
++            "7k/8/3n4/2B5/3R4/8/8/K7",
++            "7k/8/8/8/8/8/8/K6R",
++            "7k/8/8/8/8/8/8/K7",
++        ] {
++            let pos = position(placement);
++            for map in [
++                Influence::build(&pos), empty_influence(),
++                Influence { profiles: [[255; 64], [0; 64]] },
++                Influence { profiles: [[0; 64], [255; 64]] },
++            ] {
++                let before = (pos, map);
++                let parts = raw_roles(&pos, &map);
++                let full = compute_partition(&pos, &map, [15, 15]);
++                let mut raw_sum = RawActivity::default();
++                for part in parts {
++                    for side in 0..2 {
++                        raw_sum.raw_scores[side] += part.raw_scores[side];
++                        raw_sum.pressure_sums[side] += part.pressure_sums[side];
++                    }
++                    raw_sum.relation_queries += part.relation_queries;
++                }
++                assert_eq!(raw_sum, full, "raw {placement}");
++                assert_eq!(compute_partition(&pos, &map, [0, 0]), RawActivity::default());
++                saw_relation_work |= full.relation_queries != 0;
++                for material in [-100_000, -256, -1, 0, 217, 100_000] {
++                    for weights in [
++                        [1024, 1024], [10_240, 8192], [17, 9173],
++                        [0, 0], [0, 10_240], [10_240, 0],
++                    ] {
++                        let expected = compute(&pos, &map, material, weights);
++                        assert_eq!(
++                            combine_partitions(parts, material, weights, pos.phase()), expected,
++                            "{placement}, material={material}, weights={weights:?}",
++                        );
++                        assert_eq!(
++                            combine_partitions([parts[2], parts[0], parts[1]], material, weights, pos.phase()),
++                            expected,
++                        );
++                    }
++                }
++                assert_eq!((pos, map), before);
++            }
++        }
++        assert!(saw_relation_work);
++    }
++
++    #[test]
++    fn type_disjoint_partitions_keep_promoted_whole_kinds_and_fresh_marks() {
++        for letter in ['N', 'B', 'R', 'Q'] {
++            let placement = "7k/8/8/8/8/QQQQQQQ1/QQQQQQQQ/K7".replace('Q', &letter.to_string());
++            let original = position(&placement);
++            let mut reordered = original;
++            let kind = Piece::from_fen(letter).unwrap().kind();
++            let start = reordered.counts[0][..kind.index()].iter().map(|&n| n as usize).sum::<usize>();
++            reordered.squares[0][start..start + 15].reverse();
++            reordered.validate().unwrap();
++            for pos in [original, reordered, original] {
++                let map = Influence::build(&pos);
++                let parts = raw_roles(&pos, &map);
++                // An unrelated map/position between calls must not retain marks.
++                let unrelated = position("7k/8/8/8/8/8/8/K7");
++                assert_eq!(compute_partition(&unrelated, &map, [15, 15]), RawActivity::default());
++                assert_eq!(raw_roles(&pos, &map), parts);
++                assert_eq!(
++                    combine_partitions(parts, -217, [9173, 101], pos.phase()),
++                    compute(&pos, &map, -217, [9173, 101]),
++                );
++            }
++        }
++    }
++
++    #[test]
++    fn type_disjoint_raw_pressure_adds_presence_bits_before_one_clamp() {
++        let pos = position("k7/8/8/8/3K4/8/8/1n1b1r1q");
++        let mut minor = [[0; 64]; 2];
++        let mut major = [[0; 64]; 2];
++        for category in [0, 1, 2, 3, 2] {
++            mark(&mut minor, Color::Black, PieceKind::Knight, sq("f5"), category);
++            mark(&mut minor, Color::Black, PieceKind::Bishop, sq("e5"), category);
++            mark(&mut major, Color::Black, PieceKind::Rook, sq("d5"), category);
++        }
++        mark(&mut major, Color::Black, PieceKind::Queen, sq("d5"), 2);
++        mark(&mut major, Color::Black, PieceKind::Queen, sq("e5"), 0);
++        assert_eq!(minor[1][sq("f5").0 as usize], 3);
++        assert_eq!(minor[1][sq("e5").0 as usize], 12);
++        let mut all = minor;
++        for side in 0..2 {
++            for target in 0..64 {
++                all[side][target] |= major[side][target];
++            }
++        }
++        assert_eq!(raw_king_pressure(&pos, Color::White, &minor, 3), 64); // Knight 40 + bishop 24.
++        assert_eq!(raw_king_pressure(&pos, Color::White, &major, 12), 48); // Rook 24 + queen 24.
++        assert_eq!(raw_king_pressure(&pos, Color::White, &all, 15), 112);
++        assert_eq!(raw_king_pressure(&pos, Color::White, &all, 0), 0);
++        assert_eq!(king_pressure(&pos, Color::White, &all), 100);
++
++        // Global inventory admission and original own/opposing occupancy remain
++        // authoritative even when a private mark array contains other type bits.
++        let blocked = position("7r/8/3P4/8/3Kp3/8/8/k7");
++        let mut marks = [[0; 64]; 2];
++        mark(&mut marks, Color::Black, PieceKind::Rook, sq("d5"), 0);
++        mark(&mut marks, Color::Black, PieceKind::Rook, sq("d6"), 2);
++        mark(&mut marks, Color::Black, PieceKind::Rook, sq("d7"), 2);
++        mark(&mut marks, Color::Black, PieceKind::Rook, sq("e4"), 2);
++        mark(&mut marks, Color::Black, PieceKind::Knight, sq("f5"), 2);
++        mark(&mut marks, Color::Black, PieceKind::Bishop, sq("e5"), 2);
++        assert_eq!(raw_king_pressure(&blocked, Color::White, &marks, 15), 24);
++        assert_eq!(king_pressure(&blocked, Color::White, &marks), 12);
++    }
++
++    #[test]
++    fn type_disjoint_reduction_keeps_signed_rounds_and_pressure_twelve_boundary() {
++        let phase = Phase { opening: 0, middlegame: 256, endgame: 0 };
++        let parts = [
++            RawActivity { raw_scores: [4, -4], pressure_sums: [8, 4], relation_queries: 7 },
++            RawActivity { raw_scores: [4, -4], pressure_sums: [8, 8], relation_queries: 11 },
++            RawActivity { relation_queries: 13, ..RawActivity::default() },
++        ];
++        let result = combine_partitions(parts, 0, [1024; 2], phase);
++        assert_eq!(result.pieces, [9, -9]); // Separately rounding the shards gives 8/-8.
++        assert_eq!(result.pressure, [4, 0]); // Separately clamping the shards gives 0/0.
++        assert_eq!(result.relation_queries, 31);
++        assert_eq!(result.weighted, weighted([9, -9], 0, [1024; 2], phase));
++        for sum in [0, 8, 12, 16, 24] {
++            let parts = [
++                RawActivity { pressure_sums: [sum / 2, sum], ..RawActivity::default() },
++                RawActivity { pressure_sums: [sum - sum / 2, 0], ..RawActivity::default() },
++                RawActivity::default(),
++            ];
++            assert_eq!(combine_partitions(parts, 0, [0; 2], phase).pressure, [(sum - 12).max(0); 2]);
++        }
++    }
++
++    #[test]
++    fn type_disjoint_partition_preserves_repeated_additional_and_source_relation_charges() {
++        let pos = position("7k/8/8/3B4/2RRQ3/3B4/8/K7");
++        let map = empty_influence();
++        // d4 charges d6/d7/d8/b4/a4 plus its source; c4 adds no charged query.
++        let rooks = compute_partition(&pos, &map, [4, 0]);
++        assert_eq!(rooks.relation_queries, 6);
++        let parts = raw_roles(&pos, &map);
++        assert_eq!(parts[2], rooks);
++        assert_eq!(
++            combine_partitions(parts, 0, [1024; 2], pos.phase()).relation_queries,
++            compute(&pos, &map, 0, [1024; 2]).relation_queries,
++        );
++    }
++
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -274,0 +275 @@
++    Raw(crate::raw_worker::RawActiveScope),
+@@ -286,0 +288 @@
++    raw_worker: Option<crate::raw_worker::RawWorker>,
+@@ -298 +300 @@
+-            self.full_worker.is_none() && self.colors_worker.is_none(),
++            self.full_worker.is_none() && self.colors_worker.is_none() && self.raw_worker.is_none(),
+@@ -310,0 +313 @@
++            raw_worker: None,
+@@ -344,0 +348 @@
++            raw_worker: None,
+@@ -354 +358 @@
+-    /// is min(requested, permitted, 3). Later placement does not change this cap.
++    /// is min(requested, permitted, 4). Later placement does not change this cap.
+@@ -374 +378 @@
+-                available => requested.min(available).min(3),
++                available => requested.min(available).min(4),
+@@ -388,0 +393,2 @@
++                if let Some(worker) = self.raw_worker.as_mut() { worker.shutdown()?; }
++                self.raw_worker = None;
+@@ -396,0 +403,2 @@
++                if let Some(worker) = self.raw_worker.as_mut() { worker.shutdown()?; }
++                self.raw_worker = None;
+@@ -405,0 +414,2 @@
++                if let Some(worker) = self.raw_worker.as_mut() { worker.shutdown()?; }
++                self.raw_worker = None;
+@@ -407,0 +418,11 @@
++            4 => {
++                let replacement = if let Some(worker) = self.raw_worker.as_ref() {
++                    worker.check_running()?;
++                    None
++                } else { Some(crate::raw_worker::RawWorker::start()?) };
++                if let Some(worker) = self.full_worker.as_mut() { worker.shutdown()?; }
++                if let Some(worker) = self.colors_worker.as_mut() { worker.shutdown()?; }
++                self.full_worker = None;
++                self.colors_worker = None;
++                if let Some(worker) = replacement { self.raw_worker = Some(worker); }
++            }
+@@ -418 +439 @@
+-        if self.colors_worker.is_some() { 3 } else if self.full_worker.is_some() { 2 } else { 1 }
++        if self.raw_worker.is_some() { 4 } else if self.colors_worker.is_some() { 3 } else if self.full_worker.is_some() { 2 } else { 1 }
+@@ -434 +455 @@
+-        if self.full_worker.is_some() || self.colors_worker.is_some() {return Err("child preparation requires inline FULL mode".into());}
++        if self.full_worker.is_some() || self.colors_worker.is_some() || self.raw_worker.is_some() {return Err("child preparation requires inline FULL mode".into());}
+@@ -469 +490,4 @@
+-        if let Some(worker) = self.colors_worker.as_ref() {
++        if let Some(worker) = self.raw_worker.as_ref() {
++            Some(FullWorkerScope::Raw(worker.start_active_scope()
++                .unwrap_or_else(|error|panic!("raw worker activation failed: {error}"))))
++        } else if let Some(worker) = self.colors_worker.as_ref() {
+@@ -482,0 +507 @@
++            Some(FullWorkerScope::Raw(scope)) => scope.finish(),
+@@ -491 +516 @@
+-        if let Some(worker) = self.colors_worker.as_mut() {
++        let (mut report, raw) = if let Some(worker) = self.raw_worker.as_mut() {
+@@ -493 +518 @@
+-            Ok(worker.readiness_report())
++            ("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".to_string(), worker.cold_report())
+@@ -495,3 +520,12 @@
+-            if let Some(worker) = self.full_worker.as_mut() { worker.shutdown()?; }
+-            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".into())
+-        }
++            let report = if let Some(worker) = self.colors_worker.as_mut() {
++                worker.shutdown()?;
++                worker.readiness_report()
++            } else {
++                if let Some(worker) = self.full_worker.as_mut() { worker.shutdown()?; }
++                "{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".to_string()
++            };
++            (report, "{\"enabled\":false}".to_string())
++        };
++        report.pop();
++        report.push_str(&format!(",\"rawFour\":{raw}}}"));
++        Ok(report)
+@@ -607 +641,4 @@
+-        let call_scope = if let Some(worker) = self.colors_worker.as_ref() {
++        let call_scope = if let Some(worker) = self.raw_worker.as_ref() {
++            worker.start_call_scope().unwrap_or_else(|error|panic!("raw call activation failed: {error}"))
++                .map(FullWorkerScope::Raw)
++        } else if let Some(worker) = self.colors_worker.as_ref() {
+@@ -614,0 +652,4 @@
++        if let Some(worker) = self.raw_worker.as_mut() {
++            worker.dispatch(position, influence, material, self.weights.mobility, self.weights.shelter)
++                .unwrap_or_else(|error|panic!("raw dispatch failed: {error}"));
++        }
+@@ -647 +688 @@
+-        let inline_chain = if self.full_worker.is_none() && self.colors_worker.is_none() {
++        let inline_chain = if self.full_worker.is_none() && self.colors_worker.is_none() && self.raw_worker.is_none() {
+@@ -684 +725,3 @@
+-        let chain = if let Some(worker) = self.colors_worker.as_mut() {
++        let chain = if let Some(worker) = self.raw_worker.as_mut() {
++            worker.complete().unwrap_or_else(|error|panic!("raw completion failed: {error}"))
++        } else if let Some(worker) = self.colors_worker.as_mut() {
+@@ -1305,0 +1349,8 @@
++
++#[cfg(test)]
++#[path = "evaluator/raw_tests.rs"]
++mod raw_tests;
++
++#[cfg(test)]
++#[path = "evaluator/raw_lifecycle_tests.rs"]
++mod raw_lifecycle_tests;
+diff --git a/src/evaluator/colors_tests.rs b/src/evaluator/colors_tests.rs
+--- a/src/evaluator/colors_tests.rs
++++ b/src/evaluator/colors_tests.rs
+@@ -367 +367 @@
+-    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,4));
+@@ -369 +369 @@
+-    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,4));
+diff --git a/src/evaluator/raw_lifecycle_tests.rs b/src/evaluator/raw_lifecycle_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/raw_lifecycle_tests.rs
+@@ -0,0 +1,105 @@
++//! Budget4 lexical owner tests; these run with the test profile's unwinding panic policy.
++use super::*;
++use crate::{engine::Search,history::SearchHistory,quiescence::{Limits,Stopped},ordinary,timed};
++const START:&str="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++fn parked<const D:bool>(e:&Evaluator<D>){assert!(e.raw_worker.as_ref().unwrap().is_parked());}
++
++#[test]
++fn full_scope_parks_after_completion_error_and_test_unwind() {
++    let p=Position::from_fen(START).unwrap();
++    let mut s=Search::<true>::new(&p);s.config.tts_bytes=65536;
++    s.evaluator.set_threads(4).unwrap();parked(&s.evaluator);
++    for fen in [START,"6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40",START] {
++        let p=Position::from_fen(fen).unwrap();let mut h=SearchHistory::new(&p);
++        s.run_iterations(p,&mut h,2,Limits::default()).unwrap();parked(&s.evaluator);
++        assert!(matches!(s.run_iterations(p,&mut h,3,Limits{nodes:Some(0)}),Err(ordinary::Error::Stopped(Stopped::NodeLimit(0)))));parked(&s.evaluator);
++    }
++    let mut h=SearchHistory::new(&p);
++    let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++        s.run_seeded_iterations(p,&mut h,1,Limits::default(),0,0, |_|panic!("test callback unwind"))
++    }));assert!(result.is_err());parked(&s.evaluator);
++    let mut h=SearchHistory::new(&p);
++    s.run_iterations(p,&mut h,1,Limits::default()).unwrap();parked(&s.evaluator);
++    let control=timed::Controls{average_cs:1000,maximum_cs:10000,origin:0,seed:0,randomness:0,maximum_entered_iterations:1};
++    assert!(matches!(s.run_work_timed(p,&mut h,control,Limits::default()),Err(ordinary::Error::IterationCapacity)));parked(&s.evaluator);
++    let mut node=Node::root(p,&s.evaluator.root);
++    s.evaluator.full(&mut node,&Influence::build(&p),false);parked(&s.evaluator);
++}
++
++#[test]
++fn full_scope_parks_after_live_finish_abort_and_host_error() {
++    use crate::host::{Host,Command,Control};
++    struct Events {command:Option<Command>,fail:bool}
++    impl Host for Events {
++        fn command(&mut self)->std::io::Result<Option<Command>> {
++            if self.fail {Err(std::io::Error::other("host control failure"))} else {Ok(self.command.take())}
++        }
++    }
++    for (command,fail) in [(Some(Command::Finish),false),(Some(Command::Abort),false),(None,true)] {
++        let p=Position::from_fen(START).unwrap();let mut s=Search::<true>::new(&p);
++        s.config.tts_bytes=65536;s.evaluator.set_threads(4).unwrap();
++        let (mut s,_)=s.map_host(Events{command,fail});
++        s.control=Some(Control{clock:crate::clock::GameClock::default(),post:false,force:false,
++            pondering:false,published:false,fine_work:false,game_ply:0,initial_side:p.side,clock_color:p.side});
++        let c=timed::Controls{average_cs:1000,maximum_cs:10000,origin:0,seed:0,randomness:0,maximum_entered_iterations:8};
++        let mut h=SearchHistory::new(&p);
++        let result=s.run_work_timed(p,&mut h,c,Limits{nodes:Some(10000)});
++        if fail {assert!(matches!(result,Err(ordinary::Error::Stopped(Stopped::HostIo(_)))));}
++        else {assert_eq!(result.unwrap().stop.reason,if command==Some(Command::Abort){"abort"}else{"host"});}
++        parked(&s.evaluator);
++    }
++}
++
++#[test]
++fn first_iteration_and_public_quiescence_boundaries_park_on_normal_and_stopped_returns() {
++    use crate::quiescence::{Entry, Observer, Work};
++    struct Quiet;
++    impl Observer for Quiet {
++        const ENABLED: bool = false;
++        type Parent = ();
++        type Frame = ();
++        fn parent(_: &Retained) {}
++        fn enter(&mut self, _: &Position, _: Entry, _: Option<Move>, _: (),
++            _: Retained, _: bool, _: Work) {}
++        fn stage(&mut self, _: EvaluationStage) {}
++        fn ordered(&mut self) {}
++        fn leave(&mut self, _: (), _: Retained, _: i32, _: &[Move], _: Work) {}
++    }
++    let p=Position::from_fen(START).unwrap();
++    let mut s=Search::<true>::new(&p);
++    s.set_threads(4).unwrap();
++    let mut h=SearchHistory::new(&p);
++    assert!(crate::first_iteration::run(&mut s,p,&mut h,Limits{nodes:Some(0)}).is_err());
++    parked(&s.evaluator);
++    let actual=crate::first_iteration::run(&mut s,p,&mut h,Limits::default()).unwrap();
++    parked(&s.evaluator);
++    let mut serial=Search::<true>::new(&p);
++    let expected=crate::first_iteration::run(&mut serial,p,&mut h,Limits::default()).unwrap();
++    assert_eq!((actual.score,actual.pv,actual.work,actual.stats,actual.evaluations),
++        (expected.score,expected.pv,expected.work,expected.stats,expected.evaluations));
++    let root=s.prepare_root(p);
++    parked(&s.evaluator);
++    let mut moves=crate::movegen::MoveList::new();
++    crate::movegen::generate_legal(&p,&mut moves);
++    let movement=moves.as_slice()[0];
++    let entry=Entry{ply:1,target:1,iteration_depth:1,lower:-10000,upper:10000,
++        analysis:0,capture_exception:crate::quiescence_policy::capture_exception(&p,&movement)};
++    for observed in [false,true] {
++        let mut node=root.child(&s.evaluator.root,movement);
++        let mut history=SearchHistory::new(&p);
++        history.push(&node.position,Some(movement));
++        let limit=Limits{nodes:Some(0)};
++        let stopped=if observed {
++            s.search_subtree_observed(&mut node,&mut history,entry,limit,&root.retained,&mut Quiet)
++        } else {s.search_subtree(&mut node,&mut history,entry,limit)};
++        assert!(matches!(stopped,Err(Stopped::NodeLimit(0))));
++        assert_eq!(history.search_ply(),1);
++        parked(&s.evaluator);
++        let complete=if observed {
++            s.search_subtree_observed(&mut node,&mut history,entry,Limits::default(),&root.retained,&mut Quiet)
++        } else {s.search_subtree(&mut node,&mut history,entry,Limits::default())};
++        assert!(complete.is_ok());
++        assert_eq!(history.search_ply(),1);
++        parked(&s.evaluator);
++    }
++}
+diff --git a/src/evaluator/raw_tests.rs b/src/evaluator/raw_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/raw_tests.rs
+@@ -0,0 +1,428 @@
++//! Adapt the retained exact owner matrix to the new budget4 path.
++//! Numerical, cache, retained and logical-work assertions are inherited unchanged.
++
++use super::*;
++use crate::engine::Search;
++use crate::history::SearchHistory;
++use crate::movegen::{generate_legal, MoveList};
++use crate::ordinary;
++use crate::quiescence::{Limits, Stopped};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const MIDDLE: &str = "r3k2r/ppp2ppp/2npbn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2Q1RK1 b kq - 0 10";
++const ENDING: &str = "6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40";
++
++fn evaluators<const D: bool>(position: &Position) -> (Evaluator<D>, Evaluator<D>) {
++    let mut serial = Evaluator::new(position);
++    let mut worker = Evaluator::new(position);
++    serial.set_threads(1).unwrap();
++    worker.set_threads(4).unwrap();
++    (serial, worker)
++}
++
++#[derive(Debug, PartialEq, Eq)]
++struct Observed {
++    evaluation: Evaluation,
++    node: Node,
++    details: FullDetails,
++}
++
++fn observe<const D: bool>(
++    evaluator: &mut Evaluator<D>,
++    mut node: Node,
++    map: &Influence,
++    checked: bool,
++    fresh: bool,
++) -> Observed {
++    let before = node.retained;
++    let stats_before = evaluator.stats;
++    let mut details = None;
++    let evaluation = if fresh {
++        evaluator.fresh_detailed_observed(&mut node, map, checked, |value| details = Some(value))
++    } else {
++        evaluator.full_detailed_observed(&mut node, map, checked, |value| details = Some(value))
++    };
++    let details = details.unwrap();
++    assert_eq!(details.base, details.components.base());
++    assert_eq!((evaluation.score, evaluation.lower, evaluation.upper),
++        (details.finished.score, details.finished.lower, details.finished.upper));
++    assert_eq!(node.retained.positional, details.components.positional());
++    assert_eq!(node.retained.pawn_progress, details.components.pawn_progress);
++    assert_eq!(node.retained.nonking_squares, before.nonking_squares);
++    assert_eq!(node.retained.age, 0);
++    assert_eq!(evaluator.stats.relation_queries - stats_before.relation_queries,
++        evaluation.relation_queries);
++    assert_eq!(evaluator.stats.full - stats_before.full, u64::from(D));
++    assert_eq!(evaluator.stats.influence_builds, stats_before.influence_builds);
++    assert_eq!(evaluator.stats.pawn_reuses - stats_before.pawn_reuses,
++        u64::from(D && details.pawn_entry_reused));
++    assert_eq!(evaluator.stats.pawn_replacements - stats_before.pawn_replacements,
++        u64::from(D && !details.pawn_entry_reused));
++    if fresh {
++        assert!(!details.pawn_entry_reused);
++    }
++    Observed { evaluation, node, details }
++}
++
++fn compare<const D: bool>(
++    serial: &mut Evaluator<D>,
++    worker: &mut Evaluator<D>,
++    node: Node,
++    map: &Influence,
++    checked: bool,
++    fresh: bool,
++) -> Observed {
++    let expected = observe(serial, node, map, checked, fresh);
++    let actual = observe(worker, node, map, checked, fresh);
++    assert_eq!(actual, expected);
++    assert_eq!(worker.stats, serial.stats);
++    expected
++}
++
++#[test]
++fn budgets_match_detailed_full_and_fresh_across_weights_and_root_rebinding() {
++    fn verify<const D: bool>() {
++        let position = Position::from_fen(START).unwrap();
++        let (mut serial, mut worker) = evaluators::<D>(&position);
++        let mut asymmetric = Parameters::default();
++        asymmetric.own = [133, 73, 151, 87, 200, 121, 19, 313, 207, 251, 49];
++        asymmetric.opponent = [91, 128, 67, 142, 80, 57, 183, 47, 333, 107, 229];
++        asymmetric.average_depth = 13;
++        asymmetric.draw = -173;
++        asymmetric.opponent_selectivity = 31;
++        let mut zero = Parameters::default();
++        zero.own[6..].fill(0);
++        zero.opponent[6..].fill(0);
++        // One persistent worker crosses changes in root side, phase, material,
++        // current weight pairs and finishing parameters.
++        for fen in [START, MIDDLE, ENDING, START] {
++            let position = Position::from_fen(fen).unwrap();
++            let map = Influence::build(&position);
++            for (index, parameters) in [Parameters::default(), asymmetric.clone(), zero.clone()]
++                .into_iter().enumerate()
++            {
++                serial.parameters = parameters.clone();
++                worker.parameters = parameters;
++                serial.begin_search(&position);
++                worker.begin_search(&position);
++                assert_eq!(serial.stats, EvalStats::default());
++                assert_eq!(worker.stats, EvalStats::default());
++                for checked in [false, true] {
++                    let mut node = Node::root(position, &serial.root);
++                    node.retained.positional = 731;
++                    node.retained.pawn_progress = -193;
++                    node.retained.age = 17;
++                    for fresh in [false, false, true, false] {
++                        let value = compare(&mut serial, &mut worker, node, &map, checked, fresh);
++                        if checked {
++                            assert_eq!(value.details.components.tempo, 0);
++                        }
++                        if index == 2 {
++                            assert_eq!(value.details.components.activity, 0);
++                            assert_eq!(value.details.components.shelter, 0);
++                        }
++                        if !D {
++                            assert_eq!(worker.stats.full, 0);
++                            assert_eq!(worker.stats.pawn_reuses, 0);
++                            assert_eq!(worker.stats.pawn_replacements, 0);
++                        }
++                    }
++                }
++                assert_eq!(worker.stats.influence_builds, 0);
++            }
++        }
++    }
++    verify::<true>();
++    verify::<false>();
++}
++
++#[test]
++fn budgets_preserve_supplied_contrary_influence_and_lazy_selection() {
++    let position = Position::from_fen(START).unwrap();
++    let natural = Influence::build(&position);
++    let contrary = Influence { profiles: [[255; 64], [0; 64]] };
++    let (mut serial, mut worker) = evaluators::<true>(&position);
++    let node = Node::root(position, &serial.root);
++    let normal = compare(&mut serial, &mut worker, node, &natural, false, true);
++    let custom = compare(&mut serial, &mut worker, node, &contrary, false, true);
++    assert_ne!((custom.details.components.activity, custom.details.components.shelter),
++        (normal.details.components.activity, normal.details.components.shelter));
++    assert_eq!(compare(&mut serial, &mut worker, node, &natural, false, true), normal);
++
++    serial.begin_search(&position);
++    worker.begin_search(&position);
++    let (mut a, mut b) = (node, node);
++    let (mut am, mut bm) = (Some(contrary), Some(contrary));
++    let (mut af, mut bf, mut aq, mut bq) = (None, None, None, None);
++    let expected = serial.select_noncheck_detailed_observed(&mut a, -10000, 10000,
++        true, &mut am, |value| af = Some(value), |value| aq = Some(value));
++    let actual = worker.select_noncheck_detailed_observed(&mut b, -10000, 10000,
++        true, &mut bm, |value| bf = Some(value), |value| bq = Some(value));
++    assert_eq!((actual, b, bm, bf, bq), (expected, a, am, af, aq));
++    assert!(expected.refreshed && !expected.initially_full);
++    assert_eq!(af.unwrap().components, custom.details.components);
++    assert_eq!(am, Some(contrary));
++    assert_eq!(worker.stats, serial.stats);
++    assert_eq!(worker.stats.influence_builds, 0);
++
++    // A strict-endpoint FAST return must leave the supplied worker idle and
++    // must not construct a map or modify inherited retained values.
++    let (mut a, mut b) = (a.null_child(), b.null_child());
++    let before = a;
++    let score = serial.fast(&a, false).score;
++    assert_eq!(worker.fast(&b, false).score, score);
++    let (mut am, mut bm) = (None, None);
++    let expected = serial.select_noncheck(&mut a, score + 250, score + 251, false, &mut am);
++    let actual = worker.select_noncheck(&mut b, score + 250, score + 251, false, &mut bm);
++    assert_eq!((actual, b, bm), (expected, a, am));
++    assert!(!actual.refreshed && !actual.initially_full);
++    assert_eq!(a, before);
++    assert!(am.is_none());
++    assert_eq!(worker.stats, serial.stats);
++}
++
++#[test]
++fn budgets_preserve_zero_group_replacement_order_and_reset() {
++    let empty = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++    let first = Position::from_fen("7k/8/8/8/6P1/3P4/8/K7 w - - 0 1").unwrap();
++    let second = Position::from_fen("7k/8/6P1/8/8/3P4/8/K7 w - - 0 1").unwrap();
++    assert_eq!(empty.pawn, 0);
++    assert_eq!(first.pawn % 128, 0);
++    assert_eq!(second.pawn % 128, 0);
++    assert_ne!(first.pawn, second.pawn);
++    let (mut serial, mut worker) = evaluators::<true>(&empty);
++    for (position, reused) in [(empty, true), (first, false), (first, true),
++        (second, false), (first, false), (empty, false), (empty, true)]
++    {
++        let node = Node::root(position, &serial.root);
++        let value = compare(&mut serial, &mut worker, node, &Influence::build(&position), false, false);
++        assert_eq!(value.details.pawn_entry_reused, reused);
++    }
++    serial.begin_search(&empty);
++    worker.begin_search(&empty);
++    let node = Node::root(empty, &serial.root);
++    let map = Influence::build(&empty);
++    compare(&mut serial, &mut worker, node, &map, false, true);
++    assert_eq!((worker.stats.pawn_reuses, worker.stats.pawn_replacements), (0, 1));
++    assert!(compare(&mut serial, &mut worker, node, &map, false, false).details.pawn_entry_reused);
++    serial.begin_search(&first);
++    worker.begin_search(&first);
++    let node = Node::root(first, &serial.root);
++    let value = compare(&mut serial, &mut worker, node, &Influence::build(&first), false, false);
++    assert!(!value.details.pawn_entry_reused);
++    assert_eq!((worker.stats.full, worker.stats.pawn_replacements), (1, 1));
++}
++
++#[test]
++fn budgets_preserve_full_identity_collision_and_fresh_cache_bypass() {
++    let first = Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
++    let collision = Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
++    assert_eq!(first.pawn, collision.pawn);
++    assert_ne!(first.pawn, 0);
++    let (first_map, collision_map) = (Influence::build(&first), Influence::build(&collision));
++    let (mut serial, mut worker) = evaluators::<true>(&first);
++    let node = Node::root(first, &serial.root);
++    assert!(!compare(&mut serial, &mut worker, node, &first_map, false, false).details.pawn_entry_reused);
++    let retained = serial.pawns.select(&first, &first_map).structure;
++    assert_eq!(worker.pawns.select(&first, &first_map).structure, retained);
++    assert_ne!(retained, pawn_structure::fresh(&collision, &collision_map, [1024; 2]));
++    let node = Node::root(collision, &serial.root);
++    assert!(compare(&mut serial, &mut worker, node, &collision_map, false, false).details.pawn_entry_reused);
++    compare(&mut serial, &mut worker, node, &collision_map, false, true);
++    assert!(compare(&mut serial, &mut worker, node, &collision_map, false, false).details.pawn_entry_reused);
++    assert_eq!(serial.pawns.select(&collision, &collision_map).structure, retained);
++    assert_eq!(worker.pawns.select(&collision, &collision_map).structure, retained);
++    serial.begin_search(&collision);
++    worker.begin_search(&collision);
++    let node = Node::root(collision, &serial.root);
++    assert!(!compare(&mut serial, &mut worker, node, &collision_map, false, false).details.pawn_entry_reused);
++    assert_eq!(worker.pawns.select(&collision, &collision_map).structure,
++        pawn_structure::fresh(&collision, &collision_map, [1024; 2]));
++}
++
++fn assert_search_equal(actual: &ordinary::Outcome, expected: &ordinary::Outcome) {
++    assert_eq!((&actual.initial_candidates, actual.score, &actual.pv, actual.work,
++        actual.stats, actual.evaluations), (&expected.initial_candidates, expected.score,
++        &expected.pv, expected.work, expected.stats, expected.evaluations));
++    assert_eq!(actual.iterations.len(), expected.iterations.len());
++    for (a, b) in actual.iterations.iter().zip(&expected.iterations) {
++        assert_eq!((a.depth, &a.candidates, &a.steps, a.score, &a.pv, a.work),
++            (b.depth, &b.candidates, &b.steps, b.score, &b.pv, b.work));
++    }
++}
++
++fn replay_pv(mut position: Position, pv: &[Move]) {
++    for &movement in pv {
++        let mut legal = MoveList::new();
++        generate_legal(&position, &mut legal);
++        assert!(legal.as_slice().contains(&movement), "illegal PV move {movement}");
++        position = position.played_unchecked(movement);
++    }
++}
++
++fn completed_pair(serial: &mut Search, worker: &mut Search, position: Position) -> ordinary::Outcome {
++    let (mut ah, mut bh) = (SearchHistory::new(&position), SearchHistory::new(&position));
++    let (mut ar, mut br) = (Vec::new(), Vec::new());
++    let expected = serial.run_seeded_iterations(position, &mut ah, 2, Limits::default(),
++        0x1020_3040, 7, |score| ar.push(score)).unwrap();
++    let actual = worker.run_seeded_iterations(position, &mut bh, 2, Limits::default(),
++        0x1020_3040, 7, |score| br.push(score)).unwrap();
++    assert_eq!((ah.search_ply(), bh.search_ply()), (0, 0));
++    assert_eq!(ar, br);
++    assert_search_equal(&actual, &expected);
++    assert!(actual.evaluations.full > 0);
++    for iteration in &actual.iterations {
++        replay_pv(position, &iteration.pv);
++        for step in &iteration.steps {
++            replay_pv(position, &step.root_pv);
++            replay_pv(position.played_unchecked(step.movement), &step.child_pv);
++        }
++    }
++    expected
++}
++
++#[test]
++fn persistent_worker_crosses_repeated_search_stop_retry_and_budget_changes() {
++    let position = Position::from_fen(START).unwrap();
++    let mut serial = Search::<true>::new(&position);
++    let mut worker = Search::<true>::new(&position);
++    serial.config.tts_bytes = 65536;
++    worker.config.tts_bytes = 65536;
++    serial.evaluator.set_threads(1).unwrap();
++    worker.evaluator.set_threads(4).unwrap();
++    let baseline = completed_pair(&mut serial, &mut worker, position);
++    let repeated = completed_pair(&mut serial, &mut worker, position);
++    assert_search_equal(&repeated, &baseline);
++    let other = Position::from_fen("r3k3/8/8/8/2n5/8/8/RN2K3 w - - 0 1").unwrap();
++    completed_pair(&mut serial, &mut worker, other);
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++
++    for limit in [0, 25] {
++        let (mut ah, mut bh) = (SearchHistory::new(&position), SearchHistory::new(&position));
++        let (mut ar, mut br) = (Vec::new(), Vec::new());
++        let expected = serial.run_seeded_iterations(position, &mut ah, 3,
++            Limits { nodes: Some(limit) }, 0x1020_3040, 7, |score| ar.push(score));
++        let actual = worker.run_seeded_iterations(position, &mut bh, 3,
++            Limits { nodes: Some(limit) }, 0x1020_3040, 7, |score| br.push(score));
++        assert!(matches!(expected, Err(ordinary::Error::Stopped(Stopped::NodeLimit(n))) if n == limit));
++        assert!(matches!(actual, Err(ordinary::Error::Stopped(Stopped::NodeLimit(n))) if n == limit));
++        assert_eq!((ah.search_ply(), bh.search_ply()), (0, 0));
++        assert_eq!(ar, br);
++        assert_eq!(worker.work(), serial.work());
++        assert_eq!(worker.stats, serial.stats);
++        assert_eq!(worker.evaluator.stats, serial.evaluator.stats);
++        assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    }
++    assert!(worker.evaluator.set_threads(0).is_err());
++    worker.evaluator.set_threads(4).unwrap();
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(4,4));
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    worker.evaluator.set_threads(1).unwrap();
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    worker.evaluator.set_threads(4).unwrap();
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    // Drop joins an active persistent worker after its last completed FULL.
++}
++
++#[test]
++fn positive_total_requests_saturate_without_changing_cache_or_evaluation() {
++    let first = Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
++    let collision = Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
++    assert_eq!(first.pawn,collision.pawn);
++    let (mut serial,mut worker)=(Evaluator::<true>::new(&first),Evaluator::<true>::new(&first));
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(1,1));
++    let first_map=Influence::build(&first);
++    let node=Node::root(first,&serial.root);
++    compare(&mut serial,&mut worker,node,&first_map,false,false);
++    let collision_map=Influence::build(&collision);
++    for requested in [2,4,2,1,4,usize::MAX,1] {
++        let before=worker.stats;
++        worker.set_threads_with_affinity(requested,||Ok(4)).unwrap();
++        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,requested.min(4)));
++        assert_eq!(worker.stats,before);
++        assert!(worker.set_threads(0).is_err());
++        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,requested.min(4)));
++        assert_eq!(worker.stats,before);
++        let node=Node::root(collision,&serial.root);
++        assert!(compare(&mut serial,&mut worker,node,&collision_map,false,false).details.pawn_entry_reused);
++        if let Some(helper)=&worker.full_worker {assert!(helper.is_parked());}
++        if let Some(helper)=&worker.raw_worker {assert!(helper.is_parked());}
++    }
++}
++
++#[test]
++fn search_and_session_expose_requested_and_configured_budgets() {
++    let position=Position::from_fen(START).unwrap();
++    let mut search=Search::<false>::new(&position);
++    assert_eq!((search.requested_threads(),search.configured_threads()),(1,1));
++    search.set_threads(4).unwrap();
++    let (mut search,_)=search.map_host(crate::host::NoHost);
++    assert_eq!((search.requested_threads(),search.configured_threads()),(4,4));
++    assert!(search.set_threads(0).is_err());
++    assert_eq!((search.requested_threads(),search.configured_threads()),(4,4));
++    search.set_threads(1).unwrap();
++    assert_eq!((search.requested_threads(),search.configured_threads()),(1,1));
++    let mut session=crate::session::Session::<false>::default();
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(1,1));
++    session.set_threads(usize::MAX).unwrap();
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,4));
++    assert!(session.set_threads(0).is_err());
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,4));
++    session.set_threads(1).unwrap();
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(1,1));
++}
++
++#[test]
++fn affinity_cap_queries_before_mutation_and_preserves_active_cache_on_failure() {
++    let first=Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
++    let collision=Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
++    assert_eq!(first.pawn,collision.pawn);
++    let (mut serial,mut worker)=(Evaluator::<true>::new(&first),Evaluator::<true>::new(&first));
++    assert!(worker.set_threads_with_affinity(0,||panic!("invalid request queried affinity")).is_err());
++    worker.set_threads_with_affinity(1,||panic!("one thread queried affinity")).unwrap();
++    worker.set_threads_with_affinity(4,||Ok(4)).unwrap();
++    let node=Node::root(first,&serial.root);
++    compare(&mut serial,&mut worker,node,&Influence::build(&first),false,false);
++    let before=worker.stats;
++    assert_eq!(worker.set_threads_with_affinity(8,||Err("affinity query failed".into())),
++        Err("affinity query failed".into()));
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(4,4));
++    assert_eq!(worker.stats,before);
++    assert!(worker.raw_worker.as_ref().unwrap().is_parked());
++    assert!(worker.set_threads_with_affinity(0,||panic!("invalid request queried affinity")).is_err());
++    assert!(worker.set_threads_with_affinity(8,||Ok(0)).is_err());
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(4,4));
++    assert_eq!(worker.stats,before);
++    let map=Influence::build(&collision);
++    let node=Node::root(collision,&serial.root);
++    assert!(compare(&mut serial,&mut worker,node,&map,false,false).details.pawn_entry_reused);
++    for (requested,allowed,configured) in [(8,1,1),(usize::MAX,2,2),(2,1,1),(4,4,4)] {
++        let before=worker.stats;
++        worker.set_threads_with_affinity(requested,||Ok(allowed)).unwrap();
++        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,configured));
++        assert_eq!(worker.stats,before);
++        assert_eq!(worker.full_worker.is_some(),configured==2);
++        assert!(compare(&mut serial,&mut worker,node,&map,false,false).details.pawn_entry_reused);
++    }
++    worker.set_threads_with_affinity(1,||panic!("one thread queried affinity")).unwrap();
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(1,1));
++}
++
++
++#[test]
++fn joined_cold_report_witnesses_all_three_actual_raw_roles_only_in_mode4() {
++    let p=Position::from_fen(START).unwrap();
++    for budget in [1,3,4] {
++        let mut e=Evaluator::<true>::new(&p);
++        e.set_threads_with_affinity(budget,||Ok(4)).unwrap();
++        let mut node=Node::root(p,&e.root);
++        e.full(&mut node,&Influence::build(&p),false);
++        if let Some(w)=e.raw_worker.as_ref(){assert!(w.is_parked());}
++        let report=e.finish_colors_report().unwrap();
++        if budget==4 {
++            assert!(report.contains("\"rawFour\":{\"enabled\":true,\"request\":1,\"done\":[1,1,1],\"roles\":[0,1,2]}"));
++        } else {
++            assert!(report.contains("\"rawFour\":{\"enabled\":false}"));
++        }
++    }
++}
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -59,0 +60,2 @@
++
++pub(crate) mod raw_worker;
+diff --git a/src/raw_worker.rs b/src/raw_worker.rs
+new file mode 100644
+--- /dev/null
++++ b/src/raw_worker.rs
+@@ -0,0 +1,1379 @@
++//! Fixed epoch input and independently owned raw-reduction outputs for FULL calls.
++//!
++//! One initialized input is written by the single coordinator and read directly
++//! by all three helpers. Matching done epochs retire every input access. Control
++//! linearizes dispatch, output consumption and final close; scope guards and
++//! parking touch metadata only. Successful calls allocate no storage or threads.
++//! The 4096-spin policy and inherited affinity remain unchanged. No hot observers.
++//! Scheduling delays never constitute an engine wall-time abort.
++
++use crate::activity::{self, RawActivity};
++use crate::evaluator_worker::ActivityShelter;
++use crate::influence::Influence;
++use crate::position::{Phase, Position};
++use crate::shelter;
++use crate::types::Color;
++use std::cell::UnsafeCell;
++use std::hint::spin_loop;
++use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
++use std::sync::{Arc, Condvar, Mutex, MutexGuard};
++use std::thread::{self, JoinHandle};
++
++const STARTING: u8 = 0;
++const IDLE: u8 = 1;
++const FAILED: u8 = 4;
++const STOPPED: u8 = 5;
++const PARKED: u8 = 6;
++const COMPLETION_SPINS: usize = 4096;
++
++/// Concrete initialized storage, never a fabricated or zeroed Position.
++struct Packet {
++    generation: u64,
++    position: Position,
++    influence: Influence,
++}
++
++#[derive(Clone, Copy)]
++struct RawOutput {
++    generation: u64,
++    activity: RawActivity,
++    geometry: Option<shelter::Components>,
++}
++
++impl RawOutput {
++    fn initial() -> Self {
++        Self { generation: 0, activity: RawActivity::default(), geometry: None }
++    }
++}
++
++// Whole color/kind ownership keeps same-kind presence OR local. The masks are
++// fixed before measurement: role0 WN/WB+BQ, role1 WQ+BN/BB, role2 WR+BR.
++const ROLE_MASKS: [[u8; 2]; 3] = [[3, 8], [8, 3], [4, 4]];
++const ROLE_NAMES: [&str; 3] = ["rook2-raw-0", "rook2-raw-1", "rook2-raw-2"];
++
++struct Cells {
++    input: UnsafeCell<Packet>,
++    role0_output: UnsafeCell<RawOutput>,
++    role1_output: UnsafeCell<RawOutput>,
++    role2_output: UnsafeCell<RawOutput>,
++}
++
++// SAFETY: Only these four concrete initialized cells are shared. One &mut
++// coordinator writes Packet under Control/Flight::None. None follows matching
++// done Acquires from ALL THREE actual readers and ended output reads, or all
++// actual parked/exited acknowledgments. request Release/Acquire publishes one
++// immutable Packet; every reader's entire Packet borrow ends before its own
++// output write and done Release. Empty arithmetic jobs still publish actual done.
++//
++// Only role i writes output_i. Complete requires all exact done epochs and
++// Published(g) under Control before scalar Copy reads. Those reads end before
++// Flight::None; the next request Release/Acquire carries their reverse edge to
++// the next output writer. Control serializes final close against publication and
++// consumption. Close retains Discarding until all real readers are quiet; stop
++// alone never retires a peer. Guards and parking never touch cells. No mutable
++// reference to Shared, Cells or the group of outputs is ever formed.
++unsafe impl Sync for Cells {}
++
++impl Cells {
++    fn output(&self, role: usize) -> &UnsafeCell<RawOutput> {
++        match role {
++            0 => &self.role0_output,
++            1 => &self.role1_output,
++            2 => &self.role2_output,
++            _ => unreachable!("invalid raw role"),
++        }
++    }
++}
++
++struct Reader {
++    state: AtomicU8,
++    done: AtomicU64,
++    failed_generation: AtomicU64,
++}
++
++impl Reader {
++    fn new() -> Self {
++        Self {
++            state: AtomicU8::new(STARTING), done: AtomicU64::new(0),
++            failed_generation: AtomicU64::new(0),
++        }
++    }
++}
++
++#[derive(Clone, Copy)]
++struct Metadata {
++    generation: u64,
++    material: i32,
++    mobility_weights: [i32; 2],
++    shelter_weights: [i32; 2],
++    phase: Phase,
++}
++
++#[derive(Clone, Copy, Default)]
++enum Flight {
++    #[default]
++    None,
++    Published(Metadata),
++    Discarding(Metadata),
++}
++
++#[derive(Default)]
++struct Control {
++    scopes: usize,
++    closing: bool,
++    shutdown: bool,
++    flight: Flight,
++    failures: [Option<String>; 3],
++    owner_failure: Option<String>,
++}
++
++struct Shared {
++    cells: Cells,
++    request: AtomicU64,
++    readers: [Reader; 3],
++    stop: AtomicBool,
++    active_scopes: AtomicUsize,
++    control: Mutex<Control>,
++    wake: Condvar,
++    // Exactly one coordinator completion waiter. Never held with Control.
++    sleep: Mutex<()>,
++    completed: Condvar,
++    waiting: AtomicBool,
++    #[cfg(test)]
++    tests: TestHooks,
++}
++
++#[derive(Clone, Copy, Default)]
++struct Startup {
++    #[cfg(test)]
++    fail_spawn: Option<usize>,
++    #[cfg(test)]
++    fail_entry: Option<usize>,
++    #[cfg(test)]
++    stop_entry: Option<usize>,
++    #[cfg(test)]
++    panic_entry: Option<usize>,
++    #[cfg(test)]
++    stop_after_request: Option<usize>,
++}
++
++/// Send guards may alter lifecycle metadata but never touch any cell.
++pub(crate) struct RawActiveScope {
++    shared: Arc<Shared>,
++    armed: bool,
++}
++
++impl RawActiveScope {
++    pub(crate) fn finish(mut self) -> Result<(), String> {
++        self.armed = false;
++        release_scope(&self.shared)
++    }
++}
++
++impl Drop for RawActiveScope {
++    fn drop(&mut self) {
++        if self.armed {
++            if let Err(error) = release_scope(&self.shared) {
++                if thread::panicking() {
++                    eprintln!("raw worker scope close failed during unwind: {error}");
++                } else {
++                    panic!("raw worker scope close failed: {error}");
++                }
++            }
++        }
++    }
++}
++
++pub(crate) struct RawWorker {
++    shared: Arc<Shared>,
++    threads: [Option<JoinHandle<()>>; 3],
++    generation: u64,
++    close_error_reported: bool,
++}
++
++impl RawWorker {
++    pub(crate) fn start() -> Result<Self, String> {
++        Self::start_with(Startup::default())
++    }
++
++    fn start_with(startup: Startup) -> Result<Self, String> {
++        let position = Position::from_fen(
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++        ).map_err(|error| format!("cannot initialize raw input: {error}"))?;
++        let influence = Influence::build(&position);
++        let shared = Arc::new(Shared {
++            cells: Cells {
++                input: UnsafeCell::new(Packet { generation: 0, position, influence }),
++                role0_output: UnsafeCell::new(RawOutput::initial()),
++                role1_output: UnsafeCell::new(RawOutput::initial()),
++                role2_output: UnsafeCell::new(RawOutput::initial()),
++            },
++            request: AtomicU64::new(0),
++            readers: [Reader::new(), Reader::new(), Reader::new()],
++            stop: AtomicBool::new(false),
++            active_scopes: AtomicUsize::new(0),
++            control: Mutex::new(Control::default()),
++            wake: Condvar::new(),
++            sleep: Mutex::new(()),
++            completed: Condvar::new(),
++            waiting: AtomicBool::new(false),
++            #[cfg(test)]
++            tests: TestHooks::new(startup),
++        });
++        #[cfg(not(test))]
++        let _ = startup;
++        let mut worker = Self {
++            shared, threads: [None, None, None], generation: 0, close_error_reported: false,
++        };
++        for side in 0..3 {
++            #[cfg(test)]
++            if startup.fail_spawn == Some(side) {
++                worker.failed_spawn(side, "controlled raw spawn failure".into());
++                let failure = worker.failure();
++                let _ = worker.shutdown();
++                return Err(failure);
++            }
++            let worker_shared = Arc::clone(&worker.shared);
++            let handle = thread::Builder::new()
++                .name(ROLE_NAMES[side].into())
++                .spawn(move || {
++                    // The assertion applies only to this concrete loop. Its
++                    // Packet reference is confined to compute_input's lexical
++                    // block; unwinding drops it before this terminal handler.
++                    // Partial output never gets a successful done publication.
++                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
++                        || run_active(&worker_shared, side),
++                    ));
++                    let failure = match result {
++                        Ok(Ok(())) => None,
++                        Ok(Err(error)) => Some(error),
++                        Err(_) => Some(format!("{} raw reader panicked", side_name(side))),
++                    };
++                    publish_terminal(&worker_shared, side, failure);
++                });
++            match handle {
++                Ok(handle) => worker.threads[side] = Some(handle),
++                Err(error) => {
++                    worker.failed_spawn(side, format!("cannot start {} raw reader: {error}", side_name(side)));
++                    let failure = worker.failure();
++                    let _ = worker.shutdown();
++                    return Err(failure);
++                }
++            }
++        }
++        let mut control = control_lock(&worker.shared);
++        while !all_state(&worker.shared, PARKED) && !terminal(&worker.shared) {
++            control = wait_control(&worker.shared, control);
++        }
++        let parked = all_state(&worker.shared, PARKED) && !terminal(&worker.shared);
++        drop(control);
++        if parked { Ok(worker) } else {
++            let failure = worker.failure();
++            let _ = worker.shutdown();
++            Err(failure)
++        }
++    }
++
++    fn failed_spawn(&self, side: usize, failure: String) {
++        // Only genuinely unstarted readers may be declared retired here.
++        publish_terminal(&self.shared, side, Some(failure));
++        for unstarted in side + 1..3 {
++            publish_terminal(&self.shared, unstarted, None);
++        }
++    }
++
++    pub(crate) fn start_active_scope(&self) -> Result<RawActiveScope, String> {
++        let mut control = control_lock(&self.shared);
++        while control.closing && !terminal(&self.shared) {
++            control = wait_control(&self.shared, control);
++        }
++        if terminal(&self.shared) { return Err(failure_in(&control)); }
++        let first = control.scopes == 0;
++        control.scopes = control.scopes.checked_add(1).expect("raw scope count exhausted");
++        self.shared.active_scopes.store(control.scopes, Ordering::Release);
++        if first {
++            self.shared.wake.notify_all();
++            while !all_state(&self.shared, IDLE) && !terminal(&self.shared) {
++                control = wait_control(&self.shared, control);
++            }
++            if terminal(&self.shared) {
++                control.scopes -= 1;
++                self.shared.active_scopes.store(control.scopes, Ordering::Release);
++                return Err(failure_in(&control));
++            }
++        }
++        drop(control);
++        Ok(RawActiveScope { shared: Arc::clone(&self.shared), armed: true })
++    }
++
++    pub(crate) fn start_call_scope(&self) -> Result<Option<RawActiveScope>, String> {
++        if self.shared.active_scopes.load(Ordering::Acquire) != 0 {
++            self.check_running()?;
++            Ok(None)
++        } else {
++            self.start_active_scope().map(Some)
++        }
++    }
++
++    pub(crate) fn dispatch(
++        &mut self,
++        position: &Position,
++        influence: &Influence,
++        material: i32,
++        mobility_weights: [i32; 2],
++        shelter_weights: [i32; 2],
++    ) -> Result<(), String> {
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.before_dispatch);
++        // This mutex is the lease. The active-scope atomic alone never grants
++        // permission to publish against a concurrent final guard close.
++        let mut control = control_lock(&self.shared);
++        if control.scopes == 0 || control.closing || terminal(&self.shared) {
++            return Err(failure_in(&control));
++        }
++        if !matches!(control.flight, Flight::None) {
++            return Err("raw dispatch while a flight is still owned".into());
++        }
++        let Some(generation) = self.generation.checked_add(1) else {
++            let error = "raw epoch exhausted".to_string();
++            control.owner_failure = Some(error.clone());
++            self.shared.stop.store(true, Ordering::Release);
++            control.closing = true;
++            self.shared.wake.notify_all();
++            drop(control);
++            signal_completion(&self.shared);
++            // Exhaustion is terminal, never a reset or fabricated completion.
++            let _ = self.shutdown();
++            return Err(error);
++        };
++        let phase = position.phase();
++        // SAFETY: Control serializes this writer with close and consumption.
++        // Flight::None proves all three old input readers and output reads ended.
++        unsafe {
++            self.shared.cells.input.get().write(Packet {
++                generation, position: *position, influence: *influence,
++            });
++        }
++        #[cfg(test)]
++        if self.shared.tests.fail_before_publish.swap(false, Ordering::SeqCst) {
++            // The initialized input is private and no new request was released.
++            // Flight stays None and the epoch does not advance.
++            return Err("controlled raw failure before publication".into());
++        }
++        control.flight = Flight::Published(Metadata {
++            generation, material, mobility_weights, shelter_weights, phase,
++        });
++        // Nothing fallible lies between installing Published and this release.
++        self.shared.request.store(generation, Ordering::Release);
++        self.generation = generation;
++        Ok(())
++    }
++
++    pub(crate) fn complete(&mut self) -> Result<ActivityShelter, String> {
++        let generation = self.generation;
++        if generation == 0 { return Err("raw complete without a dispatch".into()); }
++        // No Control mutex may span spinning or the Sleep wait.
++        if wait_completion(&self.shared, generation).is_err() {
++            return Err(self.failure());
++        }
++        let mut control = control_lock(&self.shared);
++        let metadata = match control.flight {
++            Flight::Published(metadata) if metadata.generation == generation
++                && !control.closing && !terminal(&self.shared) => metadata,
++            _ => return Err("raw completion lost ownership of its flight".into()),
++        };
++        // Recheck inside the ownership critical section. A close that won
++        // Control first owns Discarding; complete must never read its cells.
++        if !all_done(&self.shared, generation) {
++            return Err("raw completion before all three matching done epochs".into());
++        }
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.consuming);
++        // SAFETY: All exact done Acquires retire all Packet references and
++        // publish the separate initialized scalar outputs. Published/Control
++        // excludes close. Copy reads end here before None and the next request.
++        let [role0, role1, role2] = unsafe {
++            [self.shared.cells.role0_output.get().read(),
++             self.shared.cells.role1_output.get().read(),
++             self.shared.cells.role2_output.get().read()]
++        };
++        if [role0, role1, role2].iter().any(|output| output.generation != generation) {
++            return Err("raw completion generation mismatch".into());
++        }
++        let (Some(white_geometry), Some(black_geometry), None) =
++            (role0.geometry, role1.geometry, role2.geometry) else {
++                return Err("raw completion geometry ownership mismatch".into());
++            };
++        control.flight = Flight::None;
++        drop(control);
++        // Composition reads coordinator metadata and scalar locals, not input.
++        let activity = activity::combine_partitions(
++            [role0.activity, role1.activity, role2.activity], metadata.material,
++            metadata.mobility_weights, metadata.phase,
++        );
++        let shelter = shelter::compose_components(
++            [white_geometry, black_geometry], activity.pressure, metadata.material,
++            metadata.shelter_weights, metadata.phase,
++        );
++        Ok(ActivityShelter { activity, shelter })
++    }
++
++    pub(crate) fn check_running(&self) -> Result<(), String> {
++        if terminal(&self.shared) { Err(self.failure()) } else { Ok(()) }
++    }
++
++    fn failure(&self) -> String { failure_in(&control_lock(&self.shared)) }
++
++    /// Cold evidence only, after all actual helpers have been joined. These are
++    /// the necessary publication/retirement epochs, never an observation census.
++    pub(crate) fn cold_report(&self) -> String {
++        debug_assert!(self.threads.iter().all(Option::is_none));
++        let request = self.shared.request.load(Ordering::Acquire);
++        let done = self.shared.readers.each_ref().map(|reader| reader.done.load(Ordering::Acquire));
++        format!("{{\"enabled\":true,\"request\":{request},\"done\":[{},{},{}],\"roles\":[0,1,2]}}",
++            done[0], done[1], done[2])
++    }
++
++    pub(crate) fn shutdown(&mut self) -> Result<(), String> {
++        {
++            let mut control = control_lock(&self.shared);
++            control.shutdown = true;
++            control.closing = true;
++            claim_discard(&mut control);
++            control.scopes = 0;
++            self.shared.active_scopes.store(0, Ordering::Release);
++            self.shared.stop.store(true, Ordering::Release);
++            self.shared.wake.notify_all();
++        }
++        // Terminal publication always participates in the SC latch chain, even
++        // if no waiter appears registered. Control has already been released.
++        signal_completion(&self.shared);
++        for side in 0..3 {
++            if let Some(handle) = self.threads[side].take() {
++                if handle.join().is_err() {
++                    publish_terminal(&self.shared, side, Some(format!(
++                        "{} raw reader exited with an uncaught panic", side_name(side),
++                    )));
++                }
++            }
++        }
++        let mut control = control_lock(&self.shared);
++        // All started readers have actually exited; unstarted readers were
++        // marked retired by failed_spawn. No guard or shutdown mutates cells.
++        debug_assert!(quiescent(&self.shared));
++        retire_flight(&mut control);
++        control.closing = false;
++        self.shared.wake.notify_all();
++        if has_failure(&control) {
++            self.close_error_reported = true;
++            return Err(failure_in(&control));
++        }
++        Ok(())
++    }
++
++    #[cfg(test)]
++    pub(crate) fn is_parked(&self) -> bool {
++        let control = control_lock(&self.shared);
++        all_state(&self.shared, PARKED) && control.scopes == 0
++            && !control.closing && matches!(control.flight, Flight::None)
++    }
++}
++
++impl Drop for RawWorker {
++    fn drop(&mut self) {
++        let reported = self.close_error_reported;
++        if let Err(error) = self.shutdown() {
++            if reported { return; }
++            if thread::panicking() {
++                eprintln!("raw worker shutdown failed during unwind: {error}");
++            } else {
++                panic!("raw worker shutdown failed: {error}");
++            }
++        }
++    }
++}
++
++fn run_active(shared: &Shared, side: usize) -> Result<(), String> {
++    #[cfg(test)]
++    {
++        if shared.tests.startup.fail_entry == Some(side) {
++            return Err("controlled raw startup failure".into());
++        }
++        if shared.tests.startup.stop_entry == Some(side) { return Ok(()); }
++        if shared.tests.startup.panic_entry == Some(side) { panic!("controlled raw startup panic"); }
++    }
++    let mut seen = 0;
++    park(shared, side, seen);
++    let reader = &shared.readers[side];
++    loop {
++        if terminal(shared) { return Ok(()); }
++        let generation = shared.request.load(Ordering::Acquire);
++        if generation != seen {
++            if generation == 0 || generation < seen {
++                return Err("raw reader observed a nonincreasing epoch".into());
++            }
++            #[cfg(test)]
++            {
++                test_reader_gate(shared, &shared.tests.input[side], side)?;
++                if shared.tests.startup.stop_after_request == Some(side) { return Ok(()); }
++            }
++            // SAFETY: This exact request Acquire publishes the initialized input.
++            // No next input write is possible before our done or actual exit.
++            let output = unsafe { compute_input(shared, side, generation)? };
++            // compute_input has returned scalar values; ALL input references,
++            // including every numerical access, have ended before this write.
++            // SAFETY: Only this reader writes its concrete output. The acquired
++            // new request also orders the coordinator's prior output reads
++            // before this overwrite; no whole-array mutable borrow is formed.
++            unsafe { shared.cells.output(side).get().write(output); }
++            #[cfg(test)]
++            test_reader_gate(shared, &shared.tests.before_done[side], side)?;
++            reader.done.store(generation, Ordering::Release);
++            seen = generation;
++            #[cfg(test)]
++            test_pause(shared, &shared.tests.before_latch[side]);
++            // Every normal publisher exchanges, unconditionally. Descheduling
++            // after done but before this exchange can delay a cold waiter.
++            signal_completion(shared);
++            continue;
++        }
++        if shared.active_scopes.load(Ordering::Acquire) == 0 {
++            park(shared, side, seen);
++        } else {
++            spin_loop();
++        }
++    }
++}
++
++/// Caller must have acquired request(g) and own this role. The only borrowed
++/// Packet lives in this lexical block; the return type contains scalar Copies.
++unsafe fn compute_input(shared: &Shared, role: usize, generation: u64) -> Result<RawOutput, String> {
++    let output = {
++        // SAFETY: The exact request Acquire and actual done/exit protocol
++        // exclude input mutation throughout this lexical borrow.
++        let packet = unsafe { &*shared.cells.input.get() };
++        if packet.generation != generation { return Err("raw input generation mismatch".into()); }
++        let activity = activity::compute_partition(&packet.position, &packet.influence, ROLE_MASKS[role]);
++        let geometry = match role {
++            0 => Some(shelter::components(&packet.position, &packet.influence, Color::White)),
++            1 => Some(shelter::components(&packet.position, &packet.influence, Color::Black)),
++            2 => None,
++            _ => unreachable!("invalid raw role"),
++        };
++        #[cfg(test)]
++        test_reader_gate(shared, &shared.tests.in_input[role], role)?;
++        RawOutput { generation, activity, geometry }
++    };
++    Ok(output)
++}
++
++fn side_name(role: usize) -> &'static str { ROLE_NAMES[role] }
++
++fn all_state(shared: &Shared, state: u8) -> bool {
++    shared.readers.iter().all(|reader| reader.state.load(Ordering::Acquire) == state)
++}
++
++fn quiescent(shared: &Shared) -> bool {
++    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), PARKED | FAILED | STOPPED))
++}
++
++fn all_terminal(shared: &Shared) -> bool {
++    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
++}
++
++fn terminal(shared: &Shared) -> bool { shared.stop.load(Ordering::Acquire) }
++
++fn all_done(shared: &Shared, generation: u64) -> bool {
++    shared.readers.iter().all(|reader| reader.done.load(Ordering::Acquire) == generation)
++}
++
++fn has_failure(control: &Control) -> bool {
++    control.owner_failure.is_some() || control.failures.iter().any(Option::is_some)
++}
++
++fn failure_in(control: &Control) -> String {
++    control.owner_failure.clone().or_else(|| control.failures.iter().find_map(Clone::clone))
++        .unwrap_or_else(|| "raw worker entered an invalid or stopped state".into())
++}
++
++fn control_lock(shared: &Shared) -> MutexGuard<'_, Control> {
++    shared.control.lock().unwrap_or_else(|error| error.into_inner())
++}
++
++/// All normal and terminal publishers participate in the SAME SC RMW chain.
++/// If this consumes registration, Sleep makes notification follow the waiter's
++/// predicate recheck and atomic unlock/sleep. Never called while holding Control.
++fn signal_completion(shared: &Shared) {
++    if shared.waiting.swap(false, Ordering::SeqCst) {
++        let _sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
++        shared.completed.notify_all();
++    }
++}
++
++fn wait_completion(shared: &Shared, generation: u64) -> Result<(), String> {
++    for _ in 0..COMPLETION_SPINS {
++        if terminal(shared) { return Err("raw completion stopped".into()); }
++        if all_done(shared, generation) { return Ok(()); }
++        spin_loop();
++    }
++    let mut sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
++    loop {
++        #[cfg(test)]
++        test_pause(shared, &shared.tests.before_registration);
++        // A prior publisher's SC exchange precedes this one and carries its
++        // done publication to our Acquire recheck. A later publisher either
++        // consumes true and owes a Sleep-coordinated wake, or another does.
++        shared.waiting.swap(true, Ordering::SeqCst);
++        #[cfg(test)]
++        {
++            shared.tests.registrations.fetch_add(1, Ordering::SeqCst);
++            test_pause(shared, &shared.tests.after_registration);
++        }
++        let stopped = terminal(shared);
++        let done = all_done(shared, generation);
++        if stopped || done {
++            shared.waiting.swap(false, Ordering::SeqCst);
++            drop(sleep);
++            return if stopped { Err("raw completion stopped".into()) } else { Ok(()) };
++        }
++        sleep = shared.completed.wait(sleep).unwrap_or_else(|error| error.into_inner());
++        // Re-register on EVERY spurious/early wake before checking/sleeping.
++    }
++}
++
++fn publish_terminal(shared: &Shared, side: usize, failure: Option<String>) {
++    {
++        let mut control = control_lock(shared);
++        let reader = &shared.readers[side];
++        if let Some(error) = failure {
++            control.failures[side] = Some(error);
++            reader.failed_generation.store(shared.request.load(Ordering::Acquire), Ordering::Relaxed);
++            reader.state.store(FAILED, Ordering::Release);
++        } else if reader.state.load(Ordering::Acquire) != FAILED {
++            reader.state.store(STOPPED, Ordering::Release);
++        }
++        // This handler runs only after that reader's concrete loop has exited,
++        // including unwind. It never acknowledges or mutates its peer's cells.
++        shared.stop.store(true, Ordering::Release);
++        shared.wake.notify_all();
++    }
++    signal_completion(shared);
++}
++
++fn claim_discard(control: &mut Control) {
++    if let Flight::Published(metadata) = control.flight {
++        control.flight = Flight::Discarding(metadata);
++    }
++}
++
++fn retire_flight(control: &mut Control) {
++    control.flight = Flight::None;
++}
++
++fn release_scope(shared: &Shared) -> Result<(), String> {
++    let mut control = control_lock(shared);
++    if control.shutdown && control.scopes == 0 {
++        // Even when shutdown owns the joins, the guard itself acknowledges
++        // ALL THREE real quiet readers rather than assuming its owner has drained.
++        while !quiescent(shared) { control = wait_control(shared, control); }
++        return Ok(());
++    }
++    assert!(control.scopes != 0, "raw scope released twice");
++    control.scopes -= 1;
++    shared.active_scopes.store(control.scopes, Ordering::Release);
++    if control.scopes != 0 { return Ok(()); }
++    control.closing = true;
++    claim_discard(&mut control);
++    // Keep Discarding until ALL THREE real parked/exited acknowledgments. Seeing
++    // stop/failure on one reader is never input or output retirement of its peer.
++    while !quiescent(shared) { control = wait_control(shared, control); }
++    retire_flight(&mut control);
++    control.closing = false;
++    shared.wake.notify_all();
++    if terminal(shared) { Err(failure_in(&control)) } else { Ok(()) }
++}
++
++/// No cell access here. Under Control an unseen published epoch must be handled
++/// by the reader loop before PARKED, unless the reader actually exits instead.
++fn park(shared: &Shared, side: usize, seen: u64) {
++    let mut control = control_lock(shared);
++    if terminal(shared) || shared.request.load(Ordering::Acquire) != seen { return; }
++    if control.scopes != 0 { return; }
++    shared.readers[side].state.store(PARKED, Ordering::Release);
++    shared.wake.notify_all();
++    while control.scopes == 0 && !terminal(shared) {
++        control = wait_control(shared, control);
++    }
++    if !terminal(shared) {
++        shared.readers[side].state.store(IDLE, Ordering::Release);
++        shared.wake.notify_all();
++    }
++}
++
++fn wait_control<'a>(shared: &'a Shared, control: MutexGuard<'a, Control>) -> MutexGuard<'a, Control> {
++    shared.wake.wait(control).unwrap_or_else(|error| error.into_inner())
++}
++
++#[cfg(test)]
++#[derive(Default)]
++struct TestGate {
++    blocked: bool,
++    entered: bool,
++    fail: bool,
++    panic: bool,
++}
++
++#[cfg(test)]
++struct TestHooks {
++    startup: Startup,
++    input: [Mutex<TestGate>; 3],
++    in_input: [Mutex<TestGate>; 3],
++    before_done: [Mutex<TestGate>; 3],
++    before_latch: [Mutex<TestGate>; 3],
++    before_registration: Mutex<TestGate>,
++    after_registration: Mutex<TestGate>,
++    consuming: Mutex<TestGate>,
++    before_dispatch: Mutex<TestGate>,
++    wake: Condvar,
++    registrations: AtomicUsize,
++    fail_before_publish: AtomicBool,
++}
++
++#[cfg(test)]
++impl TestHooks {
++    fn new(startup: Startup) -> Self {
++        Self {
++            startup,
++            input: std::array::from_fn(|_| Mutex::new(TestGate::default())),
++            in_input: std::array::from_fn(|_| Mutex::new(TestGate::default())),
++            before_done: std::array::from_fn(|_| Mutex::new(TestGate::default())),
++            before_latch: std::array::from_fn(|_| Mutex::new(TestGate::default())),
++            before_registration: Mutex::new(TestGate::default()),
++            after_registration: Mutex::new(TestGate::default()),
++            consuming: Mutex::new(TestGate::default()),
++            before_dispatch: Mutex::new(TestGate::default()),
++            wake: Condvar::new(),
++            registrations: AtomicUsize::new(0),
++            fail_before_publish: AtomicBool::new(false),
++        }
++    }
++}
++
++#[cfg(test)]
++fn test_pause(shared: &Shared, mutex: &Mutex<TestGate>) {
++    let mut gate = mutex.lock().unwrap();
++    gate.entered = true;
++    shared.tests.wake.notify_all();
++    while gate.blocked { gate = shared.tests.wake.wait(gate).unwrap(); }
++}
++
++#[cfg(test)]
++fn test_reader_gate(shared: &Shared, mutex: &Mutex<TestGate>, side: usize) -> Result<(), String> {
++    test_pause(shared, mutex);
++    let gate = mutex.lock().unwrap();
++    if gate.panic { panic!("controlled {} raw reader panic", side_name(side)); }
++    if gate.fail { Err(format!("controlled {} raw reader failure", side_name(side))) } else { Ok(()) }
++}
++
++#[cfg(test)]
++mod lifecycle_tests {
++    use super::*;
++    use std::sync::mpsc;
++
++    struct Fixture {
++        position: Position,
++        influence: Influence,
++        material: i32,
++        mobility_weights: [i32; 2],
++        shelter_weights: [i32; 2],
++    }
++
++    fn packet() -> Fixture {
++        let position = Position::from_fen(
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R w KQkq - 0 1",
++        ).unwrap();
++        Fixture {
++            position, influence: Influence::build(&position), material: 193,
++            mobility_weights: [2017, 633], shelter_weights: [997, 3101],
++        }
++    }
++
++    fn dispatch(worker: &mut RawWorker, packet: &Fixture) -> u64 {
++        worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).unwrap();
++        worker.generation
++    }
++
++    fn assert_output(actual: ActivityShelter, packet: &Fixture) {
++        let expected = crate::evaluator_worker::compute(
++            &packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights,
++        );
++        assert_eq!(actual.activity, expected.activity);
++        assert_eq!(actual.shelter, expected.shelter);
++    }
++
++    fn block_at(mutex: &Mutex<TestGate>) {
++        let mut gate = mutex.lock().unwrap();
++        *gate = TestGate { blocked: true, ..TestGate::default() };
++    }
++
++    fn entered_at(shared: &Shared, mutex: &Mutex<TestGate>) {
++        let mut gate = mutex.lock().unwrap();
++        while !gate.entered { gate = shared.tests.wake.wait(gate).unwrap(); }
++    }
++
++    fn release_at(shared: &Shared, mutex: &Mutex<TestGate>, fail: bool) {
++        let mut gate = mutex.lock().unwrap();
++        gate.blocked = false;
++        gate.fail = fail;
++        shared.tests.wake.notify_all();
++    }
++
++    fn block(shared: &Shared, side: usize) { block_at(&shared.tests.input[side]); }
++    fn entered(shared: &Shared, side: usize) { entered_at(shared, &shared.tests.input[side]); }
++    fn release(shared: &Shared, side: usize, fail: bool) {
++        release_at(shared, &shared.tests.input[side], fail);
++    }
++
++    fn wait_done(shared: &Shared, side: usize, generation: u64) {
++        while shared.readers[side].done.load(Ordering::Acquire) != generation { thread::yield_now(); }
++    }
++
++    fn wait_state(shared: &Shared, side: usize, state: u8) {
++        while shared.readers[side].state.load(Ordering::Acquire) != state { thread::yield_now(); }
++    }
++
++    fn registered(shared: &Shared, count: usize) {
++        while shared.tests.registrations.load(Ordering::SeqCst) < count { thread::yield_now(); }
++    }
++
++    fn closing(shared: &Shared) {
++        while !control_lock(shared).closing { thread::yield_now(); }
++    }
++
++    fn no_flight(shared: &Shared) {
++        assert!(matches!(control_lock(shared).flight, Flight::None));
++    }
++
++    #[test]
++    fn raw_startup_standalone_nested_scopes_and_reuse() {
++        let mut idle = RawWorker::start().unwrap();
++        assert!(idle.is_parked());
++        idle.shutdown().unwrap();
++        assert_eq!(idle.cold_report(),
++            "{\"enabled\":true,\"request\":0,\"done\":[0,0,0],\"roles\":[0,1,2]}");
++        let mut worker = RawWorker::start().unwrap();
++        assert!(worker.is_parked());
++        let packet = packet();
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        for _ in 0..3 {
++            let outer = worker.start_active_scope().unwrap();
++            let inner = worker.start_active_scope().unwrap();
++            assert!(worker.start_call_scope().unwrap().is_none());
++            inner.finish().unwrap();
++            dispatch(&mut worker, &packet);
++            assert_output(worker.complete().unwrap(), &packet);
++            outer.finish().unwrap();
++            assert!(worker.is_parked());
++            no_flight(&worker.shared);
++        }
++        let call = worker.start_call_scope().unwrap().unwrap();
++        dispatch(&mut worker, &packet);
++        assert_output(worker.complete().unwrap(), &packet);
++        call.finish().unwrap();
++        // No selected kinds exist, but each actual reader must still end its
++        // input borrow and publish done before the packet/output cells retire.
++        let position = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        let empty = Fixture { position, influence: Influence::build(&position), material: 0,
++            mobility_weights: [1024; 2], shelter_weights: [1024; 2] };
++        let call = worker.start_call_scope().unwrap().unwrap();
++        let generation = dispatch(&mut worker, &empty);
++        assert_output(worker.complete().unwrap(), &empty);
++        assert!(all_done(&worker.shared, generation));
++        call.finish().unwrap();
++        worker.shutdown().unwrap();
++        assert_eq!(worker.cold_report(),
++            "{\"enabled\":true,\"request\":5,\"done\":[5,5,5],\"roles\":[0,1,2]}");
++    }
++
++    #[test]
++    fn raw_delayed_each_reader_retains_packet_and_completion_predicate() {
++        for delayed in 0..3 {
++            let mut worker = RawWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            block(&worker.shared, delayed);
++            let token = dispatch(&mut worker, &packet);
++            entered(&worker.shared, delayed);
++            for peer in 0..3 { if peer != delayed { wait_done(&worker.shared, peer, token); } }
++            let shared = Arc::clone(&worker.shared);
++            let (sent, received) = mpsc::channel();
++            let waiter = thread::spawn(move || {
++                wait_completion(&shared, token).unwrap();
++                sent.send(()).unwrap();
++            });
++            registered(&worker.shared, 1);
++            assert!(matches!(control_lock(&worker.shared).flight,
++                Flight::Published(metadata) if metadata.generation == token));
++            assert!(received.try_recv().is_err());
++            assert_eq!(worker.shared.readers[delayed].done.load(Ordering::Acquire), 0);
++            release(&worker.shared, delayed, false);
++            waiter.join().unwrap();
++            // Done already precedes complete: no future notification required.
++            assert_output(worker.complete().unwrap(), &packet);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn raw_discard_close_waits_for_all_readers_before_packet_reuse() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        for side in 0..3 { block(&worker.shared, side); }
++        let token = dispatch(&mut worker, &packet);
++        for side in 0..3 { entered(&worker.shared, side); }
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { scope.finish().unwrap(); sent.send(()).unwrap(); });
++        closing(&worker.shared);
++        release(&worker.shared, 0, false);
++        wait_state(&worker.shared, 0, PARKED);
++        assert!(received.try_recv().is_err());
++        assert!(matches!(control_lock(&worker.shared).flight,
++            Flight::Discarding(metadata) if metadata.generation == token));
++        // A coordinator arriving after close cannot consume either cell.
++        release(&worker.shared, 1, false);
++        release(&worker.shared, 2, false);
++        close.join().unwrap();
++        assert!(worker.is_parked());
++        assert!(worker.complete().is_err());
++        let next = worker.start_active_scope().unwrap();
++        assert!(worker.complete().is_err());
++        let new = dispatch(&mut worker, &packet);
++        assert_eq!(new, token + 1);
++        assert_output(worker.complete().unwrap(), &packet);
++        next.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_reader_failure_notifies_completion_and_drains_peers() {
++        for failing in 0..3 {
++            let mut worker = RawWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            for side in 0..3 { block(&worker.shared, side); }
++            let token = dispatch(&mut worker, &packet);
++            for side in 0..3 { entered(&worker.shared, side); }
++            let shared = Arc::clone(&worker.shared);
++            let waiter = thread::spawn(move || wait_completion(&shared, token).is_err());
++            registered(&worker.shared, 1);
++            release(&worker.shared, failing, true);
++            assert!(waiter.join().unwrap());
++            assert_eq!(worker.shared.readers[failing].failed_generation.load(Ordering::Acquire), token);
++            assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++                packet.mobility_weights, packet.shelter_weights).is_err());
++            let (sent, received) = mpsc::channel();
++            let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++            closing(&worker.shared);
++            assert!(received.try_recv().is_err());
++            assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
++            for peer in 0..3 { if peer != failing { release(&worker.shared, peer, false); } }
++            close.join().unwrap();
++            assert!(received.recv().unwrap().is_err());
++            let failure = worker.shutdown().unwrap_err();
++            assert_eq!(worker.shutdown().unwrap_err(), failure);
++            assert!(worker.check_running().is_err());
++            assert!(worker.threads.iter().all(Option::is_none));
++            no_flight(&worker.shared);
++        }
++    }
++
++    #[test]
++    fn raw_shutdown_joins_all_delayed_readers_and_outliving_guard() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..3 { block(&worker.shared, side); }
++        dispatch(&mut worker, &packet());
++        for side in 0..3 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let (sent, received) = mpsc::channel();
++        let shutdown = thread::spawn(move || {
++            worker.shutdown().unwrap();
++            sent.send(()).unwrap();
++            worker
++        });
++        while !shared.stop.load(Ordering::Acquire) { thread::yield_now(); }
++        let (guard_sent, guard_received) = mpsc::channel();
++        let guard = thread::spawn(move || { guard_sent.send(scope.finish()).unwrap(); });
++        release(&shared, 0, false);
++        wait_state(&shared, 0, STOPPED);
++        assert!(received.try_recv().is_err());
++        assert!(guard_received.try_recv().is_err());
++        assert!(matches!(control_lock(&shared).flight, Flight::Discarding(_)));
++        release(&shared, 1, false);
++        wait_state(&shared, 1, STOPPED);
++        assert!(received.try_recv().is_err());
++        assert!(guard_received.try_recv().is_err());
++        release(&shared, 2, false);
++        let worker = shutdown.join().unwrap();
++        guard.join().unwrap();
++        assert!(guard_received.recv().unwrap().is_ok());
++        assert!(worker.threads.iter().all(Option::is_none));
++        assert!(all_terminal(&shared));
++        no_flight(&shared);
++    }
++
++    #[test]
++    fn raw_normal_terminal_stop_notifies_blocked_completion_and_drains_peers() {
++        let mut worker = RawWorker::start_with(Startup {
++            stop_after_request: Some(0), ..Startup::default()
++        }).unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..3 { block(&worker.shared, side); }
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..3 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token).is_err());
++        registered(&worker.shared, 1);
++        release(&worker.shared, 0, false);
++        assert!(waiter.join().unwrap());
++        assert_eq!(worker.shared.readers[0].state.load(Ordering::Acquire), STOPPED);
++        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
++        release(&worker.shared, 1, false);
++        release(&worker.shared, 2, false);
++        assert!(scope.finish().is_err());
++        worker.shutdown().unwrap();
++        assert!(all_terminal(&worker.shared));
++        no_flight(&worker.shared);
++    }
++
++    #[test]
++    fn raw_scope_unwind_drains_and_parks_all() {
++        let mut worker = RawWorker::start().unwrap();
++        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++            let _scope = worker.start_active_scope().unwrap();
++            dispatch(&mut worker, &packet());
++            panic!("intentional raw scope unwind");
++        }));
++        assert!(unwound.is_err());
++        assert!(worker.is_parked());
++        no_flight(&worker.shared);
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_startup_failure_or_early_stop_joins_all() {
++        for side in 0..3 {
++            assert_eq!(RawWorker::start_with(Startup {
++                fail_entry: Some(side), ..Startup::default()
++            }).err().unwrap(), "controlled raw startup failure");
++            assert!(RawWorker::start_with(Startup {
++                stop_entry: Some(side), ..Startup::default()
++            }).is_err());
++            assert!(RawWorker::start_with(Startup {
++                panic_entry: Some(side), ..Startup::default()
++            }).is_err());
++            assert_eq!(RawWorker::start_with(Startup {
++                fail_spawn: Some(side), ..Startup::default()
++            }).err().unwrap(), "controlled raw spawn failure");
++        }
++    }
++
++    #[test]
++    fn raw_close_wins_dispatch_without_publishing_a_new_epoch() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block_at(&worker.shared.tests.before_dispatch);
++        let shared = Arc::clone(&worker.shared);
++        let dispatching = thread::spawn(move || {
++            let packet = packet();
++            assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++                packet.mobility_weights, packet.shelter_weights).is_err());
++            worker
++        });
++        entered_at(&shared, &shared.tests.before_dispatch);
++        scope.finish().unwrap();
++        release_at(&shared, &shared.tests.before_dispatch, false);
++        let mut worker = dispatching.join().unwrap();
++        assert_eq!(worker.generation, 0);
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        no_flight(&worker.shared);
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        dispatch(&mut worker, &packet);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_unpublished_failure_rolls_back_without_advancing_or_busy_flight() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        worker.shared.tests.fail_before_publish.store(true, Ordering::SeqCst);
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        assert_eq!(worker.generation, 0);
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        no_flight(&worker.shared);
++        let token = dispatch(&mut worker, &packet);
++        assert_eq!(token, 1);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_output_write_is_not_retirement_until_done_release() {
++        for delayed in 0..3 {
++            let mut worker = RawWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            block_at(&worker.shared.tests.before_done[delayed]);
++            let token = dispatch(&mut worker, &packet());
++            entered_at(&worker.shared, &worker.shared.tests.before_done[delayed]);
++            for peer in 0..3 { if peer != delayed { wait_done(&worker.shared, peer, token); } }
++            assert_eq!(worker.shared.readers[delayed].done.load(Ordering::Acquire), 0);
++            let (sent, received) = mpsc::channel();
++            let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++            closing(&worker.shared);
++            assert!(received.try_recv().is_err());
++            assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
++            release_at(&worker.shared, &worker.shared.tests.before_done[delayed], false);
++            close.join().unwrap();
++            assert!(received.recv().unwrap().is_ok());
++            assert!(worker.is_parked());
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            dispatch(&mut worker, &packet);
++            assert_output(worker.complete().unwrap(), &packet);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn raw_packet_borrow_blocks_discard_until_every_actual_reader_retires() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for role in 0..3 { block_at(&worker.shared.tests.in_input[role]); }
++        let packet = packet();
++        dispatch(&mut worker, &packet);
++        for role in 0..3 { entered_at(&worker.shared, &worker.shared.tests.in_input[role]); }
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        closing(&worker.shared);
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        for role in 0..3 {
++            assert!(received.try_recv().is_err());
++            assert_eq!(worker.shared.readers[role].done.load(Ordering::Acquire), 0);
++            assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
++            release_at(&worker.shared, &worker.shared.tests.in_input[role], false);
++            wait_state(&worker.shared, role, PARKED);
++        }
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        assert!(worker.is_parked());
++        let scope = worker.start_active_scope().unwrap();
++        dispatch(&mut worker, &packet);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_output_consumption_wins_control_before_final_close() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        block_at(&worker.shared.tests.consuming);
++        dispatch(&mut worker, &packet);
++        let shared = Arc::clone(&worker.shared);
++        let complete = thread::spawn(move || {
++            assert_output(worker.complete().unwrap(), &packet);
++            worker
++        });
++        entered_at(&shared, &shared.tests.consuming);
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        // Completion holds Control here; close cannot claim or retire its flight.
++        assert!(received.try_recv().is_err());
++        release_at(&shared, &shared.tests.consuming, false);
++        let mut worker = complete.join().unwrap();
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        assert!(worker.is_parked());
++        let scope = worker.start_active_scope().unwrap();
++        let mut next = self::packet();
++        next.material = -193;
++        next.mobility_weights = [0, 10240];
++        dispatch(&mut worker, &next);
++        assert_output(worker.complete().unwrap(), &next);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_prior_epoch_latch_delay_allows_safe_output_reuse() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block_at(&worker.shared.tests.before_latch[0]);
++        let packet = packet();
++        let first = dispatch(&mut worker, &packet);
++        entered_at(&worker.shared, &worker.shared.tests.before_latch[0]);
++        wait_done(&worker.shared, 1, first);
++        assert_output(worker.complete().unwrap(), &packet);
++        let second = dispatch(&mut worker, &packet);
++        assert_eq!(second, first + 1);
++        wait_done(&worker.shared, 1, second);
++        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), first);
++        release_at(&worker.shared, &worker.shared.tests.before_latch[0], false);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_completion_before_waiter_registration_uses_sc_predicate_chain() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..3 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.before_registration);
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..3 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token));
++        entered_at(&worker.shared, &worker.shared.tests.before_registration);
++        for side in 0..3 { release(&worker.shared, side, false); }
++        for side in 0..3 { wait_done(&worker.shared, side, token); }
++        release_at(&worker.shared, &worker.shared.tests.before_registration, false);
++        waiter.join().unwrap().unwrap();
++        assert!(!worker.shared.waiting.load(Ordering::SeqCst));
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_completion_during_waiter_registration_and_spurious_wake() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..3 { block(&worker.shared, side); }
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..3 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token));
++        registered(&worker.shared, 1);
++        // Sleep excludes a notification slipping into the predicate/wait gap.
++        {
++            let _sleep = worker.shared.sleep.lock().unwrap();
++            worker.shared.completed.notify_all();
++        }
++        registered(&worker.shared, 2);
++        for side in 0..3 { release(&worker.shared, side, false); }
++        waiter.join().unwrap().unwrap();
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..3 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.after_registration);
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..3 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token));
++        entered_at(&worker.shared, &worker.shared.tests.after_registration);
++        for side in 0..3 { release(&worker.shared, side, false); }
++        for side in 0..3 { wait_done(&worker.shared, side, token); }
++        release_at(&worker.shared, &worker.shared.tests.after_registration, false);
++        waiter.join().unwrap().unwrap();
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn raw_terminal_during_registration_wakes_without_fabricating_peer_done() {
++        let mut worker = RawWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..3 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.after_registration);
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..3 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token));
++        entered_at(&worker.shared, &worker.shared.tests.after_registration);
++        release(&worker.shared, 0, true);
++        wait_state(&worker.shared, 0, FAILED);
++        release_at(&worker.shared, &worker.shared.tests.after_registration, false);
++        assert!(waiter.join().unwrap().is_err());
++        assert_eq!(worker.shared.readers[1].done.load(Ordering::Acquire), 0);
++        release(&worker.shared, 1, false);
++        release(&worker.shared, 2, false);
++        assert!(scope.finish().is_err());
++        assert!(worker.shutdown().is_err());
++        no_flight(&worker.shared);
++    }
++
++    #[test]
++    fn raw_reader_unwind_before_done_drains_all_without_output_consumption() {
++        for inside_input in [false, true] {
++            let mut worker = RawWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let shared = Arc::clone(&worker.shared);
++            let pause = if inside_input { &shared.tests.in_input[0] }
++                else { &shared.tests.before_done[0] };
++            block_at(pause);
++            block(&shared, 1);
++            block(&shared, 2);
++            dispatch(&mut worker, &packet());
++            entered_at(&shared, pause);
++            entered(&shared, 1);
++            entered(&shared, 2);
++            {
++                let mut gate = pause.lock().unwrap();
++                gate.panic = true;
++                gate.blocked = false;
++                shared.tests.wake.notify_all();
++            }
++            wait_state(&shared, 0, FAILED);
++            assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++            release(&shared, 1, false);
++            release(&shared, 2, false);
++            assert!(scope.finish().is_err());
++            assert!(worker.shutdown().is_err());
++            no_flight(&shared);
++        }
++    }
++
++    #[test]
++    fn raw_near_max_epoch_publishes_max_once_then_terminally_drains() {
++        let mut worker = RawWorker::start().unwrap();
++        assert!(worker.is_parked());
++        worker.generation = u64::MAX - 1;
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = dispatch(&mut worker, &packet);
++        assert_eq!(token, u64::MAX);
++        assert_output(worker.complete().unwrap(), &packet);
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert!(all_done(&worker.shared, u64::MAX));
++        let error = worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).err().unwrap();
++        assert_eq!(error, "raw epoch exhausted");
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert!(all_done(&worker.shared, u64::MAX));
++        assert!(worker.threads.iter().all(Option::is_none));
++        assert!(all_terminal(&worker.shared));
++        no_flight(&worker.shared);
++        scope.finish().unwrap();
++        assert!(worker.shutdown().is_err());
++    }
++}
+diff --git a/src/session.rs b/src/session.rs
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -139 +139 @@
+-    /// Positive total request, configured to at most three research engine threads.
++    /// Positive total request, configured to at most four research engine threads.
+diff --git a/src/shelter.rs b/src/shelter.rs
+--- a/src/shelter.rs
++++ b/src/shelter.rs
+@@ -101,0 +102,15 @@
++}
++
++/// Geometry is already complete and indexed by defender. Compose each complete
++/// pressure once, then retain the original cross-color weighting rounds.
++pub(crate) fn compose_components(
++    parts: [Components; 2],
++    pressure: [i32; 2],
++    material_score: i32,
++    weights: [i32; 2],
++    phase: Phase,
++) -> Shelter {
++    debug_assert!(pressure.iter().all(|p| *p >= 0));
++    debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
++    let terms = [compose(parts[0], pressure[0], phase), compose(parts[1], pressure[1], phase)];
++    Shelter { terms, weighted: combine(terms, material_score, weights) }
+@@ -656,0 +672,36 @@
++    fn component_composition_matches_serial_with_complete_reduced_pressure() {
++        for placement in [
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R",
++            "7k/8/8/3B4/2RRQ3/3B4/8/K7",
++            "7k/8/8/8/8/8/8/K7",
++        ] {
++            let position = Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();
++            for map in [
++                Influence::build(&position), influence(),
++                Influence { profiles: [[255; 64], [0; 64]] },
++            ] {
++                let before = (position, map);
++                // Geometry may complete in either order and needs no pressure.
++                let black = components(&position, &map, Color::Black);
++                let white = components(&position, &map, Color::White);
++                let raw = [[3, 8], [8, 3], [4, 4]]
++                    .map(|masks| crate::activity::compute_partition(&position, &map, masks));
++                let produced = crate::activity::combine_partitions(raw, 0, [1024; 2], position.phase());
++                for pressure in [[0, 0], [0, 12], [12, 16], [57, 119], produced.pressure] {
++                    for material in [-100_000, -256, -1, 0, 217, 100_000] {
++                        for weights in [[1024; 2], [10_240, 8192], [17, 9173], [0; 2], [10_240, 0]] {
++                            assert_eq!(
++                                compose_components([white, black], pressure, material, weights, position.phase()),
++                                compute(&position, &map, pressure, material, weights),
++                                "{placement}, pressure={pressure:?}, material={material}, weights={weights:?}",
++                            );
++                        }
++                    }
++                }
++                assert_eq!((position, map), before);
++            }
++        }
++    }
++
++    #[test]
