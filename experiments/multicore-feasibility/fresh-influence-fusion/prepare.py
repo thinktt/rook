@@ -26,7 +26,17 @@ def main():
     prepared=preparation(prepared_path)
     assert set(os.sched_getaffinity(0))==HELPERS
     if args.stage=='prepare':
-        out.mkdir();start=time.monotonic_ns()
+        # One compile-only repair: preserve its raw/source/tool snapshot and clock.
+        history=out/'failed-preparation-01'
+        if history.exists():
+            prior=read(history/'pipeline.json')
+            assert prior['failure'] is not None and len(prior['stages'])==1 and prior['stages'][0]['exit']==101
+            assert not (history/'tests-00-colors-worker.stdout').read_text().strip()
+            assert 'error[E0599]' in (history/'tests-00-colors-worker.stderr').read_text()
+            assert not (out/'prepared-run.json').exists()
+            start=prior['pipelineStartMonotonicNs']
+        else:
+            out.mkdir();start=time.monotonic_ns()
         state=dict(schema='rook2-fresh-influence-fusion-pipeline-v1',complete=False,prepared=False,collected=False,
             failure=None,active=None,stages=[],preparation=str(prepared_path),preparationSha256=sha(prepared_path),
             sourcePreparation=prepared,protectedArtifacts=baseline(),pipelineStartMonotonicNs=start,

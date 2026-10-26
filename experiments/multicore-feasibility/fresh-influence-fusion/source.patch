@@ -133,9 +133,7 @@ diff --git a/src/colors_worker.rs b/src/colors_worker.rs
 @@ -419 +467 @@
 -            Flight::Published(metadata) if metadata.generation == generation
 +            Flight::Published(metadata) | Flight::FreshDelivered(metadata) if metadata.generation == generation
-@@ -459,0 +508,39 @@
-+    }
-+
+@@ -461,0 +510,39 @@
 +    /// Deliver only this fresh epoch into empty caller-owned canonical scratch.
 +    /// Sleep is released before Control; no worker-storage reference escapes.
 +    pub(crate) fn acquire_fresh_map(
@@ -173,24 +171,37 @@ diff --git a/src/colors_worker.rs b/src/colors_worker.rs
 +            self.shared.row_ready[0].load(Ordering::Acquire),
 +            self.shared.row_ready[1].load(Ordering::Acquire),
 +        ]
-@@ -558 +645,3 @@
++    }
++
+@@ -506,0 +594,10 @@
++    }
++
++    #[cfg(test)]
++    pub(crate) fn parked_probe_for_test(&self) -> impl Fn() -> bool {
++        let shared = Arc::clone(&self.shared);
++        move || {
++            let control = control_lock(&shared);
++            all_state(&shared, PARKED) && control.scopes == 0
++                && !control.closing && matches!(control.flight, Flight::None)
++        }
+@@ -558 +655,3 @@
 -            let output = unsafe { compute_input(shared, side, generation, access_started)? };
 +            let Some(output) = (unsafe { compute_input(shared, side, generation, access_started)? }) else {
 +                return Ok(()); // Stop retires only this actual reader on loop exit.
 +            };
-@@ -588 +677 @@
+@@ -588 +687 @@
 -) -> Result<SideOutput, String> {
 +) -> Result<Option<SideOutput>, String> {
-@@ -590,2 +679,2 @@
+@@ -590,2 +689,2 @@
 -        // SAFETY: The caller's request Acquire and the done/retirement protocol
 -        // exclude input mutation for this entire block.
 +        // SAFETY: Request Acquire publishes this immutable Packet. No next
 +        // writer can proceed before both actual done or actual exit retirement.
-@@ -595,3 +683,0 @@
+@@ -595,3 +693,0 @@
 -        // Existing field name/timer positions remain: this now observes input
 -        // access setup, with no packet memcpy or input mutex. Actual direct
 -        // packet cache traffic occurs inside the following kernel interval.
-@@ -602 +688,36 @@
+@@ -602 +698,36 @@
 -        let activity = activity::compute_side(&packet.position, &packet.influence, color);
 +        let local_map: Influence;
 +        let influence = match &packet.input {
@@ -228,16 +239,16 @@ diff --git a/src/colors_worker.rs b/src/colors_worker.rs
 +            }
 +        };
 +        let activity = activity::compute_side(&packet.position, influence, color);
-@@ -604 +725 @@
+@@ -604 +735 @@
 -            &packet.position, &packet.influence, color.opponent(), activity.pressure,
 +            &packet.position, influence, color.opponent(), activity.pressure,
-@@ -609,2 +730,3 @@
+@@ -609,2 +740,3 @@
 -        // Last Packet access, sampled or otherwise. There is no output mutex;
 -        // the same ready clock sits immediately before output publication.
 +        // The original sparse clocks stay in their phase positions. Fresh
 +        // kernel/ready intervals include row build, publication, peer wait and
 +        // local assembly; they are not the old supplied-map phase partition.
-@@ -614 +736,12 @@
+@@ -614 +746,12 @@
 -    Ok(output)
 +    Ok(Some(output))
 +}
@@ -251,12 +262,12 @@ diff --git a/src/colors_worker.rs b/src/colors_worker.rs
 +            unsafe { shared.cells.black_row.get().read() },
 +        ],
 +    }
-@@ -659,0 +793,4 @@
+@@ -659,0 +803,4 @@
 +fn both_rows_ready(shared: &Shared, generation: u64) -> bool {
 +    shared.row_ready.iter().all(|ready| ready.load(Ordering::Acquire) == generation)
 +}
 +
-@@ -660,0 +798,13 @@
+@@ -660,0 +808,13 @@
 +    wait_phase(shared, generation, false)
 +}
 +
@@ -270,32 +281,32 @@ diff --git a/src/colors_worker.rs b/src/colors_worker.rs
 +
 +/// Only the coordinator calls this cold wait. Helpers never register on it.
 +fn wait_phase(shared: &Shared, generation: u64, rows: bool) -> Result<(), String> {
-@@ -663 +813 @@
+@@ -663 +823 @@
 -        if both_done(shared, generation) { return Ok(()); }
 +        if phase_ready(shared, generation, rows) { return Ok(()); }
-@@ -680 +830 @@
+@@ -680 +840 @@
 -        let done = both_done(shared, generation);
 +        let done = phase_ready(shared, generation, rows);
-@@ -711 +861 @@
+@@ -711 +871 @@
 -    if let Flight::Published(metadata) = control.flight {
 +    if let Flight::Published(metadata) | Flight::FreshProducing(metadata) | Flight::FreshDelivered(metadata) = control.flight {
-@@ -719 +869,2 @@
+@@ -719 +879,2 @@
 -        Flight::Published(metadata) | Flight::Discarding(metadata) => metadata,
 +        Flight::Published(metadata) | Flight::FreshProducing(metadata)
 +        | Flight::FreshDelivered(metadata) | Flight::Discarding(metadata) => metadata,
-@@ -906,0 +1058,5 @@
+@@ -906,0 +1068,5 @@
 +    row_input: [Mutex<TestGate>; 2],
 +    before_row_ready: [Mutex<TestGate>; 2],
 +    before_row_signal: [Mutex<TestGate>; 2],
 +    after_row_ready: [Mutex<TestGate>; 2],
 +    map_consuming: Mutex<TestGate>,
-@@ -924,0 +1081,5 @@
+@@ -924,0 +1091,5 @@
 +            row_input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
 +            before_row_ready: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
 +            before_row_signal: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
 +            after_row_ready: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
 +            map_consuming: Mutex::new(TestGate::default()),
-@@ -1585 +1746,273 @@
+@@ -1585 +1756,273 @@
 -}
 +    fn fresh_dispatch(worker: &mut ColorsWorker, packet: &Fixture) -> DispatchToken {
 +        worker.dispatch_fresh(&packet.position, packet.material,
