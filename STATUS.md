@@ -9,12 +9,12 @@ No further adoption, release or external gate has been selected.
 The [lead synthesis](docs/research/open-multicore-progress.md) connects the current
 results, architectural lessons and next decision.
 
-**Latest research performance leader:** exact `3d914cdd` with ordinary owner-local
-inventory enabled and three threads. The [own-PGO/full54 comparison](experiments/multicore-feasibility/owner-local-own-pgo/README.md)
-records 60.049404s versus retained67d3 61.047211s and accepted serial 68.282114s:
-1.63% and 12.06% lower, respectively. Whole CPU is 180.163710s, or 2.635x serial.
+**Latest research performance leader:** exact `f8b829a7` with ordinary and Q
+owner-local inventory enabled and three threads. The [Q own-PGO/full54 comparison](experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
+records59.918858s versus retained3d3 60.327621s and accepted serial68.811008s:
+0.68% and12.92% lower, respectively. Whole CPU is179.768092s, or2.609x serial.
 All270 comparison lives/3120 posts pass; there are single observations per cell,
-not confidence intervals. New inline1 costs0.82% versus accepted serial. Prior
+not confidence intervals. New inline1 costs1.07% versus accepted serial. Prior
 artifacts, canonical source and accepted release remain unchanged; no adoption.
 
 The latest [wide internal-branch trial](experiments/multicore-feasibility/wide-internal/report.md)
@@ -167,9 +167,20 @@ passes17 affected checks and36 replay lives/420 posts plus three idle probes,
 first attempt. Sums are preserved ordinary-on7.624830s, matching Q-off7.664552s,
 Q-on7.537385s:1.15% and1.66% lower, respectively, with lower CPU. Most net gain
 comes from43;35 separates only versus matching off, and08 ranges overlap.
-Select one unchanged own-PGO/full54 comparison,216 training then270 comparisons
-plus five idle probes, reusing existing evidence.3d914c remains the research
-leader pending that result; no Q production gain or qualification is claimed.
+The [Q own-PGO closure](experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
+atdaa9e04a passes216 training lives, actual independent remerge/use build and
+270 comparisons plus five idle probes without failure or repeat. Q-on59.918858s
+improves0.88% versus matching Q-off60.450227s (46/54 cases),0.68% versus retained
+3d60.327621s (41/54) and12.92% versus serial68.811008s (54/54). Common Q-off drift
+is+0.20%; new inline1 is69.548826s (+1.07%). Retain exactf8/profilebbb858 as the
+latest research artifact; broader qualification and adoption remain unselected.
+
+Next selected is one completion-notification discriminator with both required
+SC fences, replacing publisher latch RMWs with fence/load/conditional notification.
+The publisher-only version is unsound; the independent proof requires an explicit
+cold-side fence after every registration. Preserve layout/math/ownership and both
+owner-local hooks; compare preserved/new generic inline1/mode3 in one fixed48+4
+lane after affected controls. No result, tuning or PGO is claimed yet.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

@@ -11,12 +11,20 @@ One immutable input is shared until both readers retire; each owns its output.
 The reviewed epoch protocol removed serialized reader copies and result locking.
 The numerical split alone had lost: the transport change made it useful.
 
-The latest [owner-local own-PGO survey](../../experiments/multicore-feasibility/owner-local-own-pgo/README.md)
+The latest [Q owner-local own-PGO survey](../../experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
+records59.918858s versus retained3d3 60.327621s and accepted serial68.811008s,
+gains of0.68% and12.92%. The coordinator conditionally prepares ordinary and
+eligible unchecked-Q lists during helper work. Whole CPU is179.768092s,2.609x
+serial; the new inline mode costs1.07% versus accepted serial. This is the latest
+research performance leader, with single observations per case/configuration,
+not qualification or canonical adoption.
+
+The preceding [ordinary owner-local survey](../../experiments/multicore-feasibility/owner-local-own-pgo/README.md)
 extends that design: at ordinary FULL, the coordinator conditionally generates
 its future move list while the matching color pair remains unfinished. It records
 60.049404s versus retained67d3 61.047211s and accepted serial68.282114s in one
 full54 window, gains of1.63% and12.06%. Whole CPU is180.163710s,2.635x serial.
-This is the new research performance leader; canonical/release source is unchanged.
+It established the ordinary hook's gain; canonical/release source is unchanged.
 Its new inline1 costs0.82% versus accepted serial. Qualification remains separate.
 
 The preceding [epoch own-PGO full54 survey](../../experiments/multicore-feasibility/epoch-own-pgo/report.md)
@@ -196,19 +204,35 @@ with lower CPU. Most net gain is43 with separated ranges against both controls;
 35 separates only against matching off and08 overlaps. The off build drifts0.52%
 above preserved. This is positive but narrow evidence, not demonstrated breadth.
 
-Select one unchanged68-source own-PGO/full54 lane:216 training lives spanning
-inline1/current2 (both hooks requested but dormant) and ordinary-on/Q-off3/Q-on3,
-one merge/independent remerge/use build, then270 single observations against
-accepted5cf/current3d and matching new inline/off/on plus five idle probes.
-Reuse affected and prior evidence, bind the corrected metadata API before data,
-and retain3d as leader until the result. No retuning, qualification or adoption
-is selected. This remains kernel overlap, not Q branch parallelism. Frontier
-batching and writer-region layout are other unselected reserves.
+The [Q own-PGO/full54 closure](../../experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
+atdaa9e04a passes216 training lives, actual independent byte-identical remerge,
+one use build/admission and270 comparisons/3120 posts plus five idle probes.
+All491 training/comparison/idle native chains close first attempt; the metadata
+adapter was corrected prospectively. Q-on59.918858s improves0.88% over matching
+off60.450227s (46/54) and0.68% over retained3d60.327621s (41/54). All54 observations
+beat serial68.811008s; no per-case significance follows from single observations.
+The13 losses to3d sum0.086002s, worst relative loss2.10% on10. Newinline69.548826s
+costs1.07% over accepted serial; Q-off drift is0.20%.43 supplies9.63% of matching
+net gain, so the full54 gain is broader than the generic three-case screen.
+Retain f8/profilebbb858 as latest research leader, with3d/67d/serial preserved.
 
-The latest three-thread image is `3d914cddf415cfb109bdabaf6eaf5b2384c3ca537a37a2f37a691c28ac5e91cc`,
-with profile `bf909cd4b9a489f3de23e1b0b2d5bb45c0069f690354d76510636c8fed54cd1f`;
-the winning mode enables owner-local inventory. Predecessor67d01108/profile948747
-remains preserved. These sources/artifacts are isolated experiment products; canonical research source
+Next select one fixed completion-notification trial. An independent bounded Astra
+review found a portable lost-wake execution for publisher fence+load alone.
+Adding an explicit SC fence after every cold registration yields the required
+ordering proof: each missed publication must either be visible to the recheck
+or lead to a Sleep-coordinated notification. Publishers stop clearing the latch;
+the sole coordinator retains registration/clear ownership. Real done/Control/
+reader retirement and output reverse edges stay unchanged. Compare preserved/new
+generic inline1/mode3, both owner hooks on, in one48+4 lane after affected controls.
+No layout, arithmetic, spin/sampling, weaker ordering or PGO change is selected.
+Less shared latch ownership traffic is a hypothesis, not a measured cache cause.
+Frontier batching and writer-region layout remain separate reserves.
+
+The latest three-thread image is `f8b829a79e43a90a0396c3baacb8f44f23476f6d9e7a9661626f5c1e8b467c62`,
+with profile `bbb858b01018cea09311ac5fe3b5fb5bc18c3b716e2f6a7bb5df83c794527ed4`;
+the winning mode enables ordinary and Q owner-local inventory. Predecessors
+3d914c and67d01108, with their profiles, remain preserved. These sources/artifacts
+are isolated experiment products; canonical research source
 still preserves the practical two-thread checkpoint, and accepted main/release
 bytes are unchanged. The source proof, focused controls and exact-image replay
 surveys support further research. Broad mandatory/gameplay qualification of the

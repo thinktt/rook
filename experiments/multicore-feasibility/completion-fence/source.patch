@@ -1,0 +1,113 @@
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -19 +19 @@
+-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
++use std::sync::atomic::{fence, AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+@@ -534 +534 @@
+-        // Terminal publication always participates in the SC latch chain, even
++        // Terminal publication always executes the SC publisher fence, even
+@@ -622,2 +622,2 @@
+-            // Every normal publisher exchanges, unconditionally. Descheduling
+-            // after done but before this exchange can delay a cold waiter.
++            // Every normal publisher fences, unconditionally. Descheduling
++            // after done but before signaling can delay a cold waiter.
+@@ -701,3 +701,5 @@
+-/// All normal and terminal publishers participate in the SAME SC RMW chain.
+-/// If this consumes registration, Sleep makes notification follow the waiter's
+-/// predicate recheck and atomic unlock/sleep. Never called while holding Control.
++/// Every done/terminal publication precedes this unconditional SC fence.
++/// Together with the fence after EVERY waiter registration, it excludes a
++/// missed publication plus a missed registration. Publishers never clear waiting.
++/// A true load owes Sleep acquisition/notification without another recheck;
++/// delayed/duplicate notifications are harmless. Never called with Control held.
+@@ -705 +707,7 @@
+-    if shared.waiting.swap(false, Ordering::SeqCst) {
++    fence(Ordering::SeqCst);
++    if shared.waiting.load(Ordering::SeqCst) {
++        #[cfg(test)]
++        {
++            shared.tests.notification_loads.fetch_add(1, Ordering::SeqCst);
++            test_pause(shared, &shared.tests.before_notify);
++        }
+@@ -721,3 +729,3 @@
+-        // A prior publisher's SC exchange precedes this one and carries its
+-        // done publication to our Acquire recheck. A later publisher either
+-        // consumes true and owes a Sleep-coordinated wake, or another does.
++        // Only this waiter writes waiting. The explicit SC fence, on EVERY
++        // registration, is required before the non-SC terminal/done reads;
++        // the SC swap alone cannot substitute for this two-fence proof.
+@@ -724,0 +733 @@
++        fence(Ordering::SeqCst);
+@@ -959,0 +969 @@
++    before_notify: Mutex<TestGate>,
+@@ -963,0 +974 @@
++    notification_loads: AtomicUsize,
+@@ -977,0 +989 @@
++            before_notify: Mutex::new(TestGate::default()),
+@@ -981,0 +994 @@
++            notification_loads: AtomicUsize::new(0),
+@@ -1590 +1603 @@
+-    fn colors_prior_epoch_latch_delay_allows_safe_output_reuse() {
++    fn colors_prior_epoch_signal_delay_allows_safe_output_reuse() {
+@@ -1610 +1623 @@
+-    fn colors_completion_before_waiter_registration_uses_sc_predicate_chain() {
++    fn colors_completion_before_registration_uses_two_fence_recheck() {
+@@ -1665,0 +1679,58 @@
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_two_delayed_true_notifiers_survive_exit_and_reregistration() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        for side in 0..2 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.before_notify);
++        let first = dispatch(&mut worker, &packet);
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let first_waiter = thread::spawn(move || wait_completion(&shared, first.generation));
++        registered(&worker.shared, 1);
++        for side in 0..2 { release(&worker.shared, side, false); }
++        // Both actual publishers read true and owe notification, but neither
++        // has yet acquired Sleep. Neither publisher may consume registration.
++        while worker.shared.tests.notification_loads.load(Ordering::SeqCst) < 2 {
++            thread::yield_now();
++        }
++        assert!(worker.shared.waiting.load(Ordering::SeqCst));
++        for side in 0..2 { wait_done(&worker.shared, side, first.generation); }
++        // An explicit spurious wake lets the sole waiter recheck matching done,
++        // clear registration and exit while both notification obligations wait.
++        {
++            let _sleep = worker.shared.sleep.lock().unwrap();
++            worker.shared.completed.notify_all();
++        }
++        first_waiter.join().unwrap().unwrap();
++        assert!(!worker.shared.waiting.load(Ordering::SeqCst));
++        assert_output(worker.complete().unwrap(), &packet);
++        let before = worker.shared.tests.registrations.load(Ordering::SeqCst);
++        for side in 0..2 { block(&worker.shared, side); }
++        let second = dispatch(&mut worker, &packet);
++        assert_eq!(second.generation, first.generation + 1);
++        let shared = Arc::clone(&worker.shared);
++        let (sent, received) = mpsc::channel();
++        let second_waiter = thread::spawn(move || {
++            let outcome = wait_completion(&shared, second.generation);
++            sent.send(outcome).unwrap();
++        });
++        registered(&worker.shared, before + 1);
++        // Old true-load obligations cross exit/registration and may notify the
++        // new waiter; they must never fabricate new done or clear its flag.
++        release_at(&worker.shared, &worker.shared.tests.before_notify, false);
++        for side in 0..2 { entered(&worker.shared, side); }
++        assert!(received.try_recv().is_err());
++        assert!(worker.shared.waiting.load(Ordering::SeqCst));
++        for side in 0..2 {
++            assert_eq!(worker.shared.readers[side].done.load(Ordering::Acquire), first.generation);
++            release(&worker.shared, side, false);
++        }
++        second_waiter.join().unwrap();
++        received.recv().unwrap().unwrap();
++        assert!(!worker.shared.waiting.load(Ordering::SeqCst));
++        assert_output(worker.complete().unwrap(), &packet);
