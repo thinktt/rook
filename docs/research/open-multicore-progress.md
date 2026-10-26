@@ -73,12 +73,20 @@ but no unique cause. Request/done spacing was already compact, and per-FULL Flig
 and waiting cannot share a 64-byte line in the lean layout. Actual heap-base phase
 and coherence traffic are unknown.
 
-One counterfactual is selected: restore original concrete shared field storage
-while keeping observation operations disabled and the installed receipt minimal.
-Verify the compiled layout before timing. Compare matching observed/unobserved3/4,
-retained3 and lean3 in one fixed generic stream; no padding sweep or PGO. This
-tests the representation confound without promising a cache explanation. Fresh-map
-fusion and frontier batching remain reserves.
+The [fixed-layout counterfactual](../../experiments/multicore-feasibility/fixed-layout-no-observations/report.md)
+matched old compiled offsets before data and passed72 replay lives/840 posts.
+Fixed3 records7.817264s versus lean3 8.243957s and retained3 7.716113s. Fixed4
+records7.721670s:1.223% below matching3, but0.072% above retained3 at1.334x CPU.
+Representation materially changes the result; neither isolated cache attribution
+nor a net four-thread win follows. Further inventory/layout variants are unselected.
+
+The next source-design question moves additional serial work onto the existing
+two helpers: construct native coherent Influence profiles in parallel at actual
+FULL/scratch-None demand, then continue the current color chains. Preserve supplied
+maps, scratch authority and canonical pawn/cache order. Concrete row publication,
+peer readiness, one coordinator waiter, final retirement and original callback
+boundaries need review before implementation. No new census, build or run is
+selected. Frontier batching remains a reserve.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

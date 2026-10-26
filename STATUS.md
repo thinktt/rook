@@ -87,12 +87,20 @@ no unique cause. Request/done spacing remains compact and the proposed per-FULL
 Flight/waiting same-line explanation is excluded. Heap-base alignment and actual
 coherence traffic are unknown.
 
-Next selected: one old-concrete-layout/observation-free counterfactual, requiring
-compiled layout verification before a fixed six-configuration 72-life generic
-comparison. Keep the lean installed marker/callers and disabled observations;
-restore original shared types/storage rather than sweep padding. Compare matching
-observed/unobserved3/4, retained3 and lean3. No PGO, new parallel graph or adoption
-is selected; accepted main and all positive artifacts remain preserved.
+The [fixed-layout counterfactual](experiments/multicore-feasibility/fixed-layout-no-observations/report.md)
+is closed at `a964ca65`: compiled old layout matched before data, and all 72 replay
+lives/840 posts plus six idle probes pass. Fixed3 recovered most of lean3's loss
+(7.817264s versus 8.243957s), but retained3 was 7.716113s. Fixed4 beat matching3 by
+1.223% at 7.721670s, remaining 0.072% above retained3 at 1.334x CPU. This demonstrates
+representation sensitivity without establishing a cache cause or a net four-thread
+win. No further inventory/layout variant or PGO is selected.
+
+Next selected: source-only design of fresh coherent Influence construction fused
+with the two existing color FULL helpers. Restrict to actual FULL/scratch-None
+demand; preserve supplied maps, canonical pawn/cache order and numerical ownership.
+Review concrete caller seams, two-phase row publication/retirement and the existing
+single-coordinator cold-wakeup boundary before selecting implementation. No new
+build/run or adoption; accepted main and all positive artifacts remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
