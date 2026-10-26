@@ -1,0 +1,155 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -28,0 +29,2 @@
++# Isolated actual-search study; disabled in ordinary engine builds.
++replicated-control = []
+diff --git a/src/bin/rook2-replica-study.rs b/src/bin/rook2-replica-study.rs
+new file mode 100644
+--- /dev/null
++++ b/src/bin/rook2-replica-study.rs
+@@ -0,0 +1,144 @@
++//! Matched fixed-depth NoHost study; not the production wire protocol.
++use rook2::{engine::{Config,Search}, evaluator::Parameters, history::SearchHistory,
++    movegen::{self,MoveList}, ordinary, position::Position, quiescence::Limits, types::Move};
++use std::fmt::Write as _;
++use std::io::{self,Write as _};
++use std::time::Instant;
++
++struct Input {
++    root:Position, history:SearchHistory, parameters:Parameters, config:Config,
++    seed:u32, randomness:u32,
++}
++fn numbers<const N:usize>(s:Option<String>)->Result<[i32;N],String> {
++    let values:Vec<i32>=s.ok_or("missing numerical input")?.split(',')
++        .map(|s|s.parse().map_err(|_|"invalid numerical input".to_string())).collect::<Result<_,_>>()?;
++    values.try_into().map_err(|_|"wrong numerical input arity".into())
++}
++fn input(path:&str)->Result<Input,String> {
++    let text=std::fs::read_to_string(path).map_err(|e|e.to_string())?;
++    let(mut fen,mut moves,mut own,mut opponent,mut evaluation,mut search)=(None,None,None,None,None,None);
++    let(mut seed,mut randomness)=(0u32,None);
++    for line in text.lines() {
++        if line.is_empty() || line.starts_with('#'){continue;}
++        let(key,value)=line.split_once('=').ok_or("invalid input assignment")?;
++        match key {
++            "case"=>{},"fen"=>fen=Some(value.to_string()),"moves"=>moves=Some(value.to_string()),
++            "own"=>own=Some(value.to_string()),"opponent"=>opponent=Some(value.to_string()),
++            "evaluation"=>evaluation=Some(value.to_string()),"search"=>search=Some(value.to_string()),
++            "seed"=>seed=value.parse().map_err(|_|"invalid seed")?,
++            "randomness"=>randomness=Some(value.parse::<u32>().map_err(|_|"invalid randomness")?),
++            _=>return Err(format!("unknown input assignment {key}")),
++        }
++    }
++    let e=numbers::<3>(evaluation)?;let c=numbers::<4>(search)?;
++    if c[1]<1 || c[2]<48 {return Err("invalid depth or TT input".into());}
++    let parameters=Parameters{own:numbers(own)?,opponent:numbers(opponent)?,
++        average_depth:e[0],draw:e[1],opponent_selectivity:e[2]};
++    let config=Config{selectivity:c[0],maximum_depth:c[1] as usize,tts_bytes:c[2] as usize,analysis:c[3]};
++    let mut root=Position::from_fen(&fen.ok_or("missing initial FEN")?)?;
++    let mut history=SearchHistory::new(&root);
++    for token in moves.ok_or("missing history")?.split_whitespace() {
++        let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
++        let movement=*legal.as_slice().iter().find(|m|m.to_string()==token)
++            .ok_or_else(||format!("invalid history move {token}"))?;
++        root=root.played_unchecked(movement);history.push(&root,Some(movement));
++    }
++    history.mark_root();root.validate()?;
++    let randomness=randomness.ok_or("explicit randomness required")?;
++    if randomness!=0 {return Err("this fixed study admits explicit randomness0 only".into());}
++    Ok(Input{root,history,parameters,config,seed,randomness})
++}
++fn gate(gated:bool)->Result<(),String> {
++    if gated {
++        println!("READY");io::stdout().flush().map_err(|e|e.to_string())?;
++        let mut line=String::new();io::stdin().read_line(&mut line).map_err(|e|e.to_string())?;
++        if line!="go\n" {return Err("study entry gate requires exact go newline".into());}
++    }
++    Ok(())
++}
++fn moves_json(moves:&[Move])->String {
++    format!("[{}]",moves.iter().map(|m|m.0.to_string()).collect::<Vec<_>>().join(","))
++}
++fn ints_json(values:&[i32])->String {
++    format!("[{}]",values.iter().map(|v|v.to_string()).collect::<Vec<_>>().join(","))
++}
++fn outcome_json(outcome:&ordinary::Outcome,raw:&[i32])->String {
++    let mut iterations=String::new();
++    for (i,it) in outcome.iterations.iter().enumerate() {
++        if i!=0 {iterations.push(',');}
++        let mut steps=String::new();
++        for(j,s)in it.steps.iter().enumerate() {
++            if j!=0 {steps.push(',');}
++            write!(steps,"{{\"movement\":{},\"lower\":{},\"score\":{},\"best\":{},\"second\":{},\"childPv\":{},\"rootPv\":{},\"nodes\":{},\"relations\":{}}}",
++                s.movement.0,s.lower,s.score,s.best,s.second,moves_json(&s.child_pv),moves_json(&s.root_pv),
++                s.work.charged_search_units,s.work.charged_relation_queries).unwrap();
++        }
++        write!(iterations,"{{\"depth\":{},\"candidates\":{},\"score\":{},\"pv\":{},\"nodes\":{},\"relations\":{},\"steps\":[{}]}}",
++            it.depth,moves_json(&it.candidates),it.score,moves_json(&it.pv),
++            it.work.charged_search_units,it.work.charged_relation_queries,steps).unwrap();
++    }
++    format!("{{\"score\":{},\"pv\":{},\"initialCandidates\":{},\"nodes\":{},\"relations\":{},\"rawRootReturns\":{},\"iterations\":[{}]}}",
++        outcome.score,moves_json(&outcome.pv),moves_json(&outcome.initial_candidates),outcome.work.charged_search_units,
++        outcome.work.charged_relation_queries,ints_json(raw),iterations)
++}
++struct ResultData {
++    outcome:ordinary::Outcome,raw:Vec<i32>,search_wall_ns:u128,join_ns:u128,
++    epochs:Option<[u64;3]>,audit_checked_fulls:Option<usize>,audit_final_state_equal:Option<bool>,
++    pawn_owner_equal:Option<bool>,all_replicas_equal:bool,collective_storage_bytes:usize,
++}
++fn control(mut data:Input,depth:u8,mode:&str,gated:bool)->Result<ResultData,String> {
++    let mut s=Search::<false>::new(&data.root);s.config=data.config;s.evaluator.parameters=data.parameters;
++    s.set_threads(if mode=="packet"{3}else{1})?;
++    gate(gated)?;
++    let start=Instant::now();let mut raw=Vec::new();
++    let outcome=s.run_seeded_iterations(data.root,&mut data.history,depth,Limits::default(),data.seed,data.randomness,
++        |score|raw.push(score)).map_err(|e|format!("fixed search failed: {e:?}"))?;
++    let joined=Instant::now();s.set_threads(1)?;let join_ns=joined.elapsed().as_nanos();
++    let search_wall_ns=start.elapsed().as_nanos();
++    if data.history.search_ply()!=0 {return Err("control history tail not restored".into());}
++    Ok(ResultData{outcome,raw,search_wall_ns,join_ns,epochs:None,audit_checked_fulls:None,
++        audit_final_state_equal:None,pawn_owner_equal:None,all_replicas_equal:true,collective_storage_bytes:0})
++}
++fn run()->Result<(),String> {
++    if !cfg!(panic="unwind") {return Err("matched study driver/library requires panic=unwind".into());}
++    let(mut path,mut mode,mut depth,mut audit,mut gated)=(None,None,None,false,false);
++    let mut args=std::env::args().skip(1);
++    while let Some(key)=args.next(){
++        match key.as_str(){
++            "--audit"=>audit=true,"--gated"=>gated=true,
++            "--input"=>path=Some(args.next().ok_or("missing input path")?),
++            "--mode"=>mode=Some(args.next().ok_or("missing mode")?),
++            "--depth"=>depth=Some(args.next().ok_or("missing depth")?.parse::<u8>().map_err(|_|"invalid depth")?),
++            _=>return Err(format!("unknown option {key}")),
++        }
++    }
++    let mode=mode.ok_or("--mode required")?;let depth=depth.ok_or("--depth required")?;
++    if !(1..=8).contains(&depth) || !["inline","packet","replica"].contains(&mode.as_str()) {
++        return Err("unsupported study mode/depth".into());
++    }
++    if audit && (mode!="replica" || depth>2) {return Err("audit admits replica mode depth1/2 only".into());}
++    let data=input(&path.ok_or("--input required")?)?;
++    let result=if mode=="replica" {
++        #[cfg(feature="replicated-control")]
++        {
++            let r=rook2::replicated_control::run(data.root,data.history,data.parameters,data.config,
++                depth,data.seed,data.randomness,audit,||gate(gated))?;
++            ResultData{outcome:r.outcome,raw:r.raw_returns,search_wall_ns:r.search_wall_ns,join_ns:r.join_ns,
++                epochs:Some(r.epochs),audit_checked_fulls:r.audit_checked_fulls,
++                audit_final_state_equal:r.audit_final_state_equal,pawn_owner_equal:r.pawn_owner_equal,
++                all_replicas_equal:r.all_replicas_equal,collective_storage_bytes:r.collective_storage_bytes}
++        }
++        #[cfg(not(feature="replicated-control"))]
++        {return Err("replica integration absent from preserved-source build".into());}
++    }else{control(data,depth,&mode,gated)?};
++    let participation=result.epochs.map_or("null".to_string(),|g|format!(
++        "{{\"epochs\":[{},{},{}],\"roles\":[0,1,2]}}",g[0],g[1],g[2]));
++    let number=result.audit_checked_fulls.map_or("null".to_string(),|n|n.to_string());
++    let checked=result.audit_final_state_equal.map_or("null".to_string(),|b|b.to_string());
++    let pawns=result.pawn_owner_equal.map_or("null".to_string(),|b|b.to_string());
++    println!("{{\"schema\":\"rook2-replicated-control-study-v1\",\"mode\":\"{}\",\"depth\":{},\"audit\":{},\"searchWallNs\":{},\"joinNs\":{},\"outcome\":{},\"participation\":{},\"auditCheckedFulls\":{},\"auditFinalStateEqual\":{},\"pawnOwnerEqual\":{},\"allReplicasEqual\":{},\"collectiveStorageBytes\":{}}}",
++        mode,depth,audit,result.search_wall_ns,result.join_ns,outcome_json(&result.outcome,&result.raw),participation,
++        number,checked,pawns,result.all_replicas_equal,result.collective_storage_bytes);
++    Ok(())
++}
++fn main(){if let Err(e)=run(){eprintln!("replicated-control study: {e}");std::process::exit(1);}}

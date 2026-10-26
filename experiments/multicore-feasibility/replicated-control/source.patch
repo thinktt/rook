@@ -1,0 +1,1770 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -28,0 +29,2 @@
++# Isolated actual-search study; disabled in ordinary engine builds.
++replicated-control = []
+diff --git a/src/bin/rook2-replica-study.rs b/src/bin/rook2-replica-study.rs
+new file mode 100644
+--- /dev/null
++++ b/src/bin/rook2-replica-study.rs
+@@ -0,0 +1,144 @@
++//! Matched fixed-depth NoHost study; not the production wire protocol.
++use rook2::{engine::{Config,Search}, evaluator::Parameters, history::SearchHistory,
++    movegen::{self,MoveList}, ordinary, position::Position, quiescence::Limits, types::Move};
++use std::fmt::Write as _;
++use std::io::{self,Write as _};
++use std::time::Instant;
++
++struct Input {
++    root:Position, history:SearchHistory, parameters:Parameters, config:Config,
++    seed:u32, randomness:u32,
++}
++fn numbers<const N:usize>(s:Option<String>)->Result<[i32;N],String> {
++    let values:Vec<i32>=s.ok_or("missing numerical input")?.split(',')
++        .map(|s|s.parse().map_err(|_|"invalid numerical input".to_string())).collect::<Result<_,_>>()?;
++    values.try_into().map_err(|_|"wrong numerical input arity".into())
++}
++fn input(path:&str)->Result<Input,String> {
++    let text=std::fs::read_to_string(path).map_err(|e|e.to_string())?;
++    let(mut fen,mut moves,mut own,mut opponent,mut evaluation,mut search)=(None,None,None,None,None,None);
++    let(mut seed,mut randomness)=(0u32,None);
++    for line in text.lines() {
++        if line.is_empty() || line.starts_with('#'){continue;}
++        let(key,value)=line.split_once('=').ok_or("invalid input assignment")?;
++        match key {
++            "case"=>{},"fen"=>fen=Some(value.to_string()),"moves"=>moves=Some(value.to_string()),
++            "own"=>own=Some(value.to_string()),"opponent"=>opponent=Some(value.to_string()),
++            "evaluation"=>evaluation=Some(value.to_string()),"search"=>search=Some(value.to_string()),
++            "seed"=>seed=value.parse().map_err(|_|"invalid seed")?,
++            "randomness"=>randomness=Some(value.parse::<u32>().map_err(|_|"invalid randomness")?),
++            _=>return Err(format!("unknown input assignment {key}")),
++        }
++    }
++    let e=numbers::<3>(evaluation)?;let c=numbers::<4>(search)?;
++    if c[1]<1 || c[2]<48 {return Err("invalid depth or TT input".into());}
++    let parameters=Parameters{own:numbers(own)?,opponent:numbers(opponent)?,
++        average_depth:e[0],draw:e[1],opponent_selectivity:e[2]};
++    let config=Config{selectivity:c[0],maximum_depth:c[1] as usize,tts_bytes:c[2] as usize,analysis:c[3]};
++    let mut root=Position::from_fen(&fen.ok_or("missing initial FEN")?)?;
++    let mut history=SearchHistory::new(&root);
++    for token in moves.ok_or("missing history")?.split_whitespace() {
++        let mut legal=MoveList::new();movegen::generate_legal(&root,&mut legal);
++        let movement=*legal.as_slice().iter().find(|m|m.to_string()==token)
++            .ok_or_else(||format!("invalid history move {token}"))?;
++        root=root.played_unchecked(movement);history.push(&root,Some(movement));
++    }
++    history.mark_root();root.validate()?;
++    let randomness=randomness.ok_or("explicit randomness required")?;
++    if randomness!=0 {return Err("this fixed study admits explicit randomness0 only".into());}
++    Ok(Input{root,history,parameters,config,seed,randomness})
++}
++fn gate(gated:bool)->Result<(),String> {
++    if gated {
++        println!("READY");io::stdout().flush().map_err(|e|e.to_string())?;
++        let mut line=String::new();io::stdin().read_line(&mut line).map_err(|e|e.to_string())?;
++        if line!="go\n" {return Err("study entry gate requires exact go newline".into());}
++    }
++    Ok(())
++}
++fn moves_json(moves:&[Move])->String {
++    format!("[{}]",moves.iter().map(|m|m.0.to_string()).collect::<Vec<_>>().join(","))
++}
++fn ints_json(values:&[i32])->String {
++    format!("[{}]",values.iter().map(|v|v.to_string()).collect::<Vec<_>>().join(","))
++}
++fn outcome_json(outcome:&ordinary::Outcome,raw:&[i32])->String {
++    let mut iterations=String::new();
++    for (i,it) in outcome.iterations.iter().enumerate() {
++        if i!=0 {iterations.push(',');}
++        let mut steps=String::new();
++        for(j,s)in it.steps.iter().enumerate() {
++            if j!=0 {steps.push(',');}
++            write!(steps,"{{\"movement\":{},\"lower\":{},\"score\":{},\"best\":{},\"second\":{},\"childPv\":{},\"rootPv\":{},\"nodes\":{},\"relations\":{}}}",
++                s.movement.0,s.lower,s.score,s.best,s.second,moves_json(&s.child_pv),moves_json(&s.root_pv),
++                s.work.charged_search_units,s.work.charged_relation_queries).unwrap();
++        }
++        write!(iterations,"{{\"depth\":{},\"candidates\":{},\"score\":{},\"pv\":{},\"nodes\":{},\"relations\":{},\"steps\":[{}]}}",
++            it.depth,moves_json(&it.candidates),it.score,moves_json(&it.pv),
++            it.work.charged_search_units,it.work.charged_relation_queries,steps).unwrap();
++    }
++    format!("{{\"score\":{},\"pv\":{},\"initialCandidates\":{},\"nodes\":{},\"relations\":{},\"rawRootReturns\":{},\"iterations\":[{}]}}",
++        outcome.score,moves_json(&outcome.pv),moves_json(&outcome.initial_candidates),outcome.work.charged_search_units,
++        outcome.work.charged_relation_queries,ints_json(raw),iterations)
++}
++struct ResultData {
++    outcome:ordinary::Outcome,raw:Vec<i32>,search_wall_ns:u128,join_ns:u128,
++    epochs:Option<[u64;3]>,audit_checked_fulls:Option<usize>,audit_final_state_equal:Option<bool>,
++    pawn_owner_equal:Option<bool>,all_replicas_equal:bool,collective_storage_bytes:usize,
++}
++fn control(mut data:Input,depth:u8,mode:&str,gated:bool)->Result<ResultData,String> {
++    let mut s=Search::<false>::new(&data.root);s.config=data.config;s.evaluator.parameters=data.parameters;
++    s.set_threads(if mode=="packet"{3}else{1})?;
++    gate(gated)?;
++    let start=Instant::now();let mut raw=Vec::new();
++    let outcome=s.run_seeded_iterations(data.root,&mut data.history,depth,Limits::default(),data.seed,data.randomness,
++        |score|raw.push(score)).map_err(|e|format!("fixed search failed: {e:?}"))?;
++    let joined=Instant::now();s.set_threads(1)?;let join_ns=joined.elapsed().as_nanos();
++    let search_wall_ns=start.elapsed().as_nanos();
++    if data.history.search_ply()!=0 {return Err("control history tail not restored".into());}
++    Ok(ResultData{outcome,raw,search_wall_ns,join_ns,epochs:None,audit_checked_fulls:None,
++        audit_final_state_equal:None,pawn_owner_equal:None,all_replicas_equal:true,collective_storage_bytes:0})
++}
++fn run()->Result<(),String> {
++    if !cfg!(panic="unwind") {return Err("matched study driver/library requires panic=unwind".into());}
++    let(mut path,mut mode,mut depth,mut audit,mut gated)=(None,None,None,false,false);
++    let mut args=std::env::args().skip(1);
++    while let Some(key)=args.next(){
++        match key.as_str(){
++            "--audit"=>audit=true,"--gated"=>gated=true,
++            "--input"=>path=Some(args.next().ok_or("missing input path")?),
++            "--mode"=>mode=Some(args.next().ok_or("missing mode")?),
++            "--depth"=>depth=Some(args.next().ok_or("missing depth")?.parse::<u8>().map_err(|_|"invalid depth")?),
++            _=>return Err(format!("unknown option {key}")),
++        }
++    }
++    let mode=mode.ok_or("--mode required")?;let depth=depth.ok_or("--depth required")?;
++    if !(1..=8).contains(&depth) || !["inline","packet","replica"].contains(&mode.as_str()) {
++        return Err("unsupported study mode/depth".into());
++    }
++    if audit && (mode!="replica" || depth>2) {return Err("audit admits replica mode depth1/2 only".into());}
++    let data=input(&path.ok_or("--input required")?)?;
++    let result=if mode=="replica" {
++        #[cfg(feature="replicated-control")]
++        {
++            let r=rook2::replicated_control::run(data.root,data.history,data.parameters,data.config,
++                depth,data.seed,data.randomness,audit,||gate(gated))?;
++            ResultData{outcome:r.outcome,raw:r.raw_returns,search_wall_ns:r.search_wall_ns,join_ns:r.join_ns,
++                epochs:Some(r.epochs),audit_checked_fulls:r.audit_checked_fulls,
++                audit_final_state_equal:r.audit_final_state_equal,pawn_owner_equal:r.pawn_owner_equal,
++                all_replicas_equal:r.all_replicas_equal,collective_storage_bytes:r.collective_storage_bytes}
++        }
++        #[cfg(not(feature="replicated-control"))]
++        {return Err("replica integration absent from preserved-source build".into());}
++    }else{control(data,depth,&mode,gated)?};
++    let participation=result.epochs.map_or("null".to_string(),|g|format!(
++        "{{\"epochs\":[{},{},{}],\"roles\":[0,1,2]}}",g[0],g[1],g[2]));
++    let number=result.audit_checked_fulls.map_or("null".to_string(),|n|n.to_string());
++    let checked=result.audit_final_state_equal.map_or("null".to_string(),|b|b.to_string());
++    let pawns=result.pawn_owner_equal.map_or("null".to_string(),|b|b.to_string());
++    println!("{{\"schema\":\"rook2-replicated-control-study-v1\",\"mode\":\"{}\",\"depth\":{},\"audit\":{},\"searchWallNs\":{},\"joinNs\":{},\"outcome\":{},\"participation\":{},\"auditCheckedFulls\":{},\"auditFinalStateEqual\":{},\"pawnOwnerEqual\":{},\"allReplicasEqual\":{},\"collectiveStorageBytes\":{}}}",
++        mode,depth,audit,result.search_wall_ns,result.join_ns,outcome_json(&result.outcome,&result.raw),participation,
++        number,checked,pawns,result.all_replicas_equal,result.collective_storage_bytes);
++    Ok(())
++}
++fn main(){if let Err(e)=run(){eprintln!("replicated-control study: {e}");std::process::exit(1);}}
+diff --git a/src/engine.rs b/src/engine.rs
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -224 +224,6 @@
+-        if crate::work_clock::charge_search_unit(&mut self.stats.nodes,self.limits.nodes)? {
++        let poll = crate::work_clock::charge_search_unit(&mut self.stats.nodes,self.limits.nodes)?;
++        #[cfg(feature = "replicated-control")]
++        if self.evaluator.replica_audit_enabled() {
++            self.evaluator.replica_audit_set_nodes(self.stats.nodes);
++        }
++        if poll {
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -10,0 +11,4 @@
++#[cfg(feature = "replicated-control")]
++use crate::replica_collective::{ColorPart, Contribution, OwnerPart, ReplicaLane};
++#[cfg(feature = "replicated-control")]
++use std::sync::Arc;
+@@ -264,0 +269,61 @@
++#[cfg(feature = "replicated-control")]
++pub(crate) const FULL_AUDIT_CAP: usize = 32_768;
++
++/// Exact root data, interned by the cold audit rather than hashed or duplicated
++/// into every FULL event. Arc equality compares the complete structured value.
++#[cfg(feature = "replicated-control")]
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(crate) struct FullAuditRoot {
++    pub side: Color,
++    pub phase: crate::position::Phase,
++    pub counts: [[u8; 6]; 2],
++    pub values: [[i32; 5]; 2],
++    pub squares: [[[i16; 64]; 5]; 2],
++    pub average_depth: i32,
++    pub weights: [[i32; 2]; 5],
++    pub own: [i32; 11],
++    pub opponent: [i32; 11],
++    pub parameter_average_depth: i32,
++    pub draw: i32,
++    pub opponent_selectivity: i32,
++    pub draw_preference: i32,
++    pub variation_range: u32,
++}
++
++#[cfg(feature = "replicated-control")]
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(crate) struct FullAuditInput {
++    pub position: Position,
++    pub influence: Influence,
++    pub retained: Retained,
++    pub checked: bool,
++    pub fresh: bool,
++    pub root: Arc<FullAuditRoot>,
++    pub logical_n: u64,
++    pub stats: EvalStats,
++}
++
++#[cfg(feature = "replicated-control")]
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(crate) struct FullAudit {
++    pub input: FullAuditInput,
++    pub evaluation: Evaluation,
++    pub details: FullDetails,
++    pub retained: Retained,
++    pub stats: EvalStats,
++    pub logical_n: u64,
++}
++
++#[cfg(feature = "replicated-control")]
++enum FullAuditMode {
++    Record(Vec<FullAudit>),
++    Compare { trace: Arc<Vec<FullAudit>>, cursor: usize },
++}
++
++#[cfg(feature = "replicated-control")]
++struct FullAuditState {
++    mode: FullAuditMode,
++    root: Option<Arc<FullAuditRoot>>,
++    logical_n: u64,
++}
++
+@@ -286,0 +352,4 @@
++    #[cfg(feature = "replicated-control")]
++    replica_lane: Option<ReplicaLane>,
++    #[cfg(feature = "replicated-control")]
++    replica_audit: Option<FullAuditState>,
+@@ -296,0 +366,2 @@
++        #[cfg(feature = "replicated-control")]
++        assert!(self.replica_lane.is_none() && self.replica_audit.is_none(), "replica lane/audit cannot be cloned");
+@@ -310,0 +382,4 @@
++            #[cfg(feature = "replicated-control")]
++            replica_lane: None,
++            #[cfg(feature = "replicated-control")]
++            replica_audit: None,
+@@ -344,0 +420,4 @@
++            #[cfg(feature = "replicated-control")]
++            replica_lane: None,
++            #[cfg(feature = "replicated-control")]
++            replica_audit: None,
+@@ -366,0 +446,4 @@
++        }
++        #[cfg(feature = "replicated-control")]
++        if self.replica_lane.is_some() {
++            return Err("replica evaluation and FULL workers cannot be nested".into());
+@@ -420,0 +504,155 @@
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_attach(&mut self, lane: ReplicaLane) -> Result<(), String> {
++        if !cfg!(panic = "unwind") {
++            return Err("replica study requires panic=unwind".into());
++        }
++        if self.replica_lane.is_some() || self.full_worker.is_some() || self.colors_worker.is_some() {
++            return Err("replica lane requires detached inline FULL evaluation".into());
++        }
++        #[cfg(feature = "child-preparation")]
++        if self.child_preparation.is_some() {
++            return Err("replica lane cannot nest child preparation".into());
++        }
++        self.replica_lane = Some(lane);
++        Ok(())
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_cancel(&self, reason: &str) {
++        if let Some(lane) = &self.replica_lane { lane.cancel(reason); }
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_pawns_equal(&self, other: &Self) -> bool {
++        self.pawns.replica_eq(&other.pawns)
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_finish(&mut self) -> Result<u64, String> {
++        self.replica_lane.as_mut().ok_or("no attached replica lane")?.finish()
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_detach(&mut self) -> Result<(), String> {
++        self.replica_finish()?;
++        self.replica_lane = None;
++        Ok(())
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_audit_record(&mut self) -> Result<(), String> {
++        if self.replica_audit.is_some() { return Err("FULL audit already active".into()); }
++        self.replica_audit = Some(FullAuditState {
++            mode: FullAuditMode::Record(Vec::new()), root: None, logical_n: 0,
++        });
++        Ok(())
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_audit_compare(&mut self, trace: Arc<Vec<FullAudit>>) -> Result<(), String> {
++        if self.replica_audit.is_some() { return Err("FULL audit already active".into()); }
++        if trace.len() > FULL_AUDIT_CAP { return Err("FULL audit trace exceeds fixed cap".into()); }
++        self.replica_audit = Some(FullAuditState {
++            mode: FullAuditMode::Compare { trace, cursor: 0 }, root: None, logical_n: 0,
++        });
++        Ok(())
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_audit_enabled(&self) -> bool { self.replica_audit.is_some() }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_audit_set_nodes(&mut self, nodes: u64) {
++        if let Some(audit) = &mut self.replica_audit { audit.logical_n = nodes; }
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_audit_take(&mut self) -> Result<Vec<FullAudit>, String> {
++        if !matches!(self.replica_audit.as_ref().map(|audit| &audit.mode), Some(FullAuditMode::Record(_))) {
++            return Err("FULL audit is not recording".into());
++        }
++        match self.replica_audit.take().unwrap().mode {
++            FullAuditMode::Record(trace) => Ok(trace),
++            FullAuditMode::Compare { .. } => unreachable!(),
++        }
++    }
++
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_audit_finish(&mut self) -> Result<usize, String> {
++        let result = match self.replica_audit.as_ref().map(|audit| &audit.mode) {
++            Some(FullAuditMode::Compare { trace, cursor }) if *cursor == trace.len() => Ok(*cursor),
++            Some(FullAuditMode::Compare { trace, cursor }) => Err(format!("FULL audit ended at {cursor}/{}", trace.len())),
++            _ => Err("FULL audit is not comparing".into()),
++        };
++        match result {
++            Ok(count) => { self.replica_audit = None; Ok(count) }
++            Err(error) => { self.replica_cancel(&error); Err(error) }
++        }
++    }
++
++    #[cfg(feature = "replicated-control")]
++    fn replica_abort(&self, reason: String) -> ! {
++        self.replica_cancel(&reason);
++        panic!("replica FULL failed: {reason}");
++    }
++
++    #[cfg(feature = "replicated-control")]
++    fn full_audit_root(&self) -> FullAuditRoot {
++        FullAuditRoot {
++            side: self.root.side, phase: self.root.phase, counts: self.root.counts,
++            values: self.root.values, squares: self.root.squares, average_depth: self.root.average_depth,
++            weights: [self.weights.structure, self.weights.progress, self.weights.central,
++                self.weights.mobility, self.weights.shelter],
++            own: self.parameters.own, opponent: self.parameters.opponent,
++            parameter_average_depth: self.parameters.average_depth, draw: self.parameters.draw,
++            opponent_selectivity: self.parameters.opponent_selectivity,
++            draw_preference: self.draw_preference, variation_range: self.variation_range,
++        }
++    }
++
++    #[cfg(feature = "replicated-control")]
++    fn full_audit_begin<const FRESH: bool>(
++        &mut self, node: &Node, influence: &Influence, checked: bool,
++    ) -> FullAuditInput {
++        let signature = self.full_audit_root();
++        let audit = self.replica_audit.as_mut().unwrap();
++        let root = match &audit.root {
++            Some(root) if **root == signature => Arc::clone(root),
++            _ => {
++                let root = Arc::new(signature);
++                audit.root = Some(Arc::clone(&root));
++                root
++            }
++        };
++        let input = FullAuditInput {
++            position: node.position, influence: *influence, retained: node.retained,
++            checked, fresh: FRESH, root, logical_n: audit.logical_n, stats: self.stats,
++        };
++        let failure = match &audit.mode {
++            FullAuditMode::Record(trace) if trace.len() >= FULL_AUDIT_CAP => Some("FULL audit exceeded fixed event cap".into()),
++            FullAuditMode::Compare { trace, cursor } => match trace.get(*cursor) {
++                Some(expected) if expected.input == input => None,
++                Some(_) => Some(format!("FULL audit input mismatch at epoch {}", cursor + 1)),
++                None => Some(format!("FULL audit extra input at epoch {}", cursor + 1)),
++            },
++            _ => None,
++        };
++        if let Some(error) = failure { self.replica_abort(error); }
++        input
++    }
++
++    #[cfg(feature = "replicated-control")]
++    fn full_audit_end(&mut self, input: FullAuditInput, evaluation: Evaluation, details: FullDetails, retained: Retained) {
++        let audit = self.replica_audit.as_mut().unwrap();
++        let actual = FullAudit { input, evaluation, details, retained, stats: self.stats, logical_n: audit.logical_n };
++        let failure = match &mut audit.mode {
++            FullAuditMode::Record(trace) => { trace.push(actual); None }
++            FullAuditMode::Compare { trace, cursor } => {
++                if trace.get(*cursor) != Some(&actual) {
++                    Some(format!("FULL audit output mismatch at epoch {}", *cursor + 1))
++                } else { *cursor += 1; None }
++            }
++        };
++        if let Some(error) = failure { self.replica_abort(error); }
++    }
++
+@@ -432,0 +671,2 @@
++        #[cfg(feature = "replicated-control")]
++        if self.replica_lane.is_some() { return Err("replica lane cannot nest child preparation".into()); }
+@@ -510,0 +751,2 @@
++        #[cfg(feature = "replicated-control")]
++        self.replica_audit_set_nodes(0);
+@@ -594,0 +837,17 @@
++        &mut self, node: &mut Node, influence: &Influence, in_check: bool, observer: F, details: D,
++    ) -> Evaluation {
++        #[cfg(feature = "replicated-control")]
++        if self.replica_audit.is_some() {
++            let input = self.full_audit_begin::<FRESH>(node, influence, in_check);
++            let mut observed = None;
++            let evaluation = self.full_core::<FRESH, _, _>(node, influence, in_check, observer, |value| {
++                observed = Some(value);
++                details(value);
++            });
++            self.full_audit_end(input, evaluation, observed.unwrap(), node.retained);
++            return evaluation;
++        }
++        self.full_core::<FRESH, _, _>(node, influence, in_check, observer, details)
++    }
++
++    fn full_core<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+@@ -601,0 +861,4 @@
++        #[cfg(feature = "replicated-control")]
++        if self.replica_lane.is_some() {
++            return self.replica_full::<FRESH, _, _>(node, influence, in_check, observer, details);
++        }
+@@ -631,9 +894 @@
+-        let selected = if FRESH {
+-            pawn_structure::Selection {
+-                structure: pawn_structure::fresh(position, influence, [1024; 2]),
+-                reused: false,
+-            }
+-        } else {
+-            self.pawns.select(position, influence)
+-        };
+-        let pawn = pawn_terms::compute(position, influence, &selected.structure);
++        let (selected, pawn) = self.full_pawn_inputs::<FRESH>(position, influence);
+@@ -658,24 +913 @@
+-        let structure = pawn_progress::structure_weighted(
+-            phase,
+-            pawn.structure,
+-            pawn.piece,
+-            self.weights.structure,
+-        );
+-        // This producer has no state or charged relation work. At a zero final
+-        // phase factor, its weighted result is identically zero.
+-        let progress = if phase.middlegame == 0 && phase.endgame == 0 {
+-            0
+-        } else {
+-            pawn_progress::selected(
+-                position,
+-                influence,
+-                &selected.structure,
+-                phase,
+-                material,
+-                self.weights.progress,
+-            )
+-            .weighted
+-        };
+-        let central = positional_terms::central(influence, phase, self.weights.central);
+-        let patterns = positional_terms::patterns(position);
+-        let squares = self.root.square_balance_from(position, node.retained.nonking_squares);
++        let owner = self.full_owner_components(node, influence, phase, material, &selected, &pawn);
+@@ -695,0 +928,89 @@
++        self.finish_full_components(node, in_check, phase, owner, chain, pawn.relation_queries, selected.reused, observer, details)
++    }
++
++    fn full_pawn_inputs<const FRESH: bool>(
++        &mut self, position: &Position, influence: &Influence,
++    ) -> (pawn_structure::Selection, pawn_terms::PawnTerms) {
++        let selected = if FRESH {
++            pawn_structure::Selection {
++                structure: pawn_structure::fresh(position, influence, [1024; 2]), reused: false,
++            }
++        } else { self.pawns.select(position, influence) };
++        let pawn = pawn_terms::compute(position, influence, &selected.structure);
++        (selected, pawn)
++    }
++
++    /// Shared native owner-only work, before Activity/shelter/tempo composition.
++    fn full_owner_components(
++        &self, node: &Node, influence: &Influence, phase: crate::position::Phase, material: i32,
++        selected: &pawn_structure::Selection, pawn: &pawn_terms::PawnTerms,
++    ) -> Components {
++        let position = &node.position;
++        let structure = pawn_progress::structure_weighted(
++            phase, pawn.structure, pawn.piece, self.weights.structure,
++        );
++        // This producer has no state or charged relation work. At a zero final
++        // phase factor, its weighted result is identically zero.
++        let progress = if phase.middlegame == 0 && phase.endgame == 0 {
++            0
++        } else {
++            pawn_progress::selected(
++                position, influence, &selected.structure, phase, material, self.weights.progress,
++            ).weighted
++        };
++        let central = positional_terms::central(influence, phase, self.weights.central);
++        let patterns = positional_terms::patterns(position);
++        let squares = self.root.square_balance_from(position, node.retained.nonking_squares);
++        Components {
++            material, squares, pawn_structure: structure, pawn_progress: progress,
++            central: central.weighted, bishops: patterns.bishop_coordination,
++            patterns: patterns.opening, ..Components::default()
++        }
++    }
++
++    #[cfg(feature = "replicated-control")]
++    fn replica_full<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        &mut self, node: &mut Node, influence: &Influence, in_check: bool, observer: F, details: D,
++    ) -> Evaluation {
++        let position = &node.position;
++        let phase = position.phase();
++        let material = self.root.material(position);
++        let role = self.replica_lane.as_ref().unwrap().role();
++        let contribution = match role {
++            0 => {
++                let (selected, pawn) = self.full_pawn_inputs::<FRESH>(position, influence);
++                Contribution::Owner(OwnerPart {
++                    components: self.full_owner_components(node, influence, phase, material, &selected, &pawn),
++                    pawn_queries: pawn.relation_queries, pawn_reused: selected.reused,
++                })
++            }
++            1 | 2 => {
++                let attacker = if role == 1 { Color::White } else { Color::Black };
++                let activity = crate::activity::compute_side(position, influence, attacker);
++                let shelter = crate::shelter::compute_side(position, influence, attacker.opponent(), activity.pressure);
++                Contribution::Color(ColorPart { activity, shelter })
++            }
++            _ => self.replica_abort("invalid writer role".into()),
++        };
++        let gathered = match self.replica_lane.as_mut().unwrap().exchange(contribution) {
++            Ok(gathered) => gathered,
++            Err(error) => self.replica_abort(error),
++        };
++        let activity = crate::activity::combine_sides(
++            [gathered.white.activity, gathered.black.activity], material, self.weights.mobility, phase,
++        );
++        let shelter = crate::shelter::combine_sides(
++            [gathered.black.shelter, gathered.white.shelter], material, self.weights.shelter,
++        );
++        self.finish_full_components(
++            node, in_check, phase, gathered.owner.components, evaluator_worker::ActivityShelter { activity, shelter },
++            gathered.owner.pawn_queries, gathered.owner.pawn_reused, observer, details,
++        )
++    }
++
++    fn finish_full_components<F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        &mut self, node: &mut Node, in_check: bool, phase: crate::position::Phase, mut components: Components,
++        chain: evaluator_worker::ActivityShelter, pawn_queries: u64, pawn_reused: bool,
++        observer: F, details: D,
++    ) -> Evaluation {
++        let position = &node.position;
+@@ -713,12 +1034,3 @@
+-        let components = Components {
+-            material,
+-            squares,
+-            pawn_structure: structure,
+-            pawn_progress: progress,
+-            activity: activity.weighted,
+-            central: central.weighted,
+-            shelter: shelter.weighted,
+-            bishops: patterns.bishop_coordination,
+-            patterns: patterns.opening,
+-            tempo,
+-        };
++        components.activity = activity.weighted;
++        components.shelter = shelter.weighted;
++        components.tempo = tempo;
+@@ -726 +1038 @@
+-        node.retained.pawn_progress = progress;
++        node.retained.pawn_progress = components.pawn_progress;
+@@ -728 +1040 @@
+-        let queries = pawn.relation_queries + activity.relation_queries;
++        let queries = pawn_queries + activity.relation_queries;
+@@ -731 +1043 @@
+-            if selected.reused {
++            if pawn_reused {
+@@ -740 +1052 @@
+-        self.finish_observed(position, base, in_check, progress, queries, |finished| {
++        self.finish_observed(position, base, in_check, components.pawn_progress, queries, |finished| {
+@@ -745 +1057 @@
+-                pawn_entry_reused: selected.reused,
++                pawn_entry_reused: pawn_reused,
+@@ -1305,0 +1618,4 @@
++
++#[cfg(all(test, feature = "replicated-control"))]
++#[path = "evaluator/replica_tests.rs"]
++mod replica_tests;
+diff --git a/src/evaluator/replica_tests.rs b/src/evaluator/replica_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/replica_tests.rs
+@@ -0,0 +1,217 @@
++//! Finite source controls for private replicated actual-search evaluation.
++use super::*;
++use crate::engine::Search;
++use crate::history::SearchHistory;
++use crate::quiescence::Limits;
++use crate::replica_collective::CollectiveControl;
++use std::panic::{catch_unwind, AssertUnwindSafe};
++use std::thread;
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const ENDING: &str = "6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40";
++const FIRST: &str = "7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1";
++const COLLISION: &str = "7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1";
++const EMPTY: &str = "7k/8/8/8/8/8/8/K7 w - - 0 1";
++const GROUP_ZERO: &str = "7k/8/8/8/6P1/3P4/8/K7 w - - 0 1";
++
++fn position(fen: &str) -> Position { Position::from_fen(fen).unwrap() }
++
++/// Every spawned body is caught, cancels on panic, and is actually joined. No
++/// test relies on a missing lane eventually receiving a fabricated publication.
++fn lanes<T: Send, F: Fn(ReplicaLane) -> T + Sync>(run: F) -> Vec<T> {
++    let (control, writers) = CollectiveControl::new();
++    let values = thread::scope(|scope| {
++        let handles: Vec<_> = writers.into_iter().map(|lane| {
++            let run = &run;
++            let cancellation = control.clone();
++            scope.spawn(move || {
++                let result = catch_unwind(AssertUnwindSafe(|| run(lane)));
++                if result.is_err() { cancellation.cancel("focused evaluator lane panicked"); }
++                result
++            })
++        }).collect();
++        handles.into_iter().map(|handle| match handle.join() {
++            Ok(Ok(value)) => value,
++            _ => { control.cancel("focused evaluator join failed"); panic!("focused evaluator lane failed"); }
++        }).collect::<Vec<_>>()
++    });
++    assert!(!control.cancelled());
++    let epochs = control.final_epochs();
++    assert_eq!(epochs, [epochs[0]; 3]);
++    values
++}
++
++fn parameters() -> Parameters {
++    Parameters {
++        own: [133, 73, 151, 87, 200, 121, 19, 313, 207, 251, 49],
++        opponent: [91, 128, 67, 142, 80, 57, 183, 47, 333, 107, 229],
++        average_depth: 13, draw: -173, opponent_selectivity: 31,
++    }
++}
++
++fn full_sequence(evaluator: &mut Evaluator<true>) -> Vec<(Evaluation, Retained)> {
++    let mut output = Vec::new();
++    for root in [position(START), position("6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 b - - 0 40")] {
++        evaluator.parameters = parameters();
++        evaluator.begin_search(&root);
++        for (index, (fen, fresh)) in [
++            (EMPTY, false), (GROUP_ZERO, false), (GROUP_ZERO, false), (EMPTY, false),
++            (FIRST, false), (COLLISION, false), (COLLISION, true), (FIRST, false),
++        ].into_iter().enumerate() {
++            let current = position(fen);
++            let natural = Influence::build(&current);
++            let contrary = Influence { profiles: [[255; 64], [0; 64]] };
++            let map = if index % 2 == 0 { natural } else { contrary };
++            let mut node = Node::root(current, &evaluator.root);
++            node.retained.positional = 731;
++            node.retained.pawn_progress = -193;
++            node.retained.age = 17;
++            evaluator.replica_audit_set_nodes(index as u64);
++            let checked = index % 3 == 0;
++            let evaluation = if fresh {
++                evaluator.fresh_observed(&mut node, &map, checked, |_| {})
++            } else { evaluator.full(&mut node, &map, checked) };
++            output.push((evaluation, node.retained));
++        }
++    }
++    output
++}
++
++#[test]
++fn replicas_match_owner_cache_collisions_resets_fresh_and_authoritative_maps() {
++    assert_eq!(position(FIRST).pawn, position(COLLISION).pawn);
++    assert_eq!(position(GROUP_ZERO).pawn % 128, 0);
++    let root = position(START);
++    let mut serial = Evaluator::<true>::new(&root);
++    serial.replica_audit_record().unwrap();
++    let expected = full_sequence(&mut serial);
++    let trace = Arc::new(serial.replica_audit_take().unwrap());
++    assert_eq!(trace.len(), 16);
++    assert!(Arc::ptr_eq(&trace[0].input.root, &trace[1].input.root));
++    assert_ne!(trace[0].input.root, trace[8].input.root);
++    let values = lanes(|lane| {
++        let role = lane.role();
++        let mut evaluator = Evaluator::<true>::new(&root);
++        evaluator.replica_attach(lane).unwrap();
++        evaluator.replica_audit_compare(Arc::clone(&trace)).unwrap();
++        let actual = full_sequence(&mut evaluator);
++        assert_eq!(evaluator.replica_audit_finish().unwrap(), trace.len());
++        assert_eq!(evaluator.replica_finish().unwrap(), trace.len() as u64);
++        (role, actual, evaluator)
++    });
++    let empty_cache = Evaluator::<true>::new(&root);
++    for (role, actual, evaluator) in values {
++        assert_eq!(actual, expected);
++        assert_eq!(evaluator.stats, serial.stats);
++        if role == 0 { assert!(evaluator.replica_pawns_equal(&serial)); }
++        else { assert!(evaluator.replica_pawns_equal(&empty_cache)); }
++    }
++}
++
++fn compare_outcomes(actual: &crate::ordinary::Outcome, expected: &crate::ordinary::Outcome) {
++    assert_eq!(actual.initial_candidates, expected.initial_candidates);
++    assert_eq!((actual.score, &actual.pv, actual.work, actual.stats, actual.evaluations),
++        (expected.score, &expected.pv, expected.work, expected.stats, expected.evaluations));
++    assert_eq!(actual.iterations.len(), expected.iterations.len());
++    for (a, b) in actual.iterations.iter().zip(&expected.iterations) {
++        assert_eq!((a.depth, &a.candidates, &a.steps, a.score, &a.pv, a.work),
++            (b.depth, &b.candidates, &b.steps, b.score, &b.pv, b.work));
++    }
++}
++
++#[test]
++fn replicas_match_actual_seeded_search_depth_one_and_two_with_root_full_and_work_reset() {
++    for fen in [START, ENDING] {
++        for depth in [1, 2] {
++            let root = position(fen);
++            let mut serial = Search::<true>::new(&root);
++            serial.evaluator.parameters = parameters();
++            serial.evaluator.replica_audit_record().unwrap();
++            let mut history = SearchHistory::new(&root);
++            let mut expected_raw = Vec::new();
++            let expected = serial.run_seeded_iterations(root, &mut history, depth, Limits::default(),
++                0x1234_5678, 19, |score| expected_raw.push(score)).unwrap();
++            let trace = Arc::new(serial.evaluator.replica_audit_take().unwrap());
++            assert!(trace.len() > 1 && trace.len() <= FULL_AUDIT_CAP);
++            assert_eq!(trace[0].input.logical_n, 0);
++            assert_eq!(trace[0].input.stats.full, 0);
++            assert_eq!(trace[1].input.stats.full, 0); // Root work was reset before recursive search.
++            assert!(trace[1].input.logical_n > 0);
++            let values = lanes(|lane| {
++                let role = lane.role();
++                let mut search = Search::<true>::new(&root);
++                search.evaluator.parameters = parameters();
++                search.evaluator.replica_attach(lane).unwrap();
++                search.evaluator.replica_audit_compare(Arc::clone(&trace)).unwrap();
++                let mut history = SearchHistory::new(&root);
++                let mut raw = Vec::new();
++                let outcome = search.run_seeded_iterations(root, &mut history, depth, Limits::default(),
++                    0x1234_5678, 19, |score| raw.push(score)).unwrap();
++                assert_eq!(search.evaluator.replica_audit_finish().unwrap(), trace.len());
++                assert_eq!(search.evaluator.replica_finish().unwrap(), trace.len() as u64);
++                (role, outcome, raw, search)
++            });
++            for (role, actual, raw, search) in values {
++                compare_outcomes(&actual, &expected);
++                assert_eq!(raw, expected_raw);
++                assert_eq!(search.work(), serial.work());
++                if role == 0 { assert!(search.evaluator.replica_pawns_equal(&serial.evaluator)); }
++            }
++        }
++    }
++}
++
++fn one_full_trace(root: &Position) -> Vec<FullAudit> {
++    let mut evaluator = Evaluator::<true>::new(root);
++    evaluator.replica_audit_record().unwrap();
++    let mut node = Node::root(*root, &evaluator.root);
++    evaluator.full(&mut node, &Influence::build(root), false);
++    evaluator.replica_audit_take().unwrap()
++}
++
++#[test]
++fn replica_input_audit_mismatch_cancels_before_any_publication() {
++    let root = position(START);
++    let mut trace = one_full_trace(&root);
++    trace[0].input.influence.profiles[0][0] ^= 1;
++    let (control, [owner, white, black]) = CollectiveControl::new();
++    let mut evaluator = Evaluator::<true>::new(&root);
++    evaluator.replica_attach(owner).unwrap();
++    evaluator.replica_audit_compare(Arc::new(trace)).unwrap();
++    let mut node = Node::root(root, &evaluator.root);
++    assert!(catch_unwind(AssertUnwindSafe(|| evaluator.full(&mut node, &Influence::build(&root), false))).is_err());
++    assert!(control.cancelled());
++    assert_eq!(control.final_epochs(), [0; 3]);
++    drop((white, black));
++}
++
++#[test]
++fn replica_audit_rejects_output_mismatch_incomplete_trace_and_oversized_trace() {
++    let root = position(START);
++    let mut trace = one_full_trace(&root);
++    let original = trace.clone();
++    trace[0].evaluation.score ^= 1;
++    let mut evaluator = Evaluator::<true>::new(&root);
++    evaluator.replica_audit_compare(Arc::new(trace)).unwrap();
++    let mut node = Node::root(root, &evaluator.root);
++    assert!(catch_unwind(AssertUnwindSafe(|| evaluator.full(&mut node, &Influence::build(&root), false))).is_err());
++    let mut evaluator = Evaluator::<true>::new(&root);
++    evaluator.replica_audit_compare(Arc::new(original.clone())).unwrap();
++    assert!(evaluator.replica_audit_finish().is_err());
++    let mut evaluator = Evaluator::<true>::new(&root);
++    assert!(evaluator.replica_audit_compare(Arc::new(vec![original[0].clone(); FULL_AUDIT_CAP + 1])).is_err());
++}
++
++#[test]
++fn replica_attachment_rejects_nested_full_workers_and_second_lane() {
++    let root = position(START);
++    let (control, [owner, white, black]) = CollectiveControl::new();
++    let mut evaluator = Evaluator::<true>::new(&root);
++    evaluator.replica_attach(owner).unwrap();
++    assert!(evaluator.set_threads(1).is_err());
++    assert!(evaluator.set_threads(2).is_err());
++    assert!(evaluator.replica_attach(white).is_err());
++    evaluator.replica_cancel("focused attachment check complete");
++    assert!(control.cancelled());
++    drop(black);
++}
+diff --git a/src/history.rs b/src/history.rs
+--- a/src/history.rs
++++ b/src/history.rs
+@@ -39 +39 @@
+-#[cfg_attr(feature = "branch-transactions", derive(Clone, Debug, PartialEq, Eq))]
++#[cfg_attr(any(feature = "branch-transactions", feature = "replicated-control"), derive(Clone, Debug, PartialEq, Eq))]
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -59,0 +60,5 @@
++
++#[cfg(feature = "replicated-control")]
++pub(crate) mod replica_collective;
++#[cfg(feature = "replicated-control")]
++pub mod replicated_control;
+diff --git a/src/pawn_structure.rs b/src/pawn_structure.rs
+--- a/src/pawn_structure.rs
++++ b/src/pawn_structure.rs
+@@ -87,0 +88,7 @@
++    /// Cold owner-cache audit; follower caches are outside the simulation state.
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_eq(&self, other: &Self) -> bool {
++        self.groups.iter().zip(&other.groups).all(|(a,b)|
++            a.identity == b.identity && a.structure == b.structure)
++    }
++
+diff --git a/src/quiescence.rs b/src/quiescence.rs
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -217,0 +218,2 @@
++        #[cfg(feature = "replicated-control")]
++        if self.evaluator.replica_audit_enabled() { self.evaluator.replica_audit_set_nodes(0); }
+diff --git a/src/remembered.rs b/src/remembered.rs
+--- a/src/remembered.rs
++++ b/src/remembered.rs
+@@ -161,0 +162,10 @@
++    /// Cold final-state audit only; no snapshot or comparison occurs per node.
++    #[cfg(feature = "replicated-control")]
++    pub(crate) fn replica_eq(&self, other: &Self) -> bool {
++        self.generation == other.generation && self.groups.len() == other.groups.len()
++            && self.groups.iter().zip(&other.groups).all(|(a,b)|
++                a.records.iter().zip(&b.records).all(|(a,b)|
++                    a.identity == b.identity && a.score == b.score && a.depth == b.depth
++                    && a.endpoints == b.endpoints && a.flags == b.flags && a.generation == b.generation))
++    }
++
+diff --git a/src/replica_collective.rs b/src/replica_collective.rs
+new file mode 100644
+--- /dev/null
++++ b/src/replica_collective.rs
+@@ -0,0 +1,449 @@
++//! Three unique scalar publishers for private fixed-completion search replicas.
++//! Every actual lane remains active; cancellation, rather than a deadline or a
++//! fabricated publication, releases failed/divergent gathers. No input is shared.
++
++use crate::activity::SideActivity;
++use crate::evaluator::Components;
++use std::cell::UnsafeCell;
++use std::hint::spin_loop;
++use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
++use std::sync::{Arc, Mutex};
++
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct OwnerPart {
++    pub(crate) components: Components,
++    pub(crate) pawn_queries: u64,
++    pub(crate) pawn_reused: bool,
++}
++
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct ColorPart {
++    pub(crate) activity: SideActivity,
++    pub(crate) shelter: i32,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) enum Contribution {
++    Owner(OwnerPart),
++    Color(ColorPart),
++}
++
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct Gathered {
++    pub(crate) owner: OwnerPart,
++    pub(crate) white: ColorPart,
++    pub(crate) black: ColorPart,
++}
++
++#[derive(Clone, Copy)]
++struct Slot {
++    generation: u64,
++    contribution: Contribution,
++}
++
++#[repr(align(64))]
++struct RoleSlots { parity: [UnsafeCell<Slot>; 2] }
++
++struct Slots { roles: [RoleSlots; 3] }
++
++// One prospective fixed layout, selected before data: different writers own
++// distinct publication/storage regions. Alignment is not a cache diagnosis.
++#[repr(align(64))]
++struct Publication { ready: AtomicU64, finished: AtomicBool }
++
++#[repr(align(64))]
++struct Cancellation(AtomicBool);
++
++// SAFETY: The constructor creates exactly one nonclonable ReplicaLane per role.
++// Only that lane's &mut exchange writes its two concrete initialized cells.
++// Publication g is Release, after all scalar reads from g-1 have ended. A lane
++// may write g only after its complete gather g-1 acquired ALL roles' releases
++// g-1, which retire all reads of g-2 before its parity cell is overwritten.
++//
++// Reader i acquires ready[j]>=g before copying slot[j][g%2]. Writer j can reach
++// g+1, but cannot overwrite that cell at g+2 until it acquires i's publication
++// g+1; i cannot publish g+1 before ending ALL reads of g. Thus the entire scalar
++// Copy read is protected, even if ready[j] is already g+1. Slot generation is
++// checked, epochs never wrap, and no cell reference escapes the read. Cancel,
++// finish, Control clones and Drop never write slots or invent ready epochs.
++// Shared storage lives through every actual lane's Arc, including cancellation
++// and unwind; the caller joins actual threads. No whole-group mutable borrow is
++// formed, and the protocol does not depend on a wall clock or another waiter.
++unsafe impl Sync for Slots {}
++
++struct Shared {
++    slots: Slots,
++    publications: [Publication; 3],
++    cancelled: Cancellation,
++    // Cold failure detail only. Successful exchange never locks a mutex.
++    reason: Mutex<Option<String>>,
++    #[cfg(test)]
++    before_read: [Mutex<TestGate>; 3],
++    #[cfg(test)]
++    gate_wake: std::sync::Condvar,
++}
++
++impl Shared {
++    fn cancel(&self, reason: impl Into<String>) {
++        if self.cancelled.0.load(Ordering::Acquire) { return; }
++        let mut saved = self.reason.lock().unwrap_or_else(|error| error.into_inner());
++        if saved.is_none() { *saved = Some(reason.into()); }
++        // The first stored reason precedes every observation of cancellation.
++        self.cancelled.0.store(true, Ordering::Release);
++    }
++
++    fn failure(&self) -> String {
++        self.reason.lock().unwrap_or_else(|error| error.into_inner()).clone()
++            .unwrap_or_else(|| "replica collective cancelled".into())
++    }
++}
++
++/// Clones can cancel and inspect necessary epochs, but cannot publish a slot.
++#[derive(Clone)]
++pub(crate) struct CollectiveControl {
++    shared: Arc<Shared>,
++}
++
++impl CollectiveControl {
++    pub(crate) fn new() -> (Self, [ReplicaLane; 3]) {
++        assert!(cfg!(panic = "unwind"), "replica collective requires panic=unwind");
++        let shared = Arc::new(Shared {
++            slots: Slots {
++                roles: std::array::from_fn(|role| RoleSlots { parity: std::array::from_fn(|_| UnsafeCell::new(Slot {
++                    generation: 0,
++                    contribution: if role == 0 { Contribution::Owner(OwnerPart::default()) }
++                        else { Contribution::Color(ColorPart::default()) },
++                })) }),
++            },
++            publications: std::array::from_fn(|_| Publication { ready: AtomicU64::new(0), finished: AtomicBool::new(false) }),
++            cancelled: Cancellation(AtomicBool::new(false)),
++            reason: Mutex::new(None),
++            #[cfg(test)]
++            before_read: std::array::from_fn(|_| Mutex::new(TestGate::default())),
++            #[cfg(test)]
++            gate_wake: std::sync::Condvar::new(),
++        });
++        let lanes = std::array::from_fn(|role| ReplicaLane {
++            shared: Arc::clone(&shared), role, generation: 0, finished: false,
++        });
++        (Self { shared }, lanes)
++    }
++
++    pub(crate) fn cancel(&self, reason: impl Into<String>) { self.shared.cancel(reason); }
++
++    pub(crate) fn cancelled(&self) -> bool { self.shared.cancelled.0.load(Ordering::Acquire) }
++
++    /// Cold native storage size; unit-test gates exist only in test builds.
++    pub(crate) fn storage_bytes(&self) -> usize { std::mem::size_of::<Shared>() }
++
++    /// Cold witness after all actual threads have been joined. These are actual
++    /// publications; failed gathers/finish never advance them.
++    pub(crate) fn final_epochs(&self) -> [u64; 3] {
++        self.shared.publications.each_ref().map(|publication| publication.ready.load(Ordering::Acquire))
++    }
++}
++
++/// Unique writer role: deliberately neither Clone nor Copy. Mutable methods
++/// serialize publications and make a returned Gathered completely owned.
++pub(crate) struct ReplicaLane {
++    shared: Arc<Shared>,
++    role: usize,
++    generation: u64,
++    finished: bool,
++}
++
++impl ReplicaLane {
++    pub(crate) fn role(&self) -> usize { self.role }
++
++    pub(crate) fn cancel(&self, reason: impl Into<String>) { self.shared.cancel(reason); }
++
++    pub(crate) fn exchange(&mut self, contribution: Contribution) -> Result<Gathered, String> {
++        if self.shared.cancelled.0.load(Ordering::Acquire) { return Err(self.shared.failure()); }
++        if self.finished { return self.fail("replica exchange after finish"); }
++        match (self.role, contribution) {
++            (0, Contribution::Owner(owner)) if owner.components.activity == 0
++                && owner.components.shelter == 0 && owner.components.tempo == 0 => {},
++            (1 | 2, Contribution::Color(_)) => {},
++            _ => return self.fail("replica contribution has invalid role or owner fields"),
++        }
++        let Some(generation) = self.generation.checked_add(1) else {
++            return self.fail("replica collective epoch exhausted");
++        };
++        // SAFETY: The unique writer completed every read of g-1 before this
++        // call; that gather acquired every g-1 release, retiring g-2 readers.
++        // At g=1/2 the parity cells are initialized and have no older readers.
++        unsafe {
++            self.shared.slots.roles[self.role].parity[(generation & 1) as usize].get()
++                .write(Slot { generation, contribution });
++        }
++        self.shared.publications[self.role].ready.store(generation, Ordering::Release);
++        for peer in 0..3 {
++            loop {
++                if self.shared.cancelled.0.load(Ordering::Acquire) { return Err(self.shared.failure()); }
++                if self.shared.publications[peer].ready.load(Ordering::Acquire) >= generation { break; }
++                if self.shared.publications[peer].finished.load(Ordering::Acquire) {
++                    // Finish follows its last ready release. Recheck after the
++                    // terminal Acquire to avoid diagnosing an older ready read.
++                    if self.shared.publications[peer].ready.load(Ordering::Acquire) < generation {
++                        return self.fail("replica finished before a required collective epoch");
++                    }
++                    break;
++                }
++                spin_loop();
++            }
++        }
++        #[cfg(test)]
++        pause_before_read(&self.shared, self.role);
++        if self.shared.cancelled.0.load(Ordering::Acquire) { return Err(self.shared.failure()); }
++        // SAFETY: Every matching-or-later ready Acquire publishes this exact
++        // parity generation. A peer cannot overwrite it at g+2 before our g+1
++        // publication, which follows the end of every read here. Copy values
++        // contain no references and no input/slot borrow survives this block.
++        let slots: [Slot; 3] = std::array::from_fn(|peer| unsafe {
++            self.shared.slots.roles[peer].parity[(generation & 1) as usize].get().read()
++        });
++        if slots.iter().any(|slot| slot.generation != generation) {
++            return self.fail("replica collective slot generation mismatch");
++        }
++        let [Contribution::Owner(owner), Contribution::Color(white), Contribution::Color(black)] =
++            slots.map(|slot| slot.contribution) else {
++                return self.fail("replica collective slot role mismatch");
++            };
++        self.generation = generation;
++        Ok(Gathered { owner, white, black })
++    }
++
++    pub(crate) fn finish(&mut self) -> Result<u64, String> {
++        if self.finished { return self.fail("replica lane finished twice"); }
++        // This is terminal metadata, not a successful publication. All of this
++        // lane's previous reads ended before the flag; no later cell access is
++        // possible through its API. Peers at this same epoch may still gather.
++        self.finished = true;
++        self.shared.publications[self.role].finished.store(true, Ordering::Release);
++        if self.shared.cancelled.0.load(Ordering::Acquire) { return Err(self.shared.failure()); }
++        if self.shared.publications.iter().any(|publication| publication.ready.load(Ordering::Acquire) > self.generation) {
++            return self.fail("replica terminal epoch diverged");
++        }
++        Ok(self.generation)
++    }
++
++    fn fail<T>(&self, reason: &str) -> Result<T, String> {
++        self.shared.cancel(reason);
++        Err(self.shared.failure())
++    }
++}
++
++impl Drop for ReplicaLane {
++    fn drop(&mut self) {
++        if !self.finished {
++            self.shared.cancel("replica lane dropped without finish");
++            self.shared.publications[self.role].finished.store(true, Ordering::Release);
++        }
++    }
++}
++
++#[cfg(test)]
++#[derive(Default)]
++struct TestGate { blocked: bool, entered: bool }
++
++#[cfg(test)]
++fn pause_before_read(shared: &Shared, role: usize) {
++    let mut gate = shared.before_read[role].lock().unwrap();
++    gate.entered = true;
++    shared.gate_wake.notify_all();
++    while gate.blocked { gate = shared.gate_wake.wait(gate).unwrap(); }
++}
++
++#[cfg(test)]
++mod protocol_tests {
++    use super::*;
++    use std::thread;
++
++    fn part(role: usize, generation: u64) -> Contribution {
++        if role == 0 {
++            Contribution::Owner(OwnerPart {
++                components: Components { material: generation as i32, squares: -(generation as i32), ..Components::default() },
++                pawn_queries: generation, pawn_reused: generation & 1 != 0,
++            })
++        } else {
++            Contribution::Color(ColorPart {
++                activity: SideActivity { piece: generation as i32 * role as i32,
++                    pressure: generation as i32 + role as i32, relation_queries: generation + role as u64 },
++                shelter: -(generation as i32) * role as i32,
++            })
++        }
++    }
++
++    fn expected(generation: u64) -> Gathered {
++        let Contribution::Owner(owner) = part(0, generation) else { unreachable!() };
++        let Contribution::Color(white) = part(1, generation) else { unreachable!() };
++        let Contribution::Color(black) = part(2, generation) else { unreachable!() };
++        Gathered { owner, white, black }
++    }
++
++    fn block(control: &CollectiveControl, role: usize) {
++        *control.shared.before_read[role].lock().unwrap() = TestGate { blocked: true, entered: false };
++    }
++
++    fn entered(control: &CollectiveControl, role: usize) {
++        let mut gate = control.shared.before_read[role].lock().unwrap();
++        while !gate.entered { gate = control.shared.gate_wake.wait(gate).unwrap(); }
++    }
++
++    fn release(control: &CollectiveControl, role: usize) {
++        control.shared.before_read[role].lock().unwrap().blocked = false;
++        control.shared.gate_wake.notify_all();
++    }
++
++    fn ready(control: &CollectiveControl, role: usize, generation: u64) {
++        while control.shared.publications[role].ready.load(Ordering::Acquire) < generation { thread::yield_now(); }
++    }
++
++    #[test]
++    fn unique_roles_gather_typed_values_and_owned_results_survive_reuse() {
++        let (control, lanes) = CollectiveControl::new();
++        assert_eq!(lanes.each_ref().map(ReplicaLane::role), [0, 1, 2]);
++        let threads = lanes.map(|mut lane| thread::spawn(move || {
++            let mut first = None;
++            for generation in 1..=17 {
++                let gathered = lane.exchange(part(lane.role(), generation)).unwrap();
++                assert_eq!(gathered, expected(generation));
++                if first.is_none() { first = Some(gathered); }
++            }
++            assert_eq!(first.unwrap(), expected(1));
++            assert_eq!(lane.finish().unwrap(), 17);
++        }));
++        for handle in threads { handle.join().unwrap(); }
++        assert!(!control.cancelled());
++        assert_eq!(control.final_epochs(), [17; 3]);
++    }
++
++    #[test]
++    fn fast_lanes_one_epoch_ahead_preserve_delayed_reader_parity() {
++        let (control, lanes) = CollectiveControl::new();
++        block(&control, 2);
++        let threads = lanes.map(|mut lane| thread::spawn(move || {
++            for generation in 1..=5 {
++                assert_eq!(lane.exchange(part(lane.role(), generation)).unwrap(), expected(generation));
++            }
++            lane.finish().unwrap();
++        }));
++        entered(&control, 2);
++        ready(&control, 0, 2);
++        ready(&control, 1, 2);
++        assert_eq!(control.final_epochs(), [2, 2, 1]);
++        release(&control, 2);
++        for handle in threads { handle.join().unwrap(); }
++        assert_eq!(control.final_epochs(), [5; 3]);
++        assert!(!control.cancelled());
++    }
++
++    #[test]
++    fn cancellation_while_waiting_never_fabricates_missing_publications() {
++        let (control, [mut owner, white, black]) = CollectiveControl::new();
++        let waiting = thread::spawn(move || owner.exchange(part(0, 1)));
++        ready(&control, 0, 1);
++        let clone = control.clone();
++        clone.cancel("controlled cancellation");
++        assert_eq!(waiting.join().unwrap().unwrap_err(), "controlled cancellation");
++        assert_eq!(control.final_epochs(), [1, 0, 0]);
++        drop((white, black));
++    }
++
++    #[test]
++    fn finished_peer_below_request_and_already_ahead_terminal_are_divergence() {
++        let (control, [mut owner, mut white, black]) = CollectiveControl::new();
++        assert_eq!(owner.finish().unwrap(), 0);
++        assert!(white.exchange(part(1, 1)).is_err());
++        assert!(control.cancelled());
++        assert_eq!(control.final_epochs(), [0, 1, 0]);
++        drop(black);
++
++        let (control, [mut owner, mut white, black]) = CollectiveControl::new();
++        let waiting = thread::spawn(move || white.exchange(part(1, 1)));
++        ready(&control, 1, 1);
++        assert!(owner.finish().is_err());
++        assert!(waiting.join().unwrap().is_err());
++        assert_eq!(control.final_epochs(), [0, 1, 0]);
++        drop(black);
++    }
++
++    #[test]
++    fn finished_peers_at_same_epoch_allow_last_actual_reader() {
++        let (control, [mut owner, mut white, mut black]) = CollectiveControl::new();
++        block(&control, 2);
++        let lagging = thread::spawn(move || {
++            let value = black.exchange(part(2, 1)).unwrap();
++            assert_eq!(black.finish().unwrap(), 1);
++            value
++        });
++        let owner = thread::spawn(move || {
++            assert_eq!(owner.exchange(part(0, 1)).unwrap(), expected(1));
++            owner.finish().unwrap()
++        });
++        let white = thread::spawn(move || {
++            assert_eq!(white.exchange(part(1, 1)).unwrap(), expected(1));
++            white.finish().unwrap()
++        });
++        entered(&control, 2);
++        assert_eq!(owner.join().unwrap(), 1);
++        assert_eq!(white.join().unwrap(), 1);
++        assert!(!control.cancelled());
++        release(&control, 2);
++        assert_eq!(lagging.join().unwrap(), expected(1));
++        assert_eq!(control.final_epochs(), [1; 3]);
++        assert!(!control.cancelled());
++    }
++
++    #[test]
++    fn unfinished_drop_cancels_all_waiters_without_terminal_ready() {
++        let (control, [mut owner, mut white, black]) = CollectiveControl::new();
++        let owner = thread::spawn(move || owner.exchange(part(0, 1)));
++        let white = thread::spawn(move || white.exchange(part(1, 1)));
++        ready(&control, 0, 1);
++        ready(&control, 1, 1);
++        drop(black);
++        assert!(owner.join().unwrap().is_err());
++        assert!(white.join().unwrap().is_err());
++        assert_eq!(control.final_epochs(), [1, 1, 0]);
++    }
++
++    #[test]
++    fn wrong_role_and_nonzero_owner_finish_fields_fail_before_publication() {
++        for invalid_role in 0..3 {
++            let (control, mut lanes) = CollectiveControl::new();
++            let invalid = if invalid_role == 0 { part(1, 1) } else { part(0, 1) };
++            assert!(lanes[invalid_role].exchange(invalid).is_err());
++            assert!(control.cancelled());
++            assert_eq!(control.final_epochs(), [0; 3]);
++        }
++        for field in 0..3 {
++            let (control, [mut owner, _white, _black]) = CollectiveControl::new();
++            let mut components = Components::default();
++            match field { 0 => components.activity = 1, 1 => components.shelter = 1, _ => components.tempo = 1 }
++            assert!(owner.exchange(Contribution::Owner(OwnerPart { components, ..OwnerPart::default() })).is_err());
++            assert_eq!(control.final_epochs(), [0; 3]);
++        }
++    }
++
++    #[test]
++    fn final_epoch_is_published_once_then_overflow_cancels_without_wrap() {
++        let (control, mut lanes) = CollectiveControl::new();
++        // A test-only boundary setup while all unique lanes are local, no
++        // threads/readers exist and both slots are initialized. No ready value
++        // is forged; the first and only actual publication below is MAX.
++        for lane in &mut lanes { lane.generation = u64::MAX - 1; }
++        let barrier = Arc::new(std::sync::Barrier::new(3));
++        let threads = lanes.map(|mut lane| {
++            let barrier = Arc::clone(&barrier);
++            thread::spawn(move || {
++                assert_eq!(lane.exchange(part(lane.role(), 1)).unwrap(), expected(1));
++                barrier.wait();
++                assert!(lane.exchange(part(lane.role(), 2)).is_err());
++            })
++        });
++        for handle in threads { handle.join().unwrap(); }
++        assert!(control.cancelled());
++        assert_eq!(control.final_epochs(), [u64::MAX; 3]);
++    }
++}
+diff --git a/src/replicated_control.rs b/src/replicated_control.rs
+new file mode 100644
+--- /dev/null
++++ b/src/replicated_control.rs
+@@ -0,0 +1,436 @@
++//! Private fixed-completion actual Search replicas. Public production search and
++//! evaluator-only calls retain their original entry points and behavior.
++
++use crate::engine::{Config, Search};
++use crate::evaluator::{FullAudit, Parameters};
++use crate::history::SearchHistory;
++use crate::ordinary::Outcome;
++use crate::position::Position;
++use crate::quiescence::Limits;
++use crate::replica_collective::{CollectiveControl, ReplicaLane};
++use std::any::Any;
++use std::sync::{Arc, Condvar, Mutex};
++use std::thread::{self, JoinHandle};
++use std::time::Instant;
++
++pub struct RunReport {
++    pub outcome: Outcome,
++    pub raw_returns: Vec<i32>,
++    pub search_wall_ns: u128,
++    pub join_ns: u128,
++    pub epochs: [u64; 3],
++    pub collective_storage_bytes: usize,
++    pub audit_checked_fulls: Option<usize>,
++    pub audit_final_state_equal: Option<bool>,
++    pub pawn_owner_equal: Option<bool>,
++    pub all_replicas_equal: bool,
++}
++
++/// Every lane receives independent search/TT/learning/history state with the
++/// original TT capacity. Audit records serial execution before replicas start;
++/// performance carries no trace or future FULL inputs.
++pub fn run(
++    root: Position, history: SearchHistory, parameters: Parameters, config: Config,
++    depth: u8, seed: u32, randomness: u32, audit: bool,
++    before_search: impl FnOnce() -> Result<(), String>,
++) -> Result<RunReport, String> {
++    run_with(root, history, parameters, config, depth, seed, randomness, audit,
++        before_search, Controls::default())
++}
++
++fn run_with(
++    root: Position, history: SearchHistory, parameters: Parameters, config: Config,
++    depth: u8, seed: u32, randomness: u32, audit: bool,
++    before_search: impl FnOnce() -> Result<(), String>, controls: Controls,
++) -> Result<RunReport, String> {
++    if !cfg!(panic = "unwind") { return Err("replica runner requires panic=unwind".into()); }
++    if !(1..=8).contains(&depth) || (audit && depth > 2) {
++        return Err("replica depth must be 1..=8, with audit depth at most 2".into());
++    }
++    if randomness > i32::MAX as u32 || history.search_ply() != 0 {
++        return Err("invalid replica randomness or root history boundary".into());
++    }
++    // The concrete join guard below remains live through every startup,
++    // callback and owner panic. AssertUnwindSafe covers this private fatal-only
++    // run: no partially mutated Search is reused after a caught failure.
++    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++        if audit {
++            run_mode::<true>(root, history, parameters, config, depth, seed, randomness,
++                true, before_search, controls)
++        } else {
++            run_mode::<false>(root, history, parameters, config, depth, seed, randomness,
++                false, before_search, controls)
++        }
++    })) {
++        Ok(result) => result,
++        Err(payload) => Err(format!("replica runner panicked: {}", panic_text(payload))),
++    }
++}
++
++struct Completed<const D: bool> {
++    search: Search<D>,
++    history: SearchHistory,
++    outcome: Outcome,
++    raw: Vec<i32>,
++    epoch: u64,
++    checked: Option<usize>,
++}
++
++#[derive(Default)]
++struct StartupState { entered: [bool; 2], start: bool, aborted: bool }
++
++#[derive(Default)]
++struct StartupGate { state: Mutex<StartupState>, wake: Condvar }
++
++impl StartupGate {
++    fn enter_and_wait(&self, role: usize) -> Result<(), String> {
++        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
++        state.entered[role - 1] = true;
++        self.wake.notify_all();
++        while !state.start && !state.aborted {
++            state = self.wake.wait(state).unwrap_or_else(|error| error.into_inner());
++        }
++        if state.aborted { Err("replica startup cancelled".into()) } else { Ok(()) }
++    }
++
++    fn wait_entered(&self) -> Result<(), String> {
++        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
++        while !state.entered.iter().all(|entered| *entered) && !state.aborted {
++            state = self.wake.wait(state).unwrap_or_else(|error| error.into_inner());
++        }
++        if state.aborted { Err("replica entry failed before placement gate".into()) } else { Ok(()) }
++    }
++
++    fn start(&self) {
++        self.state.lock().unwrap_or_else(|error| error.into_inner()).start = true;
++        self.wake.notify_all();
++    }
++
++    fn abort(&self) {
++        self.state.lock().unwrap_or_else(|error| error.into_inner()).aborted = true;
++        self.wake.notify_all();
++    }
++}
++
++/// Concrete ownership of the two actual peers, including partial startup. Drop
++/// is only a failure path; normal join_all disarms it after taking EVERY handle.
++struct Peers<const D: bool> {
++    handles: [Option<JoinHandle<Result<Completed<D>, String>>>; 2],
++    control: CollectiveControl,
++    gate: Arc<StartupGate>,
++    armed: bool,
++}
++
++impl<const D: bool> Peers<D> {
++    fn join_all(&mut self) -> Result<[Completed<D>; 2], String> {
++        let mut results = Vec::with_capacity(2);
++        let mut failure = None;
++        for handle in &mut self.handles {
++            if let Some(handle) = handle.take() {
++                match handle.join() {
++                    Ok(Ok(result)) => results.push(result),
++                    Ok(Err(error)) => {
++                        self.control.cancel(error.clone()); self.gate.abort();
++                        if failure.is_none() { failure = Some(error); }
++                    }
++                    Err(payload) => {
++                        let error = format!("replica peer escaped catcher: {}", panic_text(payload));
++                        self.control.cancel(error.clone()); self.gate.abort();
++                        if failure.is_none() { failure = Some(error); }
++                    }
++                }
++            }
++        }
++        self.armed = false;
++        if let Some(error) = failure { return Err(error); }
++        let mut results = results.into_iter();
++        match (results.next(), results.next()) {
++            (Some(white), Some(black)) => Ok([white, black]),
++            _ => Err("replica runner lacks two actual joined peers".into()),
++        }
++    }
++}
++
++impl<const D: bool> Drop for Peers<D> {
++    fn drop(&mut self) {
++        if self.armed {
++            self.control.cancel("replica runner abandoned before all joins");
++            self.gate.abort();
++            for handle in &mut self.handles {
++                if let Some(handle) = handle.take() { let _ = handle.join(); }
++            }
++        }
++    }
++}
++
++fn search<const D: bool>(root: &Position, parameters: Parameters, config: Config,
++    lane: Option<ReplicaLane>, trace: Option<Arc<Vec<FullAudit>>>) -> Result<Search<D>, String> {
++    let mut search = Search::new(root);
++    search.config = config;
++    search.evaluator.parameters = parameters;
++    if let Some(lane) = lane { search.evaluator.replica_attach(lane)?; }
++    if let Some(trace) = trace { search.evaluator.replica_audit_compare(trace)?; }
++    Ok(search)
++}
++
++fn run_lane<const D: bool>(
++    mut search: Search<D>, mut history: SearchHistory, root: Position,
++    depth: u8, seed: u32, randomness: u32, audit: bool,
++    control: &CollectiveControl, gate: &StartupGate,
++) -> Result<Completed<D>, String> {
++    // Search/history live outside the catcher. An unexpected search panic is
++    // converted into cancellation before their final drop; mutated state is
++    // fatal and is never reused. Evaluator FULL already cancels before panic.
++    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++        let mut raw = Vec::new();
++        let outcome = search.run_seeded_iterations(root, &mut history, depth,
++            Limits::default(), seed, randomness, |score| raw.push(score))
++            .map_err(|error| format!("replica ordinary search failed: {error:?}"))?;
++        let checked = if audit { Some(search.evaluator.replica_audit_finish()?) } else { None };
++        let epoch = search.evaluator.replica_finish()?;
++        Ok::<_, String>((outcome, raw, checked, epoch))
++    }));
++    let result = match result {
++        Ok(result) => result,
++        Err(payload) => Err(format!("replica lane panicked: {}", panic_text(payload))),
++    };
++    match result {
++        Ok((outcome, raw, checked, epoch)) =>
++            Ok(Completed { search, history, outcome, raw, epoch, checked }),
++        Err(error) => {
++            search.evaluator.replica_cancel(&error);
++            control.cancel(error.clone()); gate.abort();
++            Err(error)
++        }
++    }
++}
++
++fn run_mode<const D: bool>(
++    root: Position, history: SearchHistory, parameters: Parameters, config: Config,
++    depth: u8, seed: u32, randomness: u32, audit: bool,
++    before_search: impl FnOnce() -> Result<(), String>, controls: Controls,
++) -> Result<RunReport, String> {
++    let (serial, trace) = if audit {
++        let mut serial_search = search::<D>(&root, parameters.clone(), config, None, None)?;
++        serial_search.evaluator.replica_audit_record()?;
++        let mut serial_history = history.clone();
++        let mut raw = Vec::new();
++        let outcome = serial_search.run_seeded_iterations(root, &mut serial_history, depth,
++            Limits::default(), seed, randomness, |score| raw.push(score))
++            .map_err(|error| format!("independent serial audit failed: {error:?}"))?;
++        let trace = Arc::new(serial_search.evaluator.replica_audit_take()?);
++        let serial = Completed { search: serial_search, history: serial_history,
++            outcome, raw, epoch: 0, checked: None };
++        (Some(serial), Some(trace))
++    } else { (None, None) };
++
++    let (control, [owner, white, black]) = CollectiveControl::new();
++    let gate = Arc::new(StartupGate::default());
++    let mut peers = Peers::<D> { handles: [None, None], control: control.clone(),
++        gate: Arc::clone(&gate), armed: true };
++    let owner_search = search::<D>(&root, parameters.clone(), config, Some(owner), trace.clone())?;
++    for (role, lane) in [(1, white), (2, black)] {
++        #[cfg(test)]
++        if controls.fail_spawn == Some(role) {
++            return Err(format!("controlled replica spawn failure at role {role}"));
++        }
++        let peer_control = control.clone();
++        let peer_gate = Arc::clone(&gate);
++        let peer_parameters = parameters.clone();
++        let peer_history = history.clone();
++        let peer_trace = trace.clone();
++        let peer_controls = controls.clone();
++        let handle = thread::Builder::new().name(format!("rook2-rep-{role}")).spawn(move || {
++            #[cfg(test)]
++            let _probe = ExitProbe::new(peer_controls.probe.clone());
++            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                let search = search::<D>(&root, peer_parameters, config, Some(lane), peer_trace)?;
++                #[cfg(test)]
++                {
++                    if peer_controls.fail_entry == Some(role) { return Err("controlled replica entry failure".into()); }
++                    if peer_controls.panic_entry == Some(role) { panic!("controlled replica entry panic"); }
++                }
++                // Initialization and lane attachment precede this actual entry.
++                peer_gate.enter_and_wait(role)?;
++                #[cfg(test)]
++                let depth = if peer_controls.shorter_lane == Some(role) { 1 } else { depth };
++                #[cfg(not(test))]
++                let _ = peer_controls;
++                run_lane(search, peer_history, root, depth, seed, randomness, audit,
++                    &peer_control, &peer_gate)
++            }));
++            let result = match result {
++                Ok(result) => result,
++                Err(payload) => Err(format!("replica thread entry panicked: {}", panic_text(payload))),
++            };
++            if let Err(error) = &result { peer_control.cancel(error.clone()); peer_gate.abort(); }
++            result
++        }).map_err(|error| format!("cannot spawn replica role {role}: {error}"))?;
++        peers.handles[role - 1] = Some(handle);
++    }
++    gate.wait_entered()?;
++    before_search()?;
++    if control.cancelled() { return Err("replicas cancelled at placement gate".into()); }
++    let started = Instant::now();
++    gate.start();
++    let owner = run_lane(owner_search, history, root, depth, seed, randomness, audit, &control, &gate);
++    let joining = Instant::now();
++    let joined = peers.join_all();
++    let join_ns = joining.elapsed().as_nanos();
++    let search_wall_ns = started.elapsed().as_nanos();
++    // No owner outcome escapes until every actual peer has returned and joined.
++    let owner = owner?;
++    let [white, black] = joined?;
++    if control.cancelled() { return Err("replica collective cancelled during search".into()); }
++    for peer in [&white, &black] {
++        if !outcome_equal(&owner.outcome, &peer.outcome) || owner.raw != peer.raw {
++            return Err("actual replica outcomes or raw root returns diverged".into());
++        }
++    }
++    let epochs = control.final_epochs();
++    if epochs != [owner.epoch, white.epoch, black.epoch] || epochs.iter().any(|epoch| *epoch != owner.epoch) {
++        return Err("actual replica terminal epochs diverged".into());
++    }
++    let (audit_checked_fulls, audit_final_state_equal, pawn_owner_equal) = if let Some(serial) = serial {
++        let count = trace.as_ref().unwrap().len();
++        for replica in [&owner, &white, &black] {
++            if replica.checked != Some(count) || replica.epoch != count as u64
++                || !outcome_equal(&serial.outcome, &replica.outcome) || serial.raw != replica.raw
++                || !state_equal(&serial, replica) {
++                return Err("replica serial audit final state or FULL count diverged".into());
++            }
++        }
++        if !serial.search.evaluator.replica_pawns_equal(&owner.search.evaluator) {
++            return Err("authoritative owner pawn cache diverged from serial".into());
++        }
++        (Some(count), Some(true), Some(true))
++    } else { (None, None, None) };
++    Ok(RunReport { outcome: owner.outcome, raw_returns: owner.raw, search_wall_ns, join_ns,
++        epochs, collective_storage_bytes: control.storage_bytes(), audit_checked_fulls,
++        audit_final_state_equal, pawn_owner_equal, all_replicas_equal: true })
++}
++
++fn outcome_equal(a: &Outcome, b: &Outcome) -> bool {
++    a.initial_candidates == b.initial_candidates && a.score == b.score && a.pv == b.pv
++        && a.work == b.work && a.stats == b.stats && a.evaluations == b.evaluations
++        && a.iterations.len() == b.iterations.len()
++        && a.iterations.iter().zip(&b.iterations).all(|(a, b)|
++            a.depth == b.depth && a.candidates == b.candidates && a.steps == b.steps
++                && a.score == b.score && a.pv == b.pv && a.work == b.work)
++}
++
++fn state_equal<const D: bool>(a: &Completed<D>, b: &Completed<D>) -> bool {
++    a.history == b.history && a.search.stats == b.search.stats
++        && a.search.evaluator.stats == b.search.evaluator.stats
++        && a.search.learning.history == b.search.learning.history
++        && a.search.learning.killers == b.search.learning.killers
++        && a.search.learning.total == b.search.learning.total
++        && a.search.pv[1][..a.search.pv_len[1]] == b.search.pv[1][..b.search.pv_len[1]]
++        && match (&a.search.remembered, &b.search.remembered) {
++            (Some(a), Some(b)) => a.replica_eq(b), (None, None) => true, _ => false,
++        }
++}
++
++fn panic_text(payload: Box<dyn Any + Send>) -> String {
++    if let Some(text) = payload.downcast_ref::<&str>() { (*text).into() }
++    else if let Some(text) = payload.downcast_ref::<String>() { text.clone() }
++    else { "non-string panic".into() }
++}
++
++#[derive(Clone, Default)]
++struct Controls {
++    #[cfg(test)] fail_spawn: Option<usize>,
++    #[cfg(test)] fail_entry: Option<usize>,
++    #[cfg(test)] panic_entry: Option<usize>,
++    #[cfg(test)] shorter_lane: Option<usize>,
++    #[cfg(test)] probe: Option<Arc<Probe>>,
++}
++
++#[cfg(test)]
++#[derive(Default)]
++struct Probe { started: std::sync::atomic::AtomicUsize, exited: std::sync::atomic::AtomicUsize }
++
++#[cfg(test)]
++struct ExitProbe(Option<Arc<Probe>>);
++
++#[cfg(test)]
++impl ExitProbe {
++    fn new(probe: Option<Arc<Probe>>) -> Self {
++        if let Some(probe) = &probe { probe.started.fetch_add(1, std::sync::atomic::Ordering::SeqCst); }
++        Self(probe)
++    }
++}
++
++#[cfg(test)]
++impl Drop for ExitProbe {
++    fn drop(&mut self) {
++        if let Some(probe) = &self.0 { probe.exited.fetch_add(1, std::sync::atomic::Ordering::SeqCst); }
++    }
++}
++
++#[cfg(test)]
++mod runner_tests {
++    use super::*;
++    use std::sync::atomic::Ordering;
++    const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++
++    fn invoke(depth: u8, audit: bool, controls: Controls,
++        entry: impl FnOnce() -> Result<(), String>) -> Result<RunReport, String> {
++        let root = Position::from_fen(START).unwrap();
++        run_with(root, SearchHistory::new(&root), Parameters::default(),
++            Config { tts_bytes: 65_536, ..Config::default() }, depth, 17, 50, audit, entry, controls)
++    }
++
++    fn joined(probe: &Probe, expected: usize) {
++        assert_eq!(probe.started.load(Ordering::SeqCst), expected);
++        assert_eq!(probe.exited.load(Ordering::SeqCst), expected);
++    }
++
++    #[test]
++    fn seeded_depth_one_and_two_audits_match_independent_serial_state() {
++        for depth in [1, 2] {
++            let report = invoke(depth, true, Controls::default(), || Ok(())).unwrap();
++            assert!(report.all_replicas_equal && !report.raw_returns.is_empty());
++            assert_eq!(report.audit_final_state_equal, Some(true));
++            assert_eq!(report.pawn_owner_equal, Some(true));
++            assert_eq!(report.epochs, [report.audit_checked_fulls.unwrap() as u64; 3]);
++            assert!(report.epochs[0] > 0 && report.join_ns <= report.search_wall_ns);
++            assert!(report.collective_storage_bytes > 0);
++        }
++    }
++
++    #[test]
++    fn partial_spawn_and_entry_failure_or_panic_join_every_actual_peer() {
++        for role in [1, 2] {
++            for failure in 0..3 {
++                let probe = Arc::new(Probe::default());
++                let mut controls = Controls { probe: Some(Arc::clone(&probe)), ..Controls::default() };
++                match failure { 0 => controls.fail_spawn = Some(role),
++                    1 => controls.fail_entry = Some(role), _ => controls.panic_entry = Some(role) }
++                assert!(invoke(1, false, controls, || Ok(())).is_err());
++                joined(&probe, if failure == 0 { role - 1 } else { 2 });
++            }
++        }
++    }
++
++    #[test]
++    fn entry_callback_error_and_panic_cancel_and_join_both_waiting_peers() {
++        for panic in [false, true] {
++            let probe = Arc::new(Probe::default());
++            let controls = Controls { probe: Some(Arc::clone(&probe)), ..Controls::default() };
++            assert!(invoke(1, false, controls, || {
++                if panic { panic!("controlled placement callback panic"); }
++                Err("controlled placement callback error".into())
++            }).is_err());
++            joined(&probe, 2);
++        }
++    }
++
++    #[test]
++    fn actual_shorter_peer_completion_cancels_divergent_search_and_joins() {
++        let probe = Arc::new(Probe::default());
++        let controls = Controls { shorter_lane: Some(1), probe: Some(Arc::clone(&probe)), ..Controls::default() };
++        assert!(invoke(2, false, controls, || Ok(())).is_err());
++        joined(&probe, 2);
++    }
++}

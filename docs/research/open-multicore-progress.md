@@ -97,16 +97,30 @@ checked the arithmetic and commissioned one bounded Astra challenge of replicate
 control. That design remains semantically plausible but duplicates control and
 full-sized TT state to avoid per-FULL input publication; no speed claim follows.
 
-Select type-disjoint raw Activity reduction first because it exposes additional
-demanded arithmetic width. Three helpers own disjoint whole color/kind jobs and
-shelter geometry. Same-kind marks stay together; disjoint kind bits permit scalar
-pressure addition before one final subtraction/clamp. The owner retains original
-side rounding and weighted composition. Unlike fusion there is no peer barrier;
-unlike inventory this divides the currently late arithmetic. Extra scans, reader
-traffic, reduction, skew and layout can still erase savings. One prospective
-assignment and one preserved3/new1/new3/new4 fixed48+4 generic comparison are
-selected after focused controls, with no automatic PGO or retuning. Lexically
-borrowed inputs, replicated control and frontier batching remain separate reserves.
+The [type-disjoint trial](../../experiments/multicore-feasibility/type-disjoint-four/README.md)
+closed at `8f3b568f`. Whole color/kind ownership allowed scalar pressure reduction
+without a peer barrier, but the integrated design lost:9.097050s versus matching3
+7.773228s and retained3 7.741570s. Per-case losses versus matching3 are11.78%,25.60%
+and21.88%, with separated ranges. All49 controls and48 replay lives/560 posts pass
+first attempt; final epochs match every actual reader. CPU is1.56024x matching3.
+Park this fixed design. It establishes neither an isolated reduction cost nor a
+general impossibility of wider arithmetic, and does not justify tuning this trial.
+
+Select a distinct replicated-control experiment next. Three private search/TT/
+learning instances follow the same deterministic transitions; one owner retains
+pawn-cache authority. Role scalar outputs are exchanged once and every lane uses
+the same numerical finishing and complete semantic N/R. Local inputs eliminate
+input publication, at the cost of duplicate search, map construction and full
+table capacity. The expected gain is modest or negative; this is a test of a
+different execution foundation, not a claim of independent branch search.
+
+The bounded prototype uses actual fixed-completion NoHost depth8 search and
+matched preserved/new inline and packet controls. This entry has narrower root
+and host semantics than ordinary timed production. Collective audit, cancellation
+and two-slot reverse-ownership proof precede one generic comparison; no hot census,
+PGO or qualification is selected. Three completion waiters cannot reuse the old
+single-waiter latch. A bounded active-spin protocol is acceptable for the joined
+research prototype. Borrowed inputs and frontier batching remain separate reserves.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

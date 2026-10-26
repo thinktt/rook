@@ -105,14 +105,20 @@ compile repair is preserved. This measures the complete changed design, not an
 isolated barrier or copying cost. No PGO or rescue variant is selected.
 
 The [architectural reassessment](docs/research/post-fusion-execution-architectures.md)
-closed at `a7613525`. Next selected is one integrated type-disjoint raw Activity
-reduction: three arithmetic helpers own whole color/kind jobs and independent
-shelter geometry, with one final owner reduction. Disjoint mark bits allow scalar
-pressure addition before the single clamp, without a peer barrier. Freeze one
-assignment, then compare preserved3/new1/new3/new4 in one fixed48+4 generic lane
-after focused admission. Borrowed inputs and replicated-control collectives remain
-distinct unselected reserves. No PGO, adoption or external work is selected; all
-positive artifacts remain preserved.
+closed at `a7613525`. Its [type-disjoint four-thread trial](experiments/multicore-feasibility/type-disjoint-four/README.md)
+is parked at `8f3b568f`: raw4 records9.097050s versus matching3 7.773228s and
+retained3 7.741570s. The17.03% loss versus matching3 spans all three cases with
+separated ranges; CPU is1.56024x matching3. All49 focused controls,48 replay
+lives/560 posts and4 idle probes pass first attempt. Final epochs verify all three
+arithmetic readers participated. No tuning or PGO rescue is selected.
+
+Next selected is an isolated replicated-control/collective-FULL prototype:
+three private Search/TT/learning instances, owner-only pawn cache, scalar exchange
+and local numerical finishing. It tests input locality/publication against
+duplicated control and memory costs. Use matched preserved/new source controls
+and actual fixed-completion NoHost depth8 search, not the original timed protocol;
+one finite generic comparison is selected after focused admission. Borrowed input
+remains a separate reserve. No qualification, adoption or external work is selected.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
