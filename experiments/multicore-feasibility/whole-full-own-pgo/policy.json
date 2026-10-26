@@ -1,0 +1,83 @@
+{
+  "schema": "rook2-whole-full-own-pgo-policy-v1",
+  "sourceCheckpoint": "1c68dd32d5f323e09faf784ff4fc50a5b5fca47d",
+  "sourceFiles": 64,
+  "sourceChangeAllowed": false,
+  "training": {
+    "modes": [
+      1,
+      2,
+      3
+    ],
+    "casesPerMode": 54,
+    "lives": 162,
+    "canonicalMerges": 1,
+    "independentRemerges": 1,
+    "weighting": "equal raw input inclusion; no alternate weights",
+    "rawProfileBytes": 268435456
+  },
+  "comparison": {
+    "variants": [
+      "serial1",
+      "prior2",
+      "prior3",
+      "inline1",
+      "wholeepoch2",
+      "colorepoch3"
+    ],
+    "cases": 54,
+    "lives": 324,
+    "observationsPerCell": 1,
+    "warmups": 0,
+    "idleProbes": 6,
+    "caseOrder": "released original order; rotate config order by case index modulo6",
+    "statistic": "direct sums/single observations; no per-case medians"
+  },
+  "coordinatorCpu": 14,
+  "helperCpus": [
+    6,
+    4
+  ],
+  "housekeepingCpus": [
+    0,
+    1,
+    2,
+    3,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "unusedOwnedSiblings": [
+    15,
+    7,
+    5
+  ],
+  "limits": {
+    "pipelineSeconds": 3600,
+    "instrumentedBuildSeconds": 300,
+    "trainingSeconds": 2400,
+    "trainingDriverSeconds": 2500,
+    "trainingAuditSeconds": 120,
+    "mergeSeconds": 60,
+    "useBuildSeconds": 300,
+    "comparisonSeconds": 1800,
+    "comparisonDriverSeconds": 1900,
+    "comparisonAuditSeconds": 120,
+    "perLifeSeconds": 180
+  },
+  "recipe": {
+    "target": "x86_64-unknown-linux-gnu",
+    "cpu": "x86-64",
+    "optimization": "O3/ThinLTO/oneCGU/debug1/panic-abort",
+    "useOnlyExtTspProfiled": true
+  },
+  "spinBudget": 4096,
+  "sampleStride": 512,
+  "smallScreen": false,
+  "gainGate": false,
+  "conditionalRepeat": false,
+  "scope": "Direct own-PGO/full54 research; no source cleanup/tuning/adoption/qualification/external action."
+}
