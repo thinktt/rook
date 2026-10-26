@@ -27,16 +27,21 @@ def count(value):
     assert type(value) is int and value >= 0, ('nonnegative integer', value)
     return value
 
-def checked_preparation(path):
+def checked_preparation(path, archived_tools=None):
     prep = read(path); directory = path.parent
-    assert prep['schema'] in ['rook2-internal-split-preparation-run-v1', 'rook2-wide-preparation-run-v1', 'rook2-coarse-pure-preparation-run-v1']
+    assert prep['schema'] in ['rook2-internal-split-preparation-run-v1', 'rook2-wide-preparation-run-v1',
+        'rook2-coarse-pure-preparation-run-v1', 'rook2-coarse-pure-completion-preparation-v1']
     assert prep['complete'] is True and prep['failure'] is None
     assert prep['sourceBefore'] == prep['sourceAfter']
     assert prep['baselineBefore'] == prep['baselineAfter']
     for name, digest in prep['sourceBefore'].items():
         assert sha(directory/'source-before'/name) == digest
     for name, digest in prep['tools'].items():
-        assert sha(name) == digest
+        if archived_tools is not None:
+            assert name in archived_tools and archived_tools[name]['sha256'] == digest
+            assert sha(archived_tools[name]['path']) == digest
+        else:
+            assert sha(name) == digest
     selectors = prep['selectors']
     assert selectors and len(selectors) == len(set(selectors))
     stages = prep['stages']; assert len(stages) == len(selectors)+1
@@ -140,6 +145,15 @@ def vector(value, length):
     return value
 
 
+def demand_json_budget(key_count, scope_cells):
+    count(key_count); count(scope_cells)
+    assert key_count <= scope_cells <= 9*key_count
+    bound = 256*key_count+128*scope_cells
+    assert bound <= 96*1024*1024, 'pure demand ledger exceeds unchanged96MiB partition'
+    return dict(uniqueDemandKeys=key_count, nonzeroScopeCells=scope_cells,
+        conservativeBytes=bound, partitionBytes=96*1024*1024)
+
+
 def audit_policy(chosen):
     assert chosen['schema'] == 'rook2-coarse-pure-policy-v1'
     assert chosen['reportSchema'] == 'rook2-coarse-pure-salvage-v1'
@@ -211,10 +225,15 @@ def admit_original_fixture(chosen):
 
 def audit_preparation(path, receipt):
     prep = checked_preparation(path)
-    assert prep['schema'] == 'rook2-coarse-pure-preparation-run-v1'
+    completion = prep['schema'] == 'rook2-coarse-pure-completion-preparation-v1'
+    assert completion or prep['schema'] == 'rook2-coarse-pure-preparation-run-v1'
     assert prep['crate'] == receipt['crate'] and prep['sourceBefore'] == receipt['sourceBefore']
     assert prep['baselineBefore'] == receipt['baselineBefore']
-    assert prep['selectors'] == ['pure_observer::tests::', 'coarse_pure_salvage::tests::']
+    if completion:
+        assert prep['selectors'] == ['pure_observer::tests::serialization_']
+        audit_completion_reuse(prep)
+    else:
+        assert prep['selectors'] == ['pure_observer::tests::', 'coarse_pure_salvage::tests::']
     paths = [Path('/home/legolas/rook2-experiments')/name/'prepare/preparation-run.json'
         for name in ['internal-split-20261026-01', 'internal-horizon-20261026-01', 'wide-internal-20261026-01']]
     inherited = prep['inheritedControls']; assert len(inherited) == 3
@@ -228,6 +247,61 @@ def audit_preparation(path, receipt):
     assert delta == prep['reusedSourceDelta'] == ['Cargo.toml', 'src/bin/rook2-coarse-pure-census.rs',
         'src/coarse_pure_salvage.rs', 'src/engine.rs', 'src/evaluator.rs', 'src/internal_split.rs',
         'src/lib.rs', 'src/ordinary.rs', 'src/pure_observer.rs']
+
+
+def audit_completion_reuse(prep):
+    failed = Path('/home/legolas/rook2-experiments/coarse-pure-salvage-20261026-01')
+    old_path = failed/'prepare/preparation-run.json'
+    archive_path = failed/'frozen-tools/archive.json'
+    archive = read(archive_path)
+    assert archive['schema'] == 'rook2-coarse-pure-original-tools-v1' and archive['originalPreparation'] == str(old_path)
+    tools = archive['tools']; old_raw = read(old_path)
+    assert set(tools) == set(old_raw['tools']) and len(tools) == 8
+    for original, row in tools.items():
+        artifact = Path(row['path'])
+        assert artifact == archive_path.parent/Path(original).name and not artifact.is_symlink()
+        assert row['sha256'] == old_raw['tools'][original] == sha(artifact)
+    assert prep['toolArchive'] == dict(path=str(archive_path), sha256=sha(archive_path))
+    old = checked_preparation(old_path, tools)
+    assert old['focusedTests'] == 11 and old['selectors'] == ['pure_observer::tests::', 'coarse_pure_salvage::tests::']
+    assert old['baselineBefore'] == prep['baselineBefore']
+    diagnostic_path = Path('/home/legolas/rook2-experiments/coarse-pure-salvage-diagnostic-20261026-01/diagnostic.json')
+    reused = prep['reusedCurrentControls']
+    assert reused == [dict(path=str(old_path), sha256=sha(old_path), focusedTests=11, kind='first-census-preparation'),
+        dict(path=str(diagnostic_path), sha256=sha(diagnostic_path), focusedTests=1, kind='error-diagnostic')]
+    diagnostic = read(diagnostic_path)
+    assert diagnostic['schema'] == 'rook2-coarse-pure-error-diagnostic-v1'
+    assert diagnostic['complete'] is True and diagnostic['failure'] is None and diagnostic['diagnosticOnly'] is True
+    assert diagnostic['failedAttempt'] == str(failed) and diagnostic['nativeExit'] == 1 and diagnostic['stdoutBytes'] == 0
+    assert diagnostic['observerReason'] == 'pure-demand-json-cap'
+    assert diagnostic['baseline'] == prep['baselineBefore']
+    assert diagnostic['policySha256'] == tools[str(HERE/'policy.json')]['sha256']
+    assert diagnostic['newDiagnosticTest'] == 'coarse_pure_salvage::tests::dispatcher_root_error_surfaces_observer_cap_or_key_failure'
+    stages = diagnostic['stages']; assert [stage['stage'] for stage in stages] == ['test', 'build']
+    for stage in stages:
+        assert stage['exit'] == 0 and count(stage['wallNs']) > 0
+        assert sha(diagnostic_path.parent/(stage['stage']+'.stdout')) == stage['stdoutSha256']
+        assert sha(diagnostic_path.parent/(stage['stage']+'.stderr')) == stage['stderrSha256']
+    stdout = (diagnostic_path.parent/'test.stdout').read_text()
+    assert 'test '+diagnostic['newDiagnosticTest']+' ... ok\n' in stdout
+    assert 'test result: ok. 1 passed; 0 failed; 0 ignored;' in stdout
+    for path, digest in diagnostic['nativeBindings'].items(): assert sha(path) == digest
+    terminal = read(diagnostic_path.parent/'native/terminal.json')
+    native = read(diagnostic_path.parent/'native/native.json')
+    assert terminal['exit'] == native['native_exit_code'] == 1 and terminal['cleanup'] is None
+    diagnostic_build = read(diagnostic_path.parent/'build/receipt.json')
+    assert diagnostic_build['complete'] is True and diagnostic_build['exit'] == 0
+    assert diagnostic_build['sourceBefore'] == diagnostic_build['sourceAfter'] == diagnostic['sourceBefore']
+    assert sha(diagnostic_build['binary']) == diagnostic_build['binarySha256']
+    for name, digest in diagnostic['sourceBefore'].items():
+        assert sha(diagnostic_path.parent/'build/source-before'/name) == digest
+    cold_delta = sorted(name for name in set(old['sourceBefore']) | set(diagnostic['sourceBefore'])
+        if old['sourceBefore'].get(name) != diagnostic['sourceBefore'].get(name))
+    assert cold_delta == diagnostic['sourceDelta'] == ['src/coarse_pure_salvage.rs']
+    changes = sorted(name for name in set(old['sourceBefore']) | set(prep['sourceBefore'])
+        if old['sourceBefore'].get(name) != prep['sourceBefore'].get(name))
+    assert changes == prep['sourceChangeFromFailed'] == ['src/coarse_pure_salvage.rs', 'src/pure_observer.rs']
+    assert prep['sourceBefore']['src/coarse_pure_salvage.rs'] == diagnostic['sourceBefore']['src/coarse_pure_salvage.rs']
 
 
 def costs(value, materialized_bytes, calls):
@@ -329,6 +403,7 @@ def audit_kind(report, kind):
         first_scope = count(row['first_scope']); assert first_scope < 9
         first = count(row['first_kernel_ns'])
         scopes = row['scopes']; assert type(scopes) is list and scopes
+        assert len(json.dumps(row, separators=(',', ':'), allow_nan=False).encode())+1 <= 256+128*len(scopes)
         indices = [t['index'] for t in scopes]; assert indices == sorted(set(indices))
         for tally in scopes:
             i = count(tally['index']); assert i < 9 and tally['scope'] == SCOPES[i]
@@ -437,7 +512,8 @@ def audit_report(report, chosen):
     assert sum(report['pool'][kind]['unique_keys'] for kind in KINDS)*(1024+160) <= 134217728
     assert sum(report['pool'][kind]['calls'] for kind in KINDS) <= CAPS['pool_calls']
     assert sum(derived[kind]['total']['unique_keys'] for kind in KINDS) <= CAPS['demand_keys']
-    assert sum(derived[kind]['total']['unique_keys'] for kind in KINDS)*1536 <= 100663296
+    demand_json_budget(sum(derived[kind]['total']['unique_keys'] for kind in KINDS),
+        sum(len(row['scopes']) for kind in KINDS for row in report['demand'][kind]['records']))
     assert sum(derived[kind]['total']['calls'] for kind in KINDS) <= CAPS['demand_calls']
     assert sum(report['prefix'][kind]['calls'] for kind in KINDS) <= CAPS['prefix_calls']
     costs(report['demand']['timings'], sum(PAYLOAD[k]*(derived[k]['pooled']['calls']+derived[k]['total']['repeated_calls']) for k in KINDS), sum(derived[k]['total']['calls'] for k in KINDS))
@@ -537,6 +613,8 @@ def main():
         physicalWork={key: report[key] for key in ['canonical_nodes', 'canonical_relations', 'producer_nodes_per_set', 'producer_relations_per_set',
             'physical_producer_executions', 'physical_canonical_passes', 'physical_total_nodes', 'physical_total_relations', 'parent_nodes', 'parent_relations']},
         summaries=summaries, dispatcherTimingsNs=timings, producerTimingTotalsNs=producer_costs,
+        demandJsonBound=demand_json_budget(sum(len(report['demand'][kind]['records']) for kind in KINDS),
+            sum(len(row['scopes']) for kind in KINDS for row in report['demand'][kind]['records'])),
         observerTimings=dict(producers=[p['production']['timings'] for p in report['producers']], demand=report['demand']['timings'], prefix=report['prefix']['timings']),
         retainedBytes=dict(pool=report['pool']['retained_bytes'], demandPeak=report['demand']['peak_retained_bytes'], prefixMembership=report['prefix']['membership_bytes'],
             ttBaseCopy=report['tt_base_copy_bytes'], ttBase=report['tt_base_bytes'], snapshot=report['snapshot_bytes'], mechanismEstimate=report['estimated_mechanism_bytes']),

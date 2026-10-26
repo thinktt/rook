@@ -1,0 +1,224 @@
+--- a/src/coarse_pure_salvage.rs
++++ b/src/coarse_pure_salvage.rs
+@@ -100,7 +100,10 @@
+     }
+ }
+ fn peak_rss()->usize {std::fs::read_to_string("/proc/self/status").ok().and_then(|s|s.lines().find(|l|l.starts_with("VmHWM:")).and_then(|l|l.split_whitespace().nth(1)).and_then(|v|v.parse().ok())).unwrap_or(0)}
+-fn root_error(context:&Context,error:String)->String {format!("{error}; dispatcher={:?}",context.0.borrow().error)}
++fn root_error(context:&Context,error:String)->String {
++    let state=context.0.borrow();let observer=state.observer.as_ref().and_then(pure::Context::fatal);
++    format!("{error}; dispatcher={:?}; observer={observer:?}",state.error)
++}
+ pub fn run(position:Position,history:SearchHistory,parameters:Parameters,config:Config,fixture:Fixture)->Result<Report,String> {
+     if history.search_ply()!=0{return Err("coarse census requires root history boundary".into());}
+     let context=Context::new(fixture.clone(),Pass::Demand,None);let mut first=Search::<true>::new(&position);first.config=config;first.evaluator.parameters=parameters.clone();first.coarse_pure=Some(context.clone());first.wide_capture=Some(crate::wide_capture::Context::counter());let mut first_history=history.clone();
+@@ -144,4 +147,15 @@
+         let mut actual=Search::<true>::new(&position);actual.config=config;actual.evaluator.begin_search(&position);actual.evaluator.research_attach_pure_observer(Some(observer.clone())).unwrap();let mut b=SearchHistory::new(&position);
+         let returned=internal_split::native_root(&mut actual,position,&mut b,8).unwrap();actual.evaluator.research_attach_pure_observer(None).unwrap();assert_eq!(returned,expected);assert!(actual.research_eq(&reference));assert_eq!(a,b);assert_eq!(a.search_ply(),0);assert!(!observer.finish_prefix().unwrap().failed());
+     }
++    #[test]
++    fn dispatcher_root_error_surfaces_observer_cap_or_key_failure() {
++        for (caps,reason) in [(Caps{max_calls:0,..PRODUCER_CAPS},"pure-observer-call-cap"),(Caps{max_keys:0,..PRODUCER_CAPS},"pure-observer-key-cap")] {
++            let position=Position::from_fen(START).unwrap();let mut search=Search::<true>::new(&position);let observer=pure::Context::producer(search.evaluator.research_pure_epoch(),caps,0).unwrap();
++            search.evaluator.research_attach_pure_observer(Some(observer.clone())).unwrap();let mut scratch=None;search.evaluator.ensure_influence(&position,&mut scratch);assert_eq!(observer.fatal(),Some(reason));
++            let stop=search.charge_node(&SearchHistory::new(&position)).unwrap_err();assert_eq!(stop,Stopped::WorkPoll);
++            let context=Context::new(frozen("diagnostic-only"),Pass::Demand,None);context.0.borrow_mut().observer=Some(observer);
++            let message=root_error(&context,format!("native root stopped: {stop:?}"));assert!(message.contains("dispatcher=None"));assert!(message.contains(&format!("observer=Some(\"{reason}\")")));
++        }
++    }
++
+ }
+--- a/src/pure_observer.rs
++++ b/src/pure_observer.rs
+@@ -24,13 +24,17 @@
+ // incidence128MiB; canonical demand incidence96MiB; fixed summaries, seven
+ // producer summaries, fixture and dispatcher fields reserve32MiB. Pool row
+ // (seven u64 call counts, fourteen u128 kernel/first costs, IDs/mask) fits1024B;
+-// prefix row fits160B; demand row with all nine scope rows fits1536B. Controls
+-// below exercise maximum integer widths through the actual serializers.
++// prefix row fits160B. Demand serialization is sparse: charge256B per key
++// for its fixed header/empty scope brackets/outer row comma, plus128B for each
++// actual nonzero scope cell including its comma. No charge for absent cells or
++// repeated calls in an already present cell. Controls below prove these bounds
++// with maximum integer widths through the actual serializers.
+ const POOL_PREFIX_JSON_BUDGET:usize=128*1024*1024;
+ const DEMAND_JSON_BUDGET:usize=96*1024*1024;
+ const POOL_ROW_BYTES:usize=1024;
+ const PREFIX_ROW_BYTES:usize=160;
+-const DEMAND_ROW_BYTES:usize=1536;
++const DEMAND_KEY_JSON_BYTES:usize=256;
++const DEMAND_SCOPE_JSON_BYTES:usize=128;
+ 
+ #[derive(Clone,Copy,Debug)]
+ pub(crate) struct Caps {pub(crate) max_keys:usize,pub(crate) max_calls:u64,pub(crate) max_bytes:usize}
+@@ -196,7 +200,7 @@
+ 
+ enum Mode {
+     Producer {id:usize,maps:Catalog<InfluenceKey,Influence,Produced>,chains:Catalog<ChainKey,ChainValue,Produced>},
+-    Canonical {pool:Rc<Pool>,maps:Catalog<InfluenceKey,Influence,Demanded>,chains:Catalog<ChainKey,ChainValue,Demanded>},
++    Canonical {pool:Rc<Pool>,maps:Catalog<InfluenceKey,Influence,Demanded>,chains:Catalog<ChainKey,ChainValue,Demanded>,demand_json_bytes:usize},
+     Prefix {pool:Rc<Pool>,maps:Vec<Tally>,chains:Vec<Tally>,calls:[Tally;2],matched:[Tally;2]},Finished,
+ }
+ struct State {epoch:RootEpoch,caps:Caps,mode:Mode,scope:Scope,fatal:Option<&'static str>,calls:u64,costs:Costs,peak_bytes:usize}
+@@ -213,7 +217,7 @@
+     pub(crate) fn producer(epoch:RootEpoch,caps:Caps,id:usize)->Result<Self,String> {if id>=7{return Err("pure producer id must be0..6".into());}
+         Ok(Self::new(epoch,caps,Mode::Producer {id,maps:Catalog::new(),chains:Catalog::new()},Scope::Inactive))}
+     pub(crate) fn canonical(epoch:RootEpoch,pool:Rc<Pool>,caps:Caps)->Result<Self,String> {if epoch!=pool.epoch{return Err("pure-canonical-epoch-mismatch".into());}
+-        Ok(Self::new(epoch,caps,Mode::Canonical {pool,maps:Catalog::new(),chains:Catalog::new()},Scope::Inactive))}
++        Ok(Self::new(epoch,caps,Mode::Canonical {pool,maps:Catalog::new(),chains:Catalog::new(),demand_json_bytes:0},Scope::Inactive))}
+     pub(crate) fn prefix(epoch:RootEpoch,pool:Rc<Pool>,caps:Caps)->Result<Self,String> {if epoch!=pool.epoch{return Err("pure-prefix-epoch-mismatch".into());}
+         let maps=vec![Tally::default();pool.maps.records.len()];let chains=vec![Tally::default();pool.chains.records.len()];
+         let context=Self::new(epoch,caps,Mode::Prefix {pool,maps,chains,calls:[Tally::default();2],matched:[Tally::default();2]},Scope::Prefix);
+@@ -235,7 +239,7 @@
+     pub(crate) fn finish_producer(&self)->Result<Store,String> {let mut state=self.0.borrow_mut();if let Some(fatal)=state.fatal{return Err(fatal.into());}
+         let mode=std::mem::replace(&mut state.mode,Mode::Finished);match mode {Mode::Producer {id,maps,chains}=>Ok(Store {epoch:state.epoch.clone(),id,maps,chains,costs:state.costs}),_=>Err("not an unfinished pure producer".into())}}
+     pub(crate) fn finish_canonical(&self)->Result<DemandReport,String> {let mut state=self.0.borrow_mut();if let Some(fatal)=state.fatal{return Err(fatal.into());}
+-        let mode=std::mem::replace(&mut state.mode,Mode::Finished);match mode {Mode::Canonical {pool,maps,chains}=>Ok(DemandReport {pool,maps,chains,costs:state.costs,peak_bytes:state.peak_bytes}),_=>Err("not an unfinished pure canonical observer".into())}}
++        let mode=std::mem::replace(&mut state.mode,Mode::Finished);match mode {Mode::Canonical {pool,maps,chains,..}=>Ok(DemandReport {pool,maps,chains,costs:state.costs,peak_bytes:state.peak_bytes}),_=>Err("not an unfinished pure canonical observer".into())}}
+     pub(crate) fn finish_prefix(&self)->Result<PrefixReport,String> {let mut state=self.0.borrow_mut();if let Some(fatal)=state.fatal{return Err(fatal.into());}
+         let mode=std::mem::replace(&mut state.mode,Mode::Finished);match mode {Mode::Prefix {pool,maps,chains,calls,matched}=>Ok(PrefixReport {epoch:state.epoch.clone(),pool,maps,chains,calls,matched,costs:state.costs}),_=>Err("not an unfinished pure prefix observer".into())}}
+ }
+@@ -249,7 +253,7 @@
+     if let Err(error)=call(state){return Some(error);}let bytes=state.bytes();let caps=state.caps;let scope=state.scope;
+     match &mut state.mode {
+         Mode::Producer {id,maps,chains}=>produce(maps,key,value,kernel_ns,*id,caps,bytes,chains.records.len(),&mut state.costs),
+-        Mode::Canonical {pool,maps,chains}=>demand(maps,&pool.maps,key,value,kernel_ns,scope,caps,bytes,chains.records.len(),&mut state.costs),
++        Mode::Canonical {pool,maps,chains,demand_json_bytes}=>demand(maps,&pool.maps,key,value,kernel_ns,scope,caps,bytes,chains.records.len(),demand_json_bytes,&mut state.costs),
+         Mode::Prefix {pool,maps,calls,matched,..}=>prefix(&pool.maps,maps,&mut calls[0],&mut matched[0],key,value,kernel_ns,&mut state.costs),Mode::Finished=>Some("pure-observer-already-finished"),
+     }
+ }
+@@ -257,7 +261,7 @@
+     if let Err(error)=call(state){return Some(error);}let bytes=state.bytes();let caps=state.caps;let scope=state.scope;
+     match &mut state.mode {
+         Mode::Producer {id,maps,chains}=>produce(chains,key,value,kernel_ns,*id,caps,bytes,maps.records.len(),&mut state.costs),
+-        Mode::Canonical {pool,maps,chains}=>demand(chains,&pool.chains,key,value,kernel_ns,scope,caps,bytes,maps.records.len(),&mut state.costs),
++        Mode::Canonical {pool,maps,chains,demand_json_bytes}=>demand(chains,&pool.chains,key,value,kernel_ns,scope,caps,bytes,maps.records.len(),demand_json_bytes,&mut state.costs),
+         Mode::Prefix {pool,chains,calls,matched,..}=>prefix(&pool.chains,chains,&mut calls[1],&mut matched[1],key,value,kernel_ns,&mut state.costs),Mode::Finished=>Some("pure-observer-already-finished"),
+     }
+ }
+@@ -270,16 +274,21 @@
+         let mut child_kernel_ns=[0;7];child_kernel_ns[id]=kernel_ns;
+         catalog.insert(key,value,Produced {mask:1<<id,calls:1,kernel_ns,first_kernel_ns:kernel_ns,child_calls,child_kernel_ns,child_first_kernel_ns:child_kernel_ns});}None
+ }
+-fn demand<K:Key,V:Copy+PartialEq>(catalog:&mut Catalog<K,V,Demanded>,pool:&Catalog<K,V,Produced>,key:K,value:V,kernel_ns:u128,scope:Scope,caps:Caps,bytes:usize,other_keys:usize,costs:&mut Costs)->Option<&'static str> {
++fn demand<K:Key,V:Copy+PartialEq>(catalog:&mut Catalog<K,V,Demanded>,pool:&Catalog<K,V,Produced>,key:K,value:V,kernel_ns:u128,scope:Scope,caps:Caps,bytes:usize,other_keys:usize,demand_json_bytes:&mut usize,costs:&mut Costs)->Option<&'static str> {
+     let Some(scope)=scope.index() else{return Some("pure-demand-outside-scope");};
+     let lookup=Instant::now();let found=catalog.find(&key);let supplied=pool.find(&key);costs.lookup_ns+=lookup.elapsed().as_nanos();
+     if let Some(id)=supplied {if !materialize(&pool.records[id].value,value,costs){return Some("pure-pool-demand-payload-mismatch");}}
+-    if let Some(found)=found {let record=&mut catalog.records[found];if !materialize(&record.value,value,costs){return Some("pure-duplicate-payload-mismatch");}record.meta.scopes[scope].add(kernel_ns);}
+-    else {if catalog.records.len()+other_keys>=caps.max_keys{return Some("pure-observer-key-cap");}
+-        if (catalog.records.len()+other_keys+1).saturating_mul(DEMAND_ROW_BYTES)>DEMAND_JSON_BUDGET{return Some("pure-demand-json-cap");}
++    if let Some(found)=found {let record=&mut catalog.records[found];if !materialize(&record.value,value,costs){return Some("pure-duplicate-payload-mismatch");}
++        let growth=if record.meta.scopes[scope].calls==0 {DEMAND_SCOPE_JSON_BYTES}else{0};
++        if demand_json_bytes.saturating_add(growth)>DEMAND_JSON_BUDGET{return Some("pure-demand-json-cap");}
++        record.meta.scopes[scope].add(kernel_ns);*demand_json_bytes+=growth;
++    } else {if catalog.records.len()+other_keys>=caps.max_keys{return Some("pure-observer-key-cap");}
++        let growth=DEMAND_KEY_JSON_BYTES+DEMAND_SCOPE_JSON_BYTES;
++        if demand_json_bytes.saturating_add(growth)>DEMAND_JSON_BUDGET{return Some("pure-demand-json-cap");}
+         if bytes.saturating_add(catalog.growth(&key))>caps.max_bytes{return Some("pure-observer-byte-cap");}
+         let mut scopes=[Tally::default();9];scopes[scope].add(kernel_ns);let mask=supplied.map_or(0,|id|pool.records[id].meta.mask);
+-        catalog.insert(key,value,Demanded {pool_id:supplied,mask,first_scope:scope,first_kernel_ns:kernel_ns,scopes});}None
++        catalog.insert(key,value,Demanded {pool_id:supplied,mask,first_scope:scope,first_kernel_ns:kernel_ns,scopes});*demand_json_bytes+=growth;
++    }None
+ }
+ fn prefix<K:Key,V:Copy+PartialEq>(pool:&Catalog<K,V,Produced>,seen:&mut [Tally],calls:&mut Tally,matched:&mut Tally,key:K,value:V,kernel_ns:u128,costs:&mut Costs)->Option<&'static str> {
+     calls.add(kernel_ns);let lookup=Instant::now();let supplied=pool.find(&key);costs.lookup_ns+=lookup.elapsed().as_nanos();
+@@ -329,9 +338,12 @@
+             if class==0||(class==2&&prior&&first_in_scope){result.first_kernel_ns+=meta.first_kernel_ns;}}
+     }result
+ }
++fn demand_scope_json(index:usize,tally:Tally)->String {
++    format!("{{\"index\":{},\"scope\":\"{}\",\"calls\":{},\"kernel_ns\":{}}}",index,scope_name(index),tally.calls,tally.kernel_ns)
++}
+ fn demand_record_json<K,V>(id:usize,record:&Record<K,V,Demanded>)->String {
+-    let rows=record.meta.scopes.iter().enumerate().filter(|(_,tally)|tally.calls!=0).map(|(index,tally)|
+-        format!("{{\"index\":{},\"scope\":\"{}\",\"calls\":{},\"kernel_ns\":{}}}",index,scope_name(index),tally.calls,tally.kernel_ns)).collect::<Vec<_>>().join(",");
++    let rows=record.meta.scopes.iter().enumerate().filter(|(_,tally)|tally.calls!=0)
++        .map(|(index,tally)|demand_scope_json(index,*tally)).collect::<Vec<_>>().join(",");
+     format!("{{\"demand_id\":{},\"pool_id\":{},\"producer_mask\":{},\"first_scope\":{},\"first_kernel_ns\":{},\"scopes\":[{}]}}",
+         id,record.meta.pool_id.map_or("null".into(),|id|id.to_string()),record.meta.mask,record.meta.first_scope,record.meta.first_kernel_ns,rows)
+ }
+@@ -491,6 +503,74 @@
+         assert!(std::panic::catch_unwind(||Placement::new(&too_many,false)).is_err(),"private16-slot domain is explicit");
+     }
+     #[test]
++    fn serialization_sparse_rows_fit_actual_max_value_bound() {
++        let maximum=Tally {calls:u64::MAX,kernel_ns:u128::MAX};
++        let mut record=Record {key:(),value:(),meta:Demanded {pool_id:Some(usize::MAX),mask:u8::MAX,
++            first_scope:8,first_kernel_ns:u128::MAX,scopes:[Tally::default();9]}};
++        // The fixed allowance includes the empty array and outer record comma;
++        // each cell allowance includes its longest scope name and cell comma.
++        assert!(demand_record_json(usize::MAX,&record).len()+1<=DEMAND_KEY_JSON_BYTES);
++        for index in 0..9 {assert!(demand_scope_json(index,maximum).len()+1<=DEMAND_SCOPE_JSON_BYTES);}
++        for cells in 0..=9 {
++            record.meta.scopes=[Tally::default();9];
++            record.meta.scopes[..cells].fill(maximum);
++            assert!(demand_record_json(usize::MAX,&record).len()+1<=DEMAND_KEY_JSON_BYTES+cells*DEMAND_SCOPE_JSON_BYTES);
++        }
++        assert_eq!(Caps::canonical().max_keys*(DEMAND_KEY_JSON_BYTES+DEMAND_SCOPE_JSON_BYTES),DEMAND_JSON_BUDGET,
++            "unchanged96MiB admits the existing key cap when each key has one scope cell");
++    }
++    #[test]
++    fn serialization_sparse_charge_combines_kinds_and_ignores_repeats() {
++        fn charge(context:&Context)->usize {match &context.0.borrow().mode {
++            Mode::Canonical {demand_json_bytes,..}=>*demand_json_bytes,_=>panic!("expected canonical observer")}}
++        let position=position();let map=Influence::build(&position);
++        let pool=Rc::new(Pool::combine(empty_stores(),Caps::pool()).unwrap());
++        let context=Context::canonical(epoch(),pool,Caps::canonical()).unwrap();
++        assert_eq!(charge(&context),0);
++        {let _scope=context.set_scope(Scope::Coordinator);
++            context.influence(&position,Route::Scalar,map,1);assert_eq!(charge(&context),384);
++            context.influence(&position,Route::Scalar,map,1);assert_eq!(charge(&context),384);
++            context.chain(&position,&map,0,[1024;2],[1024;2],Activity::default(),Shelter::default(),1);
++            assert_eq!(charge(&context),768);
++            context.chain(&position,&map,0,[1024;2],[1024;2],Activity::default(),Shelter::default(),1);
++            assert_eq!(charge(&context),768);
++        }
++        {let _scope=context.set_scope(Scope::Queued(0));
++            context.influence(&position,Route::Scalar,map,1);assert_eq!(charge(&context),896);
++            context.influence(&position,Route::Scalar,map,1);assert_eq!(charge(&context),896);
++            context.chain(&position,&map,0,[1024;2],[1024;2],Activity::default(),Shelter::default(),1);
++            assert_eq!(charge(&context),1024);
++        }
++        let state=context.0.borrow();
++        if let Mode::Canonical {maps,chains,demand_json_bytes,..}=&state.mode {
++            let cells=maps.records.iter().map(|r|r.meta.scopes.iter().filter(|cell|cell.calls!=0).count()).sum::<usize>()
++                +chains.records.iter().map(|r|r.meta.scopes.iter().filter(|cell|cell.calls!=0).count()).sum::<usize>();
++            assert_eq!(*demand_json_bytes,(maps.records.len()+chains.records.len())*DEMAND_KEY_JSON_BYTES+cells*DEMAND_SCOPE_JSON_BYTES);
++            assert_eq!(cells,4);
++        }else{panic!("expected canonical observer");}
++        assert!(state.fatal.is_none());
++    }
++    #[test]
++    fn serialization_sparse_admission_keeps_exact_unchanged_budget() {
++        let position=position();let map=Influence::build(&position);let key=InfluenceKey::new(&position,Route::Scalar);
++        let mut catalog=Catalog::<InfluenceKey,Influence,Demanded>::new();let pool=Catalog::<InfluenceKey,Influence,Produced>::new();
++        let mut costs=Costs::default();let mut charge=DEMAND_JSON_BUDGET-DEMAND_KEY_JSON_BYTES-DEMAND_SCOPE_JSON_BYTES;
++        assert_eq!(demand(&mut catalog,&pool,key,map,1,Scope::Coordinator,Caps::canonical(),0,0,&mut charge,&mut costs),None);
++        assert_eq!(charge,DEMAND_JSON_BUDGET);
++        assert_eq!(demand(&mut catalog,&pool,key,map,1,Scope::Coordinator,Caps::canonical(),0,0,&mut charge,&mut costs),None,
++            "repeat queries add no serialized cells even at the cap");
++        assert_eq!(demand(&mut catalog,&pool,key,map,1,Scope::Queued(0),Caps::canonical(),0,0,&mut charge,&mut costs),Some("pure-demand-json-cap"));
++        assert_eq!(catalog.records[0].meta.scopes[1].calls,0);assert_eq!(charge,DEMAND_JSON_BUDGET);
++        let other=InfluenceKey::new(&position,Route::Coherent);
++        assert_eq!(demand(&mut catalog,&pool,other,map,1,Scope::Coordinator,Caps::canonical(),0,0,&mut charge,&mut costs),Some("pure-demand-json-cap"));
++        assert_eq!(catalog.records.len(),1);assert_eq!(charge,DEMAND_JSON_BUDGET);
++        charge=DEMAND_JSON_BUDGET-DEMAND_SCOPE_JSON_BYTES;
++        assert_eq!(demand(&mut catalog,&pool,key,map,1,Scope::Queued(0),Caps::canonical(),0,0,&mut charge,&mut costs),None);
++        assert_eq!(charge,DEMAND_JSON_BUDGET);assert_eq!(catalog.records[0].meta.scopes[1].calls,1);
++        assert_eq!(demand(&mut catalog,&pool,key,map,1,Scope::Queued(1),Caps::canonical(),0,0,&mut charge,&mut costs),Some("pure-demand-json-cap"));
++        assert_eq!(catalog.records[0].meta.scopes[2].calls,0);
++    }
++    #[test]
+     fn maximum_incidence_json_rows_fit_prospective256_mib_partition() {
+         let production=Produced {mask:u8::MAX,calls:u64::MAX,kernel_ns:u128::MAX,first_kernel_ns:u128::MAX,
+             child_calls:[u64::MAX;7],child_kernel_ns:[u128::MAX;7],child_first_kernel_ns:[u128::MAX;7]};
+@@ -499,7 +579,7 @@
+         assert!(prefix_record_json(usize::MAX,Tally {calls:u64::MAX,kernel_ns:u128::MAX}).len()+1<=PREFIX_ROW_BYTES);
+         let record=Record {key:(),value:(),meta:Demanded {pool_id:Some(usize::MAX),mask:u8::MAX,first_scope:8,first_kernel_ns:u128::MAX,
+             scopes:[Tally {calls:u64::MAX,kernel_ns:u128::MAX};9]}};
+-        assert!(demand_record_json(usize::MAX,&record).len()+1<=DEMAND_ROW_BYTES);
++        assert!(demand_record_json(usize::MAX,&record).len()+1<=DEMAND_KEY_JSON_BYTES+9*DEMAND_SCOPE_JSON_BYTES);
+         assert_eq!(POOL_PREFIX_JSON_BUDGET+DEMAND_JSON_BUDGET+32*1024*1024,256*1024*1024);
+     }
+ }
