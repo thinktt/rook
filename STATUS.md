@@ -1,9 +1,10 @@
 # Current implementation status
 
 **Active research, 2026-10-26:** pursue useful deterministic multicore acceleration
-under the restored [mission](docs/deterministic-multicore-mission.md), without making
-branch queues primary. The owner authorized a new open-ended goal after clearing
-the earlier goal. The two-thread result below remains a preserved baseline.
+under the expanded [mission](docs/deterministic-multicore-mission.md), without making
+branch queues primary. The owner authorized a fresh goal explicitly allowing major
+redesigns, replacement subsystems and isolated greenfield implementations. Preserve
+King behavior and retained baselines; the current architecture is not a constraint.
 No further adoption, release or external gate has been selected.
 The [lead synthesis](docs/research/open-multicore-progress.md) connects the current
 results, architectural lessons and next decision.
@@ -95,18 +96,21 @@ lives/840 posts plus six idle probes pass. Fixed3 recovered most of lean3's loss
 representation sensitivity without establishing a cache cause or a net four-thread
 win. No further inventory/layout variant or PGO is selected.
 
-The [fresh-Influence design](docs/research/fresh-influence-fusion-design.md) is closed
-at `42518617`. Next selected: one integrated discriminator using two disjoint
-profile cells, helper-local complete maps and coordinator-owned canonical scratch.
-Fuse only actual coherent FULL/scratch-None demand at the reviewed private seams;
-preserve supplied maps and all other fallbacks. FreshDelivered gates final
-retirement and only the coordinator uses the cold waiter.
+The [fresh-Influence trial](experiments/multicore-feasibility/fresh-influence-fusion/README.md)
+is parked at `08a5fd91`: fused3 records8.047858s versus matching unfused3 7.695892s
+and retained3 7.729813s. It loses4.5734% to matching unfused, with separated ranges
+in all three cases. All56 focused controls,36 replay lives/420 posts and3 idle
+probes pass; matching nonzero row epochs establish activation. The test-only
+compile repair is preserved. This measures the complete changed design, not an
+isolated barrier or copying cost. No PGO or rescue variant is selected.
 
-Compare preserved7ac3 with same-image new unfused3/fused3 in one fixed36+3 generic
-stream after focused admission. Report rowReady epochs only after shutdown as
-activation evidence; add no hot census. All copies, peer barriers and publication
-costs count. No inventory, PGO, adoption or external work is selected; accepted main
-and all positive artifacts remain preserved.
+Next selected work is source-only architectural reassessment: distinguish
+specification-required ordering from inherited boundaries, then choose a concrete
+new overlap mechanism and a decisive prototype. Imp2 and its Sol team examine
+alternative designs; the lead independently examines execution models, with one
+selective Astra challenge of replicated control and collective evaluation. No new
+native lane, adoption or external work is selected; all positive artifacts remain
+preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

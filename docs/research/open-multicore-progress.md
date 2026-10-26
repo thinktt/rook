@@ -80,20 +80,24 @@ records7.721670s:1.223% below matching3, but0.072% above retained3 at1.334x CPU.
 Representation materially changes the result; neither isolated cache attribution
 nor a net four-thread win follows. Further inventory/layout variants are unselected.
 
-The [fresh-Influence design](fresh-influence-fusion-design.md) is now reviewed and
-one integrated discriminator is selected. It moves native coherent profile
-construction onto the two existing helpers at actual FULL/scratch-None demand,
-then continues their color chains. Each row has one writer; helpers acquire both
-and assemble local maps, while the coordinator installs canonical scratch before
-its original pawn/cache work. FreshDelivered gates final retirement and only the
-coordinator registers a cold waiter. Supplied maps and all other fallbacks retain
-their current authority.
+The [fresh-Influence trial](../../experiments/multicore-feasibility/fresh-influence-fusion/README.md)
+closed at `08a5fd91`. Fused3 records8.047858s versus matching unfused3 7.695892s
+and retained3 7.729813s. The4.5734% loss versus matching unfused spans all three
+cases with separated ranges. All56 focused controls and36 replay lives/420 posts
+pass, and cold row epochs verify actual activation. The extra map copies, peer
+barrier, publications and code changes are included; the trial does not isolate
+their individual costs. Park this fixed design without PGO or retuning.
 
-Compare preserved7ac3 and matching new unfused3/fused3 in one fixed36+3 generic
-stream. The384B of helper/canonical map copies, extra publications, peer barrier
-and data/code changes are costs, not assumed savings. Cold post-shutdown row epochs
-witness activation without a new hot census. No inventory integration, PGO or
-automatic extension is selected. Frontier batching remains a reserve.
+The owner has explicitly expanded the mission to major redesigns, replacement
+subsystems and isolated greenfield implementations. Existing search architecture
+is not a requirement. The next source-only reassessment separates prescribed
+state/order dependencies from inherited execution boundaries, and asks each
+candidate design to identify a concrete source of useful overlap and its costs.
+Imp2's independent alternatives and the lead's replicated-control/collective-FULL
+hypothesis will be compared before choosing a prototype. The latter would trade
+duplicated control and private state for avoiding per-FULL input publication;
+it is unimplemented and has no speed claim. Intra-color reductions and frontier
+batching remain reserves rather than automatic next steps.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.
