@@ -1,0 +1,197 @@
+--- a/src/bin/rook2-internal-split.rs
++++ b/src/bin/rook2-internal-split.rs
+@@ -7,11 +7,13 @@
+     let mut args=std::env::args().skip(1);
+     let mut input=None;
+     let mut threads=1usize;
++    let mut max_depth=6u8;
+     while let Some(key)=args.next() {
+         let value=args.next().ok_or("missing option value")?;
+         match key.as_str() {
+             "--input"=>input=Some(value),
+             "--threads"=>threads=value.parse().map_err(|_|"bad total thread budget")?,
++            "--max-depth"=>max_depth=value.parse().map_err(|_|"bad root maximum depth")?,
+             _=>return Err(format!("unknown option {key}")),
+         }
+     }
+@@ -58,7 +60,7 @@
+         history.push(&position,Some(movement));
+     }
+     history.mark_root();
+-    let report=internal_split::run(position,history,parameters,config,threads)?;
++    let report=internal_split::run_with_max_depth(position,history,parameters,config,threads,max_depth)?;
+     println!("{}",report.json());
+     if report.failed() {return Err("semantic acceptance disagrees with canonical execution".into());}
+     Ok(())
+--- a/src/internal_split.rs
++++ b/src/internal_split.rs
+@@ -29,12 +29,42 @@
+ impl Selector {
+     fn json(&self)->String {format!("{{\"ply\":{},\"depth\":{},\"iteration\":{},\"window\":[{},{}],\"best\":{},\"remaining\":{},\"child0_nodes\":{},\"entry_nodes\":{},\"primary\":{},\"secondary\":{},\"input_fingerprint\":\"{:016x}\",\"task_ids\":{:?},\"movements\":[{}],\"forecast_windows\":{:?}}}",self.ply,self.depth,self.iteration,self.lower,self.upper,self.best,self.remaining,self.child0_nodes,self.entry_nodes,self.primary,self.secondary,self.input_fingerprint,self.movements.map(|m|m.0),self.movements.iter().map(|m|format!("\"{m}\"")).collect::<Vec<_>>().join(","),self.forecasts.map(|r|[r.lower,r.upper]))}
+ }
++/// Cumulative diagnostic counts at the existing post-child0/tail-IIO hook.
++/// These values never participate in selecting or constructing a task.
++#[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
++struct Funnel {post_child0:u64,finite_window:u64,depth_ge3:u64,remaining_ge8:u64,best_le_lower:u64,child0_ge2048:u64,max_child0_nodes_other_conditions:u64}
++impl Funnel {
++    fn observe(&mut self,request:Request,remaining:usize,child0_nodes:u64,best:i32) {
++        self.post_child0+=1;
++        if request.lower<=-10000||request.upper>=10000||request.lower>=request.upper{return;}
++        self.finite_window+=1;
++        if request.depth<3{return;}self.depth_ge3+=1;
++        if remaining<8{return;}self.remaining_ge8+=1;
++        if best>request.lower{return;}self.best_le_lower+=1;
++        self.max_child0_nodes_other_conditions=self.max_child0_nodes_other_conditions.max(child0_nodes);
++        if child0_nodes>=2048 {self.child0_ge2048+=1;}
++    }
++    fn json(&self,iteration:usize)->String {format!("{{\"iteration\":{},\"post_child0\":{},\"finite_window\":{},\"depth_ge3\":{},\"remaining_ge8\":{},\"best_le_lower\":{},\"child0_ge2048\":{},\"max_child0_nodes_other_conditions\":{}}}",iteration,self.post_child0,self.finite_window,self.depth_ge3,self.remaining_ge8,self.best_le_lower,self.child0_ge2048,self.max_child0_nodes_other_conditions)}
++}
++fn funnel_json(funnel:&[Funnel;8],max_depth:u8)->String {funnel[..max_depth as usize].iter().enumerate().map(|(i,row)|row.json(i+1)).collect::<Vec<_>>().join(",")}
+ struct Audit {selector:Option<Selector>,forests:[Option<Forest>;7]}
+ #[derive(Clone)] pub(crate) struct Context(Rc<RefCell<State>>);
+-struct State {oracle:bool,threads:usize,selected:bool,selector:Option<Selector>,audit:Audit,batch:Option<Batch>,tasks:Vec<TaskReport>,split_wall:u128,split_cpu:u128,setup_ns:u128,snapshot_ns:u128,wait_ns:u128,join_ns:u128,tt_base_copy_bytes:usize,tt_base_bytes:usize,snapshot_bytes:usize,batch_estimated_bytes:usize,peak_forest_bytes:usize,fatal:Option<&'static str>,coordinator_cpu:i32,queue_cancelled:usize,worker_panics:usize,worker_placements:Vec<Placement>,oracle_summaries:[ForestSummary;7]}
++struct State {oracle:bool,threads:usize,selected:bool,selector:Option<Selector>,audit:Audit,batch:Option<Batch>,tasks:Vec<TaskReport>,split_wall:u128,split_cpu:u128,setup_ns:u128,snapshot_ns:u128,wait_ns:u128,join_ns:u128,tt_base_copy_bytes:usize,tt_base_bytes:usize,snapshot_bytes:usize,batch_estimated_bytes:usize,peak_forest_bytes:usize,fatal:Option<&'static str>,coordinator_cpu:i32,queue_cancelled:usize,worker_panics:usize,worker_placements:Vec<Placement>,oracle_summaries:[ForestSummary;7],funnel:[Funnel;8]}
+ impl Context {
+-    fn new(oracle:bool,threads:usize,audit:Audit)->Self {let oracle_summaries=std::array::from_fn(|id|audit.forests[id].as_ref().map_or_else(ForestSummary::default,Forest::summary));Self(Rc::new(RefCell::new(State{oracle,threads,selected:false,selector:None,audit,batch:None,tasks:Vec::new(),split_wall:0,split_cpu:0,setup_ns:0,snapshot_ns:0,wait_ns:0,join_ns:0,tt_base_copy_bytes:0,tt_base_bytes:0,snapshot_bytes:0,batch_estimated_bytes:0,peak_forest_bytes:0,fatal:None,coordinator_cpu:cpu(),queue_cancelled:0,worker_panics:0,worker_placements:Vec::new(),oracle_summaries})))}
++    fn new(oracle:bool,threads:usize,audit:Audit)->Self {let oracle_summaries=std::array::from_fn(|id|audit.forests[id].as_ref().map_or_else(ForestSummary::default,Forest::summary));Self(Rc::new(RefCell::new(State{oracle,threads,selected:false,selector:None,audit,batch:None,tasks:Vec::new(),split_wall:0,split_cpu:0,setup_ns:0,snapshot_ns:0,wait_ns:0,join_ns:0,tt_base_copy_bytes:0,tt_base_bytes:0,snapshot_bytes:0,batch_estimated_bytes:0,peak_forest_bytes:0,fatal:None,coordinator_cpu:cpu(),queue_cancelled:0,worker_panics:0,worker_placements:Vec::new(),oracle_summaries,funnel:[Funnel::default();8]})))}
++    fn audit_funnel(&self,oracle:&Self)->bool {
++        let agrees=self.0.borrow().funnel==oracle.0.borrow().funnel;
++        if !agrees {self.0.borrow_mut().fatal.get_or_insert("selector-funnel-oracle-mismatch");}
++        agrees
++    }
+     fn take_audit(&self)->Audit {let mut state=self.0.borrow_mut();Audit{selector:state.selector.clone(),forests:std::mem::replace(&mut state.audit.forests,std::array::from_fn(|_|None))}}
++}
++impl State {
++    fn observe_selector(&mut self,request:Request,remaining:usize,child0_nodes:u64,best:i32) {
++        if self.selected{return;}
++        assert!((1..=8).contains(&request.iteration),"root iteration exceeds the admitted research horizon");
++        self.funnel[request.iteration as usize-1].observe(request,remaining,child0_nodes,best);
++    }
+ }
+ #[derive(Clone)] struct TaskInput {id:usize,movement:Move,node:Node,history:SearchHistory,request:Request,position:Position,map:Influence,checked:bool,allow_iio:bool}
+ struct TaskResult {id:usize,forest:Forest,summary:ForestSummary,worker:usize,cpu:i32,affinity_ok:bool,nodes:u64,relations:u64,elapsed_ns:u128,setup_ns:u128,finalize_ns:u128,overlay_groups:usize,overlay_bytes:usize,private_bytes:usize,started_ns:u128,finished_ns:u128,complete:bool,stop:Option<&'static str>}
+@@ -91,7 +121,10 @@
+ 
+ pub(crate) fn select<const A:bool,const D:bool,H:Host>(search:&mut Search<D,H>,node:&Node,history:&SearchHistory,request:Request,current:Predecessor<'_>,best:i32,index:usize,child0_nodes:u64,extensions:&Extensions)->Result<Option<Parent>,Stopped> {
+     let Some(context)=search.internal_split.clone() else{return Ok(None)};
+-    if context.0.borrow().selected||index!=1||request.lower<=-10000||request.upper>=10000||request.lower>=request.upper||request.depth<3||search.candidates[request.ply].len-index<8||child0_nodes<2048||best>request.lower{return Ok(None);}
++    if context.0.borrow().selected||index!=1{return Ok(None);}
++    context.0.borrow_mut().observe_selector(request,search.candidates[request.ply].len-index,child0_nodes,best);
++    // Preserve the prospective selector; observation above cannot select work.
++    if request.lower<=-10000||request.upper>=10000||request.lower>=request.upper||request.depth<3||search.candidates[request.ply].len-index<8||child0_nodes<2048||best>request.lower{return Ok(None);}
+     assert!(D&&!H::ACTIVE&&search.timing.is_none()&&search.limits.nodes.is_none()&&search.control.is_none());
+     let started=Instant::now();let cpu_started=process_cpu();let p=request.ply;
+     let movements=std::array::from_fn(|id|search.candidates[p].moves[index+1+id]);
+@@ -165,11 +198,11 @@
+ 
+ #[derive(Debug,PartialEq,Eq)] struct RootPass {depth:u8,attempt:Attempt,score:i32,child:Node,pv:Vec<Move>,work:Work}
+ #[derive(Debug,PartialEq,Eq)] struct RootOutput {passes:Vec<RootPass>,ranked:Vec<Row>,best:i32,completed_depth:u8}
+-fn native_root(search:&mut Search<true>,position:Position,history:&mut SearchHistory)->Result<RootOutput,String> {
++fn native_root(search:&mut Search<true>,position:Position,history:&mut SearchHistory,max_depth:u8)->Result<RootOutput,String> {
+     search.ensure_table()?;search.bind_geometry_permission(&position);let (root,map)=search.prepare_root_with_influence(position);let checked=movegen::in_check(&position,position.side);
+     let mut moves=MoveList::new();movegen::generate_legal(&position,&mut moves);if moves.len<2{return Err("internal split requires at least two legal root moves".into());}
+     search.begin_owned_sequence(Limits::default());let mut rows=moves.as_slice().iter().enumerate().map(|(id,_)|Row{id:id as u16,score:0,work:0}).collect();let mut previous=0;let mut passes=Vec::new();
+-    for depth in 1..=6 {let mut schedule=Iteration::new(rows,search.stats.nodes,previous);
++    for depth in 1..=max_depth {let mut schedule=Iteration::new(rows,search.stats.nodes,previous);
+         while let Some(mut attempt)=schedule.next(search.stats.nodes) {let movement=moves.moves[attempt.id as usize];let mut child=root.child(&search.evaluator.root,movement);let mut pass=0;
+             loop {history.push(&child.position,Some(movement));let returned={let _site=h::site(&search.hierarchical,h::Site::Root{pass});search.visit_ordinary(&mut child,history,Request{ply:1,depth:depth as i32-1,lower:-attempt.window[1],upper:-attempt.window[0],previous_extension:0,iteration:depth as i32,checked:None},Predecessor{position:&root.position,influence:&map,checked,movement:Some(movement)})};history.pop();
+                 let score=-returned.map_err(|e|format!("native root stopped: {e:?}"))?;passes.push(RootPass{depth,attempt,score,child,pv:search.pv[1][..search.pv_len[1]].to_vec(),work:search.work()});
+@@ -178,30 +211,37 @@
+         }
+         previous=schedule.best();rows=schedule.into_ranked();
+     }
+-    Ok(RootOutput{passes,ranked:rows,best:previous,completed_depth:6})
+-}
+-
+-pub struct Report {threads:usize,context:Context,search_wall_ns:u128,search_cpu_ns:u128,oracle_wall_ns:u128,oracle_cpu_ns:u128,compare_ns:u128,oracle_match:bool,completed_depth:u8,canonical_nodes:u64,canonical_relations:u64,oracle_nodes:u64,oracle_relations:u64,root_passes:usize,startup_ns:u128,peak_rss_kib:usize,error:Option<String>}
++    Ok(RootOutput{passes,ranked:rows,best:previous,completed_depth:max_depth})
++}
++
++pub struct Report {threads:usize,horizon:u8,oracle_funnel:[Funnel;8],context:Context,search_wall_ns:u128,search_cpu_ns:u128,oracle_wall_ns:u128,oracle_cpu_ns:u128,compare_ns:u128,oracle_match:bool,completed_depth:u8,canonical_nodes:u64,canonical_relations:u64,oracle_nodes:u64,oracle_relations:u64,root_passes:usize,startup_ns:u128,peak_rss_kib:usize,error:Option<String>}
+ impl Report {
+     pub fn failed(&self)->bool {!self.oracle_match||self.context.0.borrow().fatal.is_some()||self.error.is_some()}
+     pub fn json(&self)->String {let state=self.context.0.borrow();let tasks=state.tasks.iter().map(TaskReport::json).collect::<Vec<_>>().join(",");let committed=state.tasks.iter().map(|t|t.recovery.committed_nodes).sum::<u64>();let speculative=state.tasks.iter().map(|t|t.speculative_nodes).sum::<u64>();let relations=state.tasks.iter().map(|t|t.recovery.committed_relations).sum::<u64>();let trace=state.tasks.iter().map(|t|t.forest.bytes).sum::<usize>();
+-        let mut out=format!("{{\"schema\":\"rook2-internal-split-v1\",\"processId\":{},\"threads\":{},\"worker_count\":{},\"worker_cpu_plan\":{:?},\"coordinator_cpu\":{},\"caps\":{{\"max_depth\":6,\"task_nodes\":262144,\"log_events\":524288,\"segments\":131072,\"forest_bytes\":{},\"batch_estimated_bytes\":{},\"process_bytes\":8589934592,\"lifetime_seconds\":180}},\"fixed_completion\":true,\"no_host\":true,\"zero_randomness\":true,\"complete_order_certificate\":true,\"selector_miss\":{},\"selector\":{},\"oracle_match\":{},\"unsafe_validation\":{},\"fatal_reason\":{},\"error\":{},\"completed_depth\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"oracle_nodes\":{},\"oracle_relations\":{},\"root_passes\":{},\"speculative_nodes\":{},\"committed_nodes\":{},\"committed_relations\":{},\"wasted_nodes\":{},\"queue_cancelled\":{},\"worker_panics\":{},\"tt_base_copy_bytes\":{},\"tt_base_bytes\":{},\"snapshot_bytes\":{},\"batch_estimated_bytes\":{},\"forest_bytes_total\":{},\"peak_forest_bytes\":{},\"peak_rss_kib\":{},\"timings\":{{\"search_wall_ns\":{},\"search_process_cpu_ns\":{},\"split_wall_ns\":{},\"split_process_cpu_ns\":{},\"setup_ns\":{},\"snapshot_ns\":{},\"wait_ns\":{},\"join_ns\":{},\"oracle_wall_ns\":{},\"oracle_process_cpu_ns\":{},\"oracle_compare_ns\":{},\"startup_ns\":{}}},\"tasks\":[{}]",std::process::id(),self.threads,self.threads-1,&WORKER_CPUS[..self.threads-1],state.coordinator_cpu,FOREST_BYTES,BATCH_BYTES,!state.selected,state.selector.as_ref().map_or("null".into(),Selector::json),self.oracle_match,self.failed(),optional(state.fatal),self.error.as_ref().map_or("null".into(),|v|format!("\"{}\"",v.replace('"',"'"))),self.completed_depth,self.canonical_nodes,self.canonical_relations,self.oracle_nodes,self.oracle_relations,self.root_passes,speculative,committed,relations,speculative.saturating_sub(committed),state.queue_cancelled,state.worker_panics,state.tt_base_copy_bytes,state.tt_base_bytes,state.snapshot_bytes,state.batch_estimated_bytes,trace,state.peak_forest_bytes,self.peak_rss_kib,self.search_wall_ns,self.search_cpu_ns,state.split_wall,state.split_cpu,state.setup_ns,state.snapshot_ns,state.wait_ns,state.join_ns,self.oracle_wall_ns,self.oracle_cpu_ns,self.compare_ns,self.startup_ns,tasks);
++        let mut out=format!("{{\"schema\":\"rook2-internal-split-v1\",\"processId\":{},\"threads\":{},\"worker_count\":{},\"worker_cpu_plan\":{:?},\"coordinator_cpu\":{},\"caps\":{{\"max_depth\":{},\"task_nodes\":262144,\"log_events\":524288,\"segments\":131072,\"forest_bytes\":{},\"batch_estimated_bytes\":{},\"process_bytes\":8589934592,\"lifetime_seconds\":180}},\"fixed_completion\":true,\"no_host\":true,\"zero_randomness\":true,\"complete_order_certificate\":true,\"selector_miss\":{},\"selector\":{},\"oracle_match\":{},\"unsafe_validation\":{},\"fatal_reason\":{},\"error\":{},\"completed_depth\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"oracle_nodes\":{},\"oracle_relations\":{},\"root_passes\":{},\"speculative_nodes\":{},\"committed_nodes\":{},\"committed_relations\":{},\"wasted_nodes\":{},\"queue_cancelled\":{},\"worker_panics\":{},\"tt_base_copy_bytes\":{},\"tt_base_bytes\":{},\"snapshot_bytes\":{},\"batch_estimated_bytes\":{},\"forest_bytes_total\":{},\"peak_forest_bytes\":{},\"peak_rss_kib\":{},\"timings\":{{\"search_wall_ns\":{},\"search_process_cpu_ns\":{},\"split_wall_ns\":{},\"split_process_cpu_ns\":{},\"setup_ns\":{},\"snapshot_ns\":{},\"wait_ns\":{},\"join_ns\":{},\"oracle_wall_ns\":{},\"oracle_process_cpu_ns\":{},\"oracle_compare_ns\":{},\"startup_ns\":{}}},\"tasks\":[{}]",std::process::id(),self.threads,self.threads-1,&WORKER_CPUS[..self.threads-1],state.coordinator_cpu,self.horizon,FOREST_BYTES,BATCH_BYTES,!state.selected,state.selector.as_ref().map_or("null".into(),Selector::json),self.oracle_match,self.failed(),optional(state.fatal),self.error.as_ref().map_or("null".into(),|v|format!("\"{}\"",v.replace('"',"'"))),self.completed_depth,self.canonical_nodes,self.canonical_relations,self.oracle_nodes,self.oracle_relations,self.root_passes,speculative,committed,relations,speculative.saturating_sub(committed),state.queue_cancelled,state.worker_panics,state.tt_base_copy_bytes,state.tt_base_bytes,state.snapshot_bytes,state.batch_estimated_bytes,trace,state.peak_forest_bytes,self.peak_rss_kib,self.search_wall_ns,self.search_cpu_ns,state.split_wall,state.split_cpu,state.setup_ns,state.snapshot_ns,state.wait_ns,state.join_ns,self.oracle_wall_ns,self.oracle_cpu_ns,self.compare_ns,self.startup_ns,tasks);
+         let placements=state.worker_placements.iter().map(|p|format!("{{\"worker\":{},\"target_cpu\":{},\"actual_cpu\":{},\"singleton_affinity_ok\":{},\"startup_ns\":{},\"exit_ns\":{}}}",p.worker,p.target,p.actual,p.ok,p.startup_ns,p.exit_ns)).collect::<Vec<_>>().join(",");
+         write!(out,",\"worker_placements\":[{}],\"oracle_forest_bytes\":{}",placements,state.oracle_summaries.iter().map(|s|s.bytes).sum::<usize>()).unwrap();
+-        out.push_str(",\"scope\":\"Single prospective post-child0/tail-IIO parent; coordinator next child and seven unchanged-best forecasts. Same fixed task inventory across budgets; budget1 has no speculative execution. All-thread process CPU includes worker setup, recording, validation, demand waits, cancellation and joins; oracle prepass and final compare lie outside executor intervals. In-interval local oracle lookup/output audit costs are reported by recovery and remain charged; concurrent process CPU is never corrected by subtracting wall hook time. Reuse ranges are disjoint within each private task forest; forests correspond to distinct parent children. Native fallback credit is canonical N/R minus committed N/R. Accepted oracle gross and descendant hook nanoseconds are observational native-cost proxies, not CPU saved. Complete-order, exact-window, exact-history, exact-pawn and native TT predicates apply. The independent audit checks local outputs/work and whole-root final shared state; transient incorrect shared writes later overwritten can escape that independent audit. peak_forest_bytes is a conservative sum bound over produced forests, not a sampled simultaneous allocation peak. Process peak RSS includes oracle retained state; housekeeping may share guest SMT siblings. No FULL helper or nested batch.\"}");out
++        write!(out,",\"horizon\":{},\"selector_funnel\":[{}],\"oracle_selector_funnel\":[{}]",self.horizon,funnel_json(&state.funnel,self.horizon),funnel_json(&self.oracle_funnel,self.horizon)).unwrap();
++        out.push_str(",\"scope\":\"Selector funnel rows count cumulative post-child0/tail-IIO hook opportunities at index1 before the first global hit, including that hit; max_child0_nodes_other_conditions ignores the N threshold but requires all other predicates. Funnel counters do not affect selection. Single prospective post-child0/tail-IIO parent; coordinator next child and seven unchanged-best forecasts. Same fixed task inventory across budgets; budget1 has no speculative execution. All-thread process CPU includes worker setup, recording, validation, demand waits, cancellation and joins; oracle prepass and final compare lie outside executor intervals. In-interval local oracle lookup/output audit costs are reported by recovery and remain charged; concurrent process CPU is never corrected by subtracting wall hook time. Reuse ranges are disjoint within each private task forest; forests correspond to distinct parent children. Native fallback credit is canonical N/R minus committed N/R. Accepted oracle gross and descendant hook nanoseconds are observational native-cost proxies, not CPU saved. Complete-order, exact-window, exact-history, exact-pawn and native TT predicates apply. The independent audit checks local outputs/work and whole-root final shared state; transient incorrect shared writes later overwritten can escape that independent audit. peak_forest_bytes is a conservative sum bound over produced forests, not a sampled simultaneous allocation peak. Process peak RSS includes oracle retained state; housekeeping may share guest SMT siblings. No FULL helper or nested batch.\"}");out
+     }
+ }
+ fn peak_rss()->usize {std::fs::read_to_string("/proc/self/status").ok().and_then(|s|s.lines().find(|l|l.starts_with("VmHWM:")).and_then(|l|l.split_whitespace().nth(1)).and_then(|v|v.parse().ok())).unwrap_or(0)}
+ /// Run the independent whole-root reference before starting the executor clock.
+ pub fn run(position:Position,history:SearchHistory,parameters:Parameters,config:Config,threads:usize)->Result<Report,String> {
++    run_with_max_depth(position,history,parameters,config,threads,6)
++}
++/// Only the prospectively selected finite research horizons are admitted.
++pub fn run_with_max_depth(position:Position,history:SearchHistory,parameters:Parameters,config:Config,threads:usize,max_depth:u8)->Result<Report,String> {
++    if ![6,8].contains(&max_depth){return Err("root maximum depth must be6/8".into());}
+     if ![1,2,4,8].contains(&threads){return Err("total threads must be1/2/4/8".into());}if history.search_ply()!=0{return Err("root history boundary required".into());}
+     let startup=Instant::now();let mut oracle=Search::<true>::new(&position);oracle.config=config;oracle.evaluator.parameters=parameters.clone();let oracle_context=Context::new(true,1,Audit{selector:None,forests:std::array::from_fn(|_|None)});oracle.internal_split=Some(oracle_context.clone());let mut oracle_history=history.clone();
+-    let oracle_started=Instant::now();let oracle_cpu=process_cpu();let expected=native_root(&mut oracle,position,&mut oracle_history)?;let oracle_cpu_ns=process_cpu()-oracle_cpu;let oracle_wall_ns=oracle_started.elapsed().as_nanos();oracle.internal_split=None;
++    let oracle_started=Instant::now();let oracle_cpu=process_cpu();let expected=native_root(&mut oracle,position,&mut oracle_history,max_depth)?;let oracle_cpu_ns=process_cpu()-oracle_cpu;let oracle_wall_ns=oracle_started.elapsed().as_nanos();oracle.internal_split=None;
+     let audit=oracle_context.take_audit();let context=Context::new(false,threads,audit);let mut canonical=Search::<true>::new(&position);canonical.config=config;canonical.evaluator.parameters=parameters;canonical.internal_split=Some(context.clone());let mut actual_history=history.clone();let startup_ns=startup.elapsed().as_nanos().saturating_sub(oracle_wall_ns);
+-    let started=Instant::now();let cpu_started=process_cpu();let actual=native_root(&mut canonical,position,&mut actual_history);let search_cpu_ns=process_cpu()-cpu_started;let search_wall_ns=started.elapsed().as_nanos();canonical.internal_split=None;
+-    let compare=Instant::now();let oracle_match=actual.as_ref().is_ok_and(|out|out==&expected)&&canonical.research_eq(&oracle)&&actual_history==oracle_history&&actual_history==history&&context.0.borrow().selector==oracle_context.0.borrow().selector;let compare_ns=compare.elapsed().as_nanos();if !oracle_match {context.0.borrow_mut().fatal.get_or_insert("whole-root-oracle-mismatch");}
++    let started=Instant::now();let cpu_started=process_cpu();let actual=native_root(&mut canonical,position,&mut actual_history,max_depth);let search_cpu_ns=process_cpu()-cpu_started;let search_wall_ns=started.elapsed().as_nanos();canonical.internal_split=None;
++    let compare=Instant::now();let funnel_match=context.audit_funnel(&oracle_context);let oracle_match=actual.as_ref().is_ok_and(|out|out==&expected)&&canonical.research_eq(&oracle)&&actual_history==oracle_history&&actual_history==history&&context.0.borrow().selector==oracle_context.0.borrow().selector&&funnel_match;let compare_ns=compare.elapsed().as_nanos();if !oracle_match {context.0.borrow_mut().fatal.get_or_insert("whole-root-oracle-mismatch");}
+     let completed_depth=actual.as_ref().map_or(0,|v|v.completed_depth);let root_passes=actual.as_ref().map_or(0,|v|v.passes.len());let error=actual.err();
+-    Ok(Report{threads,context,search_wall_ns,search_cpu_ns,oracle_wall_ns,oracle_cpu_ns,compare_ns,oracle_match,completed_depth,canonical_nodes:canonical.stats.nodes,canonical_relations:canonical.evaluator.stats.relation_queries,oracle_nodes:oracle.stats.nodes,oracle_relations:oracle.evaluator.stats.relation_queries,root_passes,startup_ns,peak_rss_kib:peak_rss(),error})
++    let oracle_funnel=oracle_context.0.borrow().funnel;
++    Ok(Report{threads,horizon:max_depth,oracle_funnel,context,search_wall_ns,search_cpu_ns,oracle_wall_ns,oracle_cpu_ns,compare_ns,oracle_match,completed_depth,canonical_nodes:canonical.stats.nodes,canonical_relations:canonical.evaluator.stats.relation_queries,oracle_nodes:oracle.stats.nodes,oracle_relations:oracle.evaluator.stats.relation_queries,root_passes,startup_ns,peak_rss_kib:peak_rss(),error})
+ }
+ 
+ #[cfg(test)]
+@@ -256,4 +296,49 @@
+         let reason=Arc::new(Mutex::new(None));search.internal_worker=Some(WorkerControl{cancel:Arc::new(AtomicBool::new(false)),base:search.stats.nodes,max_nodes:8,deadline:Instant::now()+Duration::from_secs(180),reason:reason.clone()});
+         let (_,returned)=call(&mut search,&inputs[0]);assert_eq!(returned,Err(Stopped::WorkPoll));assert_eq!(search.stats.nodes,8);assert_eq!(*reason.lock().unwrap(),Some("executed-node-cap"));
+     }
+-}
++    #[test]
++    fn horizon_admission_and_report_bind_root_limit() {
++        // A shallow tactical handoff isolates the root iteration horizon from
++        // subtree size; these are source controls, not workload observations.
++        let position=Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++        let config=Config{maximum_depth:1,tts_bytes:65536,..Config::default()};
++        for max_depth in [6u8,8] {
++            let history=SearchHistory::new(&position);
++            let report=if max_depth==6 {run(position,history,Parameters::default(),config,1)}else{run_with_max_depth(position,history,Parameters::default(),config,1,max_depth)}.unwrap();
++            assert_eq!(report.horizon,max_depth);assert_eq!(report.completed_depth,max_depth);assert!(!report.failed());
++            let json=report.json();assert!(json.contains(&format!("\"horizon\":{}",max_depth)));assert!(json.contains(&format!("\"caps\":{{\"max_depth\":{},",max_depth)));
++            assert_eq!(json.matches("\"iteration\":").count(),2*max_depth as usize);
++        }
++        for max_depth in [0,1,5,7,9,u8::MAX] {
++            assert!(run_with_max_depth(position,SearchHistory::new(&position),Parameters::default(),config,1,max_depth).is_err());
++        }
++    }
++    #[test]
++    fn horizon_funnel_records_predicates_and_iteration_before_first_hit() {
++        let context=Context::new(true,1,Audit{selector:None,forests:std::array::from_fn(|_|None)});
++        let request=Request{ply:1,depth:3,lower:-500,upper:500,previous_extension:0,iteration:3,checked:None};
++        let mut state=context.0.borrow_mut();
++        for (lower,upper) in [(-10000,500),(-500,10000),(500,500)] {state.observe_selector(Request{lower,upper,..request},8,9000,lower);}
++        state.observe_selector(Request{depth:2,..request},8,8000,request.lower);
++        state.observe_selector(request,7,7000,request.lower);
++        state.observe_selector(request,8,6000,request.lower+1);
++        state.observe_selector(request,8,2047,request.lower);
++        state.observe_selector(request,8,2048,request.lower);
++        assert_eq!(state.funnel[2],Funnel{post_child0:8,finite_window:5,depth_ge3:4,remaining_ge8:3,best_le_lower:2,child0_ge2048:1,max_child0_nodes_other_conditions:2048});
++        state.selected=true;let before=state.funnel;state.observe_selector(Request{iteration:8,..request},8,99999,request.lower);assert_eq!(state.funnel,before);
++        drop(state);
++        let other=Context::new(true,1,Audit{selector:None,forests:std::array::from_fn(|_|None)});other.0.borrow_mut().observe_selector(Request{iteration:8,..request},8,2047,request.lower);
++        assert_eq!(other.0.borrow().funnel[7].max_child0_nodes_other_conditions,2047);assert_eq!(other.0.borrow().funnel[7].child0_ge2048,0);assert!(other.0.borrow().funnel[..7].iter().all(|row|*row==Funnel::default()));
++    }
++    #[test]
++    fn horizon_funnel_audit_rejects_count_or_max_mismatch() {
++        for max_only in [false,true] {
++            let oracle=Context::new(true,1,Audit{selector:None,forests:std::array::from_fn(|_|None)});
++            let executor=Context::new(false,1,Audit{selector:None,forests:std::array::from_fn(|_|None)});
++            assert!(executor.audit_funnel(&oracle));
++            if max_only {executor.0.borrow_mut().funnel[7].max_child0_nodes_other_conditions=1;}else{executor.0.borrow_mut().funnel[0].post_child0=1;}
++            assert!(!executor.audit_funnel(&oracle));assert_eq!(executor.0.borrow().fatal,Some("selector-funnel-oracle-mismatch"));
++        }
++    }
++
++}
