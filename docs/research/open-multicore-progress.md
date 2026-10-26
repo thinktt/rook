@@ -240,14 +240,24 @@ keep each output with its own done, while separating request, packet, packed
 lifecycle, the multiwriter latch, cold waits and Control. All observations,
 arithmetic, owned input, atomic operations and both owner-local hooks stay exact.
 
-Explicit64-byte alignment is a chosen layout hypothesis. Two polled done lines,
-polling during output publication and roughly256 additional allocation bytes may
-erase any benefit. A cold actual-production type/instance projection will admit
-the concrete geometry before one preserved/new inline1/mode3 generic48+4 lane.
-Retain narrow Cells Sync; never mutate a whole completion slot containing a live
-atomic. No padding sweep, protocol combination or automatic PGO is selected.
-This may reduce transport cost but creates no new independent work. Frontier
-batching remains a separate reserve.
+The [generic trial](../../experiments/multicore-feasibility/writer-regions/README.md)
+passes25 worker controls,14 CLI/two fallback checks and48 replay lives/560 posts
+plus four idle probes without repair/repeat. Actual production geometry matches
+the selected regions: Shared7168/alignment64, output56+done8 in each64-byte slot.
+Arc allocation extent remains estimated; no allocator introspection was added.
+Root source review confirms payload-only writes and unchanged retirement/SC
+operations after field relocation; no whole-slot mutation or broad Sync was added.
+
+New3 records7.449741s versus old3 7.499557s, a0.664% lower sum with0.993354x CPU.
+All three medians improve, but all ranges overlap. Inline rises0.440%; subtracting
+that drift cannot isolate a layout benefit. This is tentative evidence, with no
+cache-cause claim. Select one unchanged own-PGO/full54 comparison:216 training
+lives matching the retained Q mixture, actual independent remerge, one use build,
+then270+5 comparing serial and both old/new inline1/mode3. The broader production
+comparison is a distinct decision, not a generic rerun or tuning opportunity.
+Preserve f8 until interpretation; no qualification or adoption follows automatically.
+This changes transport cost, not independent work width. Frontier batching remains
+a separate reserve.
 
 The latest three-thread image is `f8b829a79e43a90a0396c3baacb8f44f23476f6d9e7a9661626f5c1e8b467c62`,
 with profile `bbb858b01018cea09311ac5fe3b5fb5bc18c3b716e2f6a7bb5df83c794527ed4`;

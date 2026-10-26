@@ -185,13 +185,17 @@ Production declarations match, but attributable compiled sizes/alignment were
 unavailable; the result makes no cache attribution or identical-layout claim.
 
 The [writer-region source review](docs/research/writer-owned-transport-layout.md)
-at82a2dae supports one selected fixed layout discriminator on retained Q source68
-with its original completion protocol. Eight concrete aligned regions keep each
-helper's output and done together, isolate lifecycle/latch/control and retain one
-allocation. The old image already separates request from packet filling. Extra
-polling lines, output contention and estimated256-byte footprint growth are costs,
-not predicted gains. Verify actual production geometry, then compare preserved/
-new inline1/mode3 in one fixed48+4 lane. No sweep, PGO or adoption is selected.
+at82a2dae led to the [fixed generic trial](experiments/multicore-feasibility/writer-regions/README.md).
+All25 worker checks,14 CLI/two fallback checks, actual-production layout admission
+and48 replay lives/560 posts plus four idle probes pass first attempt. Shared is
+7168 bytes/alignment64; each output56+done8 occupies its own64-byte slot. Arc
+allocation extent remains estimated. New3 totals7.449741s versus old3 7.499557s
+(0.664% lower), with lower CPU and all three medians lower; every mode3 range
+overlaps. Inline costs0.440%. This is tentative evidence, with no cache attribution.
+Select one unchanged own-PGO/full54 lane:216 joint training, one merge/independent
+remerge/use build and270+5 comparing accepted serial plus old/new inline and
+mode3. Reuse applicable checks. No layout tuning, qualification or adoption;
+f8 remains the research leader pending the result.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
