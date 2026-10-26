@@ -53,7 +53,9 @@ CPU placement and reversible housekeeping are unchanged: coordinator14, workers
 observed guest core pair. No exclusive-isolation claim. Fixed completion/NoHost/
 timing absent/rnd0/inlineFULL. No qualification, PGO, adoption or external action.
 
-Status: source/tool preparation. New isolated source:
-`/home/legolas/rook2-experiments/workspaces/wide-internal-20261026-01`.
-No capture or comparison workload has run yet. [Policy](policy.json) fixes all
-criteria, limits and the conditional single-fixture schedule before data.
+Status: CLOSED.11 affected checks plus inherited39,3 uncensored captures and16
+fixed-fixture comparisons pass finite audits. External rule selects35 ordinal428548:
+eight demanded children29077N, minimum839N. Splitwall t1/2/4/8 medians
+105.271/166.920/154.413/154.717ms; no wholechild reuse,11548N in7296 tiny ranges,
+largest34N. See [results](report.md) and [closure](closure.json). No new fixture,
+policy/threshold/certificate tuning or native follow-on is selected here.
