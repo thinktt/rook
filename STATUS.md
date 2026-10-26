@@ -74,13 +74,18 @@ not establish repeatability, parity or a source-level cause for small difference
 Retained67d remains the strongest complete54 candidate; no whole-helper retune,
 replacement or qualification is selected.
 
-Next selected: one generic comparison of observer-free inventory65 modes3/4 against
-preserved3 and the original observed4. Remove diagnostic counters, clocks and late
-accounting locks from matching new modes; retain actual synchronization, ownership,
-generation and semantic charges. A faster lean3 alone is not a fourth-thread gain.
-No additional census, parallel graph or PGO is selected. Fresh-Influence fusion and
-frontier batching remain reserves; accepted main and all positive artifacts remain
-preserved.
+The [observer-free inventory trial](experiments/multicore-feasibility/observer-free-inventory/report.md)
+is also parked: three-case sums were preserved3 7.688469s, observed4 7.790463s,
+lean3 8.222537s and lean4 8.758407s. Both lean modes regress, and lean4 loses to
+matching lean3. All 48 replay lives/560 posts and four idle probes pass; 40 selected
+controls pass after one fixture epoch/count correction, with the original failure
+and a pre-native hash rejection preserved. No production repair or benchmark repeat.
+
+Next selected: a bounded source/existing-image review of the common lean-mode
+regression. Observation removal also changes worker-state layout; inspect concrete
+offsets and writer ownership before proposing another variant. No engine execution,
+build, padding change or PGO is selected. Fresh-Influence fusion and frontier
+batching remain reserves; accepted main and all positive artifacts remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

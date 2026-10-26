@@ -33,6 +33,7 @@ resolution after parking. These costs matter when choosing a thread budget.
 | Was the failed color split inherently too small? | The original three-thread graph lost, but [direct epoch transport](../../experiments/multicore-feasibility/epoch-colors/report.md) improved it enough to beat two threads. This is a net architecture result, not isolated mutex nanoseconds. |
 | Does adding move generation supply useful fourth-thread work? | [Conditional inventory4](../../experiments/multicore-feasibility/epoch-inventory-four/report.md) supplied exact lists at substantial actual demand, but the measured implementation was 0.81% slower than preserved3 and used 1.344x CPU. It remains parked. |
 | Does direct epoch transport also help one helper? | The [generic whole-FULL trial](../../experiments/multicore-feasibility/whole-full-epoch/report.md) improves mode2 by 2.62%, but [own-PGO/full54](../../experiments/multicore-feasibility/whole-full-own-pgo/report.md) reduces that to a descriptive 0.317%. Three threads remain faster. Keep the tested alternative without replacing the retained candidate or extrapolating generic gains. |
+| Was research accounting hiding an inventory4 gain? | The fixed [observer-free comparison](../../experiments/multicore-feasibility/observer-free-inventory/report.md) regresses in both lean3 and lean4; four also loses to matching three. Removing observations changed data/code layout too. Park the variant and inspect existing compiled layout before attributing the result. |
 
 Readiness, useful demand and net acceleration are separate questions. Inventory
 sampling includes timestamps and color histogram work before its FULL-complete
@@ -59,16 +60,19 @@ observation per cell; no repeated-run uncertainty or isolated source attribution
 follows. The large generic gain did not transfer to this production comparison.
 No whole-helper tuning or replacement is selected.
 
-The next selected discriminator removes research accounting from matching
-inventory65 modes3/4. The old inventory producer performs three diagnostic atomic
-updates per successful list, and late demand/discard takes a Control lock solely
-for accounting after its transport lease ends. Remove those observations while
-retaining real synchronization, installed-row ownership, generation policy and
-semantic charges. Compare preserved3/observed4/new lean3/new lean4. The fourth
-worker must add value against its matching lean3 as well as the retained candidate;
-shared cleanup alone is a separate result. No gain is assumed from sampled
-readiness, and no new census, staged-input graph or PGO is selected. Fresh-map
-fusion and frontier batching remain reserves.
+The observer-free inventory comparison is now negative: preserved3 7.688469s,
+observed4 7.790463s, lean3 8.222537s and lean4 8.758407s. All 48 replay lives/560
+posts and four idle probes pass; the adapted fixture's epoch/count mistake and a
+pre-native hash rejection are preserved. Production ownership/math stayed fixed,
+but deleting observations and their storage changed both operations and layout.
+The result does not isolate the benefit or cost of the old counters.
+
+The next selected work is source/existing-image inspection only: determine what
+changed in the offsets and ownership of hot worker state, and whether a concrete
+layout-preserving discriminator is justified. Previously cold storage may have
+separated independent writers; unknown heap alignment and actual coherence costs
+must remain explicit. No new build, native run, padding variant or PGO is selected.
+Fresh-map fusion and frontier batching remain reserves.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.
