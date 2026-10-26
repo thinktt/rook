@@ -1,0 +1,1388 @@
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -1 +1 @@
+-//! Two color-owned Activity -> opposite-Shelter readers for confirmed FULL calls.
++//! Fixed epoch input and independently owned color outputs for FULL calls.
+@@ -3,7 +3,6 @@
+-//! One reusable owned packet is immutable until both readers finish or exit.
+-//! Each reader copies it under Slots, releases the shared read, and runs its
+-//! kernels on that local copy without a mutex. Successful FULL calls allocate
+-//! neither storage nor threads. The two copies and all publication/join costs
+-//! are part of this transport. Affinity is inherited from the creating thread.
+-//! Lexical active scopes permit spinning; their final close drains both readers
+-//! and acknowledges parking. Scheduling delay never implies a wall-time abort.
++//! One initialized input is written by the single coordinator and read directly
++//! by both helpers. Matching done epochs retire every input access. Control
++//! linearizes dispatch, output consumption and final close; scope guards and
++//! parking touch metadata only. Successful calls allocate no storage or threads.
++//! The 4096-spin/512-sample policies and inherited affinity remain unchanged.
++//! Scheduling delays never constitute an engine wall-time abort.
+@@ -14 +13 @@
+-use crate::position::Position;
++use crate::position::{Phase, Position};
+@@ -16,0 +16 @@
++use std::cell::UnsafeCell;
+@@ -26,2 +25,0 @@
+-const REQUESTED: u8 = 2;
+-const COMPLETE: u8 = 3;
+@@ -34,2 +31,0 @@
+-/// A token is valid only for its dispatch. Unsampled owner-ready calls need no
+-/// clock or lock. Sampling starts at dispatch 512, then 1024, and so on.
+@@ -42 +38 @@
+-#[derive(Clone, Copy)]
++/// Concrete initialized storage, never a fabricated or zeroed Position.
+@@ -47,3 +42,0 @@
+-    material: i32,
+-    mobility_weights: [i32; 2],
+-    shelter_weights: [i32; 2],
+@@ -62,0 +56,39 @@
++impl SideOutput {
++    fn initial() -> Self {
++        Self {
++            generation: 0, activity: SideActivity::default(), opposite_shelter: 0,
++            ready_ns: 0, kernel_ns: 0, copy_ns: 0,
++        }
++    }
++}
++
++struct Cells {
++    input: UnsafeCell<Packet>,
++    white_output: UnsafeCell<SideOutput>,
++    black_output: UnsafeCell<SideOutput>,
++}
++
++// SAFETY: This private implementation covers only these three concrete cells.
++// The single &mut ColorsWorker coordinator writes input under Control only with
++// Flight::None. None follows either both matching done Acquire loads plus ended
++// output reads, or BOTH real parked/exited acknowledgments. A request Release,
++// acquired by each reader before borrowing input, publishes the initialized
++// packet. Each reader's lexical Packet borrow (including sampled Instant reads)
++// ends BEFORE its output write and done Release. Matching done Acquire loads
++// therefore retire both input borrows and publish the separate scalar outputs.
++//
++// Only reader i writes output_i. Complete reads it only after matching done,
++// while holding Control and requiring Published(g). Those Copy reads end before
++// Flight becomes None. A later request Release, acquired by reader i, carries
++// this reverse edge before its next output write. Close claims Discarding under
++// the same Control and never reads/writes cells. It holds that claim until BOTH
++// readers are parked/exited; terminal observation alone cannot retire a peer.
++// No mutable reference to Shared, Cells, or both output cells is ever formed.
++unsafe impl Sync for Cells {}
++
++impl Cells {
++    fn output(&self, side: usize) -> &UnsafeCell<SideOutput> {
++        if side == 0 { &self.white_output } else { &self.black_output }
++    }
++}
++
+@@ -65,3 +97 @@
+-    requested_generation: AtomicU64,
+-    released_generation: AtomicU64,
+-    completed_generation: AtomicU64,
++    done: AtomicU64,
+@@ -74,4 +104 @@
+-            state: AtomicU8::new(STARTING),
+-            requested_generation: AtomicU64::new(0),
+-            released_generation: AtomicU64::new(0),
+-            completed_generation: AtomicU64::new(0),
++            state: AtomicU8::new(STARTING), done: AtomicU64::new(0),
+@@ -82,0 +110,19 @@
++#[derive(Clone, Copy)]
++struct Metadata {
++    generation: u64,
++    material: i32,
++    mobility_weights: [i32; 2],
++    shelter_weights: [i32; 2],
++    phase: Phase,
++    published: Option<Instant>,
++    owner_ready_ns: Option<u64>,
++}
++
++#[derive(Clone, Copy, Default)]
++enum Flight {
++    #[default]
++    None,
++    Published(Metadata),
++    Discarding(Metadata),
++}
++
+@@ -84,3 +130,5 @@
+-struct Slots {
+-    packet: Option<Packet>,
+-    outputs: [Option<SideOutput>; 2],
++struct Control {
++    scopes: usize,
++    closing: bool,
++    shutdown: bool,
++    flight: Flight,
+@@ -88,2 +136 @@
+-    owner_ready_ns: Option<u64>,
+-    completion_waiting: bool,
++    owner_failure: Option<String>,
+@@ -93,0 +141,2 @@
++    cells: Cells,
++    request: AtomicU64,
+@@ -99 +148,2 @@
+-    slots: Mutex<Slots>,
++    // Exactly one coordinator completion waiter. Never held with Control.
++    sleep: Mutex<()>,
+@@ -100,0 +151 @@
++    waiting: AtomicBool,
+@@ -102 +153,5 @@
+-    test_gates: [Mutex<TestGate>; 2],
++    tests: TestHooks,
++}
++
++#[derive(Clone, Copy, Default)]
++struct Startup {
+@@ -104,19 +159,12 @@
+-    test_wake: Condvar,
+-}
+-
+-#[derive(Default)]
+-struct Control {
+-    scopes: usize,
+-    parking: bool,
+-}
+-
+-#[cfg(test)]
+-#[derive(Default)]
+-struct TestGate {
+-    blocked: bool,
+-    entered: bool,
+-    fail: bool,
+-}
+-
+-/// No caller stack borrow survives activation. The last guard waits until both
+-/// readers have stopped touching this lifetime's packet and local computations.
++    fail_spawn: Option<usize>,
++    #[cfg(test)]
++    fail_entry: Option<usize>,
++    #[cfg(test)]
++    stop_entry: Option<usize>,
++    #[cfg(test)]
++    panic_entry: Option<usize>,
++    #[cfg(test)]
++    stop_after_request: Option<usize>,
++}
++
++/// Send guards may alter lifecycle metadata but never touch any cell.
+@@ -158,4 +206,8 @@
+-        Self::start_with(run_active)
+-    }
+-
+-    fn start_with(entry: fn(&Shared, usize) -> Result<(), String>) -> Result<Self, String> {
++        Self::start_with(Startup::default())
++    }
++
++    fn start_with(startup: Startup) -> Result<Self, String> {
++        let position = Position::from_fen(
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++        ).map_err(|error| format!("cannot initialize colors input: {error}"))?;
++        let influence = Influence::build(&position);
+@@ -162,0 +215,6 @@
++            cells: Cells {
++                input: UnsafeCell::new(Packet { generation: 0, position, influence, published: None }),
++                white_output: UnsafeCell::new(SideOutput::initial()),
++                black_output: UnsafeCell::new(SideOutput::initial()),
++            },
++            request: AtomicU64::new(0),
+@@ -168 +226 @@
+-            slots: Mutex::new(Slots::default()),
++            sleep: Mutex::new(()),
+@@ -169,0 +228 @@
++            waiting: AtomicBool::new(false),
+@@ -171,3 +230 @@
+-            test_gates: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
+-            #[cfg(test)]
+-            test_wake: Condvar::new(),
++            tests: TestHooks::new(startup),
+@@ -174,0 +232,2 @@
++        #[cfg(not(test))]
++        let _ = startup;
+@@ -176,4 +235 @@
+-            shared,
+-            threads: [None, None],
+-            generation: 0,
+-            close_error_reported: false,
++            shared, threads: [None, None], generation: 0, close_error_reported: false,
+@@ -181,0 +238,7 @@
++            #[cfg(test)]
++            if startup.fail_spawn == Some(side) {
++                worker.failed_spawn(side, "controlled colors spawn failure".into());
++                let failure = worker.failure();
++                let _ = worker.shutdown();
++                return Err(failure);
++            }
+@@ -186 +249,7 @@
+-                    let result = std::panic::catch_unwind(|| entry(&worker_shared, side));
++                    // The assertion applies only to this concrete loop. Its
++                    // Packet reference is confined to compute_input's lexical
++                    // block; unwinding drops it before this terminal handler.
++                    // Partial output never gets a successful done publication.
++                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
++                        || run_active(&worker_shared, side),
++                    ));
+@@ -197,5 +266 @@
+-                    // A reader not started has no outstanding access. Mark it
+-                    // terminal before joining any reader already created.
+-                    publish_terminal(&worker.shared, side, Some(format!(
+-                        "cannot start {} colors reader: {error}", side_name(side),
+-                    )));
++                    worker.failed_spawn(side, format!("cannot start {} colors reader: {error}", side_name(side)));
+@@ -214,3 +279 @@
+-        if parked {
+-            Ok(worker)
+-        } else {
++        if parked { Ok(worker) } else {
+@@ -222,0 +286,8 @@
++    fn failed_spawn(&self, side: usize, failure: String) {
++        // Only genuinely unstarted readers may be declared retired here.
++        publish_terminal(&self.shared, side, Some(failure));
++        for unstarted in side + 1..2 {
++            publish_terminal(&self.shared, unstarted, None);
++        }
++    }
++
+@@ -225 +296 @@
+-        while control.parking && !terminal(&self.shared) {
++        while control.closing && !terminal(&self.shared) {
+@@ -228 +299 @@
+-        if terminal(&self.shared) { return Err(self.failure()); }
++        if terminal(&self.shared) { return Err(failure_in(&control)); }
+@@ -240,2 +311 @@
+-                drop(control);
+-                return Err(self.failure());
++                return Err(failure_in(&control));
+@@ -248,2 +317,0 @@
+-    /// The owning coordinator encloses this fast path in an existing outer
+-    /// scope. Standalone direct evaluator calls get an owned wake/park guard.
+@@ -267,6 +335,23 @@
+-        if self.shared.active_scopes.load(Ordering::Acquire) == 0
+-            || !all_state(&self.shared, IDLE) || terminal(&self.shared)
+-        {
+-            return Err(self.failure());
+-        }
+-        let generation = self.generation.checked_add(1).expect("colors generation exhausted");
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.before_dispatch);
++        // This mutex is the lease. The active-scope atomic alone never grants
++        // permission to publish against a concurrent final guard close.
++        let mut control = control_lock(&self.shared);
++        if control.scopes == 0 || control.closing || terminal(&self.shared) {
++            return Err(failure_in(&control));
++        }
++        if !matches!(control.flight, Flight::None) {
++            return Err("colors dispatch while a flight is still owned".into());
++        }
++        let Some(generation) = self.generation.checked_add(1) else {
++            let error = "colors epoch exhausted".to_string();
++            control.owner_failure = Some(error.clone());
++            self.shared.stop.store(true, Ordering::Release);
++            control.closing = true;
++            self.shared.wake.notify_all();
++            drop(control);
++            signal_completion(&self.shared);
++            // Exhaustion is terminal, never a reset or fabricated completion.
++            let _ = self.shutdown();
++            return Err(error);
++        };
+@@ -274,13 +359,25 @@
+-        let mut slots = self.shared.slots.lock().map_err(|_| "colors slots poisoned")?;
+-        if slots.packet.is_some() || slots.outputs.iter().any(Option::is_some) {
+-            return Err("colors idle transport still owns a packet or output".into());
+-        }
+-        slots.owner_ready_ns = None;
+-        slots.readiness.dispatches += 1;
+-        if sampled { slots.readiness.sampled_dispatches += 1; }
+-        slots.packet = Some(Packet {
+-            generation, position: *position, influence: *influence, material,
+-            mobility_weights, shelter_weights,
+-            // Taken after the coordinator packet copy and immediately before
+-            // the two REQUESTED stores, while Slots still excludes readers.
+-            published: if sampled { Some(Instant::now()) } else { None },
++        let phase = position.phase();
++        // SAFETY: Control serializes this writer with close and consumption.
++        // Flight::None proves both old input readers and output reads ended.
++        unsafe {
++            self.shared.cells.input.get().write(Packet {
++                generation, position: *position, influence: *influence, published: None,
++            });
++        }
++        #[cfg(test)]
++        if self.shared.tests.fail_before_publish.swap(false, Ordering::SeqCst) {
++            // The initialized input is private and no new request was released.
++            // Flight stays None and the epoch/statistics do not advance.
++            return Err("controlled colors failure before publication".into());
++        }
++        control.readiness.dispatches += 1;
++        if sampled { control.readiness.sampled_dispatches += 1; }
++        let published = if sampled { Some(Instant::now()) } else { None };
++        // SAFETY: Still unpublished and exclusively coordinator-owned. Timing
++        // is installed immediately before publication, after the packet copy.
++        unsafe {
++            std::ptr::addr_of_mut!((*self.shared.cells.input.get()).published).write(published);
++        }
++        control.flight = Flight::Published(Metadata {
++            generation, material, mobility_weights, shelter_weights, phase,
++            published, owner_ready_ns: None,
+@@ -288,4 +385,2 @@
+-        for reader in &self.shared.readers {
+-            reader.requested_generation.store(generation, Ordering::Relaxed);
+-            reader.state.store(REQUESTED, Ordering::Release);
+-        }
++        // Nothing fallible lies between installing Published and this release.
++        self.shared.request.store(generation, Ordering::Release);
+@@ -296,2 +390,0 @@
+-    /// Capture the coordinator's arrival after its local terms and immediately
+-    /// before complete. The timestamp precedes acquiring the observation lock.
+@@ -301,3 +394,5 @@
+-        let mut slots = self.shared.slots.lock().map_err(|_| "colors slots poisoned")?;
+-        let packet = slots.packet.as_ref().ok_or("colors owner-ready has no packet")?;
+-        if packet.generation != token.generation {
++        let mut control = control_lock(&self.shared);
++        let Flight::Published(ref mut metadata) = control.flight else {
++            return Err("colors owner-ready has no published flight".into());
++        };
++        if metadata.generation != token.generation {
+@@ -306,2 +401 @@
+-        let published = packet.published.ok_or("colors sampled packet lacks publication time")?;
+-        if slots.owner_ready_ns.is_some() {
++        if metadata.owner_ready_ns.is_some() {
+@@ -310 +404,2 @@
+-        slots.owner_ready_ns = Some(elapsed_ns(published, ready));
++        let published = metadata.published.ok_or("colors sampled flight lacks publication time")?;
++        metadata.owner_ready_ns = Some(elapsed_ns(published, ready));
+@@ -315,8 +410,31 @@
+-        let join_started = if self.generation != 0 && self.generation % SAMPLE_STRIDE == 0 {
+-            Some(Instant::now())
+-        } else { None };
+-        let mut slots = completion_slots(&self.shared)?;
+-        let packet = slots.packet.as_ref().copied().ok_or("colors completed without a packet")?;
+-        let white = slots.outputs[0].as_ref().copied().ok_or("white colors reader has no output")?;
+-        let black = slots.outputs[1].as_ref().copied().ok_or("black colors reader has no output")?;
+-        if packet.generation != white.generation || packet.generation != black.generation {
++        let generation = self.generation;
++        if generation == 0 { return Err("colors complete without a dispatch".into()); }
++        let join_started = if generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
++        // No Control mutex may span spinning or the Sleep wait.
++        if wait_completion(&self.shared, generation).is_err() {
++            return Err(self.failure());
++        }
++        let mut control = control_lock(&self.shared);
++        let metadata = match control.flight {
++            Flight::Published(metadata) if metadata.generation == generation
++                && !control.closing && !terminal(&self.shared) => metadata,
++            _ => return Err("colors completion lost ownership of its flight".into()),
++        };
++        // Recheck inside the ownership critical section. A close that won
++        // Control first owns Discarding; complete must never read its cells.
++        if !both_done(&self.shared, generation) {
++            return Err("colors completion before both matching done epochs".into());
++        }
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.consuming);
++        // SAFETY: Both done Acquire loads publish these separate initialized
++        // scalar outputs and retire their input borrows. Published under Control
++        // excludes close. These Copy reads end here, before Flight::None and any
++        // subsequent request Release that permits either writer's next write.
++        let (white, black) = unsafe {
++            (
++                self.shared.cells.white_output.get().read(),
++                self.shared.cells.black_output.get().read(),
++            )
++        };
++        if white.generation != generation || black.generation != generation {
+@@ -325,8 +443 @@
+-        for reader in &self.shared.readers {
+-            if reader.completed_generation.load(Ordering::Acquire) != packet.generation
+-                || reader.released_generation.load(Ordering::Acquire) != packet.generation
+-            {
+-                return Err("colors completion before both reader releases".into());
+-            }
+-        }
+-        if packet.published.is_some() {
++        if metadata.published.is_some() {
+@@ -334,9 +445,5 @@
+-            let owner = slots.owner_ready_ns;
+-            slots.readiness.record_complete(white, black, owner, join_ns);
+-        }
+-        slots.packet = None;
+-        slots.outputs = [None, None];
+-        slots.owner_ready_ns = None;
+-        for reader in &self.shared.readers { reader.state.store(IDLE, Ordering::Release); }
+-        drop(slots);
+-        // Only the coordinator performs the original cross-color composition.
++            control.readiness.record_complete(white, black, metadata.owner_ready_ns, join_ns);
++        }
++        control.flight = Flight::None;
++        drop(control);
++        // Composition reads coordinator metadata and scalar locals, not input.
+@@ -345,2 +452,2 @@
+-                [white.activity, black.activity], packet.material,
+-                packet.mobility_weights, packet.position.phase(),
++                [white.activity, black.activity], metadata.material,
++                metadata.mobility_weights, metadata.phase,
+@@ -350 +457 @@
+-                packet.material, packet.shelter_weights,
++                metadata.material, metadata.shelter_weights,
+@@ -359,6 +466,2 @@
+-    fn failure(&self) -> String {
+-        failure_in(&self.shared.slots.lock().unwrap_or_else(|error| error.into_inner()))
+-    }
+-
+-    /// Report only after shutdown for a complete partition of sampled calls.
+-    /// Histograms retain every completed observation in fixed-size storage.
++    fn failure(&self) -> String { failure_in(&control_lock(&self.shared)) }
++
+@@ -366,2 +469 @@
+-        self.shared.slots.lock().unwrap_or_else(|error| error.into_inner())
+-            .readiness.json()
++        control_lock(&self.shared).readiness.json()
+@@ -371,7 +472,0 @@
+-        if self.threads.iter().all(Option::is_none) {
+-            if has_failure(&self.shared) {
+-                self.close_error_reported = true;
+-                return Err(self.failure());
+-            }
+-            return Ok(());
+-        }
+@@ -379,0 +475,5 @@
++            control.shutdown = true;
++            control.closing = true;
++            claim_discard(&mut control);
++            control.scopes = 0;
++            self.shared.active_scopes.store(0, Ordering::Release);
+@@ -381,3 +480,0 @@
+-            self.shared.active_scopes.store(0, Ordering::Release);
+-            control.scopes = 0;
+-            control.parking = false;
+@@ -386,2 +483,3 @@
+-        // Hold neither mutex while joining. Even a delayed reader owns its
+-        // packet/local computation until it actually exits, without a timeout.
++        // Terminal publication always participates in the SC latch chain, even
++        // if no waiter appears registered. Control has already been released.
++        signal_completion(&self.shared);
+@@ -397,5 +495,8 @@
+-        {
+-            let mut slots = self.shared.slots.lock().unwrap_or_else(|error| error.into_inner());
+-            discard_packet(&mut slots);
+-        }
+-        if has_failure(&self.shared) {
++        let mut control = control_lock(&self.shared);
++        // All started readers have actually exited; unstarted readers were
++        // marked retired by failed_spawn. No guard or shutdown mutates cells.
++        debug_assert!(quiescent(&self.shared));
++        retire_flight(&mut control);
++        control.closing = false;
++        self.shared.wake.notify_all();
++        if has_failure(&control) {
+@@ -403 +504 @@
+-            return Err(self.failure());
++            return Err(failure_in(&control));
+@@ -410,2 +511,3 @@
+-        all_state(&self.shared, PARKED)
+-            && self.shared.active_scopes.load(Ordering::Acquire) == 0
++        let control = control_lock(&self.shared);
++        all_state(&self.shared, PARKED) && control.scopes == 0
++            && !control.closing && matches!(control.flight, Flight::None)
+@@ -430 +532,10 @@
+-    park(shared, side)?;
++    #[cfg(test)]
++    {
++        if shared.tests.startup.fail_entry == Some(side) {
++            return Err("controlled colors startup failure".into());
++        }
++        if shared.tests.startup.stop_entry == Some(side) { return Ok(()); }
++        if shared.tests.startup.panic_entry == Some(side) { panic!("controlled colors startup panic"); }
++    }
++    let mut seen = 0;
++    park(shared, side, seen);
+@@ -432,5 +543,6 @@
+-    while !terminal(shared) {
+-        if reader.state.load(Ordering::Acquire) != REQUESTED {
+-            if shared.active_scopes.load(Ordering::Acquire) == 0 {
+-                park(shared, side)?;
+-                continue;
++    loop {
++        if terminal(shared) { return Ok(()); }
++        let generation = shared.request.load(Ordering::Acquire);
++        if generation != seen {
++            if generation == 0 || generation < seen {
++                return Err("colors reader observed a nonincreasing epoch".into());
+@@ -437,0 +550,29 @@
++            let access_started = if generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
++            #[cfg(test)]
++            {
++                test_reader_gate(shared, &shared.tests.input[side], side)?;
++                if shared.tests.startup.stop_after_request == Some(side) { return Ok(()); }
++            }
++            // SAFETY: This exact request Acquire publishes the initialized input.
++            // No next input write is possible before our done or actual exit.
++            let output = unsafe { compute_input(shared, side, generation, access_started)? };
++            // compute_input has returned scalar values; ALL input references,
++            // including published Instant accesses, have ended before this write.
++            // SAFETY: Only this reader writes its concrete output. The acquired
++            // new request also orders the coordinator's prior output reads
++            // before this overwrite; no whole-array mutable borrow is formed.
++            unsafe { shared.cells.output(side).get().write(output); }
++            #[cfg(test)]
++            test_reader_gate(shared, &shared.tests.before_done[side], side)?;
++            reader.done.store(generation, Ordering::Release);
++            seen = generation;
++            #[cfg(test)]
++            test_pause(shared, &shared.tests.before_latch[side]);
++            // Every normal publisher exchanges, unconditionally. Descheduling
++            // after done but before this exchange can delay a cold waiter.
++            signal_completion(shared);
++            continue;
++        }
++        if shared.active_scopes.load(Ordering::Acquire) == 0 {
++            park(shared, side, seen);
++        } else {
+@@ -439,15 +580,14 @@
+-            continue;
+-        }
+-        let generation = reader.requested_generation.load(Ordering::Acquire);
+-        let copy_started = if generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
+-        #[cfg(test)]
+-        test_gate(shared, side)?;
+-        let packet = {
+-            let slots = shared.slots.lock().map_err(|_| "colors slots poisoned")?;
+-            let packet = slots.packet.as_ref().copied().ok_or("colors request has no packet")?;
+-            if packet.generation != generation { return Err("colors request generation mismatch".into()); }
+-            packet
+-        };
+-        // No shared packet reference escapes its lock. The coordinator retains
+-        // the immutable owned packet until both completions or terminal joins.
+-        reader.released_generation.store(generation, Ordering::Release);
++        }
++    }
++}
++
++/// Caller must have acquired request(g) and own reader side. The only borrowed
++/// Packet lives in this lexical block; the return type contains scalar Copies.
++unsafe fn compute_input(
++    shared: &Shared, side: usize, generation: u64, access_started: Option<Instant>,
++) -> Result<SideOutput, String> {
++    let output = {
++        // SAFETY: The caller's request Acquire and the done/retirement protocol
++        // exclude input mutation for this entire block.
++        let packet = unsafe { &*shared.cells.input.get() };
++        if packet.generation != generation { return Err("colors input generation mismatch".into()); }
+@@ -455,3 +595,5 @@
+-        let copy_ns = match (copy_started, kernel_started) {
+-            (Some(start), Some(end)) => elapsed_ns(start, end),
+-            _ => 0,
++        // Existing field name/timer positions remain: this now observes input
++        // access setup, with no packet memcpy or input mutex. Actual direct
++        // packet cache traffic occurs inside the following kernel interval.
++        let copy_ns = match (access_started, kernel_started) {
++            (Some(start), Some(end)) => elapsed_ns(start, end), _ => 0,
+@@ -463,0 +606,2 @@
++        #[cfg(test)]
++        test_reader_gate(shared, &shared.tests.in_input[side], side)?;
+@@ -465,18 +609,6 @@
+-        let notify = {
+-            let mut slots = shared.slots.lock().map_err(|_| "colors slots poisoned")?;
+-            if slots.packet.as_ref().map(|packet| packet.generation) != Some(generation) {
+-                return Err("colors packet reused before reader completion".into());
+-            }
+-            // This readiness boundary includes input-lock/copy and output-lock
+-            // delays, and sits immediately before COMPLETE release publication.
+-            let ready_ns = packet.published.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
+-            slots.outputs[side] = Some(SideOutput {
+-                generation, activity, opposite_shelter, ready_ns, kernel_ns, copy_ns,
+-            });
+-            reader.completed_generation.store(generation, Ordering::Relaxed);
+-            reader.state.store(COMPLETE, Ordering::Release);
+-            slots.completion_waiting
+-        };
+-        if notify { shared.completed.notify_all(); }
+-    }
+-    Ok(())
++        // Last Packet access, sampled or otherwise. There is no output mutex;
++        // the same ready clock sits immediately before output publication.
++        let ready_ns = packet.published.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
++        SideOutput { generation, activity, opposite_shelter, ready_ns, kernel_ns, copy_ns }
++    };
++    Ok(output)
+@@ -490,0 +623,4 @@
++fn quiescent(shared: &Shared) -> bool {
++    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), PARKED | FAILED | STOPPED))
++}
++
+@@ -495,11 +631,12 @@
+-fn has_failure(shared: &Shared) -> bool {
+-    shared.readers.iter().any(|reader| reader.state.load(Ordering::Acquire) == FAILED)
+-}
+-
+-fn terminal(shared: &Shared) -> bool {
+-    shared.stop.load(Ordering::Acquire)
+-        || shared.readers.iter().any(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
+-}
+-
+-fn failure_in(slots: &Slots) -> String {
+-    slots.failures.iter().find_map(Clone::clone)
++fn terminal(shared: &Shared) -> bool { shared.stop.load(Ordering::Acquire) }
++
++fn both_done(shared: &Shared, generation: u64) -> bool {
++    shared.readers.iter().all(|reader| reader.done.load(Ordering::Acquire) == generation)
++}
++
++fn has_failure(control: &Control) -> bool {
++    control.owner_failure.is_some() || control.failures.iter().any(Option::is_some)
++}
++
++fn failure_in(control: &Control) -> String {
++    control.owner_failure.clone().or_else(|| control.failures.iter().find_map(Clone::clone))
+@@ -513,3 +650,11 @@
+-/// No Slots holder may acquire Control. All terminal/lifecycle transitions use
+-/// Control -> Slots, matching the proven single-reader transport's lock order.
+-fn completion_slots(shared: &Shared) -> Result<MutexGuard<'_, Slots>, String> {
++/// All normal and terminal publishers participate in the SAME SC RMW chain.
++/// If this consumes registration, Sleep makes notification follow the waiter's
++/// predicate recheck and atomic unlock/sleep. Never called while holding Control.
++fn signal_completion(shared: &Shared) {
++    if shared.waiting.swap(false, Ordering::SeqCst) {
++        let _sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
++        shared.completed.notify_all();
++    }
++}
++
++fn wait_completion(shared: &Shared, generation: u64) -> Result<(), String> {
+@@ -517,5 +662,2 @@
+-        if all_state(shared, COMPLETE) || terminal(shared) { break; }
+-        // An idle/parked transport has no future completion to wait for.
+-        if !shared.readers.iter().any(|reader| reader.state.load(Ordering::Acquire) == REQUESTED) {
+-            break;
+-        }
++        if terminal(shared) { return Err("colors completion stopped".into()); }
++        if both_done(shared, generation) { return Ok(()); }
+@@ -524,3 +666,26 @@
+-    let mut slots = shared.slots.lock().map_err(|_| "colors slots poisoned")?;
+-    while !all_state(shared, COMPLETE) && !terminal(shared)
+-        && shared.readers.iter().any(|reader| reader.state.load(Ordering::Acquire) == REQUESTED)
++    let mut sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
++    loop {
++        #[cfg(test)]
++        test_pause(shared, &shared.tests.before_registration);
++        // A prior publisher's SC exchange precedes this one and carries its
++        // done publication to our Acquire recheck. A later publisher either
++        // consumes true and owes a Sleep-coordinated wake, or another does.
++        shared.waiting.swap(true, Ordering::SeqCst);
++        #[cfg(test)]
++        {
++            shared.tests.registrations.fetch_add(1, Ordering::SeqCst);
++            test_pause(shared, &shared.tests.after_registration);
++        }
++        let stopped = terminal(shared);
++        let done = both_done(shared, generation);
++        if stopped || done {
++            shared.waiting.swap(false, Ordering::SeqCst);
++            drop(sleep);
++            return if stopped { Err("colors completion stopped".into()) } else { Ok(()) };
++        }
++        sleep = shared.completed.wait(sleep).unwrap_or_else(|error| error.into_inner());
++        // Re-register on EVERY spurious/early wake before checking/sleeping.
++    }
++}
++
++fn publish_terminal(shared: &Shared, side: usize, failure: Option<String>) {
+@@ -528,25 +693,33 @@
+-        slots.completion_waiting = true;
+-        slots = shared.completed.wait(slots).map_err(|_| "colors slots poisoned")?;
+-    }
+-    slots.completion_waiting = false;
+-    if !all_state(shared, COMPLETE) || terminal(shared) { return Err(failure_in(&slots)); }
+-    Ok(slots)
+-}
+-
+-fn publish_terminal(shared: &Shared, side: usize, failure: Option<String>) {
+-    let mut control = control_lock(shared);
+-    let mut slots = shared.slots.lock().unwrap_or_else(|error| error.into_inner());
+-    let reader = &shared.readers[side];
+-    if let Some(error) = failure {
+-        slots.failures[side] = Some(error);
+-        reader.failed_generation.store(reader.requested_generation.load(Ordering::Acquire), Ordering::Relaxed);
+-        reader.state.store(FAILED, Ordering::Release);
+-    } else if reader.state.load(Ordering::Acquire) != FAILED {
+-        reader.state.store(STOPPED, Ordering::Release);
+-    }
+-    // A normal unexpected exit also stops its sibling. Neither outcome frees
+-    // packet storage; only both parked acknowledgments or shutdown's joins do.
+-    shared.stop.store(true, Ordering::Release);
+-    if all_terminal(shared) { control.parking = false; }
+-    shared.completed.notify_all();
+-    shared.wake.notify_all();
++        let mut control = control_lock(shared);
++        let reader = &shared.readers[side];
++        if let Some(error) = failure {
++            control.failures[side] = Some(error);
++            reader.failed_generation.store(shared.request.load(Ordering::Acquire), Ordering::Relaxed);
++            reader.state.store(FAILED, Ordering::Release);
++        } else if reader.state.load(Ordering::Acquire) != FAILED {
++            reader.state.store(STOPPED, Ordering::Release);
++        }
++        // This handler runs only after that reader's concrete loop has exited,
++        // including unwind. It never acknowledges or mutates its peer's cells.
++        shared.stop.store(true, Ordering::Release);
++        shared.wake.notify_all();
++    }
++    signal_completion(shared);
++}
++
++fn claim_discard(control: &mut Control) {
++    if let Flight::Published(metadata) = control.flight {
++        control.flight = Flight::Discarding(metadata);
++    }
++}
++
++fn retire_flight(control: &mut Control) {
++    let metadata = match control.flight {
++        Flight::None => return,
++        Flight::Published(metadata) | Flight::Discarding(metadata) => metadata,
++    };
++    if metadata.published.is_some() {
++        if has_failure(control) { control.readiness.failed_samples += 1; }
++        else { control.readiness.discarded_samples += 1; }
++    }
++    control.flight = Flight::None;
+@@ -557,3 +730,6 @@
+-    // Shutdown has already assumed ownership and joined, or is joining, both
+-    // readers. A guard outliving that owner must not underflow the scope count.
+-    if shared.stop.load(Ordering::Acquire) && control.scopes == 0 { return Ok(()); }
++    if control.shutdown && control.scopes == 0 {
++        // Even when shutdown owns the joins, the guard itself acknowledges
++        // BOTH real quiet readers rather than assuming its owner has drained.
++        while !quiescent(shared) { control = wait_control(shared, control); }
++        return Ok(());
++    }
+@@ -564,27 +740,14 @@
+-    control.parking = true;
+-    while !all_state(shared, PARKED) && !all_terminal(shared) {
+-        control = wait_control(shared, control);
+-    }
+-    control.parking = false;
+-    if all_terminal(shared) {
+-        return Err(failure_in(&shared.slots.lock().unwrap_or_else(|error| error.into_inner())));
+-    }
+-    Ok(())
+-}
+-
+-fn discard_packet(slots: &mut Slots) {
+-    if slots.packet.as_ref().is_some_and(|packet| packet.published.is_some()) {
+-        if slots.failures.iter().any(Option::is_some) {
+-            slots.readiness.failed_samples += 1;
+-        } else {
+-            slots.readiness.discarded_samples += 1;
+-        }
+-    }
+-    slots.packet = None;
+-    slots.outputs = [None, None];
+-    slots.owner_ready_ns = None;
+-}
+-
+-/// The second parked acknowledgment clears a discarded packet. Activation
+-/// cannot pass the parking predicate until both local kernels have ended.
+-fn park(shared: &Shared, side: usize) -> Result<(), String> {
++    control.closing = true;
++    claim_discard(&mut control);
++    // Keep Discarding until BOTH real parked/exited acknowledgments. Seeing
++    // stop/failure on one reader is never input or output retirement of its peer.
++    while !quiescent(shared) { control = wait_control(shared, control); }
++    retire_flight(&mut control);
++    control.closing = false;
++    shared.wake.notify_all();
++    if terminal(shared) { Err(failure_in(&control)) } else { Ok(()) }
++}
++
++/// No cell access here. Under Control an unseen published epoch must be handled
++/// by the reader loop before PARKED, unless the reader actually exits instead.
++fn park(shared: &Shared, side: usize, seen: u64) {
+@@ -592 +755,2 @@
+-    if control.scopes != 0 { return Ok(()); }
++    if terminal(shared) || shared.request.load(Ordering::Acquire) != seen { return; }
++    if control.scopes != 0 { return; }
+@@ -594,5 +757,0 @@
+-    if all_state(shared, PARKED) {
+-        let mut slots = shared.slots.lock().map_err(|_| "colors slots poisoned while parking")?;
+-        discard_packet(&mut slots);
+-        control.parking = false;
+-    }
+@@ -607 +765,0 @@
+-    Ok(())
+@@ -734,2 +892,47 @@
+-fn test_gate(shared: &Shared, side: usize) -> Result<(), String> {
+-    let mut gate = shared.test_gates[side].lock().unwrap();
++#[derive(Default)]
++struct TestGate {
++    blocked: bool,
++    entered: bool,
++    fail: bool,
++    panic: bool,
++}
++
++#[cfg(test)]
++struct TestHooks {
++    startup: Startup,
++    input: [Mutex<TestGate>; 2],
++    in_input: [Mutex<TestGate>; 2],
++    before_done: [Mutex<TestGate>; 2],
++    before_latch: [Mutex<TestGate>; 2],
++    before_registration: Mutex<TestGate>,
++    after_registration: Mutex<TestGate>,
++    consuming: Mutex<TestGate>,
++    before_dispatch: Mutex<TestGate>,
++    wake: Condvar,
++    registrations: AtomicUsize,
++    fail_before_publish: AtomicBool,
++}
++
++#[cfg(test)]
++impl TestHooks {
++    fn new(startup: Startup) -> Self {
++        Self {
++            startup,
++            input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            in_input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            before_done: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            before_latch: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            before_registration: Mutex::new(TestGate::default()),
++            after_registration: Mutex::new(TestGate::default()),
++            consuming: Mutex::new(TestGate::default()),
++            before_dispatch: Mutex::new(TestGate::default()),
++            wake: Condvar::new(),
++            registrations: AtomicUsize::new(0),
++            fail_before_publish: AtomicBool::new(false),
++        }
++    }
++}
++
++#[cfg(test)]
++fn test_pause(shared: &Shared, mutex: &Mutex<TestGate>) {
++    let mut gate = mutex.lock().unwrap();
+@@ -737,2 +940,9 @@
+-    shared.test_wake.notify_all();
+-    while gate.blocked { gate = shared.test_wake.wait(gate).unwrap(); }
++    shared.tests.wake.notify_all();
++    while gate.blocked { gate = shared.tests.wake.wait(gate).unwrap(); }
++}
++
++#[cfg(test)]
++fn test_reader_gate(shared: &Shared, mutex: &Mutex<TestGate>, side: usize) -> Result<(), String> {
++    test_pause(shared, mutex);
++    let gate = mutex.lock().unwrap();
++    if gate.panic { panic!("controlled {} colors reader panic", side_name(side)); }
+@@ -747 +957,9 @@
+-    fn packet() -> Packet {
++    struct Fixture {
++        position: Position,
++        influence: Influence,
++        material: i32,
++        mobility_weights: [i32; 2],
++        shelter_weights: [i32; 2],
++    }
++
++    fn packet() -> Fixture {
+@@ -751,7 +969,7 @@
+-        Packet {
+-            generation: 0, position, influence: Influence::build(&position), material: 193,
+-            mobility_weights: [2017, 633], shelter_weights: [997, 3101], published: None,
+-        }
+-    }
+-
+-    fn dispatch(worker: &mut ColorsWorker, packet: &Packet) -> DispatchToken {
++        Fixture {
++            position, influence: Influence::build(&position), material: 193,
++            mobility_weights: [2017, 633], shelter_weights: [997, 3101],
++        }
++    }
++
++    fn dispatch(worker: &mut ColorsWorker, packet: &Fixture) -> DispatchToken {
+@@ -762 +980 @@
+-    fn assert_output(actual: ActivityShelter, packet: &Packet) {
++    fn assert_output(actual: ActivityShelter, packet: &Fixture) {
+@@ -771,14 +989,12 @@
+-    fn block(shared: &Shared, side: usize) {
+-        let mut gate = shared.test_gates[side].lock().unwrap();
+-        gate.blocked = true;
+-        gate.entered = false;
+-        gate.fail = false;
+-    }
+-
+-    fn entered(shared: &Shared, side: usize) {
+-        let mut gate = shared.test_gates[side].lock().unwrap();
+-        while !gate.entered { gate = shared.test_wake.wait(gate).unwrap(); }
+-    }
+-
+-    fn release(shared: &Shared, side: usize, fail: bool) {
+-        let mut gate = shared.test_gates[side].lock().unwrap();
++    fn block_at(mutex: &Mutex<TestGate>) {
++        let mut gate = mutex.lock().unwrap();
++        *gate = TestGate { blocked: true, ..TestGate::default() };
++    }
++
++    fn entered_at(shared: &Shared, mutex: &Mutex<TestGate>) {
++        let mut gate = mutex.lock().unwrap();
++        while !gate.entered { gate = shared.tests.wake.wait(gate).unwrap(); }
++    }
++
++    fn release_at(shared: &Shared, mutex: &Mutex<TestGate>, fail: bool) {
++        let mut gate = mutex.lock().unwrap();
+@@ -787 +1003,11 @@
+-        shared.test_wake.notify_all();
++        shared.tests.wake.notify_all();
++    }
++
++    fn block(shared: &Shared, side: usize) { block_at(&shared.tests.input[side]); }
++    fn entered(shared: &Shared, side: usize) { entered_at(shared, &shared.tests.input[side]); }
++    fn release(shared: &Shared, side: usize, fail: bool) {
++        release_at(shared, &shared.tests.input[side], fail);
++    }
++
++    fn wait_done(shared: &Shared, side: usize, generation: u64) {
++        while shared.readers[side].done.load(Ordering::Acquire) != generation { thread::yield_now(); }
+@@ -791,0 +1018,12 @@
++    }
++
++    fn registered(shared: &Shared, count: usize) {
++        while shared.tests.registrations.load(Ordering::SeqCst) < count { thread::yield_now(); }
++    }
++
++    fn closing(shared: &Shared) {
++        while !control_lock(shared).closing { thread::yield_now(); }
++    }
++
++    fn no_flight(shared: &Shared) {
++        assert!(matches!(control_lock(shared).flight, Flight::None));
+@@ -811,2 +1049 @@
+-            let slots = worker.shared.slots.lock().unwrap();
+-            assert!(slots.packet.is_none() && slots.outputs.iter().all(Option::is_none));
++            no_flight(&worker.shared);
+@@ -830 +1067 @@
+-            wait_state(&worker.shared, 1 - delayed, COMPLETE);
++            wait_done(&worker.shared, 1 - delayed, token.generation);
+@@ -834,2 +1071 @@
+-                let slots = completion_slots(&shared).unwrap();
+-                assert!(slots.outputs.iter().all(Option::is_some));
++                wait_completion(&shared, token.generation).unwrap();
+@@ -838,6 +1074,3 @@
+-            while !worker.shared.slots.lock().unwrap().completion_waiting { thread::yield_now(); }
+-            {
+-                let slots = worker.shared.slots.lock().unwrap();
+-                assert_eq!(slots.packet.as_ref().unwrap().generation, token.generation);
+-                assert!(slots.outputs[delayed].is_none());
+-            }
++            registered(&worker.shared, 1);
++            assert!(matches!(control_lock(&worker.shared).flight,
++                Flight::Published(metadata) if metadata.generation == token.generation));
+@@ -845 +1078 @@
+-            assert_eq!(worker.shared.readers[delayed].released_generation.load(Ordering::Acquire), 0);
++            assert_eq!(worker.shared.readers[delayed].done.load(Ordering::Acquire), 0);
+@@ -848 +1081 @@
+-            // Already published completions must not require a future notify.
++            // Done already precedes complete: no future notification required.
+@@ -865 +1098 @@
+-        while !worker.shared.control.lock().unwrap().parking { thread::yield_now(); }
++        closing(&worker.shared);
+@@ -869 +1102,3 @@
+-        assert_eq!(worker.shared.slots.lock().unwrap().packet.as_ref().unwrap().generation, token.generation);
++        assert!(matches!(control_lock(&worker.shared).flight,
++            Flight::Discarding(metadata) if metadata.generation == token.generation));
++        // A coordinator arriving after close cannot consume either cell.
+@@ -873 +1108 @@
+-        assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++        assert!(worker.complete().is_err());
+@@ -893,2 +1128,2 @@
+-            let waiter = thread::spawn(move || completion_slots(&shared).is_err());
+-            while !worker.shared.slots.lock().unwrap().completion_waiting { thread::yield_now(); }
++            let waiter = thread::spawn(move || wait_completion(&shared, token.generation).is_err());
++            registered(&worker.shared, 1);
+@@ -902 +1137 @@
+-            while !worker.shared.control.lock().unwrap().parking { thread::yield_now(); }
++            closing(&worker.shared);
+@@ -903,0 +1139 @@
++            assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
+@@ -911 +1147 @@
+-            assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++            no_flight(&worker.shared);
+@@ -929,0 +1166,2 @@
++        let (guard_sent, guard_received) = mpsc::channel();
++        let guard = thread::spawn(move || { guard_sent.send(scope.finish()).unwrap(); });
+@@ -933 +1171,2 @@
+-        assert!(shared.slots.lock().unwrap().packet.is_some());
++        assert!(guard_received.try_recv().is_err());
++        assert!(matches!(control_lock(&shared).flight, Flight::Discarding(_)));
+@@ -935,0 +1175,2 @@
++        guard.join().unwrap();
++        assert!(guard_received.recv().unwrap().is_ok());
+@@ -938,2 +1179 @@
+-        assert!(shared.slots.lock().unwrap().packet.is_none());
+-        scope.finish().unwrap();
++        no_flight(&shared);
+@@ -944,12 +1184,3 @@
+-        fn stop_one_after_request(shared: &Shared, side: usize) -> Result<(), String> {
+-            if side == 1 { return run_active(shared, side); }
+-            park(shared, side)?;
+-            while shared.readers[side].state.load(Ordering::Acquire) != REQUESTED {
+-                if terminal(shared) { return Ok(()); }
+-                spin_loop();
+-            }
+-            // This reader deliberately exits without publishing a completion.
+-            // Only its terminal notification can release the blocked waiter.
+-            test_gate(shared, side)
+-        }
+-        let mut worker = ColorsWorker::start_with(stop_one_after_request).unwrap();
++        let mut worker = ColorsWorker::start_with(Startup {
++            stop_after_request: Some(0), ..Startup::default()
++        }).unwrap();
+@@ -958 +1189 @@
+-        dispatch(&mut worker, &packet());
++        let token = dispatch(&mut worker, &packet());
+@@ -961,2 +1192,2 @@
+-        let waiter = thread::spawn(move || completion_slots(&shared).is_err());
+-        while !worker.shared.slots.lock().unwrap().completion_waiting { thread::yield_now(); }
++        let waiter = thread::spawn(move || wait_completion(&shared, token.generation).is_err());
++        registered(&worker.shared, 1);
+@@ -965,0 +1197 @@
++        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
+@@ -970 +1202 @@
+-        assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++        no_flight(&worker.shared);
+@@ -983 +1215 @@
+-        assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++        no_flight(&worker.shared);
+@@ -989,4 +1221,14 @@
+-        fn fail(_shared: &Shared, _side: usize) -> Result<(), String> { Err("controlled colors startup failure".into()) }
+-        fn stop(_shared: &Shared, _side: usize) -> Result<(), String> { Ok(()) }
+-        assert_eq!(ColorsWorker::start_with(fail).err().unwrap(), "controlled colors startup failure");
+-        assert!(ColorsWorker::start_with(stop).is_err());
++        for side in 0..2 {
++            assert_eq!(ColorsWorker::start_with(Startup {
++                fail_entry: Some(side), ..Startup::default()
++            }).err().unwrap(), "controlled colors startup failure");
++            assert!(ColorsWorker::start_with(Startup {
++                stop_entry: Some(side), ..Startup::default()
++            }).is_err());
++            assert!(ColorsWorker::start_with(Startup {
++                panic_entry: Some(side), ..Startup::default()
++            }).is_err());
++            assert_eq!(ColorsWorker::start_with(Startup {
++                fail_spawn: Some(side), ..Startup::default()
++            }).err().unwrap(), "controlled colors spawn failure");
++        }
+@@ -1005,0 +1248,2 @@
++        scope.finish().unwrap();
++        assert!(worker.is_parked());
+@@ -1006,0 +1251 @@
++        let scope = worker.start_active_scope().unwrap();
+@@ -1009 +1254 @@
+-        let scope = worker.start_active_scope().unwrap();
++        assert!(worker.is_parked());
+@@ -1010,0 +1256 @@
++        let scope = worker.start_active_scope().unwrap();
+@@ -1018,2 +1264,2 @@
+-        let slots = worker.shared.slots.lock().unwrap();
+-        let stats = &slots.readiness;
++        let control = control_lock(&worker.shared);
++        let stats = &control.readiness;
+@@ -1044 +1290,296 @@
+-}
++
++    #[test]
++    fn colors_close_wins_dispatch_without_publishing_a_new_epoch() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block_at(&worker.shared.tests.before_dispatch);
++        let shared = Arc::clone(&worker.shared);
++        let dispatching = thread::spawn(move || {
++            let packet = packet();
++            assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++                packet.mobility_weights, packet.shelter_weights).is_err());
++            worker
++        });
++        entered_at(&shared, &shared.tests.before_dispatch);
++        scope.finish().unwrap();
++        release_at(&shared, &shared.tests.before_dispatch, false);
++        let mut worker = dispatching.join().unwrap();
++        assert_eq!(worker.generation, 0);
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        no_flight(&worker.shared);
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        dispatch(&mut worker, &packet);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_unpublished_failure_rolls_back_without_advancing_or_busy_flight() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        worker.shared.tests.fail_before_publish.store(true, Ordering::SeqCst);
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        assert_eq!(worker.generation, 0);
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        assert_eq!(control_lock(&worker.shared).readiness.dispatches, 0);
++        no_flight(&worker.shared);
++        let token = dispatch(&mut worker, &packet);
++        assert_eq!(token.generation, 1);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_output_write_is_not_retirement_until_done_release() {
++        for delayed in 0..2 {
++            let mut worker = ColorsWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            block_at(&worker.shared.tests.before_done[delayed]);
++            let token = dispatch(&mut worker, &packet());
++            entered_at(&worker.shared, &worker.shared.tests.before_done[delayed]);
++            wait_done(&worker.shared, 1 - delayed, token.generation);
++            assert_eq!(worker.shared.readers[delayed].done.load(Ordering::Acquire), 0);
++            let (sent, received) = mpsc::channel();
++            let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++            closing(&worker.shared);
++            assert!(received.try_recv().is_err());
++            assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
++            release_at(&worker.shared, &worker.shared.tests.before_done[delayed], false);
++            close.join().unwrap();
++            assert!(received.recv().unwrap().is_ok());
++            assert!(worker.is_parked());
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            dispatch(&mut worker, &packet);
++            assert_output(worker.complete().unwrap(), &packet);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_packet_borrow_including_sampled_timing_blocks_discard_and_reuse() {
++        let mut worker = ColorsWorker::start().unwrap();
++        assert!(worker.is_parked());
++        worker.generation = SAMPLE_STRIDE - 1;
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block_at(&worker.shared.tests.in_input[side]); }
++        let packet = packet();
++        let token = dispatch(&mut worker, &packet);
++        assert!(token.sampled);
++        for side in 0..2 { entered_at(&worker.shared, &worker.shared.tests.in_input[side]); }
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        closing(&worker.shared);
++        assert!(worker.owner_ready(token).is_err());
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        release_at(&worker.shared, &worker.shared.tests.in_input[0], false);
++        wait_state(&worker.shared, 0, PARKED);
++        assert!(received.try_recv().is_err());
++        assert_eq!(worker.shared.readers[1].done.load(Ordering::Acquire), 0);
++        assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
++        release_at(&worker.shared, &worker.shared.tests.in_input[1], false);
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        assert!(worker.is_parked());
++        assert_eq!(control_lock(&worker.shared).readiness.discarded_samples, 1);
++        let scope = worker.start_active_scope().unwrap();
++        dispatch(&mut worker, &packet);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_output_consumption_wins_control_before_final_close() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        block_at(&worker.shared.tests.consuming);
++        dispatch(&mut worker, &packet);
++        let shared = Arc::clone(&worker.shared);
++        let complete = thread::spawn(move || {
++            assert_output(worker.complete().unwrap(), &packet);
++            worker
++        });
++        entered_at(&shared, &shared.tests.consuming);
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        // Completion holds Control here; close cannot claim or retire its flight.
++        assert!(received.try_recv().is_err());
++        release_at(&shared, &shared.tests.consuming, false);
++        let mut worker = complete.join().unwrap();
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        assert!(worker.is_parked());
++        let scope = worker.start_active_scope().unwrap();
++        let mut next = self::packet();
++        next.material = -193;
++        next.mobility_weights = [0, 10240];
++        dispatch(&mut worker, &next);
++        assert_output(worker.complete().unwrap(), &next);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_prior_epoch_latch_delay_allows_safe_output_reuse() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block_at(&worker.shared.tests.before_latch[0]);
++        let packet = packet();
++        let first = dispatch(&mut worker, &packet);
++        entered_at(&worker.shared, &worker.shared.tests.before_latch[0]);
++        wait_done(&worker.shared, 1, first.generation);
++        assert_output(worker.complete().unwrap(), &packet);
++        let second = dispatch(&mut worker, &packet);
++        assert_eq!(second.generation, first.generation + 1);
++        wait_done(&worker.shared, 1, second.generation);
++        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), first.generation);
++        release_at(&worker.shared, &worker.shared.tests.before_latch[0], false);
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_completion_before_waiter_registration_uses_sc_predicate_chain() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.before_registration);
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token.generation));
++        entered_at(&worker.shared, &worker.shared.tests.before_registration);
++        for side in 0..2 { release(&worker.shared, side, false); }
++        for side in 0..2 { wait_done(&worker.shared, side, token.generation); }
++        release_at(&worker.shared, &worker.shared.tests.before_registration, false);
++        waiter.join().unwrap().unwrap();
++        assert!(!worker.shared.waiting.load(Ordering::SeqCst));
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_completion_during_waiter_registration_and_spurious_wake() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block(&worker.shared, side); }
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token.generation));
++        registered(&worker.shared, 1);
++        // Sleep excludes a notification slipping into the predicate/wait gap.
++        {
++            let _sleep = worker.shared.sleep.lock().unwrap();
++            worker.shared.completed.notify_all();
++        }
++        registered(&worker.shared, 2);
++        for side in 0..2 { release(&worker.shared, side, false); }
++        waiter.join().unwrap().unwrap();
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.after_registration);
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token.generation));
++        entered_at(&worker.shared, &worker.shared.tests.after_registration);
++        for side in 0..2 { release(&worker.shared, side, false); }
++        for side in 0..2 { wait_done(&worker.shared, side, token.generation); }
++        release_at(&worker.shared, &worker.shared.tests.after_registration, false);
++        waiter.join().unwrap().unwrap();
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_terminal_during_registration_wakes_without_fabricating_peer_done() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.after_registration);
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token.generation));
++        entered_at(&worker.shared, &worker.shared.tests.after_registration);
++        release(&worker.shared, 0, true);
++        wait_state(&worker.shared, 0, FAILED);
++        release_at(&worker.shared, &worker.shared.tests.after_registration, false);
++        assert!(waiter.join().unwrap().is_err());
++        assert_eq!(worker.shared.readers[1].done.load(Ordering::Acquire), 0);
++        release(&worker.shared, 1, false);
++        assert!(scope.finish().is_err());
++        assert!(worker.shutdown().is_err());
++        no_flight(&worker.shared);
++    }
++
++    #[test]
++    fn colors_reader_unwind_before_done_drains_both_without_output_consumption() {
++        for inside_input in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let shared = Arc::clone(&worker.shared);
++            let pause = if inside_input { &shared.tests.in_input[0] }
++                else { &shared.tests.before_done[0] };
++            block_at(pause);
++            block(&shared, 1);
++            dispatch(&mut worker, &packet());
++            entered_at(&shared, pause);
++            entered(&shared, 1);
++            {
++                let mut gate = pause.lock().unwrap();
++                gate.panic = true;
++                gate.blocked = false;
++                shared.tests.wake.notify_all();
++            }
++            wait_state(&shared, 0, FAILED);
++            assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++            release(&shared, 1, false);
++            assert!(scope.finish().is_err());
++            assert!(worker.shutdown().is_err());
++            no_flight(&shared);
++        }
++    }
++
++    #[test]
++    fn colors_near_max_epoch_publishes_max_once_then_terminally_drains() {
++        let mut worker = ColorsWorker::start().unwrap();
++        assert!(worker.is_parked());
++        worker.generation = u64::MAX - 1;
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = dispatch(&mut worker, &packet);
++        assert_eq!(token.generation, u64::MAX);
++        assert_output(worker.complete().unwrap(), &packet);
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert!(both_done(&worker.shared, u64::MAX));
++        let error = worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).err().unwrap();
++        assert_eq!(error, "colors epoch exhausted");
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert!(both_done(&worker.shared, u64::MAX));
++        assert!(worker.threads.iter().all(Option::is_none));
++        assert!(all_terminal(&worker.shared));
++        no_flight(&worker.shared);
++        scope.finish().unwrap();
++        assert!(worker.shutdown().is_err());
++    }
++}
