@@ -15,10 +15,11 @@ catalog construction costs exceeded that opportunity. Neither result establishes
 a general limit on multicore designs. Their exact scopes and failures remain
 in the reports.
 
-A source-only architectural reassessment is underway before selecting another
-prototype. Candidates include wider same-node evaluation/data preparation with
-shared publication and independently assessed frontier batching. These are
-unmeasured hypotheses, not selected implementations or speed claims.
+The [source reassessment](docs/research/open-architecture-reassessment.md) led to
+one selected three-thread FULL prototype: two helpers compute side-owned Activity
+and opposite-side Shelter, while the coordinator retains pawn state and final
+composition. It has no measured result yet. Combined inventory, fresh-Influence
+pipeline fusion and frontier batching remain unselected hypotheses.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

@@ -1,0 +1,2017 @@
+diff --git a/src/activity.rs b/src/activity.rs
+index 78d5cecc..d0aa7931 100644
+--- a/src/activity.rs
++++ b/src/activity.rs
+@@ -16,0 +17,8 @@ pub struct Activity {
++/// One attacker's mobility and its pressure against the opposite king.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct SideActivity {
++    pub piece: i32,
++    pub pressure: i32,
++    pub relation_queries: u64,
++}
++
+@@ -159,0 +168,52 @@ pub fn compute(
++/// The original color traversal, with fresh private marks. Only this attacker's
++/// mark row is written or read, so the opposite side needs no intermediate data.
++pub(crate) fn compute_side(
++    position: &Position,
++    influence: &Influence,
++    attacker: Color,
++) -> SideActivity {
++    let phase = position.phase();
++    let values = &DESTINATION_VALUES[attacker.index()];
++    let mut marks = [[0u8; 64]; 2];
++    let mut raw_score = 0i64;
++    let mut relation_queries = 0;
++    accumulate_kind::<1>(
++        position, influence, attacker, values, &mut marks, phase.endgame,
++        &mut raw_score, &mut relation_queries,
++    );
++    accumulate_kind::<2>(
++        position, influence, attacker, values, &mut marks, phase.endgame,
++        &mut raw_score, &mut relation_queries,
++    );
++    accumulate_kind::<3>(
++        position, influence, attacker, values, &mut marks, phase.endgame,
++        &mut raw_score, &mut relation_queries,
++    );
++    accumulate_kind::<4>(
++        position, influence, attacker, values, &mut marks, phase.endgame,
++        &mut raw_score, &mut relation_queries,
++    );
++    SideActivity {
++        piece: (276 * raw_score + 128).div_euclid(256) as i32,
++        pressure: king_pressure(position, attacker.opponent(), &marks),
++        relation_queries,
++    }
++}
++
++/// Inputs are indexed by attacker; the public pressure array is by defender.
++pub(crate) fn combine_sides(
++    sides: [SideActivity; 2],
++    material_score: i32,
++    weights: [i32; 2],
++    phase: Phase,
++) -> Activity {
++    debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
++    let pieces = [sides[0].piece, sides[1].piece];
++    Activity {
++        pieces,
++        pressure: [sides[1].pressure, sides[0].pressure],
++        weighted: weighted(pieces, material_score, weights, phase),
++        relation_queries: sides[0].relation_queries + sides[1].relation_queries,
++    }
++}
++
+@@ -788,0 +849,89 @@ mod tests {
++    #[test]
++    fn side_partitions_match_original_across_weights_and_supplied_maps() {
++        for placement in [
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R",
++            "7k/8/8/3B4/2RRQ3/3B4/8/K7",
++            "7k/8/3n4/2B5/3R4/8/8/K7",
++            "7k/8/8/8/8/8/8/K6R",
++            "7k/8/8/8/8/8/8/K7",
++        ] {
++            let pos = position(placement);
++            for map in [
++                Influence::build(&pos),
++                empty_influence(),
++                Influence { profiles: [[255; 64], [0; 64]] },
++            ] {
++                let before = pos;
++                let map_before = map;
++                // Either color may complete first. Input array ownership stays
++                // by attacker rather than completion order.
++                let black = compute_side(&pos, &map, Color::Black);
++                let white = compute_side(&pos, &map, Color::White);
++                for material in [-100_000, -256, -1, 0, 217, 100_000] {
++                    for weights in [
++                        [1024, 1024], [10_240, 8192], [17, 9173],
++                        [0, 0], [0, 10_240], [10_240, 0],
++                    ] {
++                        assert_eq!(
++                            combine_sides([white, black], material, weights, pos.phase()),
++                            compute(&pos, &map, material, weights),
++                            "{placement}, material={material}, weights={weights:?}",
++                        );
++                    }
++                }
++                assert_eq!(pos, before);
++                assert_eq!(map, map_before);
++            }
++        }
++    }
++
++    #[test]
++    fn side_partitions_map_attacker_pressure_to_opposite_defender() {
++        let pos = position("7k/8/8/8/8/8/8/K6R");
++        let map = Influence::build(&pos);
++        let white = compute_side(&pos, &map, Color::White);
++        let black = compute_side(&pos, &map, Color::Black);
++        assert!(white.pressure > 0);
++        assert_eq!((black.piece, black.pressure, black.relation_queries), (0, 0, 0));
++        let result = combine_sides([white, black], 0, [0, 0], pos.phase());
++        assert_eq!(result.pressure, [0, white.pressure]);
++        assert_eq!(result.pieces[0], white.piece);
++        assert_eq!(result.weighted, 0);
++        assert_eq!(result, compute(&pos, &map, 0, [0, 0]));
++    }
++
++    #[test]
++    fn side_partitions_preserve_group_chronology_and_fresh_call_state() {
++        let original = position(
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R",
++        );
++        let mut reordered = original;
++        for color in [Color::White, Color::Black] {
++            let mut first = 0;
++            for kind in PieceKind::ALL {
++                let end = first + reordered.counts[color.index()][kind.index()] as usize;
++                reordered.squares[color.index()][first..end].reverse();
++                first = end;
++            }
++        }
++        reordered.validate().unwrap();
++        assert_ne!(original.squares, reordered.squares);
++        let contrary = Influence { profiles: [[255; 64], [0; 64]] };
++        let mut saw_relation_work = false;
++        for pos in [original, reordered, original] {
++            for map in [Influence::build(&pos), contrary, empty_influence()] {
++                let white = compute_side(&pos, &map, Color::White);
++                // Interleave an unrelated placement/map before the other color.
++                let unrelated = position("7k/8/8/8/8/8/8/K6R");
++                let _ = compute_side(&unrelated, &contrary, Color::Black);
++                let black = compute_side(&pos, &map, Color::Black);
++                let result = combine_sides([white, black], -217, [9173, 101], pos.phase());
++                assert_eq!(result, compute(&pos, &map, -217, [9173, 101]));
++                saw_relation_work |= result.relation_queries != 0;
++                assert_eq!(compute_side(&pos, &map, Color::White), white);
++            }
++        }
++        assert!(saw_relation_work);
++    }
++
+diff --git a/src/bin/rook2.rs b/src/bin/rook2.rs
+index 1c99bcad..95dda794 100644
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -155,0 +156,5 @@ fn run() -> Result<(), Failure> {
++    if let Some(path) = std::env::var_os("ROOK2_COLORS_REPORT") {
++        let report = session.finish_colors_report().map_err(Failure::Message)?;
++        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
++        writeln!(file, "{report}")?;
++    }
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+new file mode 100644
+index 00000000..9f03a5aa
+--- /dev/null
++++ b/src/colors_worker.rs
+@@ -0,0 +1,1044 @@
++//! Two color-owned Activity -> opposite-Shelter readers for confirmed FULL calls.
++//!
++//! One reusable owned packet is immutable until both readers finish or exit.
++//! Each reader copies it under Slots, releases the shared read, and runs its
++//! kernels on that local copy without a mutex. Successful FULL calls allocate
++//! neither storage nor threads. The two copies and all publication/join costs
++//! are part of this transport. Affinity is inherited from the creating thread.
++//! Lexical active scopes permit spinning; their final close drains both readers
++//! and acknowledges parking. Scheduling delay never implies a wall-time abort.
++
++use crate::activity::{self, SideActivity};
++use crate::evaluator_worker::ActivityShelter;
++use crate::influence::Influence;
++use crate::position::Position;
++use crate::shelter;
++use crate::types::Color;
++use std::fmt::Write;
++use std::hint::spin_loop;
++use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
++use std::sync::{Arc, Condvar, Mutex, MutexGuard};
++use std::thread::{self, JoinHandle};
++use std::time::Instant;
++
++const STARTING: u8 = 0;
++const IDLE: u8 = 1;
++const REQUESTED: u8 = 2;
++const COMPLETE: u8 = 3;
++const FAILED: u8 = 4;
++const STOPPED: u8 = 5;
++const PARKED: u8 = 6;
++const COMPLETION_SPINS: usize = 4096;
++const SAMPLE_STRIDE: u64 = 512;
++
++/// A token is valid only for its dispatch. Unsampled owner-ready calls need no
++/// clock or lock. Sampling starts at dispatch 512, then 1024, and so on.
++#[derive(Clone, Copy)]
++pub(crate) struct DispatchToken {
++    generation: u64,
++    sampled: bool,
++}
++
++#[derive(Clone, Copy)]
++struct Packet {
++    generation: u64,
++    position: Position,
++    influence: Influence,
++    material: i32,
++    mobility_weights: [i32; 2],
++    shelter_weights: [i32; 2],
++    published: Option<Instant>,
++}
++
++#[derive(Clone, Copy)]
++struct SideOutput {
++    generation: u64,
++    activity: SideActivity,
++    opposite_shelter: i32,
++    ready_ns: u64,
++    kernel_ns: u64,
++    copy_ns: u64,
++}
++
++struct Reader {
++    state: AtomicU8,
++    requested_generation: AtomicU64,
++    released_generation: AtomicU64,
++    completed_generation: AtomicU64,
++    failed_generation: AtomicU64,
++}
++
++impl Reader {
++    fn new() -> Self {
++        Self {
++            state: AtomicU8::new(STARTING),
++            requested_generation: AtomicU64::new(0),
++            released_generation: AtomicU64::new(0),
++            completed_generation: AtomicU64::new(0),
++            failed_generation: AtomicU64::new(0),
++        }
++    }
++}
++
++#[derive(Default)]
++struct Slots {
++    packet: Option<Packet>,
++    outputs: [Option<SideOutput>; 2],
++    failures: [Option<String>; 2],
++    owner_ready_ns: Option<u64>,
++    completion_waiting: bool,
++    readiness: Readiness,
++}
++
++struct Shared {
++    readers: [Reader; 2],
++    stop: AtomicBool,
++    active_scopes: AtomicUsize,
++    control: Mutex<Control>,
++    wake: Condvar,
++    slots: Mutex<Slots>,
++    completed: Condvar,
++    #[cfg(test)]
++    test_gates: [Mutex<TestGate>; 2],
++    #[cfg(test)]
++    test_wake: Condvar,
++}
++
++#[derive(Default)]
++struct Control {
++    scopes: usize,
++    parking: bool,
++}
++
++#[cfg(test)]
++#[derive(Default)]
++struct TestGate {
++    blocked: bool,
++    entered: bool,
++    fail: bool,
++}
++
++/// No caller stack borrow survives activation. The last guard waits until both
++/// readers have stopped touching this lifetime's packet and local computations.
++pub(crate) struct ColorsActiveScope {
++    shared: Arc<Shared>,
++    armed: bool,
++}
++
++impl ColorsActiveScope {
++    pub(crate) fn finish(mut self) -> Result<(), String> {
++        self.armed = false;
++        release_scope(&self.shared)
++    }
++}
++
++impl Drop for ColorsActiveScope {
++    fn drop(&mut self) {
++        if self.armed {
++            if let Err(error) = release_scope(&self.shared) {
++                if thread::panicking() {
++                    eprintln!("colors worker scope close failed during unwind: {error}");
++                } else {
++                    panic!("colors worker scope close failed: {error}");
++                }
++            }
++        }
++    }
++}
++
++pub(crate) struct ColorsWorker {
++    shared: Arc<Shared>,
++    threads: [Option<JoinHandle<()>>; 2],
++    generation: u64,
++    close_error_reported: bool,
++}
++
++impl ColorsWorker {
++    pub(crate) fn start() -> Result<Self, String> {
++        Self::start_with(run_active)
++    }
++
++    fn start_with(entry: fn(&Shared, usize) -> Result<(), String>) -> Result<Self, String> {
++        let shared = Arc::new(Shared {
++            readers: [Reader::new(), Reader::new()],
++            stop: AtomicBool::new(false),
++            active_scopes: AtomicUsize::new(0),
++            control: Mutex::new(Control::default()),
++            wake: Condvar::new(),
++            slots: Mutex::new(Slots::default()),
++            completed: Condvar::new(),
++            #[cfg(test)]
++            test_gates: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            #[cfg(test)]
++            test_wake: Condvar::new(),
++        });
++        let mut worker = Self {
++            shared,
++            threads: [None, None],
++            generation: 0,
++            close_error_reported: false,
++        };
++        for side in 0..2 {
++            let worker_shared = Arc::clone(&worker.shared);
++            let handle = thread::Builder::new()
++                .name(if side == 0 { "rook2-eval-white" } else { "rook2-eval-black" }.into())
++                .spawn(move || {
++                    let result = std::panic::catch_unwind(|| entry(&worker_shared, side));
++                    let failure = match result {
++                        Ok(Ok(())) => None,
++                        Ok(Err(error)) => Some(error),
++                        Err(_) => Some(format!("{} colors reader panicked", side_name(side))),
++                    };
++                    publish_terminal(&worker_shared, side, failure);
++                });
++            match handle {
++                Ok(handle) => worker.threads[side] = Some(handle),
++                Err(error) => {
++                    // A reader not started has no outstanding access. Mark it
++                    // terminal before joining any reader already created.
++                    publish_terminal(&worker.shared, side, Some(format!(
++                        "cannot start {} colors reader: {error}", side_name(side),
++                    )));
++                    let failure = worker.failure();
++                    let _ = worker.shutdown();
++                    return Err(failure);
++                }
++            }
++        }
++        let mut control = control_lock(&worker.shared);
++        while !all_state(&worker.shared, PARKED) && !terminal(&worker.shared) {
++            control = wait_control(&worker.shared, control);
++        }
++        let parked = all_state(&worker.shared, PARKED) && !terminal(&worker.shared);
++        drop(control);
++        if parked {
++            Ok(worker)
++        } else {
++            let failure = worker.failure();
++            let _ = worker.shutdown();
++            Err(failure)
++        }
++    }
++
++    pub(crate) fn start_active_scope(&self) -> Result<ColorsActiveScope, String> {
++        let mut control = control_lock(&self.shared);
++        while control.parking && !terminal(&self.shared) {
++            control = wait_control(&self.shared, control);
++        }
++        if terminal(&self.shared) { return Err(self.failure()); }
++        let first = control.scopes == 0;
++        control.scopes = control.scopes.checked_add(1).expect("colors scope count exhausted");
++        self.shared.active_scopes.store(control.scopes, Ordering::Release);
++        if first {
++            self.shared.wake.notify_all();
++            while !all_state(&self.shared, IDLE) && !terminal(&self.shared) {
++                control = wait_control(&self.shared, control);
++            }
++            if terminal(&self.shared) {
++                control.scopes -= 1;
++                self.shared.active_scopes.store(control.scopes, Ordering::Release);
++                drop(control);
++                return Err(self.failure());
++            }
++        }
++        drop(control);
++        Ok(ColorsActiveScope { shared: Arc::clone(&self.shared), armed: true })
++    }
++
++    /// The owning coordinator encloses this fast path in an existing outer
++    /// scope. Standalone direct evaluator calls get an owned wake/park guard.
++    pub(crate) fn start_call_scope(&self) -> Result<Option<ColorsActiveScope>, String> {
++        if self.shared.active_scopes.load(Ordering::Acquire) != 0 {
++            self.check_running()?;
++            Ok(None)
++        } else {
++            self.start_active_scope().map(Some)
++        }
++    }
++
++    pub(crate) fn dispatch(
++        &mut self,
++        position: &Position,
++        influence: &Influence,
++        material: i32,
++        mobility_weights: [i32; 2],
++        shelter_weights: [i32; 2],
++    ) -> Result<DispatchToken, String> {
++        if self.shared.active_scopes.load(Ordering::Acquire) == 0
++            || !all_state(&self.shared, IDLE) || terminal(&self.shared)
++        {
++            return Err(self.failure());
++        }
++        let generation = self.generation.checked_add(1).expect("colors generation exhausted");
++        let sampled = generation % SAMPLE_STRIDE == 0;
++        let mut slots = self.shared.slots.lock().map_err(|_| "colors slots poisoned")?;
++        if slots.packet.is_some() || slots.outputs.iter().any(Option::is_some) {
++            return Err("colors idle transport still owns a packet or output".into());
++        }
++        slots.owner_ready_ns = None;
++        slots.readiness.dispatches += 1;
++        if sampled { slots.readiness.sampled_dispatches += 1; }
++        slots.packet = Some(Packet {
++            generation, position: *position, influence: *influence, material,
++            mobility_weights, shelter_weights,
++            // Taken after the coordinator packet copy and immediately before
++            // the two REQUESTED stores, while Slots still excludes readers.
++            published: if sampled { Some(Instant::now()) } else { None },
++        });
++        for reader in &self.shared.readers {
++            reader.requested_generation.store(generation, Ordering::Relaxed);
++            reader.state.store(REQUESTED, Ordering::Release);
++        }
++        self.generation = generation;
++        Ok(DispatchToken { generation, sampled })
++    }
++
++    /// Capture the coordinator's arrival after its local terms and immediately
++    /// before complete. The timestamp precedes acquiring the observation lock.
++    pub(crate) fn owner_ready(&self, token: DispatchToken) -> Result<(), String> {
++        if !token.sampled { return Ok(()); }
++        let ready = Instant::now();
++        let mut slots = self.shared.slots.lock().map_err(|_| "colors slots poisoned")?;
++        let packet = slots.packet.as_ref().ok_or("colors owner-ready has no packet")?;
++        if packet.generation != token.generation {
++            return Err("colors owner-ready generation mismatch".into());
++        }
++        let published = packet.published.ok_or("colors sampled packet lacks publication time")?;
++        if slots.owner_ready_ns.is_some() {
++            return Err("colors owner-ready recorded twice".into());
++        }
++        slots.owner_ready_ns = Some(elapsed_ns(published, ready));
++        Ok(())
++    }
++
++    pub(crate) fn complete(&mut self) -> Result<ActivityShelter, String> {
++        let join_started = if self.generation != 0 && self.generation % SAMPLE_STRIDE == 0 {
++            Some(Instant::now())
++        } else { None };
++        let mut slots = completion_slots(&self.shared)?;
++        let packet = slots.packet.as_ref().copied().ok_or("colors completed without a packet")?;
++        let white = slots.outputs[0].as_ref().copied().ok_or("white colors reader has no output")?;
++        let black = slots.outputs[1].as_ref().copied().ok_or("black colors reader has no output")?;
++        if packet.generation != white.generation || packet.generation != black.generation {
++            return Err("colors completion generation mismatch".into());
++        }
++        for reader in &self.shared.readers {
++            if reader.completed_generation.load(Ordering::Acquire) != packet.generation
++                || reader.released_generation.load(Ordering::Acquire) != packet.generation
++            {
++                return Err("colors completion before both reader releases".into());
++            }
++        }
++        if packet.published.is_some() {
++            let join_ns = join_started.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
++            let owner = slots.owner_ready_ns;
++            slots.readiness.record_complete(white, black, owner, join_ns);
++        }
++        slots.packet = None;
++        slots.outputs = [None, None];
++        slots.owner_ready_ns = None;
++        for reader in &self.shared.readers { reader.state.store(IDLE, Ordering::Release); }
++        drop(slots);
++        // Only the coordinator performs the original cross-color composition.
++        Ok(ActivityShelter {
++            activity: activity::combine_sides(
++                [white.activity, black.activity], packet.material,
++                packet.mobility_weights, packet.position.phase(),
++            ),
++            shelter: shelter::combine_sides(
++                [black.opposite_shelter, white.opposite_shelter],
++                packet.material, packet.shelter_weights,
++            ),
++        })
++    }
++
++    pub(crate) fn check_running(&self) -> Result<(), String> {
++        if terminal(&self.shared) { Err(self.failure()) } else { Ok(()) }
++    }
++
++    fn failure(&self) -> String {
++        failure_in(&self.shared.slots.lock().unwrap_or_else(|error| error.into_inner()))
++    }
++
++    /// Report only after shutdown for a complete partition of sampled calls.
++    /// Histograms retain every completed observation in fixed-size storage.
++    pub(crate) fn readiness_report(&self) -> String {
++        self.shared.slots.lock().unwrap_or_else(|error| error.into_inner())
++            .readiness.json()
++    }
++
++    pub(crate) fn shutdown(&mut self) -> Result<(), String> {
++        if self.threads.iter().all(Option::is_none) {
++            if has_failure(&self.shared) {
++                self.close_error_reported = true;
++                return Err(self.failure());
++            }
++            return Ok(());
++        }
++        {
++            let mut control = control_lock(&self.shared);
++            self.shared.stop.store(true, Ordering::Release);
++            self.shared.active_scopes.store(0, Ordering::Release);
++            control.scopes = 0;
++            control.parking = false;
++            self.shared.wake.notify_all();
++        }
++        // Hold neither mutex while joining. Even a delayed reader owns its
++        // packet/local computation until it actually exits, without a timeout.
++        for side in 0..2 {
++            if let Some(handle) = self.threads[side].take() {
++                if handle.join().is_err() {
++                    publish_terminal(&self.shared, side, Some(format!(
++                        "{} colors reader exited with an uncaught panic", side_name(side),
++                    )));
++                }
++            }
++        }
++        {
++            let mut slots = self.shared.slots.lock().unwrap_or_else(|error| error.into_inner());
++            discard_packet(&mut slots);
++        }
++        if has_failure(&self.shared) {
++            self.close_error_reported = true;
++            return Err(self.failure());
++        }
++        Ok(())
++    }
++
++    #[cfg(test)]
++    pub(crate) fn is_parked(&self) -> bool {
++        all_state(&self.shared, PARKED)
++            && self.shared.active_scopes.load(Ordering::Acquire) == 0
++    }
++}
++
++impl Drop for ColorsWorker {
++    fn drop(&mut self) {
++        let reported = self.close_error_reported;
++        if let Err(error) = self.shutdown() {
++            if reported { return; }
++            if thread::panicking() {
++                eprintln!("colors worker shutdown failed during unwind: {error}");
++            } else {
++                panic!("colors worker shutdown failed: {error}");
++            }
++        }
++    }
++}
++
++fn run_active(shared: &Shared, side: usize) -> Result<(), String> {
++    park(shared, side)?;
++    let reader = &shared.readers[side];
++    while !terminal(shared) {
++        if reader.state.load(Ordering::Acquire) != REQUESTED {
++            if shared.active_scopes.load(Ordering::Acquire) == 0 {
++                park(shared, side)?;
++                continue;
++            }
++            spin_loop();
++            continue;
++        }
++        let generation = reader.requested_generation.load(Ordering::Acquire);
++        let copy_started = if generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
++        #[cfg(test)]
++        test_gate(shared, side)?;
++        let packet = {
++            let slots = shared.slots.lock().map_err(|_| "colors slots poisoned")?;
++            let packet = slots.packet.as_ref().copied().ok_or("colors request has no packet")?;
++            if packet.generation != generation { return Err("colors request generation mismatch".into()); }
++            packet
++        };
++        // No shared packet reference escapes its lock. The coordinator retains
++        // the immutable owned packet until both completions or terminal joins.
++        reader.released_generation.store(generation, Ordering::Release);
++        let kernel_started = packet.published.map(|_| Instant::now());
++        let copy_ns = match (copy_started, kernel_started) {
++            (Some(start), Some(end)) => elapsed_ns(start, end),
++            _ => 0,
++        };
++        let color = if side == 0 { Color::White } else { Color::Black };
++        let activity = activity::compute_side(&packet.position, &packet.influence, color);
++        let opposite_shelter = shelter::compute_side(
++            &packet.position, &packet.influence, color.opponent(), activity.pressure,
++        );
++        let kernel_ns = kernel_started.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
++        let notify = {
++            let mut slots = shared.slots.lock().map_err(|_| "colors slots poisoned")?;
++            if slots.packet.as_ref().map(|packet| packet.generation) != Some(generation) {
++                return Err("colors packet reused before reader completion".into());
++            }
++            // This readiness boundary includes input-lock/copy and output-lock
++            // delays, and sits immediately before COMPLETE release publication.
++            let ready_ns = packet.published.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
++            slots.outputs[side] = Some(SideOutput {
++                generation, activity, opposite_shelter, ready_ns, kernel_ns, copy_ns,
++            });
++            reader.completed_generation.store(generation, Ordering::Relaxed);
++            reader.state.store(COMPLETE, Ordering::Release);
++            slots.completion_waiting
++        };
++        if notify { shared.completed.notify_all(); }
++    }
++    Ok(())
++}
++
++fn side_name(side: usize) -> &'static str { if side == 0 { "white" } else { "black" } }
++
++fn all_state(shared: &Shared, state: u8) -> bool {
++    shared.readers.iter().all(|reader| reader.state.load(Ordering::Acquire) == state)
++}
++
++fn all_terminal(shared: &Shared) -> bool {
++    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
++}
++
++fn has_failure(shared: &Shared) -> bool {
++    shared.readers.iter().any(|reader| reader.state.load(Ordering::Acquire) == FAILED)
++}
++
++fn terminal(shared: &Shared) -> bool {
++    shared.stop.load(Ordering::Acquire)
++        || shared.readers.iter().any(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
++}
++
++fn failure_in(slots: &Slots) -> String {
++    slots.failures.iter().find_map(Clone::clone)
++        .unwrap_or_else(|| "colors worker entered an invalid or stopped state".into())
++}
++
++fn control_lock(shared: &Shared) -> MutexGuard<'_, Control> {
++    shared.control.lock().unwrap_or_else(|error| error.into_inner())
++}
++
++/// No Slots holder may acquire Control. All terminal/lifecycle transitions use
++/// Control -> Slots, matching the proven single-reader transport's lock order.
++fn completion_slots(shared: &Shared) -> Result<MutexGuard<'_, Slots>, String> {
++    for _ in 0..COMPLETION_SPINS {
++        if all_state(shared, COMPLETE) || terminal(shared) { break; }
++        // An idle/parked transport has no future completion to wait for.
++        if !shared.readers.iter().any(|reader| reader.state.load(Ordering::Acquire) == REQUESTED) {
++            break;
++        }
++        spin_loop();
++    }
++    let mut slots = shared.slots.lock().map_err(|_| "colors slots poisoned")?;
++    while !all_state(shared, COMPLETE) && !terminal(shared)
++        && shared.readers.iter().any(|reader| reader.state.load(Ordering::Acquire) == REQUESTED)
++    {
++        slots.completion_waiting = true;
++        slots = shared.completed.wait(slots).map_err(|_| "colors slots poisoned")?;
++    }
++    slots.completion_waiting = false;
++    if !all_state(shared, COMPLETE) || terminal(shared) { return Err(failure_in(&slots)); }
++    Ok(slots)
++}
++
++fn publish_terminal(shared: &Shared, side: usize, failure: Option<String>) {
++    let mut control = control_lock(shared);
++    let mut slots = shared.slots.lock().unwrap_or_else(|error| error.into_inner());
++    let reader = &shared.readers[side];
++    if let Some(error) = failure {
++        slots.failures[side] = Some(error);
++        reader.failed_generation.store(reader.requested_generation.load(Ordering::Acquire), Ordering::Relaxed);
++        reader.state.store(FAILED, Ordering::Release);
++    } else if reader.state.load(Ordering::Acquire) != FAILED {
++        reader.state.store(STOPPED, Ordering::Release);
++    }
++    // A normal unexpected exit also stops its sibling. Neither outcome frees
++    // packet storage; only both parked acknowledgments or shutdown's joins do.
++    shared.stop.store(true, Ordering::Release);
++    if all_terminal(shared) { control.parking = false; }
++    shared.completed.notify_all();
++    shared.wake.notify_all();
++}
++
++fn release_scope(shared: &Shared) -> Result<(), String> {
++    let mut control = control_lock(shared);
++    // Shutdown has already assumed ownership and joined, or is joining, both
++    // readers. A guard outliving that owner must not underflow the scope count.
++    if shared.stop.load(Ordering::Acquire) && control.scopes == 0 { return Ok(()); }
++    assert!(control.scopes != 0, "colors scope released twice");
++    control.scopes -= 1;
++    shared.active_scopes.store(control.scopes, Ordering::Release);
++    if control.scopes != 0 { return Ok(()); }
++    control.parking = true;
++    while !all_state(shared, PARKED) && !all_terminal(shared) {
++        control = wait_control(shared, control);
++    }
++    control.parking = false;
++    if all_terminal(shared) {
++        return Err(failure_in(&shared.slots.lock().unwrap_or_else(|error| error.into_inner())));
++    }
++    Ok(())
++}
++
++fn discard_packet(slots: &mut Slots) {
++    if slots.packet.as_ref().is_some_and(|packet| packet.published.is_some()) {
++        if slots.failures.iter().any(Option::is_some) {
++            slots.readiness.failed_samples += 1;
++        } else {
++            slots.readiness.discarded_samples += 1;
++        }
++    }
++    slots.packet = None;
++    slots.outputs = [None, None];
++    slots.owner_ready_ns = None;
++}
++
++/// The second parked acknowledgment clears a discarded packet. Activation
++/// cannot pass the parking predicate until both local kernels have ended.
++fn park(shared: &Shared, side: usize) -> Result<(), String> {
++    let mut control = control_lock(shared);
++    if control.scopes != 0 { return Ok(()); }
++    shared.readers[side].state.store(PARKED, Ordering::Release);
++    if all_state(shared, PARKED) {
++        let mut slots = shared.slots.lock().map_err(|_| "colors slots poisoned while parking")?;
++        discard_packet(&mut slots);
++        control.parking = false;
++    }
++    shared.wake.notify_all();
++    while control.scopes == 0 && !terminal(shared) {
++        control = wait_control(shared, control);
++    }
++    if !terminal(shared) {
++        shared.readers[side].state.store(IDLE, Ordering::Release);
++        shared.wake.notify_all();
++    }
++    Ok(())
++}
++
++fn wait_control<'a>(shared: &'a Shared, control: MutexGuard<'a, Control>) -> MutexGuard<'a, Control> {
++    shared.wake.wait(control).unwrap_or_else(|error| error.into_inner())
++}
++
++fn duration_ns(duration: std::time::Duration) -> u64 {
++    duration.as_nanos().min(u64::MAX as u128) as u64
++}
++
++fn elapsed_ns(start: Instant, end: Instant) -> u64 { duration_ns(end.duration_since(start)) }
++
++/// Fixed-size sparse observations. Each bucket is zero for duration 0, or the
++/// positive duration's bit length capped at 63 (1ns -> 1, 2..3ns -> 2, ...).
++struct Metric {
++    count: u64,
++    sum_ns: u128,
++    min_ns: u64,
++    max_ns: u64,
++    log2_ns: [u64; 64],
++}
++
++impl Default for Metric {
++    fn default() -> Self {
++        Self { count: 0, sum_ns: 0, min_ns: 0, max_ns: 0, log2_ns: [0; 64] }
++    }
++}
++
++impl Metric {
++    fn record(&mut self, ns: u64) {
++        if self.count == 0 { self.min_ns = ns; } else { self.min_ns = self.min_ns.min(ns); }
++        self.max_ns = self.max_ns.max(ns);
++        self.count += 1;
++        self.sum_ns += ns as u128;
++        let bucket = if ns == 0 { 0 } else { (64 - ns.leading_zeros() as usize).min(63) };
++        self.log2_ns[bucket] += 1;
++    }
++
++    fn write_json(&self, output: &mut String) {
++        write!(output, "{{\"count\":{},\"sum_ns\":{},\"min_ns\":{},\"max_ns\":{},\"log2_ns\":[",
++            self.count, self.sum_ns, self.min_ns, self.max_ns).unwrap();
++        for (index, count) in self.log2_ns.iter().enumerate() {
++            if index != 0 { output.push(','); }
++            write!(output, "{count}").unwrap();
++        }
++        output.push_str("]}");
++    }
++}
++
++#[derive(Default)]
++struct Readiness {
++    dispatches: u64,
++    sampled_dispatches: u64,
++    completed_samples: u64,
++    discarded_samples: u64,
++    failed_samples: u64,
++    owner_missing_samples: u64,
++    paired_samples: u64,
++    owner_ready_at_or_after_both: u64,
++    sides_after_owner: u64,
++    white_last: u64,
++    black_last: u64,
++    sides_tied: u64,
++    white_ready: Metric,
++    black_ready: Metric,
++    owner_ready: Metric,
++    white_kernel: Metric,
++    black_kernel: Metric,
++    white_copy: Metric,
++    black_copy: Metric,
++    join_wait: Metric,
++    owner_after_sides: Metric,
++    reader_imbalance: Metric,
++    join_elapsed: Metric,
++}
++
++impl Readiness {
++    fn record_complete(&mut self, white: SideOutput, black: SideOutput, owner: Option<u64>, join_ns: u64) {
++        self.completed_samples += 1;
++        self.white_ready.record(white.ready_ns);
++        self.black_ready.record(black.ready_ns);
++        self.white_kernel.record(white.kernel_ns);
++        self.black_kernel.record(black.kernel_ns);
++        self.white_copy.record(white.copy_ns);
++        self.black_copy.record(black.copy_ns);
++        self.reader_imbalance.record(white.ready_ns.abs_diff(black.ready_ns));
++        self.join_elapsed.record(join_ns);
++        if let Some(owner) = owner {
++            self.paired_samples += 1;
++            self.owner_ready.record(owner);
++            let latest = white.ready_ns.max(black.ready_ns);
++            if owner >= latest { self.owner_ready_at_or_after_both += 1; } else { self.sides_after_owner += 1; }
++            if white.ready_ns > black.ready_ns { self.white_last += 1; }
++            else if black.ready_ns > white.ready_ns { self.black_last += 1; }
++            else { self.sides_tied += 1; }
++            self.join_wait.record(latest.saturating_sub(owner));
++            self.owner_after_sides.record(owner.saturating_sub(latest));
++        } else { self.owner_missing_samples += 1; }
++    }
++
++    fn json(&self) -> String {
++        let mut output = String::new();
++        write!(output, "{{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":true,\"sample_stride\":{SAMPLE_STRIDE},\"storage\":\"fixed_log2_histograms\",\"histogram_bucket_rule\":\"zero_else_bit_length_capped_63\",\"samples_capped\":0,\"dispatches\":{},\"sampled_dispatches\":{},\"completed_samples\":{},\"discarded_samples\":{},\"failed_samples\":{},\"owner_missing_samples\":{},\"paired_samples\":{},\"owner_ready_at_or_after_both\":{},\"sides_after_owner\":{},\"white_last\":{},\"black_last\":{},\"sides_tied\":{},\"metrics\":{{",
++            self.dispatches, self.sampled_dispatches, self.completed_samples, self.discarded_samples,
++            self.failed_samples, self.owner_missing_samples, self.paired_samples,
++            self.owner_ready_at_or_after_both, self.sides_after_owner, self.white_last,
++            self.black_last, self.sides_tied).unwrap();
++        let metrics = [
++            ("white_ready", &self.white_ready), ("black_ready", &self.black_ready),
++            ("owner_ready", &self.owner_ready), ("white_kernel", &self.white_kernel),
++            ("black_kernel", &self.black_kernel), ("white_copy", &self.white_copy),
++            ("black_copy", &self.black_copy), ("join_wait", &self.join_wait),
++            ("owner_after_sides", &self.owner_after_sides), ("reader_imbalance", &self.reader_imbalance),
++            ("join_elapsed", &self.join_elapsed),
++        ];
++        for (index, (name, metric)) in metrics.iter().enumerate() {
++            if index != 0 { output.push(','); }
++            write!(output, "\"{name}\":").unwrap();
++            metric.write_json(&mut output);
++        }
++        output.push_str("}}");
++        output
++    }
++}
++
++#[cfg(test)]
++fn test_gate(shared: &Shared, side: usize) -> Result<(), String> {
++    let mut gate = shared.test_gates[side].lock().unwrap();
++    gate.entered = true;
++    shared.test_wake.notify_all();
++    while gate.blocked { gate = shared.test_wake.wait(gate).unwrap(); }
++    if gate.fail { Err(format!("controlled {} colors reader failure", side_name(side))) } else { Ok(()) }
++}
++
++#[cfg(test)]
++mod lifecycle_tests {
++    use super::*;
++    use std::sync::mpsc;
++
++    fn packet() -> Packet {
++        let position = Position::from_fen(
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R w KQkq - 0 1",
++        ).unwrap();
++        Packet {
++            generation: 0, position, influence: Influence::build(&position), material: 193,
++            mobility_weights: [2017, 633], shelter_weights: [997, 3101], published: None,
++        }
++    }
++
++    fn dispatch(worker: &mut ColorsWorker, packet: &Packet) -> DispatchToken {
++        worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).unwrap()
++    }
++
++    fn assert_output(actual: ActivityShelter, packet: &Packet) {
++        let expected = crate::evaluator_worker::compute(
++            &packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights,
++        );
++        assert_eq!(actual.activity, expected.activity);
++        assert_eq!(actual.shelter, expected.shelter);
++    }
++
++    fn block(shared: &Shared, side: usize) {
++        let mut gate = shared.test_gates[side].lock().unwrap();
++        gate.blocked = true;
++        gate.entered = false;
++        gate.fail = false;
++    }
++
++    fn entered(shared: &Shared, side: usize) {
++        let mut gate = shared.test_gates[side].lock().unwrap();
++        while !gate.entered { gate = shared.test_wake.wait(gate).unwrap(); }
++    }
++
++    fn release(shared: &Shared, side: usize, fail: bool) {
++        let mut gate = shared.test_gates[side].lock().unwrap();
++        gate.blocked = false;
++        gate.fail = fail;
++        shared.test_wake.notify_all();
++    }
++
++    fn wait_state(shared: &Shared, side: usize, state: u8) {
++        while shared.readers[side].state.load(Ordering::Acquire) != state { thread::yield_now(); }
++    }
++
++    #[test]
++    fn colors_startup_standalone_nested_scopes_and_reuse() {
++        let mut worker = ColorsWorker::start().unwrap();
++        assert!(worker.is_parked());
++        let packet = packet();
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        for _ in 0..3 {
++            let outer = worker.start_active_scope().unwrap();
++            let inner = worker.start_active_scope().unwrap();
++            assert!(worker.start_call_scope().unwrap().is_none());
++            inner.finish().unwrap();
++            let token = dispatch(&mut worker, &packet);
++            worker.owner_ready(token).unwrap();
++            assert_output(worker.complete().unwrap(), &packet);
++            outer.finish().unwrap();
++            assert!(worker.is_parked());
++            let slots = worker.shared.slots.lock().unwrap();
++            assert!(slots.packet.is_none() && slots.outputs.iter().all(Option::is_none));
++        }
++        let call = worker.start_call_scope().unwrap().unwrap();
++        dispatch(&mut worker, &packet);
++        assert_output(worker.complete().unwrap(), &packet);
++        call.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_delayed_each_reader_retains_packet_and_completion_predicate() {
++        for delayed in 0..2 {
++            let mut worker = ColorsWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            block(&worker.shared, delayed);
++            let token = dispatch(&mut worker, &packet);
++            entered(&worker.shared, delayed);
++            wait_state(&worker.shared, 1 - delayed, COMPLETE);
++            let shared = Arc::clone(&worker.shared);
++            let (sent, received) = mpsc::channel();
++            let waiter = thread::spawn(move || {
++                let slots = completion_slots(&shared).unwrap();
++                assert!(slots.outputs.iter().all(Option::is_some));
++                sent.send(()).unwrap();
++            });
++            while !worker.shared.slots.lock().unwrap().completion_waiting { thread::yield_now(); }
++            {
++                let slots = worker.shared.slots.lock().unwrap();
++                assert_eq!(slots.packet.as_ref().unwrap().generation, token.generation);
++                assert!(slots.outputs[delayed].is_none());
++            }
++            assert!(received.try_recv().is_err());
++            assert_eq!(worker.shared.readers[delayed].released_generation.load(Ordering::Acquire), 0);
++            release(&worker.shared, delayed, false);
++            waiter.join().unwrap();
++            // Already published completions must not require a future notify.
++            assert_output(worker.complete().unwrap(), &packet);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_discard_close_waits_for_both_readers_before_packet_reuse() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        for side in 0..2 { block(&worker.shared, side); }
++        let token = dispatch(&mut worker, &packet);
++        for side in 0..2 { entered(&worker.shared, side); }
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { scope.finish().unwrap(); sent.send(()).unwrap(); });
++        while !worker.shared.control.lock().unwrap().parking { thread::yield_now(); }
++        release(&worker.shared, 0, false);
++        wait_state(&worker.shared, 0, PARKED);
++        assert!(received.try_recv().is_err());
++        assert_eq!(worker.shared.slots.lock().unwrap().packet.as_ref().unwrap().generation, token.generation);
++        release(&worker.shared, 1, false);
++        close.join().unwrap();
++        assert!(worker.is_parked());
++        assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++        let next = worker.start_active_scope().unwrap();
++        assert!(worker.complete().is_err());
++        let new = dispatch(&mut worker, &packet);
++        assert_eq!(new.generation, token.generation + 1);
++        assert_output(worker.complete().unwrap(), &packet);
++        next.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_reader_failure_notifies_completion_and_drains_sibling() {
++        for failing in 0..2 {
++            let mut worker = ColorsWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            for side in 0..2 { block(&worker.shared, side); }
++            let token = dispatch(&mut worker, &packet);
++            for side in 0..2 { entered(&worker.shared, side); }
++            let shared = Arc::clone(&worker.shared);
++            let waiter = thread::spawn(move || completion_slots(&shared).is_err());
++            while !worker.shared.slots.lock().unwrap().completion_waiting { thread::yield_now(); }
++            release(&worker.shared, failing, true);
++            assert!(waiter.join().unwrap());
++            assert_eq!(worker.shared.readers[failing].failed_generation.load(Ordering::Acquire), token.generation);
++            assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++                packet.mobility_weights, packet.shelter_weights).is_err());
++            let (sent, received) = mpsc::channel();
++            let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++            while !worker.shared.control.lock().unwrap().parking { thread::yield_now(); }
++            assert!(received.try_recv().is_err());
++            release(&worker.shared, 1 - failing, false);
++            close.join().unwrap();
++            assert!(received.recv().unwrap().is_err());
++            let failure = worker.shutdown().unwrap_err();
++            assert_eq!(worker.shutdown().unwrap_err(), failure);
++            assert!(worker.check_running().is_err());
++            assert!(worker.threads.iter().all(Option::is_none));
++            assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++        }
++    }
++
++    #[test]
++    fn colors_shutdown_joins_both_delayed_readers_and_outliving_guard() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block(&worker.shared, side); }
++        dispatch(&mut worker, &packet());
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let (sent, received) = mpsc::channel();
++        let shutdown = thread::spawn(move || {
++            worker.shutdown().unwrap();
++            sent.send(()).unwrap();
++            worker
++        });
++        while !shared.stop.load(Ordering::Acquire) { thread::yield_now(); }
++        release(&shared, 0, false);
++        wait_state(&shared, 0, STOPPED);
++        assert!(received.try_recv().is_err());
++        assert!(shared.slots.lock().unwrap().packet.is_some());
++        release(&shared, 1, false);
++        let worker = shutdown.join().unwrap();
++        assert!(worker.threads.iter().all(Option::is_none));
++        assert!(all_terminal(&shared));
++        assert!(shared.slots.lock().unwrap().packet.is_none());
++        scope.finish().unwrap();
++    }
++
++    #[test]
++    fn colors_normal_terminal_stop_notifies_blocked_completion_and_drains_other_reader() {
++        fn stop_one_after_request(shared: &Shared, side: usize) -> Result<(), String> {
++            if side == 1 { return run_active(shared, side); }
++            park(shared, side)?;
++            while shared.readers[side].state.load(Ordering::Acquire) != REQUESTED {
++                if terminal(shared) { return Ok(()); }
++                spin_loop();
++            }
++            // This reader deliberately exits without publishing a completion.
++            // Only its terminal notification can release the blocked waiter.
++            test_gate(shared, side)
++        }
++        let mut worker = ColorsWorker::start_with(stop_one_after_request).unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block(&worker.shared, side); }
++        dispatch(&mut worker, &packet());
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || completion_slots(&shared).is_err());
++        while !worker.shared.slots.lock().unwrap().completion_waiting { thread::yield_now(); }
++        release(&worker.shared, 0, false);
++        assert!(waiter.join().unwrap());
++        assert_eq!(worker.shared.readers[0].state.load(Ordering::Acquire), STOPPED);
++        release(&worker.shared, 1, false);
++        assert!(scope.finish().is_err());
++        worker.shutdown().unwrap();
++        assert!(all_terminal(&worker.shared));
++        assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++    }
++
++    #[test]
++    fn colors_scope_unwind_drains_and_parks_both() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++            let _scope = worker.start_active_scope().unwrap();
++            dispatch(&mut worker, &packet());
++            panic!("intentional colors scope unwind");
++        }));
++        assert!(unwound.is_err());
++        assert!(worker.is_parked());
++        assert!(worker.shared.slots.lock().unwrap().packet.is_none());
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_startup_failure_or_early_stop_joins_both() {
++        fn fail(_shared: &Shared, _side: usize) -> Result<(), String> { Err("controlled colors startup failure".into()) }
++        fn stop(_shared: &Shared, _side: usize) -> Result<(), String> { Ok(()) }
++        assert_eq!(ColorsWorker::start_with(fail).err().unwrap(), "controlled colors startup failure");
++        assert!(ColorsWorker::start_with(stop).is_err());
++    }
++
++    #[test]
++    fn colors_sparse_counts_partition_completed_discarded_and_failed_samples() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let packet = packet();
++        let scope = worker.start_active_scope().unwrap();
++        for generation in 1..=SAMPLE_STRIDE {
++            let token = dispatch(&mut worker, &packet);
++            assert_eq!(token.sampled, generation == SAMPLE_STRIDE);
++            worker.owner_ready(token).unwrap();
++            assert_output(worker.complete().unwrap(), &packet);
++        }
++        worker.generation = 2 * SAMPLE_STRIDE - 1;
++        dispatch(&mut worker, &packet);
++        scope.finish().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        worker.generation = 3 * SAMPLE_STRIDE - 1;
++        block(&worker.shared, 0);
++        dispatch(&mut worker, &packet);
++        entered(&worker.shared, 0);
++        release(&worker.shared, 0, true);
++        assert!(worker.complete().is_err());
++        assert!(scope.finish().is_err());
++        assert!(worker.shutdown().is_err());
++        let slots = worker.shared.slots.lock().unwrap();
++        let stats = &slots.readiness;
++        assert_eq!(stats.dispatches, SAMPLE_STRIDE + 2);
++        assert_eq!(stats.sampled_dispatches, 3);
++        assert_eq!(stats.completed_samples, 1);
++        assert_eq!(stats.discarded_samples, 1);
++        assert_eq!(stats.failed_samples, 1);
++        assert_eq!(stats.paired_samples, 1);
++        assert_eq!(stats.owner_missing_samples, 0);
++        assert_eq!(stats.white_ready.log2_ns.iter().sum::<u64>(), 1);
++        assert_eq!(stats.join_elapsed.count, 1);
++    }
++
++    #[test]
++    fn colors_histogram_zero_and_positive_bucket_boundaries() {
++        let mut metric = Metric::default();
++        for ns in [0, 1, 2, 3, 4, u64::MAX] { metric.record(ns); }
++        assert_eq!(metric.count, 6);
++        assert_eq!(metric.min_ns, 0);
++        assert_eq!(metric.max_ns, u64::MAX);
++        assert_eq!(metric.log2_ns[0], 1);
++        assert_eq!(metric.log2_ns[1], 1);
++        assert_eq!(metric.log2_ns[2], 2);
++        assert_eq!(metric.log2_ns[3], 1);
++        assert_eq!(metric.log2_ns[63], 1);
++    }
++}
+diff --git a/src/engine.rs b/src/engine.rs
+index fd3bb5e0..eff45d16 100644
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -143 +143 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
+-    /// Positive total request; the implemented capacity is at most two.
++    /// Positive total request; the research capacity is at most three.
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+index 0e18f028..3e9a2201 100644
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -271,0 +272,5 @@ pub struct FastDetails {
++pub(crate) enum FullWorkerScope {
++    Current(crate::evaluator_worker::ActiveScope),
++    Colors(crate::colors_worker::ColorsActiveScope),
++}
++
+@@ -280,0 +286 @@ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
++    colors_worker: Option<crate::colors_worker::ColorsWorker>,
+@@ -292 +298 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-            self.full_worker.is_none(),
++            self.full_worker.is_none() && self.colors_worker.is_none(),
+@@ -303,0 +310 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
++            colors_worker: None,
+@@ -336,0 +344 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
++            colors_worker: None,
+@@ -346 +354 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-    /// is min(requested, 2). Later external placement does not change this cap.
++    /// is min(requested, permitted, 3). Later placement does not change this cap.
+@@ -366 +374 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-                _ => requested.min(2),
++                available => requested.min(available).min(3),
+@@ -372,0 +381,2 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
++        // Start the new numerical owner before retiring the old one. A startup
++        // failure leaves the current mode/cache intact; no pawn state moves.
+@@ -375,3 +385,2 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-                if let Some(worker) = self.full_worker.as_mut() {
+-                    worker.shutdown()?;
+-                }
++                if let Some(worker) = self.full_worker.as_mut() { worker.shutdown()?; }
++                if let Some(worker) = self.colors_worker.as_mut() { worker.shutdown()?; }
+@@ -378,0 +388 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
++                self.colors_worker = None;
+@@ -381 +391 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-                if let Some(worker) = self.full_worker.as_ref() {
++                let replacement = if let Some(worker) = self.full_worker.as_ref() {
+@@ -383,3 +393,14 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-                } else {
+-                    self.full_worker = Some(ActivityShelterWorker::start()?);
+-                }
++                    None
++                } else { Some(ActivityShelterWorker::start()?) };
++                if let Some(worker) = self.colors_worker.as_mut() { worker.shutdown()?; }
++                self.colors_worker = None;
++                if let Some(worker) = replacement { self.full_worker = Some(worker); }
++            }
++            3 => {
++                let replacement = if let Some(worker) = self.colors_worker.as_ref() {
++                    worker.check_running()?;
++                    None
++                } else { Some(crate::colors_worker::ColorsWorker::start()?) };
++                if let Some(worker) = self.full_worker.as_mut() { worker.shutdown()?; }
++                self.full_worker = None;
++                if let Some(worker) = replacement { self.colors_worker = Some(worker); }
+@@ -397 +418 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-        if self.full_worker.is_some() { 2 } else { 1 }
++        if self.colors_worker.is_some() { 3 } else if self.full_worker.is_some() { 2 } else { 1 }
+@@ -413 +434 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-        if self.full_worker.is_some() {return Err("child preparation requires inline FULL mode".into());}
++        if self.full_worker.is_some() || self.colors_worker.is_some() {return Err("child preparation requires inline FULL mode".into());}
+@@ -447,3 +468,8 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-    pub(crate) fn full_worker_scope(&self) -> Option<crate::evaluator_worker::ActiveScope> {
+-        self.full_worker.as_ref().map(|worker| worker.start_active_scope()
+-            .unwrap_or_else(|error|panic!("FULL worker activation failed: {error}")))
++    pub(crate) fn full_worker_scope(&self) -> Option<FullWorkerScope> {
++        if let Some(worker) = self.colors_worker.as_ref() {
++            Some(FullWorkerScope::Colors(worker.start_active_scope()
++                .unwrap_or_else(|error|panic!("colors worker activation failed: {error}"))))
++        } else {
++            self.full_worker.as_ref().map(|worker| FullWorkerScope::Current(worker.start_active_scope()
++                .unwrap_or_else(|error|panic!("FULL worker activation failed: {error}"))))
++        }
+@@ -453,3 +479,18 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-    pub(crate) fn finish_full_worker_scope(scope: Option<crate::evaluator_worker::ActiveScope>) {
+-        if let Some(scope) = scope {
+-            scope.finish().unwrap_or_else(|error|panic!("FULL worker scope closure failed: {error}"));
++    pub(crate) fn finish_full_worker_scope(scope: Option<FullWorkerScope>) {
++        let result = match scope {
++            Some(FullWorkerScope::Current(scope)) => scope.finish(),
++            Some(FullWorkerScope::Colors(scope)) => scope.finish(),
++            None => Ok(()),
++        };
++        result.unwrap_or_else(|error|panic!("FULL worker scope closure failed: {error}"));
++    }
++
++    /// Research-only reporting after joined shutdown; no protocol output inside
++    /// search and no numerical/statistical reset when a report is requested.
++    pub fn finish_colors_report(&mut self) -> Result<String, String> {
++        if let Some(worker) = self.colors_worker.as_mut() {
++            worker.shutdown()?;
++            Ok(worker.readiness_report())
++        } else {
++            if let Some(worker) = self.full_worker.as_mut() { worker.shutdown()?; }
++            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".into())
+@@ -566,2 +607,11 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-        let call_scope = self.full_worker.as_ref().and_then(|worker|worker.start_call_scope()
+-            .unwrap_or_else(|error|panic!("FULL worker call activation failed: {error}")));
++        let call_scope = if let Some(worker) = self.colors_worker.as_ref() {
++            worker.start_call_scope().unwrap_or_else(|error|panic!("colors call activation failed: {error}"))
++                .map(FullWorkerScope::Colors)
++        } else {
++            self.full_worker.as_ref().and_then(|worker|worker.start_call_scope()
++                .unwrap_or_else(|error|panic!("FULL worker call activation failed: {error}")))
++                .map(FullWorkerScope::Current)
++        };
++        let colors_token = self.colors_worker.as_mut().map(|worker| worker.dispatch(
++            position, influence, material, self.weights.mobility, self.weights.shelter,
++        ).unwrap_or_else(|error|panic!("colors dispatch failed: {error}")));
+@@ -597 +647 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-        let inline_chain = if self.full_worker.is_none() {
++        let inline_chain = if self.full_worker.is_none() && self.colors_worker.is_none() {
+@@ -634 +684,5 @@ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
+-        let chain = if let Some(worker) = self.full_worker.as_mut() {
++        let chain = if let Some(worker) = self.colors_worker.as_mut() {
++            worker.owner_ready(colors_token.unwrap())
++                .unwrap_or_else(|error|panic!("colors owner-ready failed: {error}"));
++            worker.complete().unwrap_or_else(|error|panic!("colors completion failed: {error}"))
++        } else if let Some(worker) = self.full_worker.as_mut() {
+@@ -1244,0 +1299,7 @@ mod lifecycle_tests;
++
++#[cfg(test)]
++#[path = "evaluator/colors_tests.rs"]
++mod colors_tests;
++#[cfg(test)]
++#[path = "evaluator/colors_lifecycle_tests.rs"]
++mod colors_lifecycle_tests;
+diff --git a/src/evaluator/colors_lifecycle_tests.rs b/src/evaluator/colors_lifecycle_tests.rs
+new file mode 100644
+index 00000000..0d649d6d
+--- /dev/null
++++ b/src/evaluator/colors_lifecycle_tests.rs
+@@ -0,0 +1,105 @@
++//! Lexical owner tests; these run with the test profile's unwinding panic policy.
++use super::*;
++use crate::{engine::Search,history::SearchHistory,quiescence::{Limits,Stopped},ordinary,timed};
++const START:&str="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++fn parked<const D:bool>(e:&Evaluator<D>){assert!(e.colors_worker.as_ref().unwrap().is_parked());}
++
++#[test]
++fn full_scope_parks_after_completion_error_and_test_unwind() {
++    let p=Position::from_fen(START).unwrap();
++    let mut s=Search::<true>::new(&p);s.config.tts_bytes=65536;
++    s.evaluator.set_threads(3).unwrap();parked(&s.evaluator);
++    for fen in [START,"6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40",START] {
++        let p=Position::from_fen(fen).unwrap();let mut h=SearchHistory::new(&p);
++        s.run_iterations(p,&mut h,2,Limits::default()).unwrap();parked(&s.evaluator);
++        assert!(matches!(s.run_iterations(p,&mut h,3,Limits{nodes:Some(0)}),Err(ordinary::Error::Stopped(Stopped::NodeLimit(0)))));parked(&s.evaluator);
++    }
++    let mut h=SearchHistory::new(&p);
++    let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++        s.run_seeded_iterations(p,&mut h,1,Limits::default(),0,0, |_|panic!("test callback unwind"))
++    }));assert!(result.is_err());parked(&s.evaluator);
++    let mut h=SearchHistory::new(&p);
++    s.run_iterations(p,&mut h,1,Limits::default()).unwrap();parked(&s.evaluator);
++    let control=timed::Controls{average_cs:1000,maximum_cs:10000,origin:0,seed:0,randomness:0,maximum_entered_iterations:1};
++    assert!(matches!(s.run_work_timed(p,&mut h,control,Limits::default()),Err(ordinary::Error::IterationCapacity)));parked(&s.evaluator);
++    let mut node=Node::root(p,&s.evaluator.root);
++    s.evaluator.full(&mut node,&Influence::build(&p),false);parked(&s.evaluator);
++}
++
++#[test]
++fn full_scope_parks_after_live_finish_abort_and_host_error() {
++    use crate::host::{Host,Command,Control};
++    struct Events {command:Option<Command>,fail:bool}
++    impl Host for Events {
++        fn command(&mut self)->std::io::Result<Option<Command>> {
++            if self.fail {Err(std::io::Error::other("host control failure"))} else {Ok(self.command.take())}
++        }
++    }
++    for (command,fail) in [(Some(Command::Finish),false),(Some(Command::Abort),false),(None,true)] {
++        let p=Position::from_fen(START).unwrap();let mut s=Search::<true>::new(&p);
++        s.config.tts_bytes=65536;s.evaluator.set_threads(3).unwrap();
++        let (mut s,_)=s.map_host(Events{command,fail});
++        s.control=Some(Control{clock:crate::clock::GameClock::default(),post:false,force:false,
++            pondering:false,published:false,fine_work:false,game_ply:0,initial_side:p.side,clock_color:p.side});
++        let c=timed::Controls{average_cs:1000,maximum_cs:10000,origin:0,seed:0,randomness:0,maximum_entered_iterations:8};
++        let mut h=SearchHistory::new(&p);
++        let result=s.run_work_timed(p,&mut h,c,Limits{nodes:Some(10000)});
++        if fail {assert!(matches!(result,Err(ordinary::Error::Stopped(Stopped::HostIo(_)))));}
++        else {assert_eq!(result.unwrap().stop.reason,if command==Some(Command::Abort){"abort"}else{"host"});}
++        parked(&s.evaluator);
++    }
++}
++
++#[test]
++fn first_iteration_and_public_quiescence_boundaries_park_on_normal_and_stopped_returns() {
++    use crate::quiescence::{Entry, Observer, Work};
++    struct Quiet;
++    impl Observer for Quiet {
++        const ENABLED: bool = false;
++        type Parent = ();
++        type Frame = ();
++        fn parent(_: &Retained) {}
++        fn enter(&mut self, _: &Position, _: Entry, _: Option<Move>, _: (),
++            _: Retained, _: bool, _: Work) {}
++        fn stage(&mut self, _: EvaluationStage) {}
++        fn ordered(&mut self) {}
++        fn leave(&mut self, _: (), _: Retained, _: i32, _: &[Move], _: Work) {}
++    }
++    let p=Position::from_fen(START).unwrap();
++    let mut s=Search::<true>::new(&p);
++    s.set_threads(3).unwrap();
++    let mut h=SearchHistory::new(&p);
++    assert!(crate::first_iteration::run(&mut s,p,&mut h,Limits{nodes:Some(0)}).is_err());
++    parked(&s.evaluator);
++    let actual=crate::first_iteration::run(&mut s,p,&mut h,Limits::default()).unwrap();
++    parked(&s.evaluator);
++    let mut serial=Search::<true>::new(&p);
++    let expected=crate::first_iteration::run(&mut serial,p,&mut h,Limits::default()).unwrap();
++    assert_eq!((actual.score,actual.pv,actual.work,actual.stats,actual.evaluations),
++        (expected.score,expected.pv,expected.work,expected.stats,expected.evaluations));
++    let root=s.prepare_root(p);
++    parked(&s.evaluator);
++    let mut moves=crate::movegen::MoveList::new();
++    crate::movegen::generate_legal(&p,&mut moves);
++    let movement=moves.as_slice()[0];
++    let entry=Entry{ply:1,target:1,iteration_depth:1,lower:-10000,upper:10000,
++        analysis:0,capture_exception:crate::quiescence_policy::capture_exception(&p,&movement)};
++    for observed in [false,true] {
++        let mut node=root.child(&s.evaluator.root,movement);
++        let mut history=SearchHistory::new(&p);
++        history.push(&node.position,Some(movement));
++        let limit=Limits{nodes:Some(0)};
++        let stopped=if observed {
++            s.search_subtree_observed(&mut node,&mut history,entry,limit,&root.retained,&mut Quiet)
++        } else {s.search_subtree(&mut node,&mut history,entry,limit)};
++        assert!(matches!(stopped,Err(Stopped::NodeLimit(0))));
++        assert_eq!(history.search_ply(),1);
++        parked(&s.evaluator);
++        let complete=if observed {
++            s.search_subtree_observed(&mut node,&mut history,entry,Limits::default(),&root.retained,&mut Quiet)
++        } else {s.search_subtree(&mut node,&mut history,entry,Limits::default())};
++        assert!(complete.is_ok());
++        assert_eq!(history.search_ply(),1);
++        parked(&s.evaluator);
++    }
++}
+diff --git a/src/evaluator/colors_tests.rs b/src/evaluator/colors_tests.rs
+new file mode 100644
+index 00000000..548390d3
+--- /dev/null
++++ b/src/evaluator/colors_tests.rs
+@@ -0,0 +1,408 @@
++//! Focused budget1/budget3 checks of the actual composed evaluator and search.
++
++use super::*;
++use crate::engine::Search;
++use crate::history::SearchHistory;
++use crate::movegen::{generate_legal, MoveList};
++use crate::ordinary;
++use crate::quiescence::{Limits, Stopped};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const MIDDLE: &str = "r3k2r/ppp2ppp/2npbn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2Q1RK1 b kq - 0 10";
++const ENDING: &str = "6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40";
++
++fn evaluators<const D: bool>(position: &Position) -> (Evaluator<D>, Evaluator<D>) {
++    let mut serial = Evaluator::new(position);
++    let mut worker = Evaluator::new(position);
++    serial.set_threads(1).unwrap();
++    worker.set_threads(3).unwrap();
++    (serial, worker)
++}
++
++#[derive(Debug, PartialEq, Eq)]
++struct Observed {
++    evaluation: Evaluation,
++    node: Node,
++    details: FullDetails,
++}
++
++fn observe<const D: bool>(
++    evaluator: &mut Evaluator<D>,
++    mut node: Node,
++    map: &Influence,
++    checked: bool,
++    fresh: bool,
++) -> Observed {
++    let before = node.retained;
++    let stats_before = evaluator.stats;
++    let mut details = None;
++    let evaluation = if fresh {
++        evaluator.fresh_detailed_observed(&mut node, map, checked, |value| details = Some(value))
++    } else {
++        evaluator.full_detailed_observed(&mut node, map, checked, |value| details = Some(value))
++    };
++    let details = details.unwrap();
++    assert_eq!(details.base, details.components.base());
++    assert_eq!((evaluation.score, evaluation.lower, evaluation.upper),
++        (details.finished.score, details.finished.lower, details.finished.upper));
++    assert_eq!(node.retained.positional, details.components.positional());
++    assert_eq!(node.retained.pawn_progress, details.components.pawn_progress);
++    assert_eq!(node.retained.nonking_squares, before.nonking_squares);
++    assert_eq!(node.retained.age, 0);
++    assert_eq!(evaluator.stats.relation_queries - stats_before.relation_queries,
++        evaluation.relation_queries);
++    assert_eq!(evaluator.stats.full - stats_before.full, u64::from(D));
++    assert_eq!(evaluator.stats.influence_builds, stats_before.influence_builds);
++    assert_eq!(evaluator.stats.pawn_reuses - stats_before.pawn_reuses,
++        u64::from(D && details.pawn_entry_reused));
++    assert_eq!(evaluator.stats.pawn_replacements - stats_before.pawn_replacements,
++        u64::from(D && !details.pawn_entry_reused));
++    if fresh {
++        assert!(!details.pawn_entry_reused);
++    }
++    Observed { evaluation, node, details }
++}
++
++fn compare<const D: bool>(
++    serial: &mut Evaluator<D>,
++    worker: &mut Evaluator<D>,
++    node: Node,
++    map: &Influence,
++    checked: bool,
++    fresh: bool,
++) -> Observed {
++    let expected = observe(serial, node, map, checked, fresh);
++    let actual = observe(worker, node, map, checked, fresh);
++    assert_eq!(actual, expected);
++    assert_eq!(worker.stats, serial.stats);
++    expected
++}
++
++#[test]
++fn budgets_match_detailed_full_and_fresh_across_weights_and_root_rebinding() {
++    fn verify<const D: bool>() {
++        let position = Position::from_fen(START).unwrap();
++        let (mut serial, mut worker) = evaluators::<D>(&position);
++        let mut asymmetric = Parameters::default();
++        asymmetric.own = [133, 73, 151, 87, 200, 121, 19, 313, 207, 251, 49];
++        asymmetric.opponent = [91, 128, 67, 142, 80, 57, 183, 47, 333, 107, 229];
++        asymmetric.average_depth = 13;
++        asymmetric.draw = -173;
++        asymmetric.opponent_selectivity = 31;
++        let mut zero = Parameters::default();
++        zero.own[6..].fill(0);
++        zero.opponent[6..].fill(0);
++        // One persistent worker crosses changes in root side, phase, material,
++        // current weight pairs and finishing parameters.
++        for fen in [START, MIDDLE, ENDING, START] {
++            let position = Position::from_fen(fen).unwrap();
++            let map = Influence::build(&position);
++            for (index, parameters) in [Parameters::default(), asymmetric.clone(), zero.clone()]
++                .into_iter().enumerate()
++            {
++                serial.parameters = parameters.clone();
++                worker.parameters = parameters;
++                serial.begin_search(&position);
++                worker.begin_search(&position);
++                assert_eq!(serial.stats, EvalStats::default());
++                assert_eq!(worker.stats, EvalStats::default());
++                for checked in [false, true] {
++                    let mut node = Node::root(position, &serial.root);
++                    node.retained.positional = 731;
++                    node.retained.pawn_progress = -193;
++                    node.retained.age = 17;
++                    for fresh in [false, false, true, false] {
++                        let value = compare(&mut serial, &mut worker, node, &map, checked, fresh);
++                        if checked {
++                            assert_eq!(value.details.components.tempo, 0);
++                        }
++                        if index == 2 {
++                            assert_eq!(value.details.components.activity, 0);
++                            assert_eq!(value.details.components.shelter, 0);
++                        }
++                        if !D {
++                            assert_eq!(worker.stats.full, 0);
++                            assert_eq!(worker.stats.pawn_reuses, 0);
++                            assert_eq!(worker.stats.pawn_replacements, 0);
++                        }
++                    }
++                }
++                assert_eq!(worker.stats.influence_builds, 0);
++            }
++        }
++    }
++    verify::<true>();
++    verify::<false>();
++}
++
++#[test]
++fn budgets_preserve_supplied_contrary_influence_and_lazy_selection() {
++    let position = Position::from_fen(START).unwrap();
++    let natural = Influence::build(&position);
++    let contrary = Influence { profiles: [[255; 64], [0; 64]] };
++    let (mut serial, mut worker) = evaluators::<true>(&position);
++    let node = Node::root(position, &serial.root);
++    let normal = compare(&mut serial, &mut worker, node, &natural, false, true);
++    let custom = compare(&mut serial, &mut worker, node, &contrary, false, true);
++    assert_ne!((custom.details.components.activity, custom.details.components.shelter),
++        (normal.details.components.activity, normal.details.components.shelter));
++    assert_eq!(compare(&mut serial, &mut worker, node, &natural, false, true), normal);
++
++    serial.begin_search(&position);
++    worker.begin_search(&position);
++    let (mut a, mut b) = (node, node);
++    let (mut am, mut bm) = (Some(contrary), Some(contrary));
++    let (mut af, mut bf, mut aq, mut bq) = (None, None, None, None);
++    let expected = serial.select_noncheck_detailed_observed(&mut a, -10000, 10000,
++        true, &mut am, |value| af = Some(value), |value| aq = Some(value));
++    let actual = worker.select_noncheck_detailed_observed(&mut b, -10000, 10000,
++        true, &mut bm, |value| bf = Some(value), |value| bq = Some(value));
++    assert_eq!((actual, b, bm, bf, bq), (expected, a, am, af, aq));
++    assert!(expected.refreshed && !expected.initially_full);
++    assert_eq!(af.unwrap().components, custom.details.components);
++    assert_eq!(am, Some(contrary));
++    assert_eq!(worker.stats, serial.stats);
++    assert_eq!(worker.stats.influence_builds, 0);
++
++    // A strict-endpoint FAST return must leave the supplied worker idle and
++    // must not construct a map or modify inherited retained values.
++    let (mut a, mut b) = (a.null_child(), b.null_child());
++    let before = a;
++    let score = serial.fast(&a, false).score;
++    assert_eq!(worker.fast(&b, false).score, score);
++    let (mut am, mut bm) = (None, None);
++    let expected = serial.select_noncheck(&mut a, score + 250, score + 251, false, &mut am);
++    let actual = worker.select_noncheck(&mut b, score + 250, score + 251, false, &mut bm);
++    assert_eq!((actual, b, bm), (expected, a, am));
++    assert!(!actual.refreshed && !actual.initially_full);
++    assert_eq!(a, before);
++    assert!(am.is_none());
++    assert_eq!(worker.stats, serial.stats);
++}
++
++#[test]
++fn budgets_preserve_zero_group_replacement_order_and_reset() {
++    let empty = Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();
++    let first = Position::from_fen("7k/8/8/8/6P1/3P4/8/K7 w - - 0 1").unwrap();
++    let second = Position::from_fen("7k/8/6P1/8/8/3P4/8/K7 w - - 0 1").unwrap();
++    assert_eq!(empty.pawn, 0);
++    assert_eq!(first.pawn % 128, 0);
++    assert_eq!(second.pawn % 128, 0);
++    assert_ne!(first.pawn, second.pawn);
++    let (mut serial, mut worker) = evaluators::<true>(&empty);
++    for (position, reused) in [(empty, true), (first, false), (first, true),
++        (second, false), (first, false), (empty, false), (empty, true)]
++    {
++        let node = Node::root(position, &serial.root);
++        let value = compare(&mut serial, &mut worker, node, &Influence::build(&position), false, false);
++        assert_eq!(value.details.pawn_entry_reused, reused);
++    }
++    serial.begin_search(&empty);
++    worker.begin_search(&empty);
++    let node = Node::root(empty, &serial.root);
++    let map = Influence::build(&empty);
++    compare(&mut serial, &mut worker, node, &map, false, true);
++    assert_eq!((worker.stats.pawn_reuses, worker.stats.pawn_replacements), (0, 1));
++    assert!(compare(&mut serial, &mut worker, node, &map, false, false).details.pawn_entry_reused);
++    serial.begin_search(&first);
++    worker.begin_search(&first);
++    let node = Node::root(first, &serial.root);
++    let value = compare(&mut serial, &mut worker, node, &Influence::build(&first), false, false);
++    assert!(!value.details.pawn_entry_reused);
++    assert_eq!((worker.stats.full, worker.stats.pawn_replacements), (1, 1));
++}
++
++#[test]
++fn budgets_preserve_full_identity_collision_and_fresh_cache_bypass() {
++    let first = Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
++    let collision = Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
++    assert_eq!(first.pawn, collision.pawn);
++    assert_ne!(first.pawn, 0);
++    let (first_map, collision_map) = (Influence::build(&first), Influence::build(&collision));
++    let (mut serial, mut worker) = evaluators::<true>(&first);
++    let node = Node::root(first, &serial.root);
++    assert!(!compare(&mut serial, &mut worker, node, &first_map, false, false).details.pawn_entry_reused);
++    let retained = serial.pawns.select(&first, &first_map).structure;
++    assert_eq!(worker.pawns.select(&first, &first_map).structure, retained);
++    assert_ne!(retained, pawn_structure::fresh(&collision, &collision_map, [1024; 2]));
++    let node = Node::root(collision, &serial.root);
++    assert!(compare(&mut serial, &mut worker, node, &collision_map, false, false).details.pawn_entry_reused);
++    compare(&mut serial, &mut worker, node, &collision_map, false, true);
++    assert!(compare(&mut serial, &mut worker, node, &collision_map, false, false).details.pawn_entry_reused);
++    assert_eq!(serial.pawns.select(&collision, &collision_map).structure, retained);
++    assert_eq!(worker.pawns.select(&collision, &collision_map).structure, retained);
++    serial.begin_search(&collision);
++    worker.begin_search(&collision);
++    let node = Node::root(collision, &serial.root);
++    assert!(!compare(&mut serial, &mut worker, node, &collision_map, false, false).details.pawn_entry_reused);
++    assert_eq!(worker.pawns.select(&collision, &collision_map).structure,
++        pawn_structure::fresh(&collision, &collision_map, [1024; 2]));
++}
++
++fn assert_search_equal(actual: &ordinary::Outcome, expected: &ordinary::Outcome) {
++    assert_eq!((&actual.initial_candidates, actual.score, &actual.pv, actual.work,
++        actual.stats, actual.evaluations), (&expected.initial_candidates, expected.score,
++        &expected.pv, expected.work, expected.stats, expected.evaluations));
++    assert_eq!(actual.iterations.len(), expected.iterations.len());
++    for (a, b) in actual.iterations.iter().zip(&expected.iterations) {
++        assert_eq!((a.depth, &a.candidates, &a.steps, a.score, &a.pv, a.work),
++            (b.depth, &b.candidates, &b.steps, b.score, &b.pv, b.work));
++    }
++}
++
++fn replay_pv(mut position: Position, pv: &[Move]) {
++    for &movement in pv {
++        let mut legal = MoveList::new();
++        generate_legal(&position, &mut legal);
++        assert!(legal.as_slice().contains(&movement), "illegal PV move {movement}");
++        position = position.played_unchecked(movement);
++    }
++}
++
++fn completed_pair(serial: &mut Search, worker: &mut Search, position: Position) -> ordinary::Outcome {
++    let (mut ah, mut bh) = (SearchHistory::new(&position), SearchHistory::new(&position));
++    let (mut ar, mut br) = (Vec::new(), Vec::new());
++    let expected = serial.run_seeded_iterations(position, &mut ah, 2, Limits::default(),
++        0x1020_3040, 7, |score| ar.push(score)).unwrap();
++    let actual = worker.run_seeded_iterations(position, &mut bh, 2, Limits::default(),
++        0x1020_3040, 7, |score| br.push(score)).unwrap();
++    assert_eq!((ah.search_ply(), bh.search_ply()), (0, 0));
++    assert_eq!(ar, br);
++    assert_search_equal(&actual, &expected);
++    assert!(actual.evaluations.full > 0);
++    for iteration in &actual.iterations {
++        replay_pv(position, &iteration.pv);
++        for step in &iteration.steps {
++            replay_pv(position, &step.root_pv);
++            replay_pv(position.played_unchecked(step.movement), &step.child_pv);
++        }
++    }
++    expected
++}
++
++#[test]
++fn persistent_worker_crosses_repeated_search_stop_retry_and_budget_changes() {
++    let position = Position::from_fen(START).unwrap();
++    let mut serial = Search::<true>::new(&position);
++    let mut worker = Search::<true>::new(&position);
++    serial.config.tts_bytes = 65536;
++    worker.config.tts_bytes = 65536;
++    serial.evaluator.set_threads(1).unwrap();
++    worker.evaluator.set_threads(3).unwrap();
++    let baseline = completed_pair(&mut serial, &mut worker, position);
++    let repeated = completed_pair(&mut serial, &mut worker, position);
++    assert_search_equal(&repeated, &baseline);
++    let other = Position::from_fen("r3k3/8/8/8/2n5/8/8/RN2K3 w - - 0 1").unwrap();
++    completed_pair(&mut serial, &mut worker, other);
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++
++    for limit in [0, 25] {
++        let (mut ah, mut bh) = (SearchHistory::new(&position), SearchHistory::new(&position));
++        let (mut ar, mut br) = (Vec::new(), Vec::new());
++        let expected = serial.run_seeded_iterations(position, &mut ah, 3,
++            Limits { nodes: Some(limit) }, 0x1020_3040, 7, |score| ar.push(score));
++        let actual = worker.run_seeded_iterations(position, &mut bh, 3,
++            Limits { nodes: Some(limit) }, 0x1020_3040, 7, |score| br.push(score));
++        assert!(matches!(expected, Err(ordinary::Error::Stopped(Stopped::NodeLimit(n))) if n == limit));
++        assert!(matches!(actual, Err(ordinary::Error::Stopped(Stopped::NodeLimit(n))) if n == limit));
++        assert_eq!((ah.search_ply(), bh.search_ply()), (0, 0));
++        assert_eq!(ar, br);
++        assert_eq!(worker.work(), serial.work());
++        assert_eq!(worker.stats, serial.stats);
++        assert_eq!(worker.evaluator.stats, serial.evaluator.stats);
++        assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    }
++    assert!(worker.evaluator.set_threads(0).is_err());
++    worker.evaluator.set_threads(3).unwrap();
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(3,3));
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    worker.evaluator.set_threads(1).unwrap();
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    worker.evaluator.set_threads(3).unwrap();
++    assert_search_equal(&completed_pair(&mut serial, &mut worker, position), &baseline);
++    // Drop joins an active persistent worker after its last completed FULL.
++}
++
++#[test]
++fn positive_total_requests_saturate_without_changing_cache_or_evaluation() {
++    let first = Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
++    let collision = Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
++    assert_eq!(first.pawn,collision.pawn);
++    let (mut serial,mut worker)=(Evaluator::<true>::new(&first),Evaluator::<true>::new(&first));
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(1,1));
++    let first_map=Influence::build(&first);
++    let node=Node::root(first,&serial.root);
++    compare(&mut serial,&mut worker,node,&first_map,false,false);
++    let collision_map=Influence::build(&collision);
++    for requested in [2,3,2,1,3,usize::MAX,1] {
++        let before=worker.stats;
++        worker.set_threads_with_affinity(requested,||Ok(3)).unwrap();
++        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,requested.min(3)));
++        assert_eq!(worker.stats,before);
++        assert!(worker.set_threads(0).is_err());
++        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,requested.min(3)));
++        assert_eq!(worker.stats,before);
++        let node=Node::root(collision,&serial.root);
++        assert!(compare(&mut serial,&mut worker,node,&collision_map,false,false).details.pawn_entry_reused);
++        if let Some(helper)=&worker.full_worker {assert!(helper.is_parked());}
++        if let Some(helper)=&worker.colors_worker {assert!(helper.is_parked());}
++    }
++}
++
++#[test]
++fn search_and_session_expose_requested_and_configured_budgets() {
++    let position=Position::from_fen(START).unwrap();
++    let mut search=Search::<false>::new(&position);
++    assert_eq!((search.requested_threads(),search.configured_threads()),(1,1));
++    search.set_threads(3).unwrap();
++    let (mut search,_)=search.map_host(crate::host::NoHost);
++    assert_eq!((search.requested_threads(),search.configured_threads()),(3,3));
++    assert!(search.set_threads(0).is_err());
++    assert_eq!((search.requested_threads(),search.configured_threads()),(3,3));
++    search.set_threads(1).unwrap();
++    assert_eq!((search.requested_threads(),search.configured_threads()),(1,1));
++    let mut session=crate::session::Session::<false>::default();
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(1,1));
++    session.set_threads(usize::MAX).unwrap();
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
++    assert!(session.set_threads(0).is_err());
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
++    session.set_threads(1).unwrap();
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(1,1));
++}
++
++#[test]
++fn affinity_cap_queries_before_mutation_and_preserves_active_cache_on_failure() {
++    let first=Position::from_fen("7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1").unwrap();
++    let collision=Position::from_fen("7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1").unwrap();
++    assert_eq!(first.pawn,collision.pawn);
++    let (mut serial,mut worker)=(Evaluator::<true>::new(&first),Evaluator::<true>::new(&first));
++    assert!(worker.set_threads_with_affinity(0,||panic!("invalid request queried affinity")).is_err());
++    worker.set_threads_with_affinity(1,||panic!("one thread queried affinity")).unwrap();
++    worker.set_threads_with_affinity(3,||Ok(3)).unwrap();
++    let node=Node::root(first,&serial.root);
++    compare(&mut serial,&mut worker,node,&Influence::build(&first),false,false);
++    let before=worker.stats;
++    assert_eq!(worker.set_threads_with_affinity(8,||Err("affinity query failed".into())),
++        Err("affinity query failed".into()));
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(3,3));
++    assert_eq!(worker.stats,before);
++    assert!(worker.colors_worker.as_ref().unwrap().is_parked());
++    assert!(worker.set_threads_with_affinity(0,||panic!("invalid request queried affinity")).is_err());
++    assert!(worker.set_threads_with_affinity(8,||Ok(0)).is_err());
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(3,3));
++    assert_eq!(worker.stats,before);
++    let map=Influence::build(&collision);
++    let node=Node::root(collision,&serial.root);
++    assert!(compare(&mut serial,&mut worker,node,&map,false,false).details.pawn_entry_reused);
++    for (requested,allowed,configured) in [(8,1,1),(usize::MAX,2,2),(2,1,1),(3,4,3)] {
++        let before=worker.stats;
++        worker.set_threads_with_affinity(requested,||Ok(allowed)).unwrap();
++        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,configured));
++        assert_eq!(worker.stats,before);
++        assert_eq!(worker.full_worker.is_some(),configured==2);
++        assert!(compare(&mut serial,&mut worker,node,&map,false,false).details.pawn_entry_reused);
++    }
++    worker.set_threads_with_affinity(1,||panic!("one thread queried affinity")).unwrap();
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(1,1));
++}
+diff --git a/src/evaluator/parallel_tests.rs b/src/evaluator/parallel_tests.rs
+index 920c188b..04558b16 100644
+--- a/src/evaluator/parallel_tests.rs
++++ b/src/evaluator/parallel_tests.rs
+@@ -317 +317 @@ fn persistent_worker_crosses_repeated_search_stop_retry_and_budget_changes() {
+-    assert_eq!((worker.requested_threads(),worker.configured_threads()),(3,2));
++    assert_eq!((worker.requested_threads(),worker.configured_threads()),(3,3));
+@@ -358 +358 @@ fn search_and_session_expose_requested_and_configured_budgets() {
+-    assert_eq!((search.requested_threads(),search.configured_threads()),(3,2));
++    assert_eq!((search.requested_threads(),search.configured_threads()),(3,3));
+@@ -360 +360 @@ fn search_and_session_expose_requested_and_configured_budgets() {
+-    assert_eq!((search.requested_threads(),search.configured_threads()),(3,2));
++    assert_eq!((search.requested_threads(),search.configured_threads()),(3,3));
+@@ -366 +366 @@ fn search_and_session_expose_requested_and_configured_budgets() {
+-    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,2));
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
+@@ -368 +368 @@ fn search_and_session_expose_requested_and_configured_budgets() {
+-    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,2));
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
+@@ -397 +397 @@ fn affinity_cap_queries_before_mutation_and_preserves_active_cache_on_failure()
+-    for (requested,allowed,configured) in [(8,1,1),(usize::MAX,2,2),(2,1,1),(3,4,2)] {
++    for (requested,allowed,configured) in [(8,1,1),(usize::MAX,2,2),(2,1,1),(3,4,3)] {
+diff --git a/src/lib.rs b/src/lib.rs
+index 064e15eb..4bba2f90 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -57,0 +58,2 @@ pub(crate) mod child_preparation;
++
++pub(crate) mod colors_worker;
+diff --git a/src/session.rs b/src/session.rs
+index f206e827..be7431f5 100644
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -139 +139 @@ impl<const D: bool> Session<D> {
+-    /// Positive total request, configured to at most two engine threads.
++    /// Positive total request, configured to at most three research engine threads.
+@@ -152,0 +153,4 @@ impl<const D: bool> Session<D> {
++    pub fn finish_colors_report(&mut self) -> Result<String, String> {
++        self.search.as_mut().ok_or("search is active")?.evaluator.finish_colors_report()
++    }
++
+diff --git a/src/shelter.rs b/src/shelter.rs
+index c21e5ec9..d0440fbe 100644
+--- a/src/shelter.rs
++++ b/src/shelter.rs
+@@ -75,0 +76,28 @@ pub fn compute(
++/// One defender's complete term, after its opposite attacker produces pressure.
++pub(crate) fn compute_side(
++    position: &Position,
++    influence: &Influence,
++    defender: Color,
++    activity_pressure: i32,
++) -> i32 {
++    debug_assert!(activity_pressure >= 0);
++    compose(
++        components(position, influence, defender),
++        activity_pressure,
++        position.phase(),
++    )
++}
++
++/// Terms retain the original defender indexing and single cross-color rounding.
++pub(crate) fn combine_sides(
++    terms: [i32; 2],
++    material_score: i32,
++    weights: [i32; 2],
++) -> Shelter {
++    debug_assert!(weights.iter().all(|w| (0..=10_240).contains(w)));
++    Shelter {
++        terms,
++        weighted: combine(terms, material_score, weights),
++    }
++}
++
+@@ -587,0 +616,65 @@ mod tests {
++    #[test]
++    fn side_partitions_match_original_with_asymmetric_pressure_weights_and_maps() {
++        for placement in [
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R",
++            "7k/8/3n4/2B5/3R4/8/8/K7",
++            "7k/8/8/8/8/8/8/K6R",
++            "7k/8/8/8/8/8/8/K7",
++        ] {
++            let position = Position::from_fen(&format!("{placement} w - - 0 1")).unwrap();
++            for map in [
++                Influence::build(&position),
++                influence(),
++                Influence { profiles: [[255; 64], [0; 64]] },
++            ] {
++                let before = position;
++                let map_before = map;
++                let produced = crate::activity::compute(&position, &map, 0, [1024; 2]);
++                for pressure in [[0, 0], [57, 119], [119, 57], produced.pressure] {
++                    let black = compute_side(&position, &map, Color::Black, pressure[1]);
++                    let white = compute_side(&position, &map, Color::White, pressure[0]);
++                    for material in [-100_000, -256, -1, 0, 217, 100_000] {
++                        for weights in [
++                            [1024, 1024], [10_240, 8192], [17, 9173],
++                            [0, 0], [0, 10_240], [10_240, 0],
++                        ] {
++                            assert_eq!(
++                                combine_sides([white, black], material, weights),
++                                compute(&position, &map, pressure, material, weights),
++                                "{placement}, pressure={pressure:?}, material={material}, weights={weights:?}",
++                            );
++                        }
++                    }
++                }
++                assert_eq!(position, before);
++                assert_eq!(map, map_before);
++            }
++        }
++    }
++
++    #[test]
++    fn side_partitions_compose_opposite_activity_without_cross_side_state() {
++        let position = Position::from_fen("7k/8/8/8/8/8/8/K6R w - - 0 1").unwrap();
++        let map = Influence::build(&position);
++        let white_attack = crate::activity::compute_side(&position, &map, Color::White);
++        let black_attack = crate::activity::compute_side(&position, &map, Color::Black);
++        assert!(white_attack.pressure > black_attack.pressure);
++        let black_shelter = compute_side(&position, &map, Color::Black, white_attack.pressure);
++        // An unrelated supplied map and pressure must leave no retained term.
++        let contrary = Influence { profiles: [[0; 64], [255; 64]] };
++        let _ = compute_side(&position, &contrary, Color::Black, 139);
++        let white_shelter = compute_side(&position, &map, Color::White, black_attack.pressure);
++        let activity = crate::activity::combine_sides(
++            [white_attack, black_attack], 217, [10_240, 0], position.phase(),
++        );
++        assert_eq!(
++            combine_sides([white_shelter, black_shelter], 217, [19, 9173]),
++            compute(&position, &map, activity.pressure, 217, [19, 9173]),
++        );
++        assert_eq!(
++            compute_side(&position, &map, Color::Black, white_attack.pressure),
++            black_shelter,
++        );
++    }
++
