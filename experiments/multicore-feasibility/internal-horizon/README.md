@@ -36,4 +36,9 @@ and whole-process wait4 CPU. Independent local output/work plus whole-root-final
 state audit can miss a transient wrong shared write later overwritten.
 Fixed completion/NoHost/timing absent/rnd0/inlineFULL; no qualification/adoption.
 
-Status: source/tool preparation, no depth-eight workload observations yet.
+Status: CLOSED. Three new checks plus inherited36, one generic build and33 unique
+lives pass the finite audit.35/08 activate unchanged at iteration7;43 misses and
+is not repeated.35 cuts off on coordinator's next child, so no queued demand;
+08 demands only162N/R0 and recovers114N as descendants with higher split costs.
+See [results](report.md) and [closure](closure.json). No retune, deeper run or
+follow-on native stream is selected by this record.
