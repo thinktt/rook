@@ -1,19 +1,17 @@
 # Epoch colors plus conditional ordinary inventory4
 
-Selected integration and fixed generic discriminator; preparation is in progress.
-The accepted [source design](../../../docs/research/after-epoch-fourth-worker-choice.md)
-and [eager-generation domain argument](generation-domain.md) guide the implementation.
-This experiment preserves the positive epoch3 source/images/profiles and adds a
-conditional third input reader only at confirmed ordinary FULL calls.
+Completed first attempt:50 focused controls,15 CLI checks,two actual fallback
+searches,60 original replay lives/700 posts and five idle probes all pass.
+The fixed generic result does not beat retained epoch3:7.777120s vs7.714777s
+search-wall median sum (+0.81%), at1.344x whole CPU. Preserve/park unchanged.
 
-Scope: five configurations on original35/08/43, one warmup plus three fixed
-rotations each (60 successful replay lives), five idle probes, no PGO/tuning or
-qualification/adoption. Source/control/build admission precedes timing. Coordinator14,
-colors6/4, inventory2; housekeeping0–1,8–13; siblings15/7/5/3 unassigned by us.
-All native stages share one persisted3600s ceiling; collection1800s, per-life180s.
-Raw products belong outside Git under `/home/legolas/rook2-experiments`.
+[Report](report.md), [timings/ranges](timings.csv), [results](results.json),
+[closure](closure.json), [plan](plan.md), [policy](policy.json),
+[generation domain](generation-domain.md), [bounded source challenge](source-review.md).
+No PGO, broad qualification, adoption, rescue run or follow-on execution.
 
-`source.patch` is the complete isolated code delta from the exact64-file epoch
-base; apply with `git apply --unidiff-zero` only after verifying that base map in
-preparation.json. It uses zero context to keep patch artifact whitespace distinct
-from code. The final build snapshots independently bind all candidate source files.
+`source.patch` is the isolated code delta from the exact64-file epoch base;
+apply with `git apply --unidiff-zero` only after verifying the base source map
+in preparation.json. Build snapshots independently bind all65 candidate files.
+Raw products are outside Git under
+`/home/legolas/rook2-experiments/epoch-inventory-four-20261026-01`.
