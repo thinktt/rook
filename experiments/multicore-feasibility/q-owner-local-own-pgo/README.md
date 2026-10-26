@@ -1,15 +1,20 @@
-# Q owner-local own-PGO discriminator
+# Q owner-local own-PGO/full54
 
-Frozen scope is in [plan.md](plan.md) and [policy.json](policy.json).
-Exact68 source and prior control/evidence bindings are in `preparation.json`.
-Raw data, images and profiles belong outside Git at
-`/home/legolas/rook2-experiments/q-owner-local-own-pgo-20261026-01`.
+Retain exact f8b829a7/profile bbb858b0 as the new research performance leader, preserving ordinary-only 3d914c, 67d and accepted serial. No qualification, canonical adoption or external action follows.
 
-Prepare once, then collect once under the same persisted3600s clock:
+| Configuration | Search wall sum, s |
+|---|---:|
+| Accepted serial 5cf | 68.811008 |
+| Retained ordinary-on 3d mode3 | 60.327621 |
+| New inline1, both hooks dormant | 69.548826 |
+| New ordinary-on / Q-off3 | 60.450227 |
+| New ordinary-on / Q-on3 | 59.918858 |
 
-```sh
-taskset -c 0-3,8-13 python3 experiments/multicore-feasibility/q-owner-local-own-pgo/prepare.py --preparation /home/legolas/rook2-multicore/experiments/multicore-feasibility/q-owner-local-own-pgo/preparation.json --output /home/legolas/rook2-experiments/q-owner-local-own-pgo-20261026-01 --stage prepare
-taskset -c 0-3,8-13 python3 experiments/multicore-feasibility/q-owner-local-own-pgo/prepare.py --preparation /home/legolas/rook2-multicore/experiments/multicore-feasibility/q-owner-local-own-pgo/preparation.json --output /home/legolas/rook2-experiments/q-owner-local-own-pgo-20261026-01 --stage collect
-```
+216 joint training lives, canonical plus actual byte-identical remerge, one use
+build, 14 CLI/two fallbacks, 270 original full54 lives and five idle probes pass.
+Source 68 and 17+42 controls reused; no tuning or native repeat.
+Both requested hooks stay dormant in budgets 1/2. Native work is stopped.
 
-No timing, qualification or adoption claim is made by this setup record.
+[Report](report.md), [all54 rows](full54.csv), [results](results.json),
+[closure](closure.json), [plan](plan.md), [policy](policy.json).
+Raw artifacts: `/home/legolas/rook2-experiments/q-owner-local-own-pgo-20261026-01`.
