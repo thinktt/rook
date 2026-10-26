@@ -42,5 +42,10 @@ state audits remain fatal. A transient erroneous write later overwritten can
 escape the independent state audit. Fixed completion/NoHost/timing absent/rnd0;
 no live stop/observer coverage, PGO, broad qualification, adoption or delivery.
 
-Status: source preparation. No workload timing has begun. The prototype is
-isolated at `/home/legolas/rook2-experiments/workspaces/internal-split-20261026-01`.
+Status: CLOSED, coverage miss. All36 focused checks and48 unique workload lives
+pass the finite audits, but none of35/08/43 meets the frozen selector by depth6.
+No workload batch/worker/TT snapshot launches, so no scaling or branch-dependence
+claim follows. Focused controls separately exercise actual workers and replay.
+See [results](report.md) and [closure](closure.json). No selector/cap retune or
+new native stream is selected by this record. Isolated source remains at
+`/home/legolas/rook2-experiments/workspaces/internal-split-20261026-01`.
