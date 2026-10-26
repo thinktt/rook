@@ -35,21 +35,6 @@ the default for delegated work.
 Preserve the accepted engine as the reference and conduct experiments on a
 separate branch.
 
-## Continuation: scaling beyond two threads
-
-Pursue useful scaling beyond two threads, with queued search-branch work as the
-primary architectural investigation. Preserve the successful two-thread
-implementation as a baseline, not a ceiling.
-
-Investigate dependencies, task size, speculative reuse and recovery. Test
-promising designs across increasing thread counts, including 4 and 8 where
-resources permit. Negative results apply to the tested design and workload,
-not automatically to branch parallelism generally.
-
-Keep fidelity requirements unchanged and testing proportional to research
-maturity. Report progress and limitations at checkpoints; a useful intermediate
-implementation does not by itself conclude the broader scaling investigation.
-
 ## Fidelity and measurement
 
 King fidelity is non-negotiable: preserve moves, scores, posts, logical work
