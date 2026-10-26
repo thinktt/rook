@@ -1,0 +1,1051 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -28,6 +28,7 @@
+ child-preparation = []
+ hierarchical-recovery = ["branch-transactions"]
+ internal-split = ["hierarchical-recovery"]
++coarse-pure-salvage = ["internal-split"]
+ 
+ [[bin]]
+ name = "rook2-hierarchical"
+@@ -43,3 +44,8 @@
+ name = "rook2-internal-split"
+ path = "src/bin/rook2-internal-split.rs"
+ required-features = ["internal-split"]
++
++[[bin]]
++name = "rook2-coarse-pure-census"
++path = "src/bin/rook2-coarse-pure-census.rs"
++required-features = ["coarse-pure-salvage"]
+--- /dev/null
++++ b/src/bin/rook2-coarse-pure-census.rs
+@@ -0,0 +1,72 @@
++//! Fixed serial pure-result producer/demand census; not a wire engine.
++use rook2::{internal_split,coarse_pure_salvage, engine::Config,
++    evaluator::Parameters, history::SearchHistory,
++    movegen::{self,MoveList}, position::Position};
++
++fn run() -> Result<(),String> {
++    let mut args=std::env::args().skip(1);
++    let mut input=None;
++    let mut fixture_path=None;
++    while let Some(key)=args.next() {
++        let value=args.next().ok_or("missing option value")?;
++        match key.as_str() {
++            "--input"=>input=Some(value),
++            "--fixture"=>fixture_path=Some(value),
++            _=>return Err(format!("unknown option {key}")),
++        }
++    }
++    let fixture_text=std::fs::read_to_string(fixture_path.ok_or("--fixture required")?).map_err(|e|e.to_string())?;
++    let fixture=internal_split::Fixture::parse(&fixture_text)?;
++    let text=std::fs::read_to_string(input.ok_or("--input required")?).map_err(|e|e.to_string())?;
++    let mut case=None;let mut fen=None;let mut moves=None;let mut own=None;let mut opponent=None;
++    let mut evaluation=None;let mut search=None;let mut randomness=None;
++    for line in text.lines() {
++        if line.is_empty() || line.starts_with('#') {continue;}
++        let (key,value)=line.split_once('=').ok_or("bad input assignment")?;
++        match key {
++            "case"=>case=Some(value.to_string()),
++            "fen"=>fen=Some(value.to_string()),
++            "moves"=>moves=Some(value.to_string()),
++            "own"=>own=Some(value.to_string()),
++            "opponent"=>opponent=Some(value.to_string()),
++            "evaluation"=>evaluation=Some(value.to_string()),
++            "search"=>search=Some(value.to_string()),
++            "randomness"=>randomness=Some(value.parse::<i32>().map_err(|_|"bad randomness")?),
++            _=>return Err(format!("unknown input key {key}")),
++        }
++    }
++    // These released profiling inputs use rnd=0; no claim is made about root
++    // seed adjustments or live Host/Clock behavior in this research adapter.
++    if randomness!=Some(0) {return Err("branch pilot admits only explicit zero randomness".into());}
++    fn numbers<const N:usize>(s:Option<String>)->Result<[i32;N],String> {
++        let values:Vec<i32>=s.ok_or("missing numerical input")?.split(',')
++            .map(|x|x.parse().map_err(|_|"bad numerical input".to_string())).collect::<Result<_,_>>()?;
++        values.try_into().map_err(|_|"wrong numerical input arity".into())
++    }
++    let eval=numbers::<3>(evaluation)?;
++    let parameters=Parameters {own:numbers(own)?,opponent:numbers(opponent)?,
++        average_depth:eval[0],draw:eval[1],opponent_selectivity:eval[2]};
++    let setup=numbers::<4>(search)?;
++    if setup[1]<1 || setup[2]<48 {return Err("invalid depth/table input".into());}
++    let config=Config {selectivity:setup[0],maximum_depth:setup[1] as usize,
++        tts_bytes:setup[2] as usize,analysis:setup[3]};
++    let mut position=Position::from_fen(&fen.ok_or("missing initial FEN")?)?;
++    let mut history=SearchHistory::new(&position);
++    for token in moves.ok_or("missing moves")?.split_whitespace() {
++        let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);
++        let movement=*legal.as_slice().iter().find(|m|m.to_string()==token)
++            .ok_or_else(||format!("invalid history move {token}"))?;
++        position=position.played_unchecked(movement);
++        history.push(&position,Some(movement));
++    }
++    history.mark_root();
++    if case.as_deref()!=Some(fixture.case()){return Err("fixture case differs from input case".into());}
++    let report=coarse_pure_salvage::run(position,history,parameters,config,fixture)?;
++    println!("{}",report.json()?);
++    if report.failed(){return Err("coarse pure-result census failed".into());}
++    Ok(())
++}
++
++fn main() {
++    if let Err(error)=run() {eprintln!("coarse pure-result census: {error}");std::process::exit(1);}
++}
+--- /dev/null
++++ b/src/coarse_pure_salvage.rs
+@@ -0,0 +1,147 @@
++//! Serial coverage/cost census for pure results from seven coarse forecasts.
++//! No numerical consumer exists here: every producer and canonical owner runs
++//! native kernels and every private producer effect is discarded.
++use std::{cell::RefCell,rc::Rc,sync::Arc,time::Instant};
++use crate::{engine::{Config,Search,SearchSnapshot},evaluator::{EvalStats,Node,Parameters},history::SearchHistory,host::Host,
++    internal_split::{self,Fixture,WorkerControl},ordinary::{Predecessor,Request},ordinary_policy::Extensions,
++    position::Position,pure_observer::{self as pure,Caps,RootEpoch,Pool,Scope,ScopeGuard},quiescence::{Stats,Stopped},types::Move};
++
++const PRODUCER_CAPS:Caps=Caps{max_keys:262144,max_calls:4194304,max_bytes:64*1024*1024};
++const POOL_CAPS:Caps=Caps{max_keys:1835008,max_calls:29360128,max_bytes:512*1024*1024};
++const DEMAND_CAPS:Caps=Caps{max_keys:262144,max_calls:4194304,max_bytes:128*1024*1024};
++const MECHANISM_BYTES:usize=2*1024*1024*1024;
++
++#[derive(Clone,Copy,PartialEq,Eq)] enum Pass {Demand,Prefix}
++#[derive(Clone)] pub(crate) struct Context(Rc<RefCell<State>>);
++struct State {fixture:Fixture,pass:Pass,selected:bool,error:Option<String>,reference_tt:Option<u64>,binding_tt:Option<u64>,binding_wall_ns:u128,binding_cpu_ns:u128,
++    epoch:Option<RootEpoch>,pool:Option<Rc<Pool>>,observer:Option<pure::Context>,producers:Vec<ProducerReport>,snapshot_ns:u128,snapshot_bytes:usize,tt_base_bytes:usize,tt_base_copy_bytes:usize,
++    pool_wall_ns:u128,pool_cpu_ns:u128,pool_render_ns:u128,pool_render_cpu_ns:u128,pool_json:String,estimated_mechanism_bytes:usize,parent_wall_ns:u128,parent_cpu_ns:u128,parent_nodes:u64,parent_relations:u64,movements:[Move;7],forecasts:[Request;7]}
++impl Context {
++    fn new(fixture:Fixture,pass:Pass,reference_tt:Option<u64>)->Self {Self(Rc::new(RefCell::new(State{fixture,pass,selected:false,error:None,reference_tt,binding_tt:None,binding_wall_ns:0,binding_cpu_ns:0,
++        epoch:None,pool:None,observer:None,producers:Vec::new(),snapshot_ns:0,snapshot_bytes:0,tt_base_bytes:0,tt_base_copy_bytes:0,pool_wall_ns:0,pool_cpu_ns:0,pool_render_ns:0,pool_render_cpu_ns:0,pool_json:"null".into(),estimated_mechanism_bytes:0,
++        parent_wall_ns:0,parent_cpu_ns:0,parent_nodes:0,parent_relations:0,movements:[Move::NONE;7],forecasts:[Request{ply:0,depth:0,lower:0,upper:0,previous_extension:0,iteration:0,checked:None};7]})))}
++    fn fail(&self,error:impl Into<String>)->Stopped {self.0.borrow_mut().error=Some(error.into());Stopped::WorkPoll}
++}
++pub(crate) struct Parent {context:Context,started:Instant,cpu_started:u128,base_nodes:u64,base_relations:u64}
++impl Drop for Parent {fn drop(&mut self){let mut state=self.context.0.borrow_mut();state.parent_wall_ns=self.started.elapsed().as_nanos();state.parent_cpu_ns=internal_split::process_cpu()-self.cpu_started;if let Some(observer)=&state.observer{observer.deactivate();}}}
++pub(crate) fn child_scope(parent:Option<&Parent>,index:usize)->Option<ScopeGuard> {
++    let parent=parent?;let observer=parent.context.0.borrow().observer.clone()?;
++    let scope=match index {1=>Scope::Coordinator,2..=8=>Scope::Queued(index-2),9.. =>Scope::Suffix,_=>Scope::Inactive};Some(observer.set_scope(scope))
++}
++pub(crate) fn end_parent<const D:bool,H:Host>(search:&mut Search<D,H>,parent:Option<Parent>) {
++    if let Some(parent)=parent {search.evaluator.research_attach_pure_observer(None).expect("detaching pure observer");
++        {let mut state=parent.context.0.borrow_mut();state.parent_nodes=search.stats.nodes-parent.base_nodes;state.parent_relations=search.evaluator.stats.relation_queries-parent.base_relations;}drop(parent);}
++}
++
++#[derive(Clone,Debug,PartialEq,Eq)] struct NativeOutput {node:Node,score:i32,pv:Vec<Move>,stats:Stats,evaluations:EvalStats}
++fn execute<const A:bool>(search:&mut Search<true>,node:Node,history:&SearchHistory,request:Request,position:&Position,map:&crate::influence::Influence,checked:bool,movement:Move)->Result<NativeOutput,String> {
++    assert!(search.hierarchical.is_none()&&search.learning.research_sink().is_none());
++    let mut node=node;let mut actual_history=history.clone();actual_history.push(&node.position,Some(movement));
++    let returned=search.visit_ordinary_impl::<A>(&mut node,&mut actual_history,request,Predecessor{position,influence:map,checked,movement:Some(movement)});actual_history.pop();
++    if actual_history!=*history{return Err("producer history was not restored".into());}
++    let score=returned.map_err(|stop|format!("producer stopped: {stop:?}"))?;
++    Ok(NativeOutput{node,score,pv:search.pv[request.ply][..search.pv_len[request.ply]].to_vec(),stats:search.stats,evaluations:search.evaluator.stats})
++}
++struct ProducerReport {id:usize,movement:Move,request:Request,nodes:u64,relations:u64,full:u64,fast:u64,maps:u64,plain_wall_ns:u128,plain_cpu_ns:u128,captured_wall_ns:u128,captured_cpu_ns:u128,
++    plain_setup_ns:u128,captured_setup_ns:u128,finish_ns:u128,finish_cpu_ns:u128,summary_render_ns:u128,summary_render_cpu_ns:u128,plain_drop_ns:u128,plain_drop_cpu_ns:u128,captured_drop_ns:u128,captured_drop_cpu_ns:u128,compare_ns:u128,plain_overlay_groups:usize,captured_overlay_groups:usize,plain_overlay_bytes:usize,captured_overlay_bytes:usize,plain_private_bytes:usize,captured_private_bytes:usize,store_json:String}
++impl ProducerReport {fn json(&self)->String {format!("{{\"id\":{},\"movement\":\"{}\",\"request\":{{\"ply\":{},\"depth\":{},\"window\":[{},{}],\"previous_extension\":{},\"iteration\":{}}},\"native_equal\":true,\"nodes_per_execution\":{},\"relations_per_execution\":{},\"full_per_execution\":{},\"fast_per_execution\":{},\"maps_per_execution\":{},\"physical_executions\":2,\"plain_wall_ns\":{},\"plain_process_cpu_ns\":{},\"captured_wall_ns\":{},\"captured_process_cpu_ns\":{},\"plain_setup_ns\":{},\"captured_setup_ns\":{},\"capture_finish_ns\":{},\"capture_finish_process_cpu_ns\":{},\"capture_summary_render_ns\":{},\"capture_summary_render_process_cpu_ns\":{},\"plain_private_drop_ns\":{},\"plain_private_drop_process_cpu_ns\":{},\"captured_private_drop_ns\":{},\"captured_private_drop_process_cpu_ns\":{},\"private_state_compare_ns\":{},\"plain_overlay_groups\":{},\"captured_overlay_groups\":{},\"plain_overlay_bytes\":{},\"captured_overlay_bytes\":{},\"plain_private_bytes\":{},\"captured_private_bytes\":{},\"production\":{}}}",self.id,self.movement,self.request.ply,self.request.depth,self.request.lower,self.request.upper,self.request.previous_extension,self.request.iteration,self.nodes,self.relations,self.full,self.fast,self.maps,self.plain_wall_ns,self.plain_cpu_ns,self.captured_wall_ns,self.captured_cpu_ns,self.plain_setup_ns,self.captured_setup_ns,self.finish_ns,self.finish_cpu_ns,self.summary_render_ns,self.summary_render_cpu_ns,self.plain_drop_ns,self.plain_drop_cpu_ns,self.captured_drop_ns,self.captured_drop_cpu_ns,self.compare_ns,self.plain_overlay_groups,self.captured_overlay_groups,self.plain_overlay_bytes,self.captured_overlay_bytes,self.plain_private_bytes,self.captured_private_bytes,self.store_json)}}
++fn produce<const A:bool>(snapshot:&SearchSnapshot,epoch:&RootEpoch,node:&Node,history:&SearchHistory,request:Request,current:Predecessor<'_>,id:usize,movement:Move)->Result<(pure::Store,ProducerReport),String> {
++    let plain_started=Instant::now();let plain_cpu=internal_split::process_cpu();let setup=Instant::now();let mut plain=Search::<true>::research_from_snapshot(snapshot);let base_stats=plain.stats;let base_eval=plain.evaluator.stats;
++    let (control,plain_reason)=WorkerControl::bounded(plain.stats.nodes);plain.internal_worker=Some(control);let plain_setup_ns=setup.elapsed().as_nanos();
++    let child=node.child(&plain.evaluator.root,movement);let expected=execute::<A>(&mut plain,child,history,request,current.position,current.influence,current.checked,movement).map_err(|error|format!("plain producer{id}: {error}; cap={:?}",*plain_reason.lock().unwrap()))?;
++    let plain_wall_ns=plain_started.elapsed().as_nanos();let plain_cpu_ns=internal_split::process_cpu()-plain_cpu;
++    let captured_started=Instant::now();let captured_cpu=internal_split::process_cpu();let setup=Instant::now();let mut captured=Search::<true>::research_from_snapshot(snapshot);let (control,captured_reason)=WorkerControl::bounded(captured.stats.nodes);captured.internal_worker=Some(control);
++    let observer=pure::Context::producer(epoch.clone(),PRODUCER_CAPS,id)?;captured.evaluator.research_attach_pure_observer(Some(observer.clone()))?;let captured_setup_ns=setup.elapsed().as_nanos();
++    let actual=execute::<A>(&mut captured,child,history,request,current.position,current.influence,current.checked,movement).map_err(|error|format!("captured producer{id}: {error}; cap={:?}; observer={:?}",*captured_reason.lock().unwrap(),observer.fatal()))?;
++    let captured_wall_ns=captured_started.elapsed().as_nanos();let captured_cpu_ns=internal_split::process_cpu()-captured_cpu;
++    captured.evaluator.research_attach_pure_observer(None)?;let finish=Instant::now();let finish_cpu=internal_split::process_cpu();let store=observer.finish_producer()?;let finish_ns=finish.elapsed().as_nanos();let finish_cpu_ns=internal_split::process_cpu()-finish_cpu;
++    let render=Instant::now();let render_cpu=internal_split::process_cpu();let store_json=store.json();let summary_render_ns=render.elapsed().as_nanos();let summary_render_cpu_ns=internal_split::process_cpu()-render_cpu;
++    let compare=Instant::now();if expected!=actual||!plain.research_eq(&captured){return Err(format!("producer{id} observer changed native outputs/work/private effects"));}let compare_ns=compare.elapsed().as_nanos();
++    let a=plain.remembered.as_ref().unwrap();let b=captured.remembered.as_ref().unwrap();
++    let mut report=ProducerReport{id,movement,request,nodes:expected.stats.nodes-base_stats.nodes,relations:expected.evaluations.relation_queries-base_eval.relation_queries,full:expected.evaluations.full-base_eval.full,fast:expected.evaluations.fast-base_eval.fast,maps:expected.evaluations.influence_builds-base_eval.influence_builds,
++        plain_wall_ns,plain_cpu_ns,captured_wall_ns,captured_cpu_ns,plain_setup_ns,captured_setup_ns,finish_ns,finish_cpu_ns,summary_render_ns,summary_render_cpu_ns,plain_drop_ns:0,plain_drop_cpu_ns:0,captured_drop_ns:0,captured_drop_cpu_ns:0,compare_ns,plain_overlay_groups:a.research_overlay_groups(),captured_overlay_groups:b.research_overlay_groups(),plain_overlay_bytes:a.research_overlay_bytes(),captured_overlay_bytes:b.research_overlay_bytes(),plain_private_bytes:plain.research_bytes(),captured_private_bytes:captured.research_bytes(),store_json};
++    let dropping=Instant::now();let dropping_cpu=internal_split::process_cpu();drop(plain);drop(expected);drop(plain_reason);report.plain_drop_ns=dropping.elapsed().as_nanos();report.plain_drop_cpu_ns=internal_split::process_cpu()-dropping_cpu;
++    let dropping=Instant::now();let dropping_cpu=internal_split::process_cpu();drop(captured);drop(actual);drop(observer);drop(captured_reason);report.captured_drop_ns=dropping.elapsed().as_nanos();report.captured_drop_cpu_ns=internal_split::process_cpu()-dropping_cpu;
++    Ok((store,report))
++}
++
++pub(crate) fn boundary<const A:bool,const D:bool,H:Host>(search:&mut Search<D,H>,node:&Node,history:&SearchHistory,request:Request,previous:Predecessor<'_>,current:Predecessor<'_>,best:i32,index:usize,extensions:&Extensions,ordinal:u64)->Result<Option<Parent>,Stopped> {
++    let Some(context)=search.coarse_pure.clone() else{return Ok(None)};
++    {let state=context.0.borrow();if state.selected||index!=1||state.fixture.parent_ordinal()!=ordinal{return Ok(None);}}
++    if request.lower<=-10000||request.upper>=10000||request.lower>=request.upper||request.depth<3||search.candidates[request.ply].len-index<8{return Err(context.fail("frozen coarse boundary became ineligible"));}
++    assert!(D&&!H::ACTIVE&&search.timing.is_none()&&search.limits.nodes.is_none()&&search.control.is_none()&&search.hierarchical.is_none()&&search.internal_split.is_none());
++    let binding=Instant::now();let binding_cpu=internal_split::process_cpu();let actual=crate::wide_capture::boundary_binding::<A,D,H>(search,node,history,request,previous,current,best,index,extensions,ordinal);let tt=search.remembered.as_ref().unwrap().research_digest();
++    {let mut state=context.0.borrow_mut();state.binding_wall_ns=binding.elapsed().as_nanos();state.binding_cpu_ns=internal_split::process_cpu()-binding_cpu;state.binding_tt=Some(tt);
++        if !state.fixture.binding_matches(&actual.descriptor){state.error=Some("frozen coarse known-input binding mismatch".into());return Err(Stopped::WorkPoll);}
++        if state.reference_tt.is_some_and(|reference|reference!=tt){state.error=Some("canonical prefix TT audit mismatch".into());return Err(Stopped::WorkPoll);}
++        state.selected=true;
++    }
++    search.wide_capture=None;
++    if context.0.borrow().pass==Pass::Prefix {search.evaluator.research_attach_pure_observer(None).map_err(|error|context.fail(error))?;if let Some(observer)=&context.0.borrow().observer{observer.deactivate();}return Ok(None);}
++    let started=Instant::now();let cpu_started=internal_split::process_cpu();let base_nodes=search.stats.nodes;let base_relations=search.evaluator.stats.relation_queries;
++    let snapshot_started=Instant::now();let snapshot=Arc::new(search.research_snapshot());let snapshot_ns=snapshot_started.elapsed().as_nanos();let epoch=search.evaluator.research_pure_epoch();let (movements,forecasts)=internal_split::forecasts(search,node,request,best,index,extensions);
++    let estimate=7*PRODUCER_CAPS.max_bytes+2*POOL_CAPS.max_bytes+2*DEMAND_CAPS.max_bytes+2*24*1024*1024+snapshot.base_bytes()+2*snapshot.bytes()+16*1024*1024;
++    if estimate>MECHANISM_BYTES{return Err(context.fail("prospective census mechanism memory estimate exceeds2GiB"));}
++    let mut stores=Vec::with_capacity(7);let mut reports=Vec::with_capacity(7);
++    for id in 0..7 {let (store,report)=produce::<A>(&snapshot,&epoch,node,history,forecasts[id],current,id,movements[id]).map_err(|error|context.fail(error))?;stores.push(store);reports.push(report);}
++    let pool_started=Instant::now();let pool_cpu=internal_split::process_cpu();let pool=Rc::new(Pool::combine(stores,POOL_CAPS).map_err(|error|context.fail(error))?);let pool_wall_ns=pool_started.elapsed().as_nanos();let pool_cpu_ns=internal_split::process_cpu()-pool_cpu;
++    let render=Instant::now();let render_cpu=internal_split::process_cpu();let pool_json=pool.json();let pool_render_ns=render.elapsed().as_nanos();let pool_render_cpu_ns=internal_split::process_cpu()-render_cpu;
++    let observer=pure::Context::canonical(epoch.clone(),pool.clone(),DEMAND_CAPS).map_err(|error|context.fail(error))?;search.evaluator.research_attach_pure_observer(Some(observer.clone())).map_err(|error|context.fail(error))?;
++    {let mut state=context.0.borrow_mut();state.epoch=Some(epoch);state.pool=Some(pool);state.observer=Some(observer);state.producers=reports;state.snapshot_ns=snapshot_ns;state.snapshot_bytes=snapshot.bytes();state.tt_base_bytes=snapshot.base_bytes();state.tt_base_copy_bytes=snapshot.base_copy_bytes();state.pool_wall_ns=pool_wall_ns;state.pool_cpu_ns=pool_cpu_ns;state.pool_render_ns=pool_render_ns;state.pool_render_cpu_ns=pool_render_cpu_ns;state.pool_json=pool_json;state.estimated_mechanism_bytes=estimate;state.movements=movements;state.forecasts=forecasts;}
++    Ok(Some(Parent{context,started,cpu_started,base_nodes,base_relations}))
++}
++
++pub struct Report {context:Context,prefix_context:Context,demand:pure::DemandReport,prefix:pure::PrefixReport,first_wall_ns:u128,first_cpu_ns:u128,second_wall_ns:u128,second_cpu_ns:u128,prefix_prebind_ns:u128,root_compare_ns:u128,canonical_nodes:u64,canonical_relations:u64,second_nodes:u64,second_relations:u64,completed_depth:u8,root_passes:usize,peak_rss_kib:usize}
++impl Report {
++    pub fn failed(&self)->bool {self.demand.failed()||self.prefix.failed()||self.context.0.borrow().error.is_some()||self.prefix_context.0.borrow().error.is_some()}
++    pub fn json(&self)->Result<String,String> {let state=self.context.0.borrow();let second=self.prefix_context.0.borrow();let producers=state.producers.iter().map(ProducerReport::json).collect::<Vec<_>>().join(",");let n=state.producers.iter().map(|r|r.nodes).sum::<u64>();let r=state.producers.iter().map(|r|r.relations).sum::<u64>();
++        let mut out=format!("{{\"schema\":\"rook2-coarse-pure-salvage-v1\",\"processId\":{},\"serial_threads\":1,\"horizon\":8,\"fixture\":{},\"fixture_bound\":true,\"all_results_ready_coverage_ceiling\":true,\"readiness_measured\":false,\"numerical_reuse\":false,\"journals_constructed\":false,\"canonical_fidelity\":true,\"producer_native_fidelity\":true,\"completed_depth\":{},\"root_passes\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"second_canonical_nodes\":{},\"second_canonical_relations\":{},\"producer_nodes_per_set\":{},\"producer_relations_per_set\":{},\"physical_producer_executions\":14,\"physical_canonical_passes\":2,\"physical_total_nodes\":{},\"physical_total_relations\":{},\"parent_nodes\":{},\"parent_relations\":{},\"tt_base_copy_bytes\":{},\"tt_base_bytes\":{},\"snapshot_bytes\":{},\"estimated_mechanism_bytes\":{},\"peak_rss_kib\":{},\"binding_tt_digest\":\"{:016x}\",\"prefix_binding_tt_digest\":\"{:016x}\",\"caps\":{{\"producer_nodes\":262144,\"producer_keys\":262144,\"producer_calls\":4194304,\"producer_bytes\":67108864,\"pool_keys\":1835008,\"pool_calls\":29360128,\"pool_bytes\":536870912,\"demand_keys\":262144,\"demand_calls\":4194304,\"demand_bytes\":134217728,\"prefix_calls\":4194304,\"prefix_bytes\":134217728,\"json_output_bytes\":268435456,\"mechanism_bytes\":2147483648,\"process_bytes\":8589934592,\"lifetime_seconds\":180}},\"timings\":{{\"first_canonical_wall_ns\":{},\"first_canonical_process_cpu_ns\":{},\"second_canonical_wall_ns\":{},\"second_canonical_process_cpu_ns\":{},\"parent_wall_ns\":{},\"parent_process_cpu_ns\":{},\"binding_wall_ns\":{},\"binding_process_cpu_ns\":{},\"prefix_binding_wall_ns\":{},\"prefix_binding_process_cpu_ns\":{},\"snapshot_ns\":{},\"pool_wall_ns\":{},\"pool_process_cpu_ns\":{},\"pool_render_ns\":{},\"pool_render_process_cpu_ns\":{},\"prefix_prebind_ns\":{},\"root_compare_ns\":{}}},\"producers\":[{}],\"pool\":{},\"demand\":{},\"prefix\":{}",std::process::id(),state.fixture.json(),self.completed_depth,self.root_passes,self.canonical_nodes,self.canonical_relations,self.second_nodes,self.second_relations,n,r,self.canonical_nodes+self.second_nodes+2*n,self.canonical_relations+self.second_relations+2*r,state.parent_nodes,state.parent_relations,state.tt_base_copy_bytes,state.tt_base_bytes,state.snapshot_bytes,state.estimated_mechanism_bytes,self.peak_rss_kib,state.binding_tt.unwrap(),second.binding_tt.unwrap(),self.first_wall_ns,self.first_cpu_ns,self.second_wall_ns,self.second_cpu_ns,state.parent_wall_ns,state.parent_cpu_ns,state.binding_wall_ns,state.binding_cpu_ns,second.binding_wall_ns,second.binding_cpu_ns,state.snapshot_ns,state.pool_wall_ns,state.pool_cpu_ns,state.pool_render_ns,state.pool_render_cpu_ns,self.prefix_prebind_ns,self.root_compare_ns,producers,state.pool_json,self.demand.json(&self.prefix),self.prefix.json());
++        out.push_str(",\"scope\":\"One serial mechanism census at the unchanged frozen wide fixture. Seven native private-overlay producers execute twice each: plain and pure-observed; paired output, logical work, history restoration and native TT/learning/pawn state must agree. One immutable TT base is copied and shared, with all producer effects discarded. No hierarchy forests, operation journals, numerical cache consumer or work-credit reuse are constructed. Canonical pass1 contains producer controls, pool construction and native demand observation; pass2 is a complete fresh canonical execution joining only prefix calls against the bounded producer set. Raw physical totals include both producer sets and both whole-root canonical passes; these are sums of native charged-work counters, whose root initialization counters are reset by the native sequence owner. Plain/captured producer intervals include Search construction and native execution; detach/finalize, private-state audit and destruction stay outside those intervals but remain charged in parent/raw first-pass timing. Private Search/result/control destruction has separate plain/captured wall and process-CPU intervals; Store and Pool JSON rendering is separate audit cost from finish/combine. The extra prefix evaluator prebind is audit setup, then normal root setup calls remain included in actual prefix observations. Same-child coverage is a subset of pooled-seven coverage; unique keys and repeated demand are separate, and matched Influence/inline Activity-Shelter kernel timers are disjoint observational proxies, not time saved. All producer results are assumed ready for coverage; readiness and parallel delivery are not measured. Parent interval includes coordinator, seven queued children and later native suffix. Whole-root output/work/final shared-state audits retain the transient-overwrite limitation. This is not a timing matrix or an end-to-end speed claim.\"}");if out.len()>256*1024*1024{return Err("coarse census JSON exceeds256MiB".into());}Ok(out)
++    }
++}
++fn peak_rss()->usize {std::fs::read_to_string("/proc/self/status").ok().and_then(|s|s.lines().find(|l|l.starts_with("VmHWM:")).and_then(|l|l.split_whitespace().nth(1)).and_then(|v|v.parse().ok())).unwrap_or(0)}
++fn root_error(context:&Context,error:String)->String {format!("{error}; dispatcher={:?}",context.0.borrow().error)}
++pub fn run(position:Position,history:SearchHistory,parameters:Parameters,config:Config,fixture:Fixture)->Result<Report,String> {
++    if history.search_ply()!=0{return Err("coarse census requires root history boundary".into());}
++    let context=Context::new(fixture.clone(),Pass::Demand,None);let mut first=Search::<true>::new(&position);first.config=config;first.evaluator.parameters=parameters.clone();first.coarse_pure=Some(context.clone());first.wide_capture=Some(crate::wide_capture::Context::counter());let mut first_history=history.clone();
++    let began=Instant::now();let cpu=internal_split::process_cpu();let first_output=internal_split::native_root(&mut first,position,&mut first_history,8).map_err(|error|root_error(&context,error))?;let first_wall_ns=began.elapsed().as_nanos();let first_cpu_ns=internal_split::process_cpu()-cpu;first.coarse_pure=None;
++    let (epoch,pool,reference_tt,observer)={let mut state=context.0.borrow_mut();if !state.selected{return Err("frozen coarse fixture was not reached".into());}(state.epoch.clone().unwrap(),state.pool.clone().unwrap(),state.binding_tt,state.observer.take().unwrap())};let demand=observer.finish_canonical()?;drop(observer);
++    let prefix_context=Context::new(fixture,Pass::Prefix,reference_tt);let prefix_observer=pure::Context::prefix(epoch,pool,DEMAND_CAPS)?;prefix_context.0.borrow_mut().observer=Some(prefix_observer.clone());
++    let mut second=Search::<true>::new(&position);second.config=config;second.evaluator.parameters=parameters;second.coarse_pure=Some(prefix_context.clone());second.wide_capture=Some(crate::wide_capture::Context::counter());
++    let prebind=Instant::now();second.evaluator.begin_search(&position);second.evaluator.research_attach_pure_observer(Some(prefix_observer.clone()))?;let prefix_prebind_ns=prebind.elapsed().as_nanos();let mut second_history=history.clone();
++    let began=Instant::now();let cpu=internal_split::process_cpu();let second_output=internal_split::native_root(&mut second,position,&mut second_history,8).map_err(|error|root_error(&prefix_context,error))?;let second_wall_ns=began.elapsed().as_nanos();let second_cpu_ns=internal_split::process_cpu()-cpu;second.coarse_pure=None;
++    if !prefix_context.0.borrow().selected{return Err("prefix pass did not reach frozen fixture".into());}second.evaluator.research_attach_pure_observer(None)?;let prefix=prefix_observer.finish_prefix()?;
++    let compare=Instant::now();if first_output!=second_output||!first.research_eq(&second)||first_history!=history||second_history!=history{return Err("pure census changed whole-root output/work/shared-state/history".into());}let root_compare_ns=compare.elapsed().as_nanos();
++    Ok(Report{context,prefix_context,demand,prefix,first_wall_ns,first_cpu_ns,second_wall_ns,second_cpu_ns,prefix_prebind_ns,root_compare_ns,canonical_nodes:first.stats.nodes,canonical_relations:first.evaluator.stats.relation_queries,second_nodes:second.stats.nodes,second_relations:second.evaluator.stats.relation_queries,completed_depth:first_output.completed_depth(),root_passes:first_output.pass_count(),peak_rss_kib:peak_rss()})
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{host::NoHost,movegen,quiescence::Limits};
++    const START:&str="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++    fn frozen(binding:&str)->Fixture {let hex=binding.as_bytes().iter().map(|byte|format!("{byte:02x}")).collect::<String>();Fixture::parse(&format!("schema=rook2-wide-fixture-v1\ncase=profile-35\nhorizon=8\nparent_ordinal=1\nbinding_hex={hex}\n")).unwrap()}
++    #[test]
++    fn dispatcher_private_effects_and_observed_native_demand_remain_exact() {
++        // A synthetic post-child0 boundary exercises the mechanism, not the
++        // frozen workload or its hindsight eligibility selection.
++        let position=Position::from_fen(START).unwrap();let mut search=Search::<true>::new(&position);search.config.tts_bytes=65536;search.ensure_table().unwrap();search.bind_geometry_permission(&position);
++        let (node,map)=search.prepare_root_with_influence(position);search.begin_owned_sequence(Limits::default());movegen::generate_legal(&position,&mut search.candidates[0]);let history=SearchHistory::new(&position);
++        let request=Request{ply:0,depth:3,lower:-500,upper:500,previous_extension:0,iteration:3,checked:Some(false)};let previous=Predecessor{position:&position,influence:&map,checked:false,movement:None};let extensions=Extensions::new(&position,search.candidates[0].as_slice(),&position,None,0,false);
++        let binding=crate::wide_capture::boundary_binding::<true,true,NoHost>(&mut search,&node,&history,request,previous,previous,100,1,&extensions,1);let context=Context::new(frozen(&binding.descriptor),Pass::Demand,None);search.coarse_pure=Some(context.clone());search.wide_capture=Some(crate::wide_capture::Context::counter());let mut reference=search.research_clone();
++        let parent=boundary::<true,true,NoHost>(&mut search,&node,&history,request,previous,previous,100,1,&extensions,1).unwrap().unwrap();
++        assert!(search.research_eq(&reference),"private producers must leave canonical state untouched");assert!(search.wide_capture.is_none());assert_eq!(context.0.borrow().producers.len(),7);assert!(context.0.borrow().tt_base_copy_bytes>0);
++        for index in 1..=9 {let movement=search.candidates[0].moves[index];let fresh=extensions.for_move(&position,movement);let child_request=Request{ply:1,depth:2+fresh as i32,lower:-500,upper:-100,previous_extension:fresh,checked:None,..request};
++            let scope=child_scope(Some(&parent),index);assert!(scope.is_some());let child=node.child(&search.evaluator.root,movement);
++            let actual=execute::<true>(&mut search,child,&history,child_request,&position,&map,false,movement).unwrap();let expected=execute::<true>(&mut reference,child,&history,child_request,&position,&map,false,movement).unwrap();assert_eq!(actual,expected);drop(scope);
++        }
++        end_parent(&mut search,Some(parent));assert!(search.research_eq(&reference));let observer=context.0.borrow_mut().observer.take().unwrap();assert!(observer.fatal().is_none());let report=observer.finish_canonical().unwrap();assert!(!report.failed());assert!(context.0.borrow().parent_nodes>0);
++    }
++    #[test]
++    fn dispatcher_prefix_observer_preserves_fresh_whole_root_outputs_and_state() {
++        let position=Position::from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1").unwrap();let config=Config{maximum_depth:1,tts_bytes:65536,..Config::default()};let mut reference=Search::<true>::new(&position);reference.config=config;let mut a=SearchHistory::new(&position);
++        let expected=internal_split::native_root(&mut reference,position,&mut a,8).unwrap();let epoch=reference.evaluator.research_pure_epoch();let stores=(0..7).map(|id|pure::Context::producer(epoch.clone(),PRODUCER_CAPS,id).unwrap().finish_producer().unwrap()).collect();let pool=Rc::new(Pool::combine(stores,POOL_CAPS).unwrap());let observer=pure::Context::prefix(epoch,pool,DEMAND_CAPS).unwrap();
++        let mut actual=Search::<true>::new(&position);actual.config=config;actual.evaluator.begin_search(&position);actual.evaluator.research_attach_pure_observer(Some(observer.clone())).unwrap();let mut b=SearchHistory::new(&position);
++        let returned=internal_split::native_root(&mut actual,position,&mut b,8).unwrap();actual.evaluator.research_attach_pure_observer(None).unwrap();assert_eq!(returned,expected);assert!(actual.research_eq(&reference));assert_eq!(a,b);assert_eq!(a.search_ply(),0);assert!(!observer.finish_prefix().unwrap().failed());
++    }
++}
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -32,6 +32,8 @@
+ }
+ 
+ pub struct Search<const DIAGNOSTICS: bool = true, H: Host = NoHost> {
++    #[cfg(feature="coarse-pure-salvage")]
++    pub(crate) coarse_pure:Option<crate::coarse_pure_salvage::Context>,
+     #[cfg(feature = "internal-split")]
+     pub(crate) wide_capture: Option<crate::wide_capture::Context>,
+     #[cfg(feature = "internal-split")]
+@@ -96,7 +98,7 @@
+ #[cfg(feature = "internal-split")]
+ impl Search<true> {
+     pub(crate) fn research_from_snapshot(snapshot:&SearchSnapshot)->Self {
+-        Self {wide_capture:None,internal_split:None,internal_worker:None,hierarchical:None,
++        Self {#[cfg(feature="coarse-pure-salvage")] coarse_pure:None,wide_capture:None,internal_split:None,internal_worker:None,hierarchical:None,
+             evaluator:Evaluator::research_from_snapshot(snapshot.evaluator.clone()),config:snapshot.config,
+             candidates:snapshot.candidates.clone(),extension_flags:snapshot.extension_flags.clone(),ordering:OrderingScratch::new(),
+             learning:Learning::research_from_snapshot(snapshot.learning.clone()),
+@@ -111,6 +113,8 @@
+     pub(crate) fn research_clone(&self) -> Self {
+         assert!(self.timing.is_none() && self.limits.nodes.is_none() && self.control.is_none());
+         Self {
++            #[cfg(feature="coarse-pure-salvage")]
++            coarse_pure:None,
+             #[cfg(feature = "internal-split")]
+             wide_capture: None,
+             #[cfg(feature = "internal-split")]
+@@ -182,6 +186,8 @@
+ 
+     pub fn new(root: &Position) -> Self {
+         Self {
++            #[cfg(feature="coarse-pure-salvage")]
++            coarse_pure:None,
+             #[cfg(feature = "internal-split")]
+             wide_capture: None,
+             #[cfg(feature = "internal-split")]
+@@ -223,6 +229,8 @@
+     /// Transfer reusable storage; changing a host neither clones nor allocates search buffers.
+     pub fn map_host<N: Host>(self, host: N) -> (Search<DIAGNOSTICS, N>, H) {
+         let Self {
++            #[cfg(feature="coarse-pure-salvage")]
++            coarse_pure,
+             #[cfg(feature = "internal-split")]
+             wide_capture,
+             #[cfg(feature = "internal-split")]
+@@ -250,6 +258,8 @@
+         } = self;
+         (
+             Search {
++                #[cfg(feature="coarse-pure-salvage")]
++                coarse_pure,
+                 #[cfg(feature = "internal-split")]
+                 wide_capture,
+                 #[cfg(feature = "internal-split")]
+@@ -308,6 +318,8 @@
+     }
+ 
+     pub(crate) fn charge_node(&mut self, history: &SearchHistory) -> Result<(), Stopped> {
++        #[cfg(feature="coarse-pure-salvage")]
++        if self.evaluator.research_pure_fatal().is_some(){return Err(Stopped::WorkPoll);}
+         #[cfg(feature = "internal-split")]
+         if self.internal_worker.as_ref().is_some_and(|control| control.stopped(self.stats.nodes,self.remembered.as_ref().map_or(0,|table|table.research_overlay_groups()))) {
+             return Err(Stopped::WorkPoll);
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -292,6 +292,8 @@
+ }
+ 
+ pub struct Evaluator<const DIAGNOSTICS: bool = true> {
++    #[cfg(feature = "coarse-pure-salvage")]
++    pure_observer: Option<crate::pure_observer::Context>,
+     pub root: RootContext,
+     pub parameters: Parameters,
+     pub draw_preference: i32,
+@@ -306,6 +308,43 @@
+ }
+ 
+ impl<const DIAGNOSTICS: bool> Evaluator<DIAGNOSTICS> {
++    #[cfg(feature = "coarse-pure-salvage")]
++    pub(crate) fn research_pure_epoch(&self) -> crate::pure_observer::RootEpoch {
++        crate::pure_observer::RootEpoch::new(&self.root,&self.parameters,self.draw_preference,self.variation_range,
++            [self.weights.structure,self.weights.progress,self.weights.central,self.weights.mobility,self.weights.shelter])
++    }
++
++    /// Attach only at a lexical native-root boundary; immutable bindings are
++    /// compared exactly here, rather than rebuilt at every pure lookup.
++    #[cfg(feature = "coarse-pure-salvage")]
++    pub(crate) fn research_attach_pure_observer(&mut self, observer: Option<crate::pure_observer::Context>) -> Result<(),String> {
++        if let Some(context)=&observer {
++            if self.full_worker.is_some() {return Err("pure census requires inline FULL kernels".into());}
++            #[cfg(feature = "child-preparation")]
++            if self.child_preparation.is_some() {return Err("pure census excludes prepared kernels".into());}
++            context.check_epoch(&self.research_pure_epoch());
++            if let Some(fatal)=context.fatal(){return Err(fatal.into());}
++        }
++        self.pure_observer=observer;Ok(())
++    }
++
++    #[cfg(feature = "coarse-pure-salvage")]
++    pub(crate) fn research_pure_fatal(&self) -> Option<&'static str> {
++        self.pure_observer.as_ref().and_then(crate::pure_observer::Context::fatal)
++    }
++
++    #[cfg(feature = "coarse-pure-salvage")]
++    fn research_inline_chain(&self,position:&Position,influence:&Influence,material:i32) -> evaluator_worker::ActivityShelter {
++        let observer=self.pure_observer.as_ref().filter(|context|context.enabled());
++        let started=observer.map(|_|std::time::Instant::now());
++        let value=evaluator_worker::compute(position,influence,material,self.weights.mobility,self.weights.shelter);
++        if let (Some(observer),Some(started))=(observer,started) {
++            let kernel_ns=started.elapsed().as_nanos();
++            observer.chain(position,influence,material,self.weights.mobility,self.weights.shelter,value.activity,value.shelter,kernel_ns);
++        }
++        value
++    }
++
+     #[cfg(feature = "branch-transactions")]
+     pub(crate) fn research_snapshot(&self) -> EvaluatorSnapshot {
+         assert!(self.full_worker.is_none(), "internal worker snapshot requires inline evaluation");
+@@ -321,6 +360,8 @@
+     #[cfg(feature = "branch-transactions")]
+     pub(crate) fn research_from_snapshot(snapshot: EvaluatorSnapshot) -> Self {
+         Self {
++            #[cfg(feature = "coarse-pure-salvage")]
++            pure_observer: None,
+             root: snapshot.root, parameters: snapshot.parameters,
+             draw_preference: snapshot.draw_preference, variation_range: snapshot.variation_range,
+             weights: snapshot.weights, pawns: PawnCache::research_from_snapshot(snapshot.pawns),
+@@ -340,6 +381,8 @@
+             "branch pilot requires inline evaluation"
+         );
+         Self {
++            #[cfg(feature = "coarse-pure-salvage")]
++            pure_observer: None,
+             root: self.root.clone(),
+             parameters: self.parameters.clone(),
+             draw_preference: self.draw_preference,
+@@ -386,6 +429,8 @@
+         let parameters = Parameters::default();
+         let (root, weights, draw_preference, variation_range) = parameters.bind(position);
+         Self {
++            #[cfg(feature = "coarse-pure-salvage")]
++            pure_observer: None,
+             root,
+             parameters,
+             weights,
+@@ -527,6 +572,8 @@
+         ) = self.parameters.bind(position);
+         self.pawns.clear();
+         self.stats = EvalStats::default();
++        #[cfg(feature = "coarse-pure-salvage")]
++        if let Some(observer)=&self.pure_observer {observer.check_epoch(&self.research_pure_epoch());}
+     }
+ 
+     pub fn ensure_influence<'a>(
+@@ -552,13 +599,24 @@
+             } else {None};
+             #[cfg(not(feature = "child-preparation"))]
+             let prepared: Option<Influence> = None;
+-            *scratch = Some(if let Some(map)=prepared {map} else if coherent_geometry {
+-                let map = Influence::build_coherent(position);
+-                #[cfg(test)]
+-                COHERENT_BUILDS.with(|count| count.set(count.get() + 1));
++            *scratch = Some(if let Some(map)=prepared {map} else {
++                #[cfg(feature = "coarse-pure-salvage")]
++                let observer=self.pure_observer.as_ref().filter(|context|context.enabled());
++                #[cfg(feature = "coarse-pure-salvage")]
++                let started=observer.map(|_|std::time::Instant::now());
++                let map=if coherent_geometry {
++                    let map = Influence::build_coherent(position);
++                    #[cfg(test)]
++                    COHERENT_BUILDS.with(|count| count.set(count.get() + 1));
++                    map
++                } else {Influence::build(position)};
++                #[cfg(feature = "coarse-pure-salvage")]
++                if let (Some(observer),Some(started))=(observer,started) {
++                    let kernel_ns=started.elapsed().as_nanos();
++                    let route=if coherent_geometry {crate::pure_observer::Route::Coherent}else{crate::pure_observer::Route::Scalar};
++                    observer.influence(position,route,map,kernel_ns);
++                }
+                 map
+-            } else {
+-                Influence::build(position)
+             });
+             if DIAGNOSTICS {
+                 self.stats.influence_builds += 1;
+@@ -655,13 +713,12 @@
+         #[cfg(not(feature = "child-preparation"))]
+         let prepared_chain: Option<evaluator_worker::ActivityShelter> = None;
+         let inline_chain = if self.full_worker.is_none() {
+-            Some(prepared_chain.unwrap_or_else(||evaluator_worker::compute(
+-                position,
+-                influence,
+-                material,
+-                self.weights.mobility,
+-                self.weights.shelter,
+-            )))
++            Some(prepared_chain.unwrap_or_else(|| {
++                #[cfg(feature = "coarse-pure-salvage")]
++                { self.research_inline_chain(position,influence,material) }
++                #[cfg(not(feature = "coarse-pure-salvage"))]
++                { evaluator_worker::compute(position,influence,material,self.weights.mobility,self.weights.shelter) }
++            }))
+         } else {
+             None
+         };
+--- a/src/internal_split.rs
++++ b/src/internal_split.rs
+@@ -18,6 +18,11 @@
+ 
+ pub(crate) struct WorkerControl {cancel:Arc<AtomicBool>,base:u64,max_nodes:u64,deadline:Instant,reason:Arc<Mutex<Option<&'static str>>>}
+ impl WorkerControl {
++    #[cfg(feature="coarse-pure-salvage")]
++    pub(crate) fn bounded(base:u64)->(Self,Arc<Mutex<Option<&'static str>>>) {
++        let reason=Arc::new(Mutex::new(None));
++        (Self{cancel:Arc::new(AtomicBool::new(false)),base,max_nodes:MAX_NODES,deadline:Instant::now()+Duration::from_secs(180),reason:reason.clone()},reason)
++    }
+     pub(crate) fn stopped(&self,nodes:u64,overlay_groups:usize)->bool {
+         let reason=if self.cancel.load(Ordering::Relaxed){Some("cancelled")}else if overlay_groups>=131072{Some("overlay-group-cap")}else if nodes-self.base>=self.max_nodes{Some("executed-node-cap")}else if Instant::now()>=self.deadline{Some("task-lifetime-cap")}else{None};
+         if let Some(reason)=reason {*self.reason.lock().unwrap()=Some(reason);true}else{false}
+@@ -49,7 +54,12 @@
+         Ok(Self{case:case.into(),horizon:8,parent_ordinal,binding})
+     }
+     pub fn case(&self)->&str {&self.case}
+-    fn json(&self)->String {format!("{{\"schema\":\"rook2-wide-fixture-v1\",\"case\":\"{}\",\"horizon\":{},\"parent_ordinal\":{},\"binding_hex\":\"{}\"}}",self.case,self.horizon,self.parent_ordinal,encode_hex(self.binding.as_bytes()))}
++    #[cfg(feature="coarse-pure-salvage")]
++    pub(crate) fn parent_ordinal(&self)->u64 {self.parent_ordinal}
++    #[cfg(feature="coarse-pure-salvage")]
++    pub(crate) fn binding_matches(&self,actual:&str)->bool {self.binding==actual}
++
++    pub(crate) fn json(&self)->String {format!("{{\"schema\":\"rook2-wide-fixture-v1\",\"case\":\"{}\",\"horizon\":{},\"parent_ordinal\":{},\"binding_hex\":\"{}\"}}",self.case,self.horizon,self.parent_ordinal,encode_hex(self.binding.as_bytes()))}
+ }
+ fn encode_hex(bytes:&[u8])->String {const HEX:&[u8;16]=b"0123456789abcdef";let mut text=String::with_capacity(bytes.len()*2);for &byte in bytes {text.push(HEX[(byte>>4) as usize] as char);text.push(HEX[(byte&15) as usize] as char);}text}
+ fn decode_hex(text:&str)->Result<String,String> {
+@@ -164,6 +174,12 @@
+ }
+ fn fingerprint(bytes:&[u8],mut digest:u64)->u64 {for &byte in bytes {digest^=byte as u64;digest=digest.wrapping_mul(1099511628211);}digest}
+ 
++pub(crate) fn forecasts<const D:bool,H:Host>(search:&Search<D,H>,node:&Node,request:Request,best:i32,index:usize,extensions:&Extensions)->([Move;7],[Request;7]) {
++    let p=request.ply;let movements=std::array::from_fn(|id|search.candidates[p].moves[index+1+id]);
++    let requests=std::array::from_fn(|id|{let movement=movements[id];let fresh=extensions.for_move(&node.position,movement);Request{ply:p+1,depth:request.depth-1+fresh as i32,previous_extension:search.extension_flags[p][index+1+id]|fresh,lower:-request.upper,upper:-best.max(request.lower),checked:None,..request}});
++    (movements,requests)
++}
++
+ pub(crate) fn select<const A:bool,const D:bool,H:Host>(search:&mut Search<D,H>,node:&Node,history:&SearchHistory,request:Request,current:Predecessor<'_>,best:i32,index:usize,child0_nodes:u64,extensions:&Extensions,parent_ordinal:u64,previous:Predecessor<'_>)->Result<Option<Parent>,Stopped> {
+     let Some(context)=search.internal_split.clone() else{return Ok(None)};
+     if context.0.borrow().selected||index!=1{return Ok(None);}
+@@ -185,8 +201,7 @@
+     // before the split interval so native fallback and reused work pay equally.
+     search.wide_capture=None;
+     let started=Instant::now();let cpu_started=process_cpu();let p=request.ply;
+-    let movements=std::array::from_fn(|id|search.candidates[p].moves[index+1+id]);
+-    let forecasts=std::array::from_fn(|id|{let movement=movements[id];let fresh=extensions.for_move(&node.position,movement);Request{ply:p+1,depth:request.depth-1+fresh as i32,previous_extension:search.extension_flags[p][index+1+id]|fresh,lower:-request.upper,upper:-best.max(request.lower),checked:None,..request}});
++    let (movements,forecasts)=forecasts(search,node,request,best,index,extensions);
+     let selector=Selector{parent_ordinal,ply:p,depth:request.depth,iteration:request.iteration,lower:request.lower,upper:request.upper,best,remaining:search.candidates[p].len-index,child0_nodes,entry_nodes:search.stats.nodes,primary:node.position.primary,secondary:node.position.secondary,input_fingerprint:digest,movements,forecasts};
+     let mut state=context.0.borrow_mut();state.selected=true;state.selector=Some(selector.clone());
+     if !state.oracle&&state.audit.selector.as_ref()!=Some(&selector){state.fatal=Some("split-selector-oracle-mismatch");return Err(Stopped::HierarchicalAudit);}
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -62,3 +62,8 @@
+ pub mod internal_split;
+ #[cfg(feature = "internal-split")]
+ pub mod wide_capture;
++
++#[cfg(feature = "coarse-pure-salvage")]
++pub mod coarse_pure_salvage;
++#[cfg(feature = "coarse-pure-salvage")]
++pub(crate) mod pure_observer;
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -1008,7 +1008,11 @@
+         let mut split_parent = None;
+         #[cfg(feature = "internal-split")]
+         let mut capture_parent = None;
++        #[cfg(feature="coarse-pure-salvage")]
++        let mut coarse_parent=None;
+         while index < count {
++            #[cfg(feature="coarse-pure-salvage")]
++            let _pure_scope=crate::coarse_pure_salvage::child_scope(coarse_parent.as_ref(),index);
+             #[cfg(feature = "internal-split")]
+             let mut capture_child = crate::wide_capture::begin_child(self,capture_parent.as_ref(),index,best);
+             let movement = self.candidates[p].moves[index];
+@@ -1168,8 +1172,13 @@
+             if index == 1 {
+                 capture_parent = crate::wide_capture::boundary::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,previous,current,best,index,child0_nodes,&main_extensions,parent_ordinal)?;
+                 split_parent = crate::internal_split::select::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,current,best,index,child0_nodes,&main_extensions,parent_ordinal,previous)?;
+-            }
+-        }
++                #[cfg(feature="coarse-pure-salvage")]
++                {coarse_parent=crate::coarse_pure_salvage::boundary::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,previous,current,best,index,&main_extensions,parent_ordinal)?;}
++
++            }
++        }
++        #[cfg(feature="coarse-pure-salvage")]
++        crate::coarse_pure_salvage::end_parent(self,coarse_parent);
+         #[cfg(feature = "internal-split")]
+         drop(capture_parent);
+         #[cfg(feature = "internal-split")]
+--- /dev/null
++++ b/src/pure_observer.rs
+@@ -0,0 +1,505 @@
++//! Research-only pure-kernel production/demand census. No observed payload is
++//! installed in an evaluator, map scratch, score, retained node or work counter.
++//! Each lookup uses an exact typed key within one immutable, exactly checked
++//! root epoch. Hashes only locate buckets; equality never trusts a fingerprint.
++use std::{cell::RefCell,collections::HashMap,fmt::Write,hint::black_box,rc::Rc,time::Instant};
++use crate::{activity::Activity,evaluation::RootContext,evaluator::Parameters,influence::Influence,
++    position::Position,shelter::Shelter,types::{Color,Piece,PieceKind,Square}};
++
++#[derive(Clone,Debug,PartialEq,Eq)]
++pub(crate) struct RootEpoch {
++    side:Color,phase:[u16;3],counts:[[u8;6];2],values:[[i32;5];2],squares:[[[i16;64];5];2],average:i32,
++    own:[i32;11],opponent:[i32;11],parameter_average:i32,draw:i32,opponent_selectivity:i32,
++    draw_preference:i32,variation:u32,weights:[[i32;2];5],
++}
++impl RootEpoch {
++    pub(crate) fn new(root:&RootContext,parameters:&Parameters,draw_preference:i32,variation:u32,weights:[[i32;2];5])->Self {
++        Self {side:root.side,phase:[root.phase.opening,root.phase.middlegame,root.phase.endgame],counts:root.counts,
++            values:root.values,squares:root.squares,average:root.average_depth,own:parameters.own,opponent:parameters.opponent,
++            parameter_average:parameters.average_depth,draw:parameters.draw,opponent_selectivity:parameters.opponent_selectivity,
++            draw_preference,variation,weights}
++    }
++}
++// Prospective256MiB report partition: pool incidence plus bounded prefix
++// incidence128MiB; canonical demand incidence96MiB; fixed summaries, seven
++// producer summaries, fixture and dispatcher fields reserve32MiB. Pool row
++// (seven u64 call counts, fourteen u128 kernel/first costs, IDs/mask) fits1024B;
++// prefix row fits160B; demand row with all nine scope rows fits1536B. Controls
++// below exercise maximum integer widths through the actual serializers.
++const POOL_PREFIX_JSON_BUDGET:usize=128*1024*1024;
++const DEMAND_JSON_BUDGET:usize=96*1024*1024;
++const POOL_ROW_BYTES:usize=1024;
++const PREFIX_ROW_BYTES:usize=160;
++const DEMAND_ROW_BYTES:usize=1536;
++
++#[derive(Clone,Copy,Debug)]
++pub(crate) struct Caps {pub(crate) max_keys:usize,pub(crate) max_calls:u64,pub(crate) max_bytes:usize}
++impl Caps {pub(crate) fn producer()->Self {Self {max_keys:262144,max_calls:4194304,max_bytes:64*1024*1024}}
++    pub(crate) fn pool()->Self {Self {max_keys:1835008,max_calls:29360128,max_bytes:512*1024*1024}}
++    pub(crate) fn canonical()->Self {Self {max_keys:262144,max_calls:4194304,max_bytes:128*1024*1024}}}
++
++#[derive(Clone,Copy,Debug,PartialEq,Eq)]
++pub(crate) enum Route {Scalar,Coherent}
++#[derive(Clone,Copy,Debug,PartialEq,Eq)]
++pub(crate) enum Scope {Inactive,Prefix,Coordinator,Queued(usize),Suffix}
++impl Scope {fn index(self)->Option<usize> {match self {Self::Coordinator=>Some(0),Self::Queued(id) if id<7=>Some(id+1),Self::Suffix=>Some(8),_=>None}}}
++fn scope_name(index:usize)->String {match index {0=>"coordinator".into(),8=>"suffix".into(),id=>format!("queued-{}",id-1)}}
++
++/// Actual placement owners are copied without inferring board/list/plane
++/// coherence. Unused source slots are removed; active multiplicity is retained.
++#[derive(Clone,Copy,Debug,PartialEq,Eq)]
++struct Placement {board:[Piece;64],counts:[[u8;6];2],sources:[[Square;16];2]}
++impl Placement {
++    fn new(position:&Position,sort:bool)->Self {
++        let mut sources=[[Square(64);16];2];
++        for color in [Color::White,Color::Black] {
++            // The frozen private native domain shares Position's16 source
++            // slots per color; successful kernel calls already require this.
++            let population=position.counts[color.index()].iter().map(|&count|count as usize).sum::<usize>();
++            assert!(population<=16,"pure census native source population exceeds16");
++            let mut offset=0;
++            for kind in PieceKind::ALL {let actual=position.piece_squares(color,kind);let end=offset+actual.len();
++                sources[color.index()][offset..end].copy_from_slice(actual);
++                if sort {sources[color.index()][offset..end].sort_unstable_by_key(|square|square.0);}
++                offset=end;
++            }
++        }
++        Self {board:position.board,counts:position.counts,sources}
++    }
++    fn hash(&self)->u64 {
++        // Congruent with projected key equality, including malformed public
++        // fingerprints. Policy hashes/rights/side/EP never select a bucket.
++        let mut hash=1469598103934665603u64;
++        for piece in self.board {hash=(hash^piece.0 as u64).wrapping_mul(1099511628211);}
++        hash
++    }
++}
++trait Key:PartialEq {fn bucket(&self)->u64;}
++#[derive(Clone,Copy,Debug,PartialEq,Eq)]
++struct InfluenceKey {placement:Placement,planes:[u64;4],route:Route}
++impl InfluenceKey {fn new(position:&Position,route:Route)->Self {
++    // Each source contributes independent wrapping sums, including the coherent
++    // bit-sliced sums. Per-kind sorting preserves duplicates/multiplicity.
++    Self {placement:Placement::new(position,true),planes:*position.attack_planes(),route}
++}}
++impl Key for InfluenceKey {fn bucket(&self)->u64 {self.placement.hash()}}
++#[derive(Clone,Copy,Debug,PartialEq,Eq)]
++struct ChainKey {placement:Placement,starting_units:u8,map:Influence,material:i32,mobility:[i32;2],shelter:[i32;2]}
++impl ChainKey {fn new(position:&Position,map:&Influence,material:i32,mobility:[i32;2],shelter:[i32;2])->Self {
++    // Chain source chronology is kept conservatively. Phase reads starting_units
++    // and counts; Activity/Shelter read this supplied map, never a rebuilt map.
++    Self {placement:Placement::new(position,false),starting_units:position.starting_units,map:*map,material,mobility,shelter}
++}}
++impl Key for ChainKey {fn bucket(&self)->u64 {self.placement.hash()}}
++#[derive(Clone,Copy,Debug,PartialEq,Eq)]
++struct ChainValue {activity:Activity,shelter:Shelter}
++#[derive(Clone,Copy,Default)]
++struct Produced {mask:u8,calls:u64,kernel_ns:u128,first_kernel_ns:u128,child_calls:[u64;7],child_kernel_ns:[u128;7],child_first_kernel_ns:[u128;7]}
++#[derive(Clone,Copy,Default)]
++struct Tally {calls:u64,kernel_ns:u128}
++impl Tally {fn add(&mut self,kernel_ns:u128) {self.calls+=1;self.kernel_ns+=kernel_ns;}}
++struct Demanded {pool_id:Option<usize>,mask:u8,first_scope:usize,first_kernel_ns:u128,scopes:[Tally;9]}
++struct Record<K,V,M> {key:K,value:V,meta:M}
++// std HashMap::capacity reports usable entries, excluding load-factor slack.
++// For this frozen64-bit Rust/hashbrown representation, round(capacity+1) to
++// physical power-of-two buckets. Charge each data bucket and control byte,
++// plus64 bytes covering the control tail and allocation-alignment padding.
++// Allocator bookkeeping outside the allocation remains explicitly excluded.
++fn physical_index_buckets(usable:usize)->usize {
++    if usable==0 {0}else{usable.saturating_add(1).checked_next_power_of_two().unwrap_or(usize::MAX)}
++}
++fn index_bytes_for_buckets(buckets:usize)->usize {
++    if buckets==0 {0}else{buckets.saturating_mul(std::mem::size_of::<(u64,Vec<usize>)>()+1).saturating_add(64)}
++}
++fn index_allocation_bytes(usable:usize)->usize {index_bytes_for_buckets(physical_index_buckets(usable))}
++struct Catalog<K,V,M> {records:Vec<Record<K,V,M>>,buckets:HashMap<u64,Vec<usize>>,bucket_slots:usize}
++impl<K:Key,V,M> Catalog<K,V,M> {
++    fn new()->Self {Self {records:Vec::new(),buckets:HashMap::new(),bucket_slots:0}}
++    fn find(&self,key:&K)->Option<usize> {self.buckets.get(&key.bucket()).and_then(|ids|ids.iter().copied().find(|&id|self.records[id].key==*key))}
++    fn bytes(&self)->usize {std::mem::size_of::<Self>()+self.records.capacity()*std::mem::size_of::<Record<K,V,M>>()
++        +index_allocation_bytes(self.buckets.capacity())
++        +self.bucket_slots*std::mem::size_of::<usize>()}
++    fn growth(&self,key:&K)->usize {
++        let record=if self.records.len()==self.records.capacity(){
++            let wanted=if self.records.capacity()==0 {8}else{self.records.capacity()*2};
++            (wanted-self.records.capacity())*std::mem::size_of::<Record<K,V,M>>()
++        }else{0};
++        let index=match self.buckets.get(&key.bucket()) {
++            Some(ids) if ids.len()==ids.capacity()=>ids.capacity().max(1)*std::mem::size_of::<usize>(),Some(_)=>0,
++            None=>std::mem::size_of::<usize>()+if self.buckets.len()==self.buckets.capacity() {
++                // First allocation has4 physical buckets; later growth doubles
++                // them. Admission includes load slack, control tail and padding.
++                let before=physical_index_buckets(self.buckets.capacity());
++                let after=if before==0 {4}else{before.saturating_mul(2)};
++                index_bytes_for_buckets(after).saturating_sub(index_bytes_for_buckets(before))
++            }else{0},
++        };record+index
++    }
++    fn insert(&mut self,key:K,value:V,meta:M)->usize {let bucket=key.bucket();let id=self.records.len();
++        if id==self.records.capacity(){let wanted=if id==0 {8}else{id*2};self.records.reserve_exact(wanted-id);}
++        self.records.push(Record {key,value,meta});let ids=self.buckets.entry(bucket).or_default();
++        if ids.len()==ids.capacity(){let before=ids.capacity();ids.reserve_exact(before.max(1));self.bucket_slots+=ids.capacity()-before;}ids.push(id);id
++    }
++}
++#[derive(Clone,Copy,Default)]
++struct Costs {observer_ns:u128,key_ns:u128,lookup_ns:u128,materialize_ns:u128,materialized_bytes:u64,epoch_check_ns:u128}
++impl Costs {fn json(&self)->String {format!("{{\"capture_dedup_observer_ns\":{},\"key_construction_ns\":{},\"lookup_full_equality_ns\":{},\"materialization_ns\":{},\"materialized_bytes\":{},\"epoch_check_ns\":{}}}",
++    self.observer_ns,self.key_ns,self.lookup_ns,self.materialize_ns,self.materialized_bytes,self.epoch_check_ns)}}
++// materialization_ns includes the black_box copy AND full payload equality
++// audit. It must not be interpreted as an isolated pure-copy delivery cost.
++fn materialize<V:Copy+PartialEq>(expected:&V,actual:V,costs:&mut Costs)->bool {
++    let started=Instant::now();let copy=black_box(*expected);let equal=black_box(copy)==black_box(actual);
++    black_box(equal);costs.materialize_ns+=started.elapsed().as_nanos();costs.materialized_bytes+=std::mem::size_of::<V>() as u64;equal
++}
++fn produced_json<K:Key,V>(catalog:&Catalog<K,V,Produced>)->String {
++    let calls=catalog.records.iter().map(|r|r.meta.calls).sum::<u64>();
++    format!("{{\"calls\":{},\"unique_keys\":{},\"repeated_calls\":{},\"payload_bytes\":{},\"retained_bytes\":{},\"kernel_ns\":{},\"first_unique_kernel_ns\":{}}}",calls,catalog.records.len(),calls-catalog.records.len() as u64,
++        catalog.records.len()*std::mem::size_of::<V>(),catalog.bytes(),catalog.records.iter().map(|r|r.meta.kernel_ns).sum::<u128>(),catalog.records.iter().map(|r|r.meta.first_kernel_ns).sum::<u128>())
++}
++fn pool_record_json<K,V>(id:usize,record:&Record<K,V,Produced>)->String {
++    format!("{{\"pool_id\":{},\"producer_mask\":{},\"producer_calls\":{:?},\"producer_kernel_ns\":{:?},\"producer_first_unique_kernel_ns\":{:?},\"first_unique_kernel_ns\":{}}}",
++        id,record.meta.mask,record.meta.child_calls,record.meta.child_kernel_ns,record.meta.child_first_kernel_ns,record.meta.first_kernel_ns)
++}
++fn pool_kind_json<K:Key,V>(catalog:&Catalog<K,V,Produced>)->String {
++    let mut summary=produced_json(catalog);summary.pop();
++    let rows=catalog.records.iter().enumerate().map(|(id,record)|pool_record_json(id,record)).collect::<Vec<_>>().join(",");
++    write!(summary,",\"records\":[{rows}]}}").unwrap();summary
++}
++pub(crate) struct Store {epoch:RootEpoch,id:usize,maps:Catalog<InfluenceKey,Influence,Produced>,chains:Catalog<ChainKey,ChainValue,Produced>,costs:Costs}
++impl Store {pub(crate) fn json(&self)->String {format!("{{\"producer\":{},\"failed\":false,\"influence\":{},\"chain\":{},\"timings\":{}}}",self.id,produced_json(&self.maps),produced_json(&self.chains),self.costs.json())}}
++pub(crate) struct Pool {epoch:RootEpoch,maps:Catalog<InfluenceKey,Influence,Produced>,chains:Catalog<ChainKey,ChainValue,Produced>,combine_ns:u128}
++impl Pool {
++    pub(crate) fn combine(stores:Vec<Store>,caps:Caps)->Result<Self,String> {
++        let started=Instant::now();if stores.len()!=7{return Err("pure pool requires exactly seven producer stores".into());}
++        let epoch=stores[0].epoch.clone();let mut result=Self {epoch:epoch.clone(),maps:Catalog::new(),chains:Catalog::new(),combine_ns:0};let mut ids=0u8;let mut calls=0u64;
++        for store in stores {if store.epoch!=epoch{return Err("pure-pool-epoch-mismatch".into());}
++            if store.id>=7||ids&(1<<store.id)!=0{return Err("pure-pool-producer-identity".into());}ids|=1<<store.id;
++            for record in store.maps.records {calls+=record.meta.calls;merge(&mut result.maps,record,caps,result.chains.bytes(),result.chains.records.len(),calls)?;}
++            for record in store.chains.records {calls+=record.meta.calls;merge(&mut result.chains,record,caps,result.maps.bytes(),result.maps.records.len(),calls)?;}
++        }
++        if result.estimated_bytes()>caps.max_bytes{return Err("pure-pool-byte-cap".into());}
++        result.combine_ns=started.elapsed().as_nanos();Ok(result)
++    }
++    pub(crate) fn estimated_bytes(&self)->usize {std::mem::size_of::<Self>()+self.maps.bytes()+self.chains.bytes()}
++    pub(crate) fn json(&self)->String {format!("{{\"failed\":false,\"influence\":{},\"chain\":{},\"retained_bytes\":{},\"combine_ns\":{}}}",pool_kind_json(&self.maps),pool_kind_json(&self.chains),self.estimated_bytes(),self.combine_ns)}
++}
++fn merge<K:Key,V:Copy+PartialEq>(catalog:&mut Catalog<K,V,Produced>,record:Record<K,V,Produced>,caps:Caps,other_bytes:usize,other_keys:usize,calls:u64)->Result<(),String> {
++    if calls>caps.max_calls{return Err("pure-pool-call-cap".into());}
++    if let Some(id)=catalog.find(&record.key) {let old=&mut catalog.records[id];if old.value!=record.value{return Err("pure-duplicate-payload-mismatch".into());}
++        old.meta.mask|=record.meta.mask;old.meta.calls+=record.meta.calls;old.meta.kernel_ns+=record.meta.kernel_ns;
++        for child in 0..7 {old.meta.child_calls[child]+=record.meta.child_calls[child];old.meta.child_kernel_ns[child]+=record.meta.child_kernel_ns[child];old.meta.child_first_kernel_ns[child]+=record.meta.child_first_kernel_ns[child];}return Ok(());}
++    let keys=catalog.records.len()+other_keys+1;
++    if keys.saturating_mul(POOL_ROW_BYTES+PREFIX_ROW_BYTES)>POOL_PREFIX_JSON_BUDGET{return Err("pure-pool-prefix-json-cap".into());}
++    if keys>caps.max_keys||catalog.bytes()+other_bytes+catalog.growth(&record.key)+std::mem::size_of::<Pool>()>caps.max_bytes{return Err("pure-pool-key-or-byte-cap".into());}
++    catalog.insert(record.key,record.value,record.meta);Ok(())
++}
++
++enum Mode {
++    Producer {id:usize,maps:Catalog<InfluenceKey,Influence,Produced>,chains:Catalog<ChainKey,ChainValue,Produced>},
++    Canonical {pool:Rc<Pool>,maps:Catalog<InfluenceKey,Influence,Demanded>,chains:Catalog<ChainKey,ChainValue,Demanded>},
++    Prefix {pool:Rc<Pool>,maps:Vec<Tally>,chains:Vec<Tally>,calls:[Tally;2],matched:[Tally;2]},Finished,
++}
++struct State {epoch:RootEpoch,caps:Caps,mode:Mode,scope:Scope,fatal:Option<&'static str>,calls:u64,costs:Costs,peak_bytes:usize}
++impl State {
++    fn bytes(&self)->usize {std::mem::size_of::<Self>()+match &self.mode {
++        Mode::Producer {maps,chains,..}=>maps.bytes()+chains.bytes(),Mode::Canonical {maps,chains,..}=>maps.bytes()+chains.bytes(),
++        Mode::Prefix {maps,chains,..}=>(maps.capacity()+chains.capacity())*std::mem::size_of::<Tally>(),Mode::Finished=>0}}
++}
++#[derive(Clone)]
++pub(crate) struct Context(Rc<RefCell<State>>);
++pub(crate) struct ScopeGuard {context:Context,saved:Scope}
++impl Drop for ScopeGuard {fn drop(&mut self){self.context.0.borrow_mut().scope=self.saved;}}
++impl Context {
++    pub(crate) fn producer(epoch:RootEpoch,caps:Caps,id:usize)->Result<Self,String> {if id>=7{return Err("pure producer id must be0..6".into());}
++        Ok(Self::new(epoch,caps,Mode::Producer {id,maps:Catalog::new(),chains:Catalog::new()},Scope::Inactive))}
++    pub(crate) fn canonical(epoch:RootEpoch,pool:Rc<Pool>,caps:Caps)->Result<Self,String> {if epoch!=pool.epoch{return Err("pure-canonical-epoch-mismatch".into());}
++        Ok(Self::new(epoch,caps,Mode::Canonical {pool,maps:Catalog::new(),chains:Catalog::new()},Scope::Inactive))}
++    pub(crate) fn prefix(epoch:RootEpoch,pool:Rc<Pool>,caps:Caps)->Result<Self,String> {if epoch!=pool.epoch{return Err("pure-prefix-epoch-mismatch".into());}
++        let maps=vec![Tally::default();pool.maps.records.len()];let chains=vec![Tally::default();pool.chains.records.len()];
++        let context=Self::new(epoch,caps,Mode::Prefix {pool,maps,chains,calls:[Tally::default();2],matched:[Tally::default();2]},Scope::Prefix);
++        if context.0.borrow().bytes()>caps.max_bytes{return Err("pure-prefix-byte-cap".into());}Ok(context)}
++    fn new(epoch:RootEpoch,caps:Caps,mode:Mode,scope:Scope)->Self {let mut state=State {epoch,caps,mode,scope,fatal:None,calls:0,costs:Costs::default(),peak_bytes:0};state.peak_bytes=state.bytes();Self(Rc::new(RefCell::new(state)))}
++    pub(crate) fn set_scope(&self,scope:Scope)->ScopeGuard {assert!(!matches!(scope,Scope::Queued(id) if id>=7));let saved=self.0.borrow().scope;self.0.borrow_mut().scope=scope;ScopeGuard {context:self.clone(),saved}}
++    pub(crate) fn deactivate(&self){self.0.borrow_mut().scope=Scope::Inactive;}
++    pub(crate) fn enabled(&self)->bool {let state=self.0.borrow();state.fatal.is_none()&&match &state.mode {Mode::Producer {..}=>true,Mode::Canonical {..}=>state.scope.index().is_some(),Mode::Prefix {..}=>state.scope==Scope::Prefix,Mode::Finished=>false}}
++    pub(crate) fn fatal(&self)->Option<&'static str> {self.0.borrow().fatal}
++    pub(crate) fn check_epoch(&self,epoch:&RootEpoch) {let started=Instant::now();let mut state=self.0.borrow_mut();if state.epoch!=*epoch{state.fatal.get_or_insert("pure-root-epoch-mismatch");}state.costs.epoch_check_ns+=started.elapsed().as_nanos();}
++    pub(crate) fn influence(&self,position:&Position,route:Route,value:Influence,kernel_ns:u128) {
++        let started=Instant::now();let key_started=Instant::now();let key=InfluenceKey::new(position,route);let key_ns=key_started.elapsed().as_nanos();let mut state=self.0.borrow_mut();
++        state.costs.key_ns+=key_ns;let error=observe_map(&mut state,key,value,kernel_ns);finish_observation(&mut state,started,error);
++    }
++    pub(crate) fn chain(&self,position:&Position,map:&Influence,material:i32,mobility:[i32;2],shelter:[i32;2],activity:Activity,shelter_value:Shelter,kernel_ns:u128) {
++        let started=Instant::now();let key_started=Instant::now();let key=ChainKey::new(position,map,material,mobility,shelter);let key_ns=key_started.elapsed().as_nanos();let mut state=self.0.borrow_mut();
++        state.costs.key_ns+=key_ns;let error=observe_chain(&mut state,key,ChainValue {activity,shelter:shelter_value},kernel_ns);finish_observation(&mut state,started,error);
++    }
++    pub(crate) fn finish_producer(&self)->Result<Store,String> {let mut state=self.0.borrow_mut();if let Some(fatal)=state.fatal{return Err(fatal.into());}
++        let mode=std::mem::replace(&mut state.mode,Mode::Finished);match mode {Mode::Producer {id,maps,chains}=>Ok(Store {epoch:state.epoch.clone(),id,maps,chains,costs:state.costs}),_=>Err("not an unfinished pure producer".into())}}
++    pub(crate) fn finish_canonical(&self)->Result<DemandReport,String> {let mut state=self.0.borrow_mut();if let Some(fatal)=state.fatal{return Err(fatal.into());}
++        let mode=std::mem::replace(&mut state.mode,Mode::Finished);match mode {Mode::Canonical {pool,maps,chains}=>Ok(DemandReport {pool,maps,chains,costs:state.costs,peak_bytes:state.peak_bytes}),_=>Err("not an unfinished pure canonical observer".into())}}
++    pub(crate) fn finish_prefix(&self)->Result<PrefixReport,String> {let mut state=self.0.borrow_mut();if let Some(fatal)=state.fatal{return Err(fatal.into());}
++        let mode=std::mem::replace(&mut state.mode,Mode::Finished);match mode {Mode::Prefix {pool,maps,chains,calls,matched}=>Ok(PrefixReport {epoch:state.epoch.clone(),pool,maps,chains,calls,matched,costs:state.costs}),_=>Err("not an unfinished pure prefix observer".into())}}
++}
++fn finish_observation(state:&mut State,started:Instant,error:Option<&'static str>) {
++    if let Some(error)=error{state.fatal.get_or_insert(error);}
++    let bytes=state.bytes();if bytes>state.caps.max_bytes {state.fatal.get_or_insert("pure-observer-byte-cap");}
++    state.costs.observer_ns+=started.elapsed().as_nanos();state.peak_bytes=state.peak_bytes.max(bytes);
++}
++fn call(state:&mut State)->Result<(),&'static str> {if let Some(fatal)=state.fatal{return Err(fatal);}state.calls+=1;if state.calls>state.caps.max_calls{return Err("pure-observer-call-cap");}Ok(())}
++fn observe_map(state:&mut State,key:InfluenceKey,value:Influence,kernel_ns:u128)->Option<&'static str> {
++    if let Err(error)=call(state){return Some(error);}let bytes=state.bytes();let caps=state.caps;let scope=state.scope;
++    match &mut state.mode {
++        Mode::Producer {id,maps,chains}=>produce(maps,key,value,kernel_ns,*id,caps,bytes,chains.records.len(),&mut state.costs),
++        Mode::Canonical {pool,maps,chains}=>demand(maps,&pool.maps,key,value,kernel_ns,scope,caps,bytes,chains.records.len(),&mut state.costs),
++        Mode::Prefix {pool,maps,calls,matched,..}=>prefix(&pool.maps,maps,&mut calls[0],&mut matched[0],key,value,kernel_ns,&mut state.costs),Mode::Finished=>Some("pure-observer-already-finished"),
++    }
++}
++fn observe_chain(state:&mut State,key:ChainKey,value:ChainValue,kernel_ns:u128)->Option<&'static str> {
++    if let Err(error)=call(state){return Some(error);}let bytes=state.bytes();let caps=state.caps;let scope=state.scope;
++    match &mut state.mode {
++        Mode::Producer {id,maps,chains}=>produce(chains,key,value,kernel_ns,*id,caps,bytes,maps.records.len(),&mut state.costs),
++        Mode::Canonical {pool,maps,chains}=>demand(chains,&pool.chains,key,value,kernel_ns,scope,caps,bytes,maps.records.len(),&mut state.costs),
++        Mode::Prefix {pool,chains,calls,matched,..}=>prefix(&pool.chains,chains,&mut calls[1],&mut matched[1],key,value,kernel_ns,&mut state.costs),Mode::Finished=>Some("pure-observer-already-finished"),
++    }
++}
++fn produce<K:Key,V:Copy+PartialEq>(catalog:&mut Catalog<K,V,Produced>,key:K,value:V,kernel_ns:u128,id:usize,caps:Caps,bytes:usize,other_keys:usize,costs:&mut Costs)->Option<&'static str> {
++    let lookup=Instant::now();let found=catalog.find(&key);costs.lookup_ns+=lookup.elapsed().as_nanos();
++    if let Some(found)=found {let record=&mut catalog.records[found];if !materialize(&record.value,value,costs){return Some("pure-duplicate-payload-mismatch");}record.meta.calls+=1;record.meta.kernel_ns+=kernel_ns;record.meta.child_calls[id]+=1;record.meta.child_kernel_ns[id]+=kernel_ns;}
++    else {if catalog.records.len()+other_keys>=caps.max_keys{return Some("pure-observer-key-cap");}
++        if bytes.saturating_add(catalog.growth(&key))>caps.max_bytes{return Some("pure-observer-byte-cap");}
++        let mut child_calls=[0;7];child_calls[id]=1;
++        let mut child_kernel_ns=[0;7];child_kernel_ns[id]=kernel_ns;
++        catalog.insert(key,value,Produced {mask:1<<id,calls:1,kernel_ns,first_kernel_ns:kernel_ns,child_calls,child_kernel_ns,child_first_kernel_ns:child_kernel_ns});}None
++}
++fn demand<K:Key,V:Copy+PartialEq>(catalog:&mut Catalog<K,V,Demanded>,pool:&Catalog<K,V,Produced>,key:K,value:V,kernel_ns:u128,scope:Scope,caps:Caps,bytes:usize,other_keys:usize,costs:&mut Costs)->Option<&'static str> {
++    let Some(scope)=scope.index() else{return Some("pure-demand-outside-scope");};
++    let lookup=Instant::now();let found=catalog.find(&key);let supplied=pool.find(&key);costs.lookup_ns+=lookup.elapsed().as_nanos();
++    if let Some(id)=supplied {if !materialize(&pool.records[id].value,value,costs){return Some("pure-pool-demand-payload-mismatch");}}
++    if let Some(found)=found {let record=&mut catalog.records[found];if !materialize(&record.value,value,costs){return Some("pure-duplicate-payload-mismatch");}record.meta.scopes[scope].add(kernel_ns);}
++    else {if catalog.records.len()+other_keys>=caps.max_keys{return Some("pure-observer-key-cap");}
++        if (catalog.records.len()+other_keys+1).saturating_mul(DEMAND_ROW_BYTES)>DEMAND_JSON_BUDGET{return Some("pure-demand-json-cap");}
++        if bytes.saturating_add(catalog.growth(&key))>caps.max_bytes{return Some("pure-observer-byte-cap");}
++        let mut scopes=[Tally::default();9];scopes[scope].add(kernel_ns);let mask=supplied.map_or(0,|id|pool.records[id].meta.mask);
++        catalog.insert(key,value,Demanded {pool_id:supplied,mask,first_scope:scope,first_kernel_ns:kernel_ns,scopes});}None
++}
++fn prefix<K:Key,V:Copy+PartialEq>(pool:&Catalog<K,V,Produced>,seen:&mut [Tally],calls:&mut Tally,matched:&mut Tally,key:K,value:V,kernel_ns:u128,costs:&mut Costs)->Option<&'static str> {
++    calls.add(kernel_ns);let lookup=Instant::now();let supplied=pool.find(&key);costs.lookup_ns+=lookup.elapsed().as_nanos();
++    if let Some(id)=supplied {if !materialize(&pool.records[id].value,value,costs){return Some("pure-pool-prefix-payload-mismatch");}seen[id].add(kernel_ns);matched.add(kernel_ns);}None
++}
++
++pub(crate) struct PrefixReport {epoch:RootEpoch,pool:Rc<Pool>,maps:Vec<Tally>,chains:Vec<Tally>,calls:[Tally;2],matched:[Tally;2],costs:Costs}
++impl PrefixReport {pub(crate) fn failed(&self)->bool {false}
++    pub(crate) fn json(&self)->String {format!("{{\"failed\":false,\"influence\":{},\"chain\":{},\"membership_bytes\":{},\"timings\":{}}}",
++        prefix_json(self.calls[0],self.matched[0],&self.maps),prefix_json(self.calls[1],self.matched[1],&self.chains),
++        (self.maps.capacity()+self.chains.capacity())*std::mem::size_of::<Tally>(),self.costs.json())}}
++fn prefix_record_json(id:usize,tally:Tally)->String {
++    format!("{{\"pool_id\":{},\"calls\":{},\"kernel_ns\":{}}}",id,tally.calls,tally.kernel_ns)
++}
++fn prefix_json(calls:Tally,matched:Tally,seen:&[Tally])->String {
++    let rows=seen.iter().copied().enumerate().filter(|(_,tally)|tally.calls!=0).map(|(id,tally)|prefix_record_json(id,tally)).collect::<Vec<_>>().join(",");
++    format!("{{\"calls\":{},\"kernel_ns\":{},\"pool_matched_calls\":{},\"pool_matched_kernel_ns\":{},\"pool_matched_unique_keys\":{},\"matched_records\":[{}]}}",
++        calls.calls,calls.kernel_ns,matched.calls,matched.kernel_ns,seen.iter().filter(|seen|seen.calls!=0).count(),rows)
++}
++pub(crate) struct DemandReport {pool:Rc<Pool>,maps:Catalog<InfluenceKey,Influence,Demanded>,chains:Catalog<ChainKey,ChainValue,Demanded>,costs:Costs,peak_bytes:usize}
++#[derive(Default)]
++struct Coverage {calls:u64,unique:usize,kernel_ns:u128,first_kernel_ns:u128}
++impl Coverage {fn json(&self)->String {format!("{{\"calls\":{},\"unique_keys\":{},\"repeated_calls\":{},\"kernel_ns\":{},\"first_target_kernel_ns\":{}}}",self.calls,self.unique,self.calls-self.unique as u64,self.kernel_ns,self.first_kernel_ns)}}
++fn coverage<K:Key,V>(catalog:&Catalog<K,V,Demanded>,accept:impl Fn(&Demanded,usize)->bool)->Coverage {
++    let mut result=Coverage::default();
++    for record in &catalog.records {let mut any=false;
++        for (scope,tally) in record.meta.scopes.iter().enumerate(){if tally.calls!=0&&accept(&record.meta,scope){result.calls+=tally.calls;result.kernel_ns+=tally.kernel_ns;any=true;}}
++        if any {result.unique+=1;if accept(&record.meta,record.meta.first_scope){result.first_kernel_ns+=record.meta.first_kernel_ns;}}
++    }result
++}
++// First-only/repeat-only classifications retain one fact per exact key, then
++// subtract its global first target query in its actual scope. Prefix presence
++// and earlier target production are separate serial-memo opportunities.
++fn classified<K:Key,V>(catalog:&Catalog<K,V,Demanded>,prefix:&[Tally],scope:Option<usize>,class:u8)->Coverage {
++    let mut result=Coverage::default();
++    for record in &catalog.records {
++        let meta=&record.meta;let Some(pool_id)=meta.pool_id else{continue;};let prior=prefix[pool_id].calls!=0;
++        let first_in_scope=scope.is_none_or(|scope|scope==meta.first_scope);
++        let mut calls=0;let mut kernel_ns=0;
++        for (index,tally) in meta.scopes.iter().enumerate(){if scope.is_none_or(|scope|scope==index){calls+=tally.calls;kernel_ns+=tally.kernel_ns;}}
++        if class==0 { // Producer-first: exactly one prefix-absent first query.
++            if prior||!first_in_scope {continue;}calls=1;kernel_ns=meta.first_kernel_ns;
++        } else if class==1||(!prior&&class==2) { // Canonical-earlier repeats.
++            if first_in_scope {calls-=1;kernel_ns-=meta.first_kernel_ns;}
++        } // class2 with prefix-present includes all matching calls.
++        if calls!=0 {result.calls+=calls;result.kernel_ns+=kernel_ns;result.unique+=1;
++            if class==0||(class==2&&prior&&first_in_scope){result.first_kernel_ns+=meta.first_kernel_ns;}}
++    }result
++}
++fn demand_record_json<K,V>(id:usize,record:&Record<K,V,Demanded>)->String {
++    let rows=record.meta.scopes.iter().enumerate().filter(|(_,tally)|tally.calls!=0).map(|(index,tally)|
++        format!("{{\"index\":{},\"scope\":\"{}\",\"calls\":{},\"kernel_ns\":{}}}",index,scope_name(index),tally.calls,tally.kernel_ns)).collect::<Vec<_>>().join(",");
++    format!("{{\"demand_id\":{},\"pool_id\":{},\"producer_mask\":{},\"first_scope\":{},\"first_kernel_ns\":{},\"scopes\":[{}]}}",
++        id,record.meta.pool_id.map_or("null".into(),|id|id.to_string()),record.meta.mask,record.meta.first_scope,record.meta.first_kernel_ns,rows)
++}
++fn demand_summary<K:Key,V>(catalog:&Catalog<K,V,Demanded>,prefix:&[Tally],scope:Option<usize>)->String {
++    let in_scope=|index|scope.is_none_or(|scope|scope==index);
++    format!("\"total\":{},\"pooled\":{},\"same_intended_child\":{},\"matched_prior_prefix\":{},\"matched_prefix_absent\":{},\"producer_first\":{},\"canonical_earlier\":{},\"serial_cache_prior\":{}",
++        coverage(catalog,|_,index|in_scope(index)).json(),
++        coverage(catalog,|meta,index|in_scope(index)&&meta.pool_id.is_some()).json(),
++        coverage(catalog,|meta,index|in_scope(index)&&(1..8).contains(&index)&&meta.mask&(1<<(index-1))!=0).json(),
++        coverage(catalog,|meta,index|in_scope(index)&&meta.pool_id.is_some_and(|id|prefix[id].calls!=0)).json(),
++        coverage(catalog,|meta,index|in_scope(index)&&meta.pool_id.is_some_and(|id|prefix[id].calls==0)).json(),
++        classified(catalog,prefix,scope,0).json(),classified(catalog,prefix,scope,1).json(),classified(catalog,prefix,scope,2).json())
++}
++fn demand_json<K:Key,V>(catalog:&Catalog<K,V,Demanded>,prefix:&[Tally])->String {
++    let scopes=(0..9).map(|index|format!("{{\"scope\":\"{}\",{}}}",scope_name(index),demand_summary(catalog,prefix,Some(index)))).collect::<Vec<_>>().join(",");
++    let rows=catalog.records.iter().enumerate().map(|(id,record)|demand_record_json(id,record)).collect::<Vec<_>>().join(",");
++    format!("{{{},\"scopes\":[{}],\"records\":[{}]}}",demand_summary(catalog,prefix,None),scopes,rows)
++}
++impl DemandReport {
++    pub(crate) fn failed(&self)->bool {false}
++    pub(crate) fn json(&self,prefix:&PrefixReport)->String {
++        assert!(self.pool.epoch==prefix.epoch&&Rc::ptr_eq(&self.pool,&prefix.pool),"prefix membership belongs to a different pool");
++        format!("{{\"failed\":false,\"influence\":{},\"chain\":{},\"peak_retained_bytes\":{},\"payload_sizes\":{{\"influence\":{},\"chain\":{}}},\"json_budget\":{{\"report_bytes\":268435456,\"pool_prefix_ledger_bytes\":{},\"demand_ledger_bytes\":{},\"fixed_reserved_bytes\":33554432}},\"timings\":{},\"scope\":\"All producer payloads assumed ready: coverage ceiling omits readiness. No numerical/effect/work reuse. Influence and inline FULL Activity->Shelter kernel timers are disjoint and include timer/observer perturbation, not time saved. Observer/key/lookup/materialization timers nest within capture. materialization_ns includes black_box value copy and full-payload equality AUDIT, not pure-copy cost. Same-intended-child is defined only for queued0..6. Unique keys deduplicate across scopes; scope unique counts must not be summed. first_target_kernel_ns counts global first target queries only when their first_scope belongs to the selected subset. producer_first is one prefix-absent matched first target query per key; later target repeats are canonical_earlier serial-memo opportunities. serial_cache_prior includes prefix-present calls plus prefix-absent target repeats. Prefix records only bounded producer keys; this classification does not assume an existing canonical cache. Chain source chronology is conservatively exact; Influence source order is normalized per kind with multiplicity. Retained estimates include table capacities and explicit index storage, excluding allocator bookkeeping and temporary serialization.\"}}",
++            demand_json(&self.maps,&prefix.maps),demand_json(&self.chains,&prefix.chains),self.peak_bytes,std::mem::size_of::<Influence>(),std::mem::size_of::<ChainValue>(),
++            POOL_PREFIX_JSON_BUDGET,DEMAND_JSON_BUDGET,self.costs.json())
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::evaluator::{Evaluator,Node};
++    fn position()->Position {Position::from_fen("4k3/8/8/8/8/1N3N2/PP6/4K3 w - - 0 1").unwrap()}
++    fn epoch()->RootEpoch {Evaluator::<true>::new(&position()).research_pure_epoch()}
++    fn empty_stores()->Vec<Store> {(0..7).map(|id|Context::producer(epoch(),Caps::producer(),id).unwrap().finish_producer().unwrap()).collect()}
++    fn pool_with_maps(position:&Position,values:&[Influence])->Rc<Pool> {
++        let mut stores=empty_stores();
++        for (id,&value) in values.iter().enumerate(){let context=Context::producer(epoch(),Caps::producer(),id).unwrap();context.influence(position,Route::Scalar,value,10+id as u128);stores[id]=context.finish_producer().unwrap();}
++        Rc::new(Pool::combine(stores,Caps::pool()).unwrap())
++    }
++    #[test]
++    fn projected_influence_key_keeps_actual_planes_lists_and_ignores_policy_hashes() {
++        let a=position();let mut b=a;b.primary^=123;b.secondary^=456;b.pawn^=789;
++        b.side=Color::Black;b.rights=15;b.ep=22;b.halfmove=77;b.starting_units=31;
++        // P,P,N,N,K: normalize only the two active knight sources.
++        b.squares[0].swap(2,3);
++        assert_eq!(InfluenceKey::new(&a,Route::Scalar),InfluenceKey::new(&b,Route::Scalar));
++        assert_eq!(Influence::build(&a),Influence::build(&b));
++        assert_eq!(Influence::build_coherent(&a),Influence::build_coherent(&b));
++        let mut changed=InfluenceKey::new(&a,Route::Coherent);changed.planes[0]^=1;
++        assert_ne!(InfluenceKey::new(&a,Route::Coherent),changed);
++        assert_eq!(InfluenceKey::new(&a,Route::Scalar).bucket(),InfluenceKey::new(&b,Route::Scalar).bucket());
++        assert_ne!(InfluenceKey::new(&a,Route::Scalar),InfluenceKey::new(&a,Route::Coherent));
++    }
++    #[test]
++    fn chain_key_binds_supplied_map_material_weights_phase_and_native_chronology() {
++        let position=position();let map=Influence::build(&position);
++        let key=ChainKey::new(&position,&map,7,[1024;2],[1024;2]);
++        let mut changed=map;changed.profiles[0][0]^=1;
++        let other=ChainKey::new(&position,&changed,7,[1024;2],[1024;2]);
++        assert_eq!(key.bucket(),other.bucket(),"index collision exercises full equality");assert_ne!(key,other);
++        assert_ne!(key,ChainKey::new(&position,&map,8,[1024;2],[1024;2]));
++        assert_ne!(key,ChainKey::new(&position,&map,7,[1023,1024],[1024;2]));
++        assert_ne!(key,ChainKey::new(&position,&map,7,[1024;2],[1023,1024]));
++        let mut phase=position;phase.starting_units^=1;assert_ne!(key,ChainKey::new(&phase,&map,7,[1024;2],[1024;2]));
++        let mut order=position;order.squares[0].swap(2,3);assert_ne!(key,ChainKey::new(&order,&map,7,[1024;2],[1024;2]));
++        let mut catalog=Catalog::<ChainKey,ChainValue,Produced>::new();
++        let value=ChainValue {activity:Activity::default(),shelter:Shelter::default()};
++        catalog.insert(key,value,Produced::default());catalog.insert(other,value,Produced::default());
++        assert_eq!(catalog.find(&key),Some(0));assert_eq!(catalog.find(&other),Some(1));
++    }
++    #[test]
++    fn duplicate_exact_key_payload_conflicts_are_fatal_in_producer_pool_and_demand() {
++        let position=position();let map=Influence::build(&position);let mut bad=map;bad.profiles[1][7]^=1;
++        let context=Context::producer(epoch(),Caps::producer(),0).unwrap();
++        context.influence(&position,Route::Scalar,map,1);context.influence(&position,Route::Scalar,bad,1);
++        assert_eq!(context.fatal(),Some("pure-duplicate-payload-mismatch"));assert!(context.finish_producer().is_err());
++        let mut stores=empty_stores();
++        for (id,value) in [map,bad].into_iter().enumerate(){let context=Context::producer(epoch(),Caps::producer(),id).unwrap();context.influence(&position,Route::Scalar,value,1);stores[id]=context.finish_producer().unwrap();}
++        assert!(Pool::combine(stores,Caps::pool()).is_err());
++        let pool=pool_with_maps(&position,&[map]);
++        let context=Context::canonical(epoch(),pool.clone(),Caps::canonical()).unwrap();let _scope=context.set_scope(Scope::Coordinator);
++        context.influence(&position,Route::Scalar,bad,1);assert_eq!(context.fatal(),Some("pure-pool-demand-payload-mismatch"));
++        let context=Context::prefix(epoch(),pool,Caps::canonical()).unwrap();context.influence(&position,Route::Scalar,bad,1);
++        assert_eq!(context.fatal(),Some("pure-pool-prefix-payload-mismatch"));
++    }
++    #[test]
++    fn immutable_epoch_is_exact_at_attach_and_pool_context_boundaries() {
++        let mut evaluator=Evaluator::<true>::new(&position());let context=Context::producer(evaluator.research_pure_epoch(),Caps::producer(),0).unwrap();
++        evaluator.parameters.own[0]+=1;assert!(evaluator.research_attach_pure_observer(Some(context.clone())).is_err());assert_eq!(context.fatal(),Some("pure-root-epoch-mismatch"));
++        let pool=pool_with_maps(&position(),&[Influence::build(&position())]);let mut changed=epoch();changed.weights[3][0]+=1;
++        assert!(Context::canonical(changed.clone(),pool.clone(),Caps::canonical()).is_err());assert!(Context::prefix(changed,pool,Caps::canonical()).is_err());
++    }
++    #[test]
++    fn native_hooks_distinguish_fast_reused_map_checked_full_and_authoritative_supplied_map() {
++        for checked in [false,true] {let position=position();let mut baseline=Evaluator::<true>::new(&position);let mut observed=baseline.research_clone();
++            let context=Context::producer(observed.research_pure_epoch(),Caps::producer(),0).unwrap();observed.research_attach_pure_observer(Some(context.clone())).unwrap();
++            let mut scratch=None;let native=baseline.ensure_influence_for_search(&position,&mut scratch,true);let expected=*native;
++            let mut actual_scratch=None;assert_eq!(*observed.ensure_influence_for_search(&position,&mut actual_scratch,true),expected);
++            // An existing supplied map is authoritative and creates no build.
++            let custom=Influence {profiles:[[0;64];2]};let mut supplied=Some(custom);
++            assert_eq!(*observed.ensure_influence_for_search(&position,&mut supplied,true),custom);
++            let mut a=Node::root(position,&baseline.root);let mut b=a;
++            assert_eq!(baseline.fast(&a,checked),observed.fast(&b,checked));
++            assert_eq!(baseline.full(&mut a,&custom,checked),observed.full(&mut b,&custom,checked));
++            assert_eq!(a,b);assert!(baseline.research_eq(&observed));
++            let mut cloned=observed.research_clone();let mut clone_scratch=None;
++            cloned.ensure_influence_for_search(&position,&mut clone_scratch,true);
++            let mut reconstructed=Evaluator::<true>::research_from_snapshot(observed.research_snapshot());let mut restored_scratch=None;
++            reconstructed.ensure_influence_for_search(&position,&mut restored_scratch,true);
++            // Neither detached reconstruction may append to the source's local
++            // Rc observer; its single map/chain call counts below prove this.
++            observed.research_attach_pure_observer(None).unwrap();let store=context.finish_producer().unwrap();
++            assert_eq!(store.maps.records.iter().map(|r|r.meta.calls).sum::<u64>(),1);
++            assert_eq!(store.chains.records.iter().map(|r|r.meta.calls).sum::<u64>(),1);
++            assert_eq!(store.chains.records[0].key.map,custom);
++        }
++    }
++    #[test]
++    fn prefix_and_earlier_target_repeats_partition_previously_unavailable_values() {
++        let position=position();let map=Influence::build(&position);let pool=pool_with_maps(&position,&[map,map]);
++        let canonical=Context::canonical(epoch(),pool.clone(),Caps::canonical()).unwrap();
++        {let _scope=canonical.set_scope(Scope::Coordinator);canonical.influence(&position,Route::Scalar,map,11);}
++        {let _scope=canonical.set_scope(Scope::Queued(0));canonical.influence(&position,Route::Scalar,map,17);canonical.influence(&position,Route::Scalar,map,19);}
++        let report=canonical.finish_canonical().unwrap();let prefix=Context::prefix(epoch(),pool,Caps::canonical()).unwrap().finish_prefix().unwrap();
++        let first=classified(&report.maps,&prefix.maps,None,0);let repeated=classified(&report.maps,&prefix.maps,None,1);
++        assert_eq!((first.calls,first.unique,first.kernel_ns),(1,1,11));assert_eq!((repeated.calls,repeated.unique,repeated.kernel_ns),(2,1,36));
++        assert_eq!(coverage(&report.maps,|meta,index|(1..8).contains(&index)&&meta.mask&(1<<(index-1))!=0).calls,2);
++        let mut prior=prefix.maps;prior[0].add(5);
++        assert_eq!(classified(&report.maps,&prior,None,0).calls,0);
++        assert_eq!(classified(&report.maps,&prior,None,2).calls,3);
++        assert_eq!(coverage(&report.maps,|_,index|index==1).first_kernel_ns,0,"first cost belongs only to actual first scope");
++    }
++    #[test]
++    fn observer_caps_censor_with_explicit_fatal_instead_of_dropping_keys() {
++        let position=position();let map=Influence::build(&position);
++        for (caps,reason) in [(Caps {max_keys:0,..Caps::producer()},"pure-observer-key-cap"),
++            (Caps {max_calls:0,..Caps::producer()},"pure-observer-call-cap"),(Caps {max_bytes:0,..Caps::producer()},"pure-observer-byte-cap")] {
++            let context=Context::producer(epoch(),caps,0).unwrap();context.influence(&position,Route::Scalar,map,1);
++            assert_eq!(context.fatal(),Some(reason));assert!(context.finish_producer().is_err());
++        }
++    }
++    #[test]
++    fn index_accounting_covers_physical_buckets_controls_and_growth() {
++        for (usable,physical) in [(0,0),(3,4),(7,8),(14,16),(28,32),(56,64)] {
++            assert_eq!(physical_index_buckets(usable),physical);
++            if usable!=0 {assert!(index_allocation_bytes(usable)>usable*(std::mem::size_of::<(u64,Vec<usize>)>()+1));}
++        }
++        let position=position();let mut catalog=Catalog::<InfluenceKey,Influence,Produced>::new();
++        let value=Influence::build(&position);
++        for nonce in 0..80 {let mut key=InfluenceKey::new(&position,Route::Scalar);key.placement.board[0]=Piece(nonce);
++            let admission=catalog.bytes()+catalog.growth(&key);catalog.insert(key,value,Produced::default());
++            assert!(catalog.bytes()<=admission,"growth admission must cover the actual rounded allocation");
++            assert_eq!(catalog.bucket_slots,catalog.buckets.values().map(|ids|ids.capacity()).sum::<usize>());
++        }
++        let mut too_many=position;too_many.counts[0][0]=17;
++        assert!(std::panic::catch_unwind(||Placement::new(&too_many,false)).is_err(),"private16-slot domain is explicit");
++    }
++    #[test]
++    fn maximum_incidence_json_rows_fit_prospective256_mib_partition() {
++        let production=Produced {mask:u8::MAX,calls:u64::MAX,kernel_ns:u128::MAX,first_kernel_ns:u128::MAX,
++            child_calls:[u64::MAX;7],child_kernel_ns:[u128::MAX;7],child_first_kernel_ns:[u128::MAX;7]};
++        let record=Record {key:(),value:(),meta:production};
++        assert!(pool_record_json(usize::MAX,&record).len()+1<=POOL_ROW_BYTES);
++        assert!(prefix_record_json(usize::MAX,Tally {calls:u64::MAX,kernel_ns:u128::MAX}).len()+1<=PREFIX_ROW_BYTES);
++        let record=Record {key:(),value:(),meta:Demanded {pool_id:Some(usize::MAX),mask:u8::MAX,first_scope:8,first_kernel_ns:u128::MAX,
++            scopes:[Tally {calls:u64::MAX,kernel_ns:u128::MAX};9]}};
++        assert!(demand_record_json(usize::MAX,&record).len()+1<=DEMAND_ROW_BYTES);
++        assert_eq!(POOL_PREFIX_JSON_BUDGET+DEMAND_JSON_BUDGET+32*1024*1024,256*1024*1024);
++    }
++}
