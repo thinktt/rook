@@ -531,7 +531,7 @@ new file mode 100644
 +    let position = previous.null_child();
 +    let mut search = Search::<true>::new(&position);
 +    search.config.tts_bytes = 65536;
-+    search.evaluator.set_threads_with_affinity(3, || Ok(3)).unwrap();
++    search.evaluator.set_threads(3).unwrap();
 +    search.evaluator.set_owner_local_inventory(enabled).unwrap();
 +    let scope = search.evaluator.full_worker_scope();
 +    search.ensure_table().unwrap();
@@ -618,7 +618,7 @@ new file mode 100644
 +        let position = Position::from_fen(START).unwrap();
 +        let previous = position.null_child();
 +        let mut search = Search::<true>::new(&position); search.config.tts_bytes = 65536;
-+        search.evaluator.set_threads_with_affinity(3, || Ok(3)).unwrap();
++        search.evaluator.set_threads(3).unwrap();
 +        search.evaluator.set_owner_local_inventory(enabled).unwrap();
 +        search.ensure_table().unwrap(); search.bind_geometry_permission(&position);
 +        let (mut node, map) = search.prepare_root_with_influence(position);
@@ -645,7 +645,7 @@ new file mode 100644
 +    let position = Position::from_fen(START).unwrap();
 +    let mut off = Search::<true>::new(&position); off.config.tts_bytes = 65536;
 +    let mut on = Search::<true>::new(&position); on.config.tts_bytes = 65536;
-+    on.evaluator.set_threads_with_affinity(3, || Ok(3)).unwrap();
++    on.evaluator.set_threads(3).unwrap();
 +    on.evaluator.set_owner_local_inventory(true).unwrap();
 +    let mut ah = SearchHistory::new(&position); let mut bh = SearchHistory::new(&position);
 +    let expected = off.run_iterations(position, &mut ah, 1, Limits::default()).unwrap();

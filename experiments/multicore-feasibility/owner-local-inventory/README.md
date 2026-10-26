@@ -1,6 +1,6 @@
 # Owner-local inventory discriminator
 
-Prepared; native work has not started. Positive64 owned transport and original
+Preparation underway; no benchmark life has run. First compilation failed on three test-only private-method calls; [repair](compile-repair.json) uses the public setter and retains the original clock and failed receipts. Production code is unchanged. Positive64 owned transport and original
 numerical body are retained. At private coherent ordinary FULL, after pawn/local
 work and owner_ready, the enabled mode prepares directly into row[p] only if the
 matching colors pair is not already complete. Original demand owns all charges,

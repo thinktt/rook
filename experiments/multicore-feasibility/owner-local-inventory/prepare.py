@@ -26,7 +26,16 @@ def main():
     prepared=preparation(prepared_path)
     assert set(os.sched_getaffinity(0))==HELPERS
     if args.stage=='prepare':
-        out.mkdir();start=time.monotonic_ns()
+        history=out/'failed-preparation-01'
+        if history.exists():
+            prior=read(history/'pipeline.json')
+            assert len(prior['stages'])==1 and prior['stages'][0]['exit']==101 and prior['failure'] is not None
+            assert (history/'tests-00-colors-worker.stdout').read_text()==''
+            assert 'error[E0624]' in (history/'tests-00-colors-worker.stderr').read_text()
+            assert not (out/'prepared-run.json').exists()
+            start=prior['pipelineStartMonotonicNs']
+        else:
+            out.mkdir();start=time.monotonic_ns()
         state=dict(schema='rook2-owner-local-inventory-pipeline-v1',complete=False,prepared=False,collected=False,
             failure=None,active=None,stages=[],preparation=str(prepared_path),preparationSha256=sha(prepared_path),
             sourcePreparation=prepared,protectedArtifacts=baseline(),pipelineStartMonotonicNs=start,
