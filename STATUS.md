@@ -57,13 +57,20 @@ and activation-local state across null descendants worked, but complete delivery
 costs erased the net gain. Sampled producer timing and observation overhead do
 not establish a lower bound for every simpler or earlier delivery design.
 
-Next selected: one isolated whole-FULL one-helper epoch transport discriminator
-from the positive epoch64 source. Keep the complete numerical kernel and API;
-replace the old mode2 slot locking/copy transport and compare preserved modes2/3
-with new same-image modes1/2/3. No new timing exists yet. No additional observer
-framework, parameter sweep or PGO is selected. Conditional inventory variants,
-fresh-Influence fusion and frontier batching remain reserves; retained epoch3
-remains the stronger measured candidate.
+The [whole-FULL one-helper epoch trial](experiments/multicore-feasibility/whole-full-epoch/report.md)
+improves the three-case mode2 median sum from 8.057632s to 7.846632s (2.62%),
+with lower total CPU and separated observed ranges in all three cases. Retained3
+remains faster at 7.669302s; new2 uses 0.682x its CPU. Only the worker transport
+changed, with 29 focused controls and all 60 replay lives passing. A missing idle
+adapter export was repaired after benchmark collection; five unstarted idle probes
+and the composed audit pass, with completed runs and original clocks preserved.
+
+Next selected: one unchanged-source own-PGO/full54 comparison, using a fresh joint
+1/2/3 profile and six configurations: accepted serial, preserved67d modes2/3 and
+new modes1/2/3. This tests whether the improved two-thread path survives PGO while
+retaining the three-thread and serial options. No tuning, qualification or adoption
+is selected. Conditional inventory variants, fresh-Influence fusion and frontier
+batching remain reserves; retained epoch3 remains the strongest complete54 result.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
