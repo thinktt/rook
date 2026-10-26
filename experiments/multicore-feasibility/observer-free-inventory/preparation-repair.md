@@ -23,3 +23,10 @@ actual argv/target directory honestly. Rerun the failed owner group, then the
 unstarted scope/build/CLI/collection/audit stages. Seven passing owner tests
 will therefore have two successful executions; this is not another benchmark
 observation. No additional fixture matrix or semantic relaxation is selected.
+
+The first continuation invocation stopped before directory creation/native work:
+late helper edits added a housekeeping hash check and moved output validation
+before mkdir after pins were generated. The identity check correctly rejected
+that mismatch. Preserve `continuation-preflight-failure-02.json` and commit4d37d64d;
+refresh pins only after all helper writes stop. No engine/test/build or timing
+life ran in that invocation and the original deadline remains authoritative.
