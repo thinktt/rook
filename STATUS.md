@@ -9,6 +9,14 @@ No further adoption, release or external gate has been selected.
 The [lead synthesis](docs/research/open-multicore-progress.md) connects the current
 results, architectural lessons and next decision.
 
+**Latest research performance leader:** exact `3d914cdd` with ordinary owner-local
+inventory enabled and three threads. The [own-PGO/full54 comparison](experiments/multicore-feasibility/owner-local-own-pgo/README.md)
+records 60.049404s versus retained67d3 61.047211s and accepted serial 68.282114s:
+1.63% and 12.06% lower, respectively. Whole CPU is 180.163710s, or 2.635x serial.
+All270 comparison lives/3120 posts pass; there are single observations per cell,
+not confidence intervals. New inline1 costs0.82% versus accepted serial. Prior
+artifacts, canonical source and accepted release remain unchanged; no adoption.
+
 The latest [wide internal-branch trial](experiments/multicore-feasibility/wide-internal/report.md)
 exercised actual 1/2/4/8-thread configurations on a hindsight-selected substantial
 branch group; effectful replay lost despite useful descendant reuse. The
@@ -140,11 +148,18 @@ one test-only visibility compile repair is preserved, with no completed-life
 repeat or clock reset. This is direct private-row generation on the coordinator
 only while the color pair appears unfinished, with original demand accounting.
 
-Select one unchanged own-PGO/full54 lane:216 training lives across modes1/2/3off/
-3on, one merge/use build with independent remerge, then270 descriptive comparisons
-across accepted serial, retained3, new inline1/off3/on3 plus five idle probes.
-No production result exists yet. No tuning, qualification or adoption is selected;
-retained artifacts and release bytes remain preserved.
+The unchanged own-PGO/full54 lane passes216 training lives, actual independent
+byte-identical remerge, use build/admission and270 comparisons plus five idle
+probes. Direct search-wall sums are serial68.282114s, retained3 61.047211s,
+new1 68.838654s, off3 61.587882s, on3 60.049404s. On3 improves2.50% versus off3
+(52/54 cases) and1.63% versus retained3 (44/54);52/54 beat serial. The ten losses
+to retained3 sum0.069517s; worst relative loss is0.99% on06. Off3 costs0.89%
+versus retained3, and inline1 costs0.82% versus accepted serial, so the common
+build/source/profile effects remain visible. These are single observations.
+A post-run metadata-closer API repair preserves the completed native evidence.
+Retain the exact image/profile as the research leader, without qualification or
+adoption. Next is a source-only assessment of analogous tactical generation at
+actual unchecked-Q FULL; no implementation or run is selected.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

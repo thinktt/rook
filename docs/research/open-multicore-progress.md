@@ -4,14 +4,22 @@
 [mission](../deterministic-multicore-mission.md); this is a progress assessment,
 not research closure or release approval.
 
-The strongest retained result now uses three threads. One coordinator preserves
+The strongest research result now uses three threads. One coordinator preserves
 King's search, pawn-cache accesses, state updates and logical work. Two helpers
 compute independent color Activity/opposite-Shelter chains at actual FULL demand.
 One immutable input is shared until both readers retire; each owns its output.
 The reviewed epoch protocol removed serialized reader copies and result locking.
 The numerical split alone had lost: the transport change made it useful.
 
-The [own-PGO full54 survey](../../experiments/multicore-feasibility/epoch-own-pgo/report.md)
+The latest [owner-local own-PGO survey](../../experiments/multicore-feasibility/owner-local-own-pgo/README.md)
+extends that design: at ordinary FULL, the coordinator conditionally generates
+its future move list while the matching color pair remains unfinished. It records
+60.049404s versus retained67d3 61.047211s and accepted serial68.282114s in one
+full54 window, gains of1.63% and12.06%. Whole CPU is180.163710s,2.635x serial.
+This is the new research performance leader; canonical/release source is unchanged.
+Its new inline1 costs0.82% versus accepted serial. Qualification remains separate.
+
+The preceding [epoch own-PGO full54 survey](../../experiments/multicore-feasibility/epoch-own-pgo/report.md)
 records 60.763786s search wall for this candidate, versus 64.092876s preserved
 two-thread and 67.973988s accepted serial in that window. Gains are 5.19% and
 10.61%, respectively. Whole CPU is 1.422x the two-thread cost and 2.679x serial.
@@ -19,7 +27,7 @@ The same new binary's one-thread mode is a descriptive 0.15% above accepted
 serial. These are single observations per case/configuration, with separate
 repeated generic evidence. They are not a matched KingWCR comparison.
 
-The gain spans 48/54 cases against preserved two-thread and 45/54 against serial;
+That earlier gain spans 48/54 cases against preserved two-thread and 45/54 against serial;
 case43 still loses 4.56% to serial. Active helpers can consume CPU while the
 coordinator is blocked in a callback. Short idle probes show zero ticks at 10ms
 resolution after parking. These costs matter when choosing a thread budget.
@@ -157,18 +165,28 @@ before any test or workload execution; failed receipts and the original clock
 are preserved. Production source was unchanged by that repair. Residual join
 timing excludes eager generation, so it is not a saved-work measurement.
 
-Select one unchanged own-PGO/full54 discriminator:216 training lives (54 each
-inline1/current2/colors3-off/colors3-on), one merge and independent remerge/use
-build, then270 single observations comparing accepted serial5cf, retained67d3,
-new inline1/off3/on3. Five idle probes follow. New versus matching-off prices
-the policy; retained controls price the common build/profile/source effects.
-No production result or qualification follows yet, and no tuning is selected.
-Frontier batching and a prospective writer-region transport layout remain
-separate unselected reserves.
+The [own-PGO/full54 lane](../../experiments/multicore-feasibility/owner-local-own-pgo/README.md)
+passes216 training lives, one merge and actual independent byte-identical remerge,
+one use build/admission,270 comparisons/3120 posts and five idle probes. Search
+wall sums are serial68.282114s, retained3 61.047211s, new1 68.838654s, off3
+61.587882s and on3 60.049404s. On3 improves2.50% against matching off (52/54)
+and1.63% against retained3 (44/54);52/54 beat serial. Case43 now beats serial in
+this observation. Ten losses to retained3 sum0.069517s, with worst relative loss
+0.99% on06. Off3's0.89% and inline1's0.82% regressions preserve common-path costs
+in the comparison; no isolated cause or confidence interval follows from one
+observation per cell. Post-run metadata-closer repair does not repeat native work.
 
-The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
-with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.
-Its source/artifact are isolated experiment products; canonical research source
+Retain the exact new image/profile as the strongest research result. Next is a
+bounded source-only assessment of tactical generation during actual unchecked-Q
+FULL, covering sparse and FAST-refresh selection, eager totality, discarded work,
+original demand/order/charges and public/observer exclusions. The Q branch census
+does not measure this overlap opportunity. No new implementation/run or tuning
+is selected; frontier batching and writer-region layout remain other reserves.
+
+The latest three-thread image is `3d914cddf415cfb109bdabaf6eaf5b2384c3ca537a37a2f37a691c28ac5e91cc`,
+with profile `bf909cd4b9a489f3de23e1b0b2d5bb45c0069f690354d76510636c8fed54cd1f`;
+the winning mode enables owner-local inventory. Predecessor67d01108/profile948747
+remains preserved. These sources/artifacts are isolated experiment products; canonical research source
 still preserves the practical two-thread checkpoint, and accepted main/release
 bytes are unchanged. The source proof, focused controls and exact-image replay
 surveys support further research. Broad mandatory/gameplay qualification of the

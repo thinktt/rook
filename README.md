@@ -1,11 +1,13 @@
 # Rook2
 
 **This worktree is the deterministic multicore research branch.** The latest
-[isolated three-thread candidate](experiments/multicore-feasibility/epoch-own-pgo/report.md)
-completed the descriptive 54-case survey in 60.764s: 5.19% below preserved two-thread
-Rook and 10.61% below accepted serial, using 1.422x the two-thread CPU. Its one-thread
-mode was 0.15% above serial in the same window. All selected replays passed;
-broader exact-image behavioral qualification and adoption remain open.
+[isolated three-thread candidate](experiments/multicore-feasibility/owner-local-own-pgo/README.md)
+completed the descriptive 54-case survey in 60.049s, versus 61.047s for the prior
+three-thread candidate and 68.282s for accepted serial: 1.63% and 12.06% lower,
+respectively. It uses 2.635x serial CPU; its one-thread mode was 0.82% slower than
+serial in the same window. The coordinator now prepares ordinary move lists
+while its two evaluation helpers are still busy. All 270 comparison replays
+passed; broader exact-image behavioral qualification and adoption remain open.
 
 The three-thread source/image are retained with that experiment; canonical branch
 source still preserves the [two-thread checkpoint](docs/research/deterministic-multicore-outcome.md)
