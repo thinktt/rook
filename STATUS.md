@@ -19,15 +19,24 @@ The [three-thread color split](experiments/multicore-feasibility/colors-three/re
 lost 4.58% in summed search-wall medians against its sibling two-thread mode on
 35/08/43, with all 48 replay lives passing. The coordinator usually reached the
 join before the helpers; this does not establish a coordinator saturation limit.
-One transport discriminator is now selected: keep the same side arithmetic while
-replacing serialized packet copies and result publication with an immutable epoch
-input and independently owned outputs. Ownership, scope-close and cold-wakeup
-proofs precede implementation. No new transport timing exists yet.
+The subsequent [fixed transport discriminator](experiments/multicore-feasibility/epoch-colors/report.md)
+kept that arithmetic and replaced serialized reader copies/result publication with
+immutable epoch input and independent outputs. It improved the three-case median
+sum by 7.57% against old colors3 and 3.67% against sibling current2, at 1.445x
+current2 whole-process CPU. All 48 replay lives and 32 focused checks passed;
+35/43 timing ranges separated, while 08 overlapped. This is generic, finite
+evidence, not qualification or a full54 prediction.
+
+One exact-source joint-mode PGO build and descriptive full54 comparison are now
+selected: train each original case once per mode1/2/3, then compare accepted
+serial5cf, preserved practical2 8f and all three new modes. No PGO result exists
+yet; no transport tuning, adoption or extra qualification is selected.
 
 The [next-work comparison](docs/research/after-colors-dataflow-choice.md) identifies
 whole-FULL plus ordinary inventory as the leading separate reserve; fresh-Influence
 pipeline fusion and frontier batching also remain unselected. The current trial
-tests transport at a fixed arithmetic partition, not those larger work graphs.
+tests the broader performance of the fixed transport/arithmetic partition, not
+those larger work graphs.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
