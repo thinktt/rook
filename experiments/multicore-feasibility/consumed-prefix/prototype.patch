@@ -1,0 +1,2378 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index acddcac5..298cd0b2 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -26,8 +26,20 @@ inherits = "release"
+ # Disabled in normal engine builds.
+ branch-transactions = []
+ child-preparation = []
++hierarchical-recovery = ["branch-transactions"]
++consumed-prefix = ["hierarchical-recovery"]
++
++[[bin]]
++name = "rook2-hierarchical"
++path = "src/bin/rook2-hierarchical.rs"
++required-features = ["hierarchical-recovery"]
+ 
+ [[bin]]
+ name = "rook2-branch-tx"
+ path = "src/bin/rook2-branch-tx.rs"
+ required-features = ["branch-transactions"]
++
++[[bin]]
++name = "rook2-consumed-prefix"
++path = "src/bin/rook2-consumed-prefix.rs"
++required-features = ["consumed-prefix"]
+diff --git a/src/branch_journal.rs b/src/branch_journal.rs
+index 387b31af..d0f2c485 100644
+--- a/src/branch_journal.rs
++++ b/src/branch_journal.rs
+@@ -6,6 +6,7 @@
+ //! canonical branch comparison succeed. Speculative final bytes are never used.
+ 
+ use std::cell::RefCell;
++use std::ops::Range;
+ use std::rc::Rc;
+ use std::time::Instant;
+ 
+@@ -15,7 +16,7 @@ use crate::movegen::{MoveList, MOVE_CAPACITY};
+ use crate::ordinary_policy::{self, Learning};
+ use crate::pawn_structure::{PawnCache, Selection};
+ use crate::position::Position;
+-use crate::remembered::{ProbeResult, Query, RememberedTable, Store};
++use crate::remembered::{ProbeResult, Query, RememberedTable, SparseStage, SparseStageError, Store};
+ use crate::tactical::{self, OrderingScratch};
+ use crate::types::Move;
+ 
+@@ -33,6 +34,10 @@ pub(crate) enum Event {
+         preferred: Option<Move>,
+         input: Vec<Move>,
+         expected: Vec<Move>,
++        /// Filled only after the driver proves complete shallow ordinary
++        /// ownership/child coverage. Native recording always starts with None.
++        #[cfg(feature = "consumed-prefix")]
++        proven_prefix: Option<usize>,
+     },
+     OrderQ { position: Position, input: Vec<Move>, expected: Vec<Move> },
+ }
+@@ -52,16 +57,130 @@ impl Event {
+ pub(crate) struct Log {
+     pub events: Vec<Event>,
+     pub overflowed: bool,
++    pub event_overflowed: bool,
++    pub byte_overflowed: bool,
+     pub attempted: usize,
+     /// Time inside Sink::record, including append/growth and capped attempts;
+     /// event construction and cloning at the native call sites are excluded.
+     pub recording_ns: u128,
+     cap: usize,
++    byte_cap: usize,
++    // O(1) prospective admission; estimated_bytes independently totals the
++    // actual retained payloads for reporting, including any control edits.
++    payload_bytes: usize,
++}
++
++/// A recording boundary includes attempted writes so capped events cannot turn
++/// into a misleading empty or apparently complete descendant certificate.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) struct Cursor {
++    pub event_index: usize,
++    pub attempted: usize,
++}
++
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub(crate) enum OrderPolicy {
++    #[default]
++    Complete,
++    ConsumedPrefix,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) enum OrderRejectionReason {
++    CompleteOrder,
++    ConsumedPrefix,
++    InvalidLength,
++    InvalidMultiset,
++}
++
++impl OrderRejectionReason {
++    pub(crate) fn name(self) -> &'static str {
++        match self {
++            Self::CompleteOrder => "complete-order-diff",
++            Self::ConsumedPrefix => "consumed-prefix-diff",
++            Self::InvalidLength => "inventory-length",
++            Self::InvalidMultiset => "inventory-multiset",
++        }
++    }
++}
++
++/// At most one bounded inventory observation is retained for a failed replay.
++/// Capture elapsed is reported separately as audit-only work within inclusive
++/// replay elapsed; counterfactual analysis is a separate caller-timed audit.
++#[derive(Clone, Debug)]
++pub(crate) struct OrderObservation {
++    pub event_index: usize,
++    pub proven_prefix: Option<usize>,
++    pub input_len: usize,
++    pub expected_len: usize,
++    pub actual_len: Option<usize>,
++    pub policy: OrderPolicy,
++    pub reason: OrderRejectionReason,
++    input: Vec<Move>,
++    expected: Vec<Move>,
++    actual: Option<Vec<Move>>,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) struct OrderClassification {
++    pub event_index: usize,
++    pub k: Option<usize>,
++    pub prefix_eligible: bool,
++    pub inventory_len: usize,
++    pub inventory_preserved: bool,
++    pub first_changed: Option<usize>,
++    pub prefix_equal: Option<bool>,
++    pub this_order_suffix_only: bool,
++    pub reason: &'static str,
++}
++
++impl OrderObservation {
++    fn capture(event_index: usize, proven_prefix: Option<usize>, input: &[Move],
++        expected: &[Move], actual: Option<&[Move]>, policy: OrderPolicy,
++        reason: OrderRejectionReason) -> Self {
++        fn bounded(moves: &[Move]) -> Vec<Move> {
++            moves.iter().take(MOVE_CAPACITY).copied().collect()
++        }
++        Self { event_index, proven_prefix, input_len: input.len(), expected_len: expected.len(),
++            actual_len: actual.map(|moves| moves.len()), policy, reason,
++            input: bounded(input), expected: bounded(expected), actual: actual.map(bounded) }
++    }
++
++    /// Audit ONLY this first rejected order operation, never the remainder of
++    /// the segment certificate. A suffix-only order can precede a later TT,
++    /// pawn, output or other order rejection. Caller must time this separately
++    /// and exclude it from semantic acceptance and executor cost.
++    pub(crate) fn classify_order_only(&self) -> OrderClassification {
++        let shape = self.input_len <= MOVE_CAPACITY && self.expected_len == self.input_len
++            && self.actual_len == Some(self.input_len);
++        let inventory_preserved = shape && self.actual.as_ref().is_some_and(|actual|
++            same_multiset(&self.input, &self.expected) && same_multiset(&self.input, actual));
++        let eligible = self.proven_prefix.filter(|&k| k >= 1 && k <= self.input_len && shape);
++        let first_changed = self.actual.as_ref().and_then(|actual| {
++            actual.iter().zip(&self.expected).position(|(a, b)| a != b)
++                .or_else(|| (actual.len() != self.expected.len()).then_some(actual.len().min(self.expected.len())))
++        });
++        let prefix_equal = if inventory_preserved {
++            eligible.map(|k| self.actual.as_ref().unwrap()[..k] == self.expected[..k])
++        } else { None };
++        OrderClassification { event_index: self.event_index, k: self.proven_prefix,
++            prefix_eligible: eligible.is_some(), inventory_len: self.input_len,
++            inventory_preserved, first_changed, prefix_equal,
++            this_order_suffix_only: prefix_equal == Some(true) && first_changed.is_some(),
++            reason: self.reason.name() }
++    }
+ }
+ 
+ impl Log {
+     pub(crate) fn new(cap: usize) -> Self {
+-        Self { events: Vec::new(), overflowed: false, attempted: 0, recording_ns: 0, cap }
++        Self::bounded(cap, usize::MAX)
++    }
++
++    fn bounded(cap: usize, byte_cap: usize) -> Self {
++        assert!(byte_cap >= std::mem::size_of::<Self>(), "journal byte cap cannot hold its header");
++        Self { events: Vec::new(), overflowed: false, event_overflowed: false,
++            byte_overflowed: false, attempted: 0, recording_ns: 0, cap, byte_cap,
++            payload_bytes: 0 }
+     }
+ 
+     pub(crate) fn estimated_bytes(&self) -> usize {
+@@ -70,6 +189,52 @@ impl Log {
+             + self.events.iter().map(Event::allocation_bytes).sum::<usize>()
+     }
+ 
++    pub(crate) fn cursor(&self) -> Cursor {
++        Cursor { event_index: self.events.len(), attempted: self.attempted }
++    }
++
++    /// A complete prefix remains valid even if later recording overflows.
++    /// Any cursor after a dropped event is conservatively censored, even if a
++    /// later segment itself attempted no operations.
++    pub(crate) fn range(&self, start: Cursor, end: Cursor) -> Option<Range<usize>> {
++        let retained = end.event_index.checked_sub(start.event_index)?;
++        let attempted = end.attempted.checked_sub(start.attempted)?;
++        (start.attempted == start.event_index && end.attempted == end.event_index
++            && end.event_index <= self.events.len() && end.attempted <= self.attempted
++            && retained == attempted).then_some(start.event_index..end.event_index)
++    }
++
++    /// Caller begins/reuses TT staging and supplies detached pawn/learning
++    /// clones. This method neither changes canonical sinks nor commits state.
++    /// Rejection poisons TT staging, including any successful mate mutations.
++    pub(crate) fn replay_range(
++        &self,
++        root: &RootContext,
++        range: Range<usize>,
++        base: &RememberedTable,
++        stage: &mut SparseStage,
++        learning: &mut Learning,
++        pawns: &mut PawnCache,
++    ) -> ReplayResult {
++        self.replay_range_policy(root, range, base, stage, learning, pawns, OrderPolicy::Complete)
++    }
++
++    pub(crate) fn replay_range_policy(
++        &self,
++        root: &RootContext,
++        range: Range<usize>,
++        base: &RememberedTable,
++        stage: &mut SparseStage,
++        learning: &mut Learning,
++        pawns: &mut PawnCache,
++        policy: OrderPolicy,
++    ) -> ReplayResult {
++        let result = replay_events(self, root, range,
++            &mut SparseReplay { base, stage: &mut *stage }, learning, pawns, policy);
++        if !result.accepted() { stage.invalidate(); }
++        result
++    }
++
+     /// Replays into staging only. Sinks are detached before native calls so
+     /// recording cannot recursively append or borrow this journal.
+     pub(crate) fn replay(
+@@ -89,65 +254,160 @@ impl Log {
+             });
+             return result;
+         }
+-        let mut scratch = OrderingScratch::new();
+-        for (event_index, event) in self.events.iter().enumerate() {
+-            let rejection = match event {
+-                Event::TTProbe { query, expected } => {
+-                    result.counts.tt_probes += 1;
+-                    (table.probe(*query) != *expected).then_some(RejectionKind::TTProbe)
+-                }
+-                Event::TTStore { store } => {
+-                    result.counts.tt_stores += 1;
+-                    table.store(*store);
+-                    None
+-                }
+-                Event::PawnSelect { identity, expected } => {
+-                    result.counts.pawn_selects += 1;
+-                    (pawns.research_replay_select(*identity, *expected) != *expected)
+-                        .then_some(RejectionKind::PawnSelect)
++        replay_events(self, root, 0..self.events.len(), table, learning, pawns, OrderPolicy::Complete)
++    }
++}
++
++trait ReplayTable {
++    fn probe(&mut self, query: Query) -> Result<ProbeResult, RejectionKind>;
++    fn store(&mut self, store: Store) -> Result<(), RejectionKind>;
++}
++
++impl ReplayTable for RememberedTable {
++    fn probe(&mut self, query: Query) -> Result<ProbeResult, RejectionKind> {
++        Ok(RememberedTable::probe(self, query))
++    }
++    fn store(&mut self, store: Store) -> Result<(), RejectionKind> {
++        RememberedTable::store(self, store);
++        Ok(())
++    }
++}
++
++struct SparseReplay<'a> {
++    base: &'a RememberedTable,
++    stage: &'a mut SparseStage,
++}
++
++fn stage_rejection(error: SparseStageError) -> RejectionKind {
++    match error {
++        SparseStageError::GroupLimit => RejectionKind::TTStageLimit,
++        SparseStageError::BaseChanged | SparseStageError::Inactive => RejectionKind::TTStageInvalid,
++    }
++}
++
++impl ReplayTable for SparseReplay<'_> {
++    fn probe(&mut self, query: Query) -> Result<ProbeResult, RejectionKind> {
++        self.stage.probe(self.base, query).map_err(stage_rejection)
++    }
++    fn store(&mut self, store: Store) -> Result<(), RejectionKind> {
++        self.stage.store(self.base, store).map_err(stage_rejection)
++    }
++}
++
++fn replay_events(
++    log: &Log,
++    root: &RootContext,
++    range: Range<usize>,
++    table: &mut impl ReplayTable,
++    learning: &mut Learning,
++    pawns: &mut PawnCache,
++    policy: OrderPolicy,
++) -> ReplayResult {
++    let mut result = ReplayResult::default();
++    if range.start > range.end || range.end > log.events.len() {
++        result.rejection = Some(Rejection {
++            event_index: range.start.min(log.events.len()), kind: RejectionKind::InvalidRange,
++        });
++        return result;
++    }
++    let mut scratch = OrderingScratch::new();
++    for event_index in range {
++        let rejection = match &log.events[event_index] {
++            Event::TTProbe { query, expected } => {
++                match table.probe(*query) {
++                    Ok(actual) => {
++                        result.counts.tt_probes += 1;
++                        (actual != *expected).then_some(RejectionKind::TTProbe)
++                    }
++                    Err(kind) => Some(kind),
+                 }
+-                Event::LearningClearNext { ply } => {
+-                    result.counts.learning_clears += 1;
+-                    learning.clear_next(*ply);
+-                    None
++            }
++            Event::TTStore { store } => {
++                match table.store(*store) {
++                    Ok(()) => { result.counts.tt_stores += 1; None }
++                    Err(kind) => Some(kind),
+                 }
+-                Event::LearningRecord { position, ply, depth, movement } => {
+-                    result.counts.learning_records += 1;
+-                    learning.record(position, *ply, *depth, *movement);
+-                    None
++            }
++            Event::PawnSelect { identity, expected } => {
++                result.counts.pawn_selects += 1;
++                (pawns.research_replay_select(*identity, *expected) != *expected)
++                    .then_some(RejectionKind::PawnSelect)
++            }
++            Event::LearningClearNext { ply } => {
++                result.counts.learning_clears += 1;
++                learning.clear_next(*ply);
++                None
++            }
++            Event::LearningRecord { position, ply, depth, movement } => {
++                result.counts.learning_records += 1;
++                learning.record(position, *ply, *depth, *movement);
++                None
++            }
++            Event::OrderMain { position, influence, ply, preferred, input, expected, .. } => {
++                result.counts.order_main += 1;
++                #[cfg(feature = "consumed-prefix")]
++                let annotation = match &log.events[event_index] {
++                    Event::OrderMain { proven_prefix, .. } => *proven_prefix,
++                    _ => unreachable!(),
++                };
++                #[cfg(not(feature = "consumed-prefix"))]
++                let annotation = None;
++                let prefix = if policy == OrderPolicy::ConsumedPrefix {
++                    annotation.filter(|&k| k >= 1 && k <= input.len())
++                } else { None };
++                if prefix.is_some() { result.counts.order_main_prefix += 1; }
++                else {
++                    result.counts.order_main_complete += 1;
++                    if policy == OrderPolicy::ConsumedPrefix { result.counts.order_main_prefix_fallback += 1; }
+                 }
+-                Event::OrderMain { position, influence, ply, preferred, input, expected } => {
+-                    result.counts.order_main += 1;
+-                    if let Some(mut list) = inventory(input, expected) {
+-                        tactical::order_by(&mut list, &mut scratch, |movement| {
+-                            ordinary_policy::priority(
+-                                position, root, influence, learning, *ply, *preferred, movement,
+-                            )
+-                        });
+-                        (list.as_slice() != expected.as_slice()).then_some(RejectionKind::OrderMain)
+-                    } else {
+-                        Some(RejectionKind::InvalidInventory)
+-                    }
++                if let Some(mut list) = inventory(input, expected) {
++                    tactical::order_by(&mut list, &mut scratch, |movement| {
++                        ordinary_policy::priority(
++                            position, root, influence, learning, *ply, *preferred, movement,
++                        )
++                    });
++                    let reason = if let Some(k) = prefix {
++                        if !same_multiset(input, expected) || !same_multiset(input, list.as_slice()) {
++                            Some((RejectionKind::InvalidInventory, OrderRejectionReason::InvalidMultiset))
++                        } else if list.as_slice()[..k] != expected[..k] {
++                            Some((RejectionKind::OrderMain, OrderRejectionReason::ConsumedPrefix))
++                        } else { None }
++                    } else if list.as_slice() != expected.as_slice() {
++                        Some((RejectionKind::OrderMain, OrderRejectionReason::CompleteOrder))
++                    } else { None };
++                    if let Some((kind, reason)) = reason {
++                        let capture_started = Instant::now();
++                        result.first_order_rejection = Some(OrderObservation::capture(
++                            event_index, annotation, input, expected, Some(list.as_slice()), policy, reason));
++                        result.order_observation_capture_ns += capture_started.elapsed().as_nanos();
++                        Some(kind)
++                    } else { None }
++                } else {
++                    let capture_started = Instant::now();
++                    result.first_order_rejection = Some(OrderObservation::capture(
++                        event_index, annotation, input, expected, None, policy, OrderRejectionReason::InvalidLength));
++                    result.order_observation_capture_ns += capture_started.elapsed().as_nanos();
++                    Some(RejectionKind::InvalidInventory)
+                 }
+-                Event::OrderQ { position, input, expected } => {
+-                    result.counts.order_q += 1;
+-                    if let Some(mut list) = inventory(input, expected) {
+-                        tactical::order_with_scratch(
+-                            position, root, &learning.history, &mut list, &mut scratch,
+-                        );
+-                        (list.as_slice() != expected.as_slice()).then_some(RejectionKind::OrderQ)
+-                    } else {
+-                        Some(RejectionKind::InvalidInventory)
+-                    }
++            }
++            Event::OrderQ { position, input, expected } => {
++                result.counts.order_q += 1;
++                if let Some(mut list) = inventory(input, expected) {
++                    tactical::order_with_scratch(
++                        position, root, &learning.history, &mut list, &mut scratch,
++                    );
++                    (list.as_slice() != expected.as_slice()).then_some(RejectionKind::OrderQ)
++                } else {
++                    Some(RejectionKind::InvalidInventory)
+                 }
+-            };
+-            if let Some(kind) = rejection {
+-                result.rejection = Some(Rejection { event_index, kind });
+-                break;
+             }
++        };
++        if let Some(kind) = rejection {
++            result.rejection = Some(Rejection { event_index, kind });
++            break;
+         }
+-        result
+     }
++    result
+ }
+ 
+ fn inventory(input: &[Move], expected: &[Move]) -> Option<MoveList> {
+@@ -160,6 +420,19 @@ fn inventory(input: &[Move], expected: &[Move]) -> Option<MoveList> {
+     Some(list)
+ }
+ 
++/// Counts duplicates explicitly and allocates no heap storage. The complete
++/// native sort remains the order owner; this only certifies its inventory.
++fn same_multiset(a: &[Move], b: &[Move]) -> bool {
++    if a.len() != b.len() || a.len() > MOVE_CAPACITY { return false; }
++    let mut used = [false; MOVE_CAPACITY];
++    for movement in a {
++        let Some(index) = b.iter().enumerate().position(|(index, other)|
++            !used[index] && movement == other) else { return false; };
++        used[index] = true;
++    }
++    true
++}
++
+ /// Shared only inside the serial simulation. This deliberately is not Send:
+ /// an actual multiworker executor is outside the experiment's scope.
+ #[derive(Clone, Debug)]
+@@ -170,31 +443,56 @@ impl Sink {
+         Self(Rc::new(RefCell::new(Log::new(cap))))
+     }
+ 
++    /// Bound retained Event capacity + retained Vec payloads, excluding transient
++    /// Event construction and allocator overhead. First loss seals the prefix.
++    pub(crate) fn bounded(event_cap: usize, byte_cap: usize) -> Self {
++        Self(Rc::new(RefCell::new(Log::bounded(event_cap, byte_cap))))
++    }
++
+     pub(crate) fn record(&self, event: Event) {
+         let started = Instant::now();
+         let mut log = self.0.borrow_mut();
+         log.attempted = log.attempted.saturating_add(1);
+-        if log.events.len() == log.cap {
++        if log.overflowed {
++            // Never append after a dropped event: descendant ranges refer to a
++            // contiguous native chronology, not a filtered event subsequence.
++        } else if log.events.len() == log.cap {
+             log.overflowed = true;
++            log.event_overflowed = true;
+         } else {
+             // Vec's geometric reserve may exceed a small explicit cap. Grow
+             // by an exact bounded request instead of the default growth rule.
+-            if log.events.len() == log.events.capacity() {
+-                let capacity = log.events.capacity().max(4).saturating_mul(2).min(log.cap);
+-                let additional = capacity - log.events.len();
+-                log.events.reserve_exact(additional);
++            let capacity = if log.events.len() == log.events.capacity() {
++                log.events.capacity().max(4).saturating_mul(2).min(log.cap)
++            } else { log.events.capacity() };
++            let payload = event.allocation_bytes();
++            let retained_bytes = std::mem::size_of::<Log>()
++                .saturating_add(capacity.saturating_mul(std::mem::size_of::<Event>()))
++                .saturating_add(log.payload_bytes).saturating_add(payload);
++            if retained_bytes > log.byte_cap {
++                log.overflowed = true;
++                log.byte_overflowed = true;
++            } else {
++                if log.events.len() == log.events.capacity() {
++                    let additional = capacity - log.events.len();
++                    log.events.reserve_exact(additional);
++                }
++                log.payload_bytes = log.payload_bytes.saturating_add(payload);
++                log.events.push(event);
+             }
+-            log.events.push(event);
+         }
+         log.recording_ns = log.recording_ns.saturating_add(started.elapsed().as_nanos());
+     }
+ 
++    pub(crate) fn cursor(&self) -> Cursor { self.0.borrow().cursor() }
++
+     /// Moves the allocation out even while storage objects retain Sink clones.
+     /// Subsequent operations start an empty journal with the same explicit cap.
+     pub(crate) fn take(&self) -> Log {
+         let mut log = self.0.borrow_mut();
+         let cap = log.cap;
+-        std::mem::replace(&mut *log, Log::new(cap))
++        let byte_cap = log.byte_cap;
++        std::mem::replace(&mut *log, Log::bounded(cap, byte_cap))
+     }
+ 
+     pub(crate) fn finish(&self) -> Log {
+@@ -217,6 +515,10 @@ pub(crate) struct OperationCounts {
+     pub learning_records: usize,
+     pub order_main: usize,
+     pub order_q: usize,
++    /// Predicate-path counters; excluded from total native operation count.
++    pub order_main_prefix: usize,
++    pub order_main_complete: usize,
++    pub order_main_prefix_fallback: usize,
+ }
+ 
+ impl OperationCounts {
+@@ -234,6 +536,9 @@ pub(crate) enum RejectionKind {
+     OrderMain,
+     OrderQ,
+     InvalidInventory,
++    InvalidRange,
++    TTStageLimit,
++    TTStageInvalid,
+ }
+ 
+ impl RejectionKind {
+@@ -245,6 +550,9 @@ impl RejectionKind {
+             Self::OrderMain => "ordinary-order",
+             Self::OrderQ => "quiescence-order",
+             Self::InvalidInventory => "invalid-inventory",
++            Self::InvalidRange => "invalid-range",
++            Self::TTStageLimit => "tt-stage-limit",
++            Self::TTStageInvalid => "tt-stage-invalid",
+         }
+     }
+ }
+@@ -259,6 +567,10 @@ pub(crate) struct Rejection {
+ pub(crate) struct ReplayResult {
+     pub rejection: Option<Rejection>,
+     pub counts: OperationCounts,
++    pub first_order_rejection: Option<OrderObservation>,
++    /// Audit-only bounded inventory capture, included in gross replay elapsed.
++    /// Caller subtracts this from validation and adds it once to audit cost.
++    pub order_observation_capture_ns: u128,
+ }
+ 
+ impl ReplayResult {
+@@ -266,3 +578,326 @@ impl ReplayResult {
+         self.rejection.is_none()
+     }
+ }
++
++#[cfg(all(test, feature = "consumed-prefix"))]
++mod prefix_tests {
++    use super::*;
++
++    fn fixture(proven_prefix: Option<usize>) -> (Log, RootContext, Learning) {
++        let position = Position::from_fen(
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
++        let root = RootContext::new(&position, [[100; 5]; 2], 10);
++        let influence = Influence::build(&position);
++        let mut all = MoveList::new();
++        crate::movegen::generate_legal(&position, &mut all);
++        let input = all.as_slice()[..4].to_vec();
++        assert!(input.iter().all(|m| position.board[m.to().0 as usize].is_empty()));
++        let preferred = Some(input[0]);
++        let original = Learning::default();
++        let mut expected = inventory(&input, &input).unwrap();
++        tactical::order_by(&mut expected, &mut OrderingScratch::new(), |movement|
++            ordinary_policy::priority(&position, &root, &influence, &original, 1, preferred, movement));
++        let changed = *input.last().unwrap();
++        let piece = position.board[changed.from().0 as usize];
++        let mut canonical = Learning::default();
++        canonical.history[piece.color().index()][piece.kind().index()][changed.to().0 as usize] = 1000;
++        canonical.total = 1000;
++        let sink = Sink::new(8);
++        sink.record(Event::OrderMain { position, influence, ply: 1, preferred, input,
++            expected: expected.as_slice().to_vec(), proven_prefix });
++        (sink.take(), root, canonical)
++    }
++
++    fn run(log: &Log, root: &RootContext, canonical: &Learning, policy: OrderPolicy) -> ReplayResult {
++        let base = RememberedTable::with_groups(3);
++        let mut stage = SparseStage::new(3);
++        stage.begin(&base);
++        log.replay_range_policy(root, 0..log.events.len(), &base, &mut stage,
++            &mut canonical.research_clone(), &mut PawnCache::new(), policy)
++    }
++
++    #[test]
++    fn changed_unvisited_suffix_accepts_only_explicit_prefix_policy() {
++        let (log, root, learning) = fixture(Some(1));
++        let complete = run(&log, &root, &learning, OrderPolicy::Complete);
++        assert_eq!(complete.rejection.unwrap().kind, RejectionKind::OrderMain);
++        let observation = complete.first_order_rejection.unwrap();
++        // This is deliberately outside replay: it says nothing about a later
++        // dependency in this or another certificate.
++        let diagnostic = observation.classify_order_only();
++        assert_eq!(diagnostic.k, Some(1));
++        assert_eq!(diagnostic.first_changed, Some(1));
++        assert_eq!(diagnostic.prefix_equal, Some(true));
++        assert!(diagnostic.inventory_preserved && diagnostic.this_order_suffix_only);
++        let prefix = run(&log, &root, &learning, OrderPolicy::ConsumedPrefix);
++        assert!(prefix.accepted());
++        assert_eq!(prefix.counts.order_main_prefix, 1);
++        assert_eq!(prefix.counts.order_main_complete, 0);
++        assert!(prefix.first_order_rejection.is_none());
++        assert_eq!(prefix.order_observation_capture_ns, 0);
++        // Both legacy entry points remain Complete even with an annotation.
++        let mut table = RememberedTable::with_groups(3);
++        let mut stage = SparseStage::new(3);
++        stage.begin(&table);
++        assert!(!log.replay_range(&root, 0..1, &table, &mut stage,
++            &mut learning.research_clone(), &mut PawnCache::new()).accepted());
++        assert!(!log.replay(&root, &mut table,
++            &mut learning.research_clone(), &mut PawnCache::new()).accepted());
++    }
++
++    #[test]
++    fn changed_consumed_move_and_skipped_prefix_item_both_reject() {
++        let (mut log, root, learning) = fixture(Some(2));
++        // The second examined item is certified even if its native frontier
++        // estimate skipped recursion. No child-call subset can replace k=2.
++        let second = run(&log, &root, &learning, OrderPolicy::ConsumedPrefix);
++        assert_eq!(second.rejection.unwrap().kind, RejectionKind::OrderMain);
++        let second = second.first_order_rejection.unwrap().classify_order_only();
++        assert_eq!(second.first_changed, Some(1));
++        assert_eq!(second.prefix_equal, Some(false));
++        assert!(!second.this_order_suffix_only);
++        if let Event::OrderMain { preferred, input, expected, proven_prefix, .. } = &mut log.events[0] {
++            *preferred = None;
++            *expected = input.clone();
++            *proven_prefix = Some(1);
++        }
++        let first = run(&log, &root, &learning, OrderPolicy::ConsumedPrefix);
++        assert_eq!(first.rejection.unwrap().kind, RejectionKind::OrderMain);
++        assert_eq!(first.first_order_rejection.unwrap().classify_order_only().first_changed, Some(0));
++    }
++
++    #[test]
++    fn prefix_never_accepts_changed_inventory_length_or_multiset() {
++        let (mut length, root, learning) = fixture(Some(1));
++        if let Event::OrderMain { expected, .. } = &mut length.events[0] { expected.pop(); }
++        let rejected = run(&length, &root, &learning, OrderPolicy::ConsumedPrefix);
++        assert_eq!(rejected.rejection.unwrap().kind, RejectionKind::InvalidInventory);
++        assert_eq!(rejected.first_order_rejection.unwrap().reason, OrderRejectionReason::InvalidLength);
++        let (mut multiset, root, learning) = fixture(Some(1));
++        if let Event::OrderMain { expected, .. } = &mut multiset.events[0] { expected[3] = expected[2]; }
++        let rejected = run(&multiset, &root, &learning, OrderPolicy::ConsumedPrefix);
++        assert_eq!(rejected.rejection.unwrap().kind, RejectionKind::InvalidInventory);
++        let observation = rejected.first_order_rejection.unwrap();
++        assert_eq!(observation.reason, OrderRejectionReason::InvalidMultiset);
++        let diagnostic = observation.classify_order_only();
++        assert!(!diagnostic.inventory_preserved);
++        assert!(!diagnostic.this_order_suffix_only);
++    }
++
++    #[test]
++    fn absent_or_invalid_proof_and_quiescence_use_complete_order() {
++        for annotation in [None, Some(0), Some(MOVE_CAPACITY + 1)] {
++            // Missing proof represents higher depth, incomplete/capped child
++            // coverage or an ambiguous owner; those decisions belong to driver.
++            let (log, root, learning) = fixture(annotation);
++            let result = run(&log, &root, &learning, OrderPolicy::ConsumedPrefix);
++            assert_eq!(result.rejection.unwrap().kind, RejectionKind::OrderMain);
++            assert_eq!(result.counts.order_main_prefix, 0);
++            assert_eq!(result.counts.order_main_complete, 1);
++            assert_eq!(result.counts.order_main_prefix_fallback, 1);
++        }
++        let (mut q, root, learning) = fixture(Some(1));
++        let (position, input) = match &q.events[0] {
++            Event::OrderMain { position, input, .. } => (*position, input.clone()),
++            _ => unreachable!(),
++        };
++        let mut expected = inventory(&input, &input).unwrap();
++        tactical::order_with_scratch(&position, &root, &Learning::default().history,
++            &mut expected, &mut OrderingScratch::new());
++        q.events[0] = Event::OrderQ { position, input, expected: expected.as_slice().to_vec() };
++        let result = run(&q, &root, &learning, OrderPolicy::ConsumedPrefix);
++        assert_eq!(result.rejection.unwrap().kind, RejectionKind::OrderQ);
++        assert_eq!(result.counts.order_main_prefix, 0);
++        assert_eq!(result.counts.order_q, 1);
++    }
++
++    #[test]
++    fn suffix_only_first_order_does_not_classify_a_later_tt_failure() {
++        let (mut log, root, learning) = fixture(Some(1));
++        log.events.push(Event::TTProbe {
++            query: Query { group: 0, identity: 77, ply: 1, target: 3, lower: 0, upper: 100 },
++            expected: ProbeResult { score: Some(17), ..ProbeResult::default() },
++        });
++        let complete = run(&log, &root, &learning, OrderPolicy::Complete);
++        assert!(complete.first_order_rejection.unwrap().classify_order_only().this_order_suffix_only);
++        let prefix = run(&log, &root, &learning, OrderPolicy::ConsumedPrefix);
++        assert_eq!(prefix.rejection, Some(Rejection { event_index: 1, kind: RejectionKind::TTProbe }));
++        assert!(prefix.first_order_rejection.is_none());
++        assert_eq!(prefix.order_observation_capture_ns, 0);
++        assert_eq!(prefix.counts.order_main_prefix, 1);
++        assert_eq!(prefix.counts.tt_probes, 1);
++    }
++}
++
++#[cfg(test)]
++mod range_tests {
++    use super::*;
++
++    fn root() -> RootContext {
++        let position = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
++        RootContext::new(&position, [[100; 5]; 2], 10)
++    }
++
++    fn query(group: usize) -> Query {
++        Query { group, identity: 71, ply: 1, target: 3, lower: 0, upper: 100 }
++    }
++
++    fn store(group: usize) -> Store {
++        Store { query: query(group), score: 17, move_hint: None,
++            quiet_mate_checked: false, mark_depth: false }
++    }
++
++    #[test]
++    fn complete_prefix_ranges_survive_later_overflow_and_zero_cap_is_censored() {
++        let sink = Sink::new(2);
++        let start = sink.cursor();
++        sink.record(Event::LearningClearNext { ply: 1 });
++        let child_end = sink.cursor();
++        sink.record(Event::LearningClearNext { ply: 2 });
++        sink.record(Event::LearningClearNext { ply: 3 });
++        let ancestor_end = sink.cursor();
++        let log = sink.take();
++        assert!(log.overflowed);
++        assert_eq!(log.range(start, child_end), Some(0..1));
++        assert_eq!(log.range(start, ancestor_end), None);
++        assert_eq!(log.range(ancestor_end, ancestor_end), None);
++        let base = RememberedTable::with_groups(2);
++        let mut stage = SparseStage::new(1);
++        stage.begin(&base);
++        let mut learning = Learning::default();
++        learning.killers[2][0] = Move(17);
++        let mut pawns = PawnCache::new();
++        let result = log.replay_range(&root(), log.range(start, child_end).unwrap(),
++            &base, &mut stage, &mut learning, &mut pawns);
++        assert!(result.accepted());
++        assert_eq!(result.counts.learning_clears, 1);
++        assert_eq!(learning.killers[2], [Move::NONE; 2]);
++        let zero = Sink::new(0);
++        let start = zero.cursor();
++        zero.record(Event::LearningClearNext { ply: 0 });
++        let end = zero.cursor();
++        assert_eq!(zero.take().range(start, end), None);
++    }
++
++    #[test]
++    fn byte_cap_prices_capacity_and_payload_and_seals_retained_prefix() {
++        let capacity_bytes = std::mem::size_of::<Log>() + 8 * std::mem::size_of::<Event>();
++        let sink = Sink::bounded(8, capacity_bytes);
++        let start = sink.cursor();
++        sink.record(Event::LearningClearNext { ply: 0 });
++        let first_end = sink.cursor();
++        let position = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
++        sink.record(Event::OrderQ { position, input: vec![Move(17); 16],
++            expected: vec![Move(17); 16] });
++        // This payload-free event would fit, but loss already sealed the prefix.
++        sink.record(Event::LearningClearNext { ply: 1 });
++        let end = sink.cursor();
++        let log = sink.take();
++        assert!(log.overflowed && log.byte_overflowed && !log.event_overflowed);
++        assert_eq!(log.events.len(), 1);
++        assert_eq!(log.attempted, 3);
++        assert!(log.estimated_bytes() <= capacity_bytes);
++        assert_eq!(log.range(start, first_end), Some(0..1));
++        assert_eq!(log.range(start, end), None);
++        sink.record(Event::LearningClearNext { ply: 0 });
++        assert_eq!(sink.take().events.len(), 1, "take retains the same byte limit");
++        let insufficient_capacity = Sink::bounded(8,
++            std::mem::size_of::<Log>() + std::mem::size_of::<Event>());
++        insufficient_capacity.record(Event::LearningClearNext { ply: 0 });
++        let capped = insufficient_capacity.take();
++        assert!(capped.byte_overflowed);
++        assert_eq!(capped.events.len(), 0, "unused Event capacity is charged too");
++    }
++
++    #[test]
++    fn late_range_rejection_preserves_base_and_previous_commit() {
++        let mut base = RememberedTable::with_groups(3);
++        let sink = Sink::new(8);
++        sink.record(Event::LearningClearNext { ply: 0 });
++        sink.record(Event::TTStore { store: store(0) });
++        sink.record(Event::LearningClearNext { ply: 1 });
++        // Native probe after the store reports Exact, so default is a genuine
++        // late metadata mismatch after a staged TT write and learning clear.
++        sink.record(Event::TTProbe { query: query(0), expected: ProbeResult::default() });
++        let log = sink.take();
++        let before = base.research_clone();
++        let mut stage = SparseStage::new(2);
++        let original_learning = Learning::default();
++        let original_pawns = PawnCache::new();
++        let mut learning = original_learning.research_clone();
++        let mut pawns = original_pawns.research_clone();
++        stage.begin(&base);
++        let result = log.replay_range(&root(), 1..4, &base, &mut stage, &mut learning, &mut pawns);
++        assert_eq!(result.rejection, Some(Rejection { event_index: 3, kind: RejectionKind::TTProbe }));
++        assert_eq!(result.counts.tt_stores, 1);
++        assert_eq!(result.counts.learning_clears, 1);
++        assert_eq!(stage.commit(&mut base), Err(SparseStageError::Inactive));
++        assert!(base.research_eq(&before));
++        assert!(original_learning.research_eq(&Learning::default()));
++        stage.begin(&base);
++        assert!(log.replay_range(&root(), 1..3, &base, &mut stage, &mut learning, &mut pawns).accepted());
++        assert_eq!(stage.commit(&mut base), Ok(1));
++        let committed = base.research_clone();
++        stage.begin(&base);
++        assert!(!log.replay_range(&root(), 1..4, &base, &mut stage, &mut learning, &mut pawns).accepted());
++        stage.discard();
++        assert!(base.research_eq(&committed), "later rejection must retain earlier commit");
++    }
++
++    #[test]
++    fn mate_depth_probe_write_is_discarded_after_late_rejection() {
++        let mut base = RememberedTable::with_groups(3);
++        let mate = Store { score: 9000, mark_depth: true, ..store(0) };
++        base.store(mate);
++        let before = base.research_clone();
++        let mut oracle = base.research_clone();
++        let deep = Query { target: 21, ..query(0) };
++        let expected = oracle.probe(deep);
++        assert_eq!(expected.marked_depth, Some(2));
++        assert_eq!(oracle.probe(deep).marked_depth, Some(20));
++        let sink = Sink::new(4);
++        sink.record(Event::TTProbe { query: deep, expected });
++        sink.record(Event::TTProbe { query: query(2),
++            expected: ProbeResult { score: Some(17), ..ProbeResult::default() } });
++        let log = sink.take();
++        let mut stage = SparseStage::new(3);
++        stage.begin(&base);
++        let result = log.replay_range(&root(), 0..2, &base, &mut stage,
++            &mut Learning::default(), &mut PawnCache::new());
++        assert_eq!(result.rejection, Some(Rejection { event_index: 1, kind: RejectionKind::TTProbe }));
++        assert_eq!(result.counts.tt_probes, 2);
++        assert_eq!(stage.commit(&mut base), Err(SparseStageError::Inactive));
++        assert!(base.research_eq(&before));
++        stage.discard();
++        assert_eq!(base.probe(deep).marked_depth, Some(2));
++    }
++
++    #[test]
++    fn sparse_replay_preserves_canonical_sink_and_reports_capacity_separately() {
++        let mut base = RememberedTable::with_groups(3);
++        let canonical_sink = Sink::new(8);
++        base.attach_sink(Some(canonical_sink.clone()));
++        let sink = Sink::new(8);
++        sink.record(Event::TTStore { store: store(0) });
++        sink.record(Event::TTStore { store: store(1) });
++        let log = sink.take();
++        let mut stage = SparseStage::new(1);
++        let mut learning = Learning::default();
++        let mut pawns = PawnCache::new();
++        stage.begin(&base);
++        let result = log.replay_range(&root(), 0..2, &base, &mut stage, &mut learning, &mut pawns);
++        assert_eq!(result.rejection, Some(Rejection { event_index: 1, kind: RejectionKind::TTStageLimit }));
++        assert_eq!(canonical_sink.cursor().attempted, 0);
++        assert_eq!(stage.commit(&mut base), Err(SparseStageError::Inactive));
++        stage.begin(&base);
++        assert!(log.replay_range(&root(), 0..1, &base, &mut stage, &mut learning, &mut pawns).accepted());
++        assert_eq!(stage.commit(&mut base), Ok(1));
++        assert_eq!(canonical_sink.cursor().attempted, 0, "replay must not record recursively");
++        base.probe(query(0));
++        assert_eq!(canonical_sink.cursor().attempted, 1, "canonical sink must stay attached");
++        stage.begin(&base);
++        let invalid = log.replay_range(&root(), 2..3, &base, &mut stage, &mut learning, &mut pawns);
++        assert_eq!(invalid.rejection.unwrap().kind, RejectionKind::InvalidRange);
++        assert_eq!(stage.commit(&mut base), Err(SparseStageError::Inactive));
++    }
++}
+diff --git a/src/branch_transactions.rs b/src/branch_transactions.rs
+index 4660136a..8bd538fb 100644
+--- a/src/branch_transactions.rs
++++ b/src/branch_transactions.rs
+@@ -195,6 +195,8 @@ fn execute(
+     let mut passes = Vec::with_capacity(2);
+     loop {
+         history.push(&child.position, Some(movement));
++        #[cfg(feature = "hierarchical-recovery")]
++        let recovery_site = crate::hierarchical_recovery::site(&search.hierarchical,crate::hierarchical_recovery::Site::Root{pass:passes.len()});
+         let value = search.visit_ordinary(
+             &mut child,
+             history,
+@@ -214,6 +216,8 @@ fn execute(
+                 movement: Some(movement),
+             },
+         );
++        #[cfg(feature = "hierarchical-recovery")]
++        drop(recovery_site);
+         history.pop();
+         let score = -value.map_err(error)?;
+         passes.push(Pass {
+@@ -255,6 +259,162 @@ fn advance(schedule: &mut Iteration, branch: &Branch, start_nodes: u64) -> Compl
+     completed.expect("native branch must complete")
+ }
+ 
++/// Separate hierarchical experiment. The legacy flat `run` and its0/36 record
++/// keep their original caps, validator and control execution unchanged.
++#[cfg(feature = "hierarchical-recovery")]
++pub(crate) fn run_hierarchical(position:Position,mut history:SearchHistory,parameters:Parameters,config:Config,caps:crate::hierarchical_recovery::Caps)
++    ->Result<crate::hierarchical_recovery::Report,String> {
++    use crate::hierarchical_recovery::{self as h,Context,Costs,Forest};
++    if !caps.valid(){return Err("hierarchical pilot requires the prospectively fixed queue2/depth6/tail8 and declared forest caps".into());}
++    if history.search_ply()!=0 {return Err("hierarchical pilot requires root history boundary".into());}
++    let started=Instant::now();let mut canonical=Search::<true>::new(&position);canonical.config=config;canonical.evaluator.parameters=parameters;canonical.set_threads(1)?;
++    canonical.ensure_table()?;canonical.bind_geometry_permission(&position);let (root,influence)=canonical.prepare_root_with_influence(position);
++    let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);if legal.len<2{return Err("hierarchical pilot requires two legal root moves".into());}
++    let env=Environment{root,influence,checked:movegen::in_check(&position,position.side),movements:legal.as_slice().to_vec()};canonical.begin_owned_sequence(Limits{nodes:None});
++    let mut report=h::Report{caps,restricted_depth:None,restricted_entry_nodes:None,completed_depth:0,incomplete_iteration:false,stopped_reason:"depth-cap-before-restricted",
++        prefix_nodes:0,prefix_relations:0,canonical_nodes:0,canonical_relations:0,candidate_nodes:0,candidate_relations:0,committed_nodes:0,committed_relations:0,fallback_nodes:0,fallback_relations:0,
++        abandoned_speculative_nodes:0,unsafe_validation:false,fatal_reason:None,max_queue_len:0,peak_queue_forest_bytes:0,elapsed_ns:0,timings:Costs::default(),candidates:Vec::new()};
++    struct Pending {forest:Forest,ahead:usize,turn:usize,costs:Costs,snapshot_bytes:usize}
++    let mut rows=env.movements.iter().enumerate().map(|(id,_)|Row{id:id as u16,score:0,work:0}).collect();let mut previous=0;
++    for depth in 1..=caps.max_depth {
++        let mut schedule=Iteration::new(rows,canonical.stats.nodes,previous);let restricted=schedule.policy()==Policy::Restricted;
++        if restricted {report.restricted_depth=Some(depth);report.restricted_entry_nodes=Some(canonical.stats.nodes);}
++        while let Some(attempt)=schedule.next(canonical.stats.nodes) {let before=canonical.stats.nodes;let begin=Instant::now();let branch=execute(&mut canonical,&mut history,&env,depth,schedule.clone(),attempt)?;report.timings.prefix_ns+=begin.elapsed().as_nanos();advance(&mut schedule,&branch,before);if restricted{break;}}
++        if !restricted {report.completed_depth=depth;previous=schedule.best();rows=schedule.into_ranked();continue;}
++        report.prefix_nodes=canonical.stats.nodes;report.prefix_relations=canonical.evaluator.stats.relation_queries;
++        let sample=caps.max_tail_candidates.min(env.movements.len()-1);let mut queue=VecDeque::<Pending>::new();
++        for turn in 0..sample {
++            while queue.len()<caps.queue_depth&&turn+queue.len()<sample {
++                let Some((projected,attempt))=schedule.research_proposal(queue.len(),canonical.stats.nodes) else{break;};
++                let mut costs=Costs::default();let snapshot_start=Instant::now();let mut shadow=canonical.research_clone();let mut shadow_history=history.clone();
++                let snapshot_bytes=shadow.research_bytes()+shadow_history.research_bytes()+projected.research_bytes();costs.snapshot_ns=snapshot_start.elapsed().as_nanos();
++                let setup=Instant::now();let recorder=Context::recording(&shadow,caps,false);shadow.research_attach_sink(recorder.sink());shadow.hierarchical=Some(recorder.clone());costs.recording_setup_ns=setup.elapsed().as_nanos();
++                let begin=Instant::now();let _=execute(&mut shadow,&mut shadow_history,&env,depth,projected,attempt)?;costs.speculation_ns=begin.elapsed().as_nanos();
++                let finalize=Instant::now();shadow.hierarchical=None;shadow.research_attach_sink(None);let forest=recorder.finish_record(&shadow);costs.recording_finalize_ns=finalize.elapsed().as_nanos();assert_eq!(shadow_history,history);
++                report.candidate_nodes+=forest.native_nodes;report.candidate_relations+=forest.native_relations;
++                queue.push_back(Pending{forest,ahead:queue.len(),turn,costs,snapshot_bytes});
++            }
++            report.max_queue_len=report.max_queue_len.max(queue.len());report.peak_queue_forest_bytes=report.peak_queue_forest_bytes.max(queue.iter().map(|p|p.forest.bytes()).sum());
++            let pending=queue.pop_front().ok_or("native restricted tail had no queued proposal")?;let attempt=schedule.next(canonical.stats.nodes).ok_or("native restricted tail demand disappeared")?;
++            let base_nodes=canonical.stats.nodes;let base_relations=canonical.evaluator.stats.relation_queries;let mut costs=pending.costs;let forest_summary=pending.forest.summary();let speculative_nodes=pending.forest.native_nodes;let speculative_relations=pending.forest.native_relations;
++            let audit_snapshot=Instant::now();let mut oracle=canonical.research_clone();let mut oracle_history=history.clone();let trace=Context::recording(&oracle,caps,true);oracle.hierarchical=Some(trace.clone());costs.oracle_snapshot_ns=audit_snapshot.elapsed().as_nanos();
++            let begin=Instant::now();let reference=execute(&mut oracle,&mut oracle_history,&env,depth,schedule.clone(),attempt)?;costs.oracle_execute_ns=begin.elapsed().as_nanos();
++            let finalize=Instant::now();oracle.hierarchical=None;let oracle_forest=trace.finish_record(&oracle);costs.oracle_snapshot_ns+=finalize.elapsed().as_nanos();let oracle_summary=oracle_forest.summary();
++            let begin=Instant::now();let context=Context::recovery(pending.forest,oracle_forest,caps);canonical.hierarchical=Some(context.clone());
++            let actual=execute(&mut canonical,&mut history,&env,depth,schedule.clone(),attempt);costs.canonical_execute_ns=begin.elapsed().as_nanos();canonical.hierarchical=None;
++            let recovery=context.metrics();costs.audit_counterfactual_ns=recovery.audit_counterfactual_ns;costs.oracle_entry_ns=recovery.audit_entry_ns;costs.oracle_local_ns=recovery.audit_local_ns;costs.recovery_hook_ns=context.hook_ns();costs.lookup_ns=recovery.lookup_ns;costs.staging_ns=recovery.staging_ns;costs.validation_ns=recovery.validation_ns;costs.commit_ns=recovery.commit_ns;
++            costs.native_fallback_estimate_ns=costs.canonical_execute_ns.saturating_sub(costs.recovery_hook_ns);
++            let compare=Instant::now();let oracle_match=actual.as_ref().is_ok_and(|branch|same_passes(branch,&reference))&&canonical.research_eq(&oracle)&&history==oracle_history;costs.oracle_compare_ns=compare.elapsed().as_nanos();
++            let fatal=context.fatal().or((!oracle_match).then_some("root-oracle-mismatch"));
++            let canonical_nodes=canonical.stats.nodes-base_nodes;let canonical_relations=canonical.evaluator.stats.relation_queries-base_relations;
++            if recovery.committed_nodes>canonical_nodes||recovery.committed_relations>canonical_relations{return Err("hierarchical committed work exceeds actual canonical credit".into());}
++            let fallback_nodes=canonical_nodes-recovery.committed_nodes;let fallback_relations=canonical_relations-recovery.committed_relations;
++            report.committed_nodes+=recovery.committed_nodes;report.committed_relations+=recovery.committed_relations;report.fallback_nodes+=fallback_nodes;report.fallback_relations+=fallback_relations;report.timings.add(&costs);
++            report.candidates.push(h::Candidate{depth,index:attempt.index,id:attempt.id,movement:env.movements[usize::from(attempt.id)].to_string(),ahead_distance:pending.ahead,enqueued_at_turn:pending.turn,consumed_at_turn:turn,
++                speculative_nodes,speculative_relations,canonical_nodes,canonical_relations,committed_nodes:recovery.committed_nodes,committed_relations:recovery.committed_relations,fallback_nodes,fallback_relations,
++                discarded_speculative_nodes:speculative_nodes-recovery.committed_nodes,oracle_match,rollback_unchanged:true,unsafe_validation:fatal.is_some(),completed_passes:actual.as_ref().map_or(0,|b|b.passes.len()),snapshot_bytes:pending.snapshot_bytes,
++                forest:forest_summary,oracle:oracle_summary,recovery,timings:costs});
++            if let Some(reason)=fatal {report.unsafe_validation=true;report.fatal_reason=Some(reason);report.stopped_reason="unsafe-validation";report.incomplete_iteration=true;
++                for abandoned in queue.drain(..){report.abandoned_speculative_nodes+=abandoned.forest.native_nodes;report.timings.add(&abandoned.costs);}break;}
++            let actual=actual?;advance(&mut schedule,&actual,base_nodes);
++        }
++        if report.unsafe_validation{break;}
++        assert!(queue.is_empty());report.incomplete_iteration=sample<env.movements.len()-1;if !report.incomplete_iteration{report.completed_depth=depth;}
++        report.stopped_reason=if report.incomplete_iteration{"tail-candidate-cap"}else{"first-restricted-iteration-complete"};break;
++    }
++    if report.restricted_depth.is_none(){report.prefix_nodes=canonical.stats.nodes;report.prefix_relations=canonical.evaluator.stats.relation_queries;}
++    report.canonical_nodes=canonical.stats.nodes;report.canonical_relations=canonical.evaluator.stats.relation_queries;report.elapsed_ns=started.elapsed().as_nanos();Ok(report)
++}
++
++#[cfg(feature = "consumed-prefix")]
++pub(crate) fn run_consumed_prefix(position:Position,mut history:SearchHistory,parameters:Parameters,config:Config,caps:crate::hierarchical_recovery::Caps)
++    ->Result<crate::consumed_prefix::Report,String> {
++    use crate::hierarchical_recovery::{self as h,Context,Costs,Forest};
++    use crate::consumed_prefix::{Pair,Variant,Differences};
++    use crate::branch_journal::OrderPolicy;
++    if !caps.valid(){return Err("hierarchical pilot requires the prospectively fixed queue2/depth6/tail8 and declared forest caps".into());}
++    if history.search_ply()!=0 {return Err("hierarchical pilot requires root history boundary".into());}
++    let started=Instant::now();let mut canonical=Search::<true>::new(&position);canonical.config=config;canonical.evaluator.parameters=parameters;canonical.set_threads(1)?;
++    canonical.ensure_table()?;canonical.bind_geometry_permission(&position);let (root,influence)=canonical.prepare_root_with_influence(position);
++    let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);if legal.len<2{return Err("hierarchical pilot requires two legal root moves".into());}
++    let env=Environment{root,influence,checked:movegen::in_check(&position,position.side),movements:legal.as_slice().to_vec()};canonical.begin_owned_sequence(Limits{nodes:None});
++    let mut report=h::Report{caps,restricted_depth:None,restricted_entry_nodes:None,completed_depth:0,incomplete_iteration:false,stopped_reason:"depth-cap-before-restricted",
++        prefix_nodes:0,prefix_relations:0,canonical_nodes:0,canonical_relations:0,candidate_nodes:0,candidate_relations:0,committed_nodes:0,committed_relations:0,fallback_nodes:0,fallback_relations:0,
++        abandoned_speculative_nodes:0,unsafe_validation:false,fatal_reason:None,max_queue_len:0,peak_queue_forest_bytes:0,elapsed_ns:0,timings:Costs::default(),candidates:Vec::new()};
++    let mut pairs=Vec::new();let mut difference_audit_ns=0;let mut annotation_total_ns=0;
++    struct Pending {forest:Forest,ahead:usize,turn:usize,costs:Costs,consumers:h::ConsumerSummary,annotation_ns:u128,snapshot_bytes:usize}
++    let mut rows=env.movements.iter().enumerate().map(|(id,_)|Row{id:id as u16,score:0,work:0}).collect();let mut previous=0;
++    for depth in 1..=caps.max_depth {
++        let mut schedule=Iteration::new(rows,canonical.stats.nodes,previous);let restricted=schedule.policy()==Policy::Restricted;
++        if restricted {report.restricted_depth=Some(depth);report.restricted_entry_nodes=Some(canonical.stats.nodes);}
++        while let Some(attempt)=schedule.next(canonical.stats.nodes) {let before=canonical.stats.nodes;let begin=Instant::now();let branch=execute(&mut canonical,&mut history,&env,depth,schedule.clone(),attempt)?;report.timings.prefix_ns+=begin.elapsed().as_nanos();advance(&mut schedule,&branch,before);if restricted{break;}}
++        if !restricted {report.completed_depth=depth;previous=schedule.best();rows=schedule.into_ranked();continue;}
++        report.prefix_nodes=canonical.stats.nodes;report.prefix_relations=canonical.evaluator.stats.relation_queries;
++        let sample=caps.max_tail_candidates.min(env.movements.len()-1);let mut queue=VecDeque::<Pending>::new();
++        for turn in 0..sample {
++            while queue.len()<caps.queue_depth&&turn+queue.len()<sample {
++                let Some((projected,attempt))=schedule.research_proposal(queue.len(),canonical.stats.nodes) else{break;};
++                let mut costs=Costs::default();let snapshot_start=Instant::now();let mut shadow=canonical.research_clone();let mut shadow_history=history.clone();
++                let snapshot_bytes=shadow.research_bytes()+shadow_history.research_bytes()+projected.research_bytes();costs.snapshot_ns=snapshot_start.elapsed().as_nanos();
++                let setup=Instant::now();let recorder=Context::recording(&shadow,caps,false);shadow.research_attach_sink(recorder.sink());shadow.hierarchical=Some(recorder.clone());costs.recording_setup_ns=setup.elapsed().as_nanos();
++                let begin=Instant::now();let _=execute(&mut shadow,&mut shadow_history,&env,depth,projected,attempt)?;costs.speculation_ns=begin.elapsed().as_nanos();
++                let finalize=Instant::now();shadow.hierarchical=None;shadow.research_attach_sink(None);let mut forest=recorder.finish_record(&shadow);costs.recording_finalize_ns=finalize.elapsed().as_nanos();assert_eq!(shadow_history,history);
++                let annotation=Instant::now();let consumers=forest.annotate_prefixes();let annotation_ns=annotation.elapsed().as_nanos();annotation_total_ns+=annotation_ns;
++                report.candidate_nodes+=forest.native_nodes;report.candidate_relations+=forest.native_relations;
++                queue.push_back(Pending{forest,ahead:queue.len(),turn,costs,consumers,annotation_ns,snapshot_bytes});
++            }
++            report.max_queue_len=report.max_queue_len.max(queue.len());report.peak_queue_forest_bytes=report.peak_queue_forest_bytes.max(queue.iter().map(|p|p.forest.bytes()).sum());
++            let pending=queue.pop_front().ok_or("native restricted tail had no queued proposal")?;let attempt=schedule.next(canonical.stats.nodes).ok_or("native restricted tail demand disappeared")?;
++            let base_nodes=canonical.stats.nodes;let base_relations=canonical.evaluator.stats.relation_queries;let mut common_costs=pending.costs;
++            let forest_summary=pending.forest.summary();let speculative_nodes=pending.forest.native_nodes;let speculative_relations=pending.forest.native_relations;
++            let audit_snapshot=Instant::now();let mut oracle=canonical.research_clone();let mut oracle_history=history.clone();let trace=Context::recording(&oracle,caps,true);oracle.hierarchical=Some(trace.clone());common_costs.oracle_snapshot_ns=audit_snapshot.elapsed().as_nanos();
++            let begin=Instant::now();let reference=execute(&mut oracle,&mut oracle_history,&env,depth,schedule.clone(),attempt)?;common_costs.oracle_execute_ns=begin.elapsed().as_nanos();
++            let finalize=Instant::now();oracle.hierarchical=None;let oracle_forest=trace.finish_record(&oracle);common_costs.oracle_snapshot_ns+=finalize.elapsed().as_nanos();let oracle_summary=oracle_forest.summary();
++            report.timings.add(&common_costs);
++            // These full-state clones exist only to compare both policies from
++            // identical inputs; they are not charged as real executor snapshots.
++            let copies=Instant::now();let mut arms=[canonical.research_clone(),canonical.research_clone()];let mut histories=[history.clone(),history.clone()];
++            let forests=[pending.forest.clone(),pending.forest.clone()];let oracles=[oracle_forest.clone(),oracle_forest.clone()];
++            let comparison_clone_bytes=arms.iter().map(Search::research_bytes).sum::<usize>()+histories.iter().map(SearchHistory::research_bytes).sum::<usize>()+4*std::mem::size_of::<Forest>();let comparison_clone_ns=copies.elapsed().as_nanos();
++            let compare=Instant::now();let same_input_state=arms[0].research_eq(&arms[1])&&arms[0].research_eq(&canonical);let same_input_history=histories[0]==histories[1]&&histories[0]==history;
++            let same_input_epoch=forests.iter().zip(arms.iter()).all(|(f,a)|f.same_epoch(a))&&oracles.iter().zip(arms.iter()).all(|(f,a)|f.same_epoch(a));
++            let shared_data_identical=forests[0].shares_data(&forests[1])&&oracles[0].shares_data(&oracles[1]);let input_compare_ns=compare.elapsed().as_nanos();
++            if !(same_input_state&&same_input_history&&same_input_epoch&&shared_data_identical){return Err("paired mode inputs/data differ before execution".into());}
++            let order=if turn%2==0 {[0,1]}else{[1,0]};let labels=["complete-order","consumed-prefix"];let mut variants:Vec<Option<Variant>>=vec![None,None];
++            let mut fatal=None;
++            for mode in order {
++                let mut costs=Costs::default();let begin=Instant::now();let policy=if mode==0{OrderPolicy::Complete}else{OrderPolicy::ConsumedPrefix};
++                let context=Context::recovery_policy(forests[mode].clone(),oracles[mode].clone(),caps,policy);arms[mode].hierarchical=Some(context.clone());
++                let actual=execute(&mut arms[mode],&mut histories[mode],&env,depth,schedule.clone(),attempt);costs.canonical_execute_ns=begin.elapsed().as_nanos();arms[mode].hierarchical=None;
++                let recovery=context.metrics();costs.audit_counterfactual_ns=recovery.audit_counterfactual_ns;costs.oracle_entry_ns=recovery.audit_entry_ns;costs.oracle_local_ns=recovery.audit_local_ns;costs.recovery_hook_ns=context.hook_ns();costs.lookup_ns=recovery.lookup_ns;costs.staging_ns=recovery.staging_ns;costs.validation_ns=recovery.validation_ns;costs.commit_ns=recovery.commit_ns;
++                costs.native_fallback_estimate_ns=costs.canonical_execute_ns.saturating_sub(costs.recovery_hook_ns);
++                let compare=Instant::now();let oracle_match=actual.as_ref().is_ok_and(|branch|same_passes(branch,&reference))&&arms[mode].research_eq(&oracle)&&histories[mode]==oracle_history;costs.oracle_compare_ns=compare.elapsed().as_nanos();
++                let mode_fatal=context.fatal().or((!oracle_match).then_some("root-oracle-mismatch"));fatal=fatal.or(mode_fatal);
++                let canonical_nodes=arms[mode].stats.nodes-base_nodes;let canonical_relations=arms[mode].evaluator.stats.relation_queries-base_relations;
++                if recovery.committed_nodes>canonical_nodes||recovery.committed_relations>canonical_relations{return Err("paired committed work exceeds canonical credit".into());}
++                variants[mode]=Some(Variant{policy:labels[mode],core:h::Candidate{depth,index:attempt.index,id:attempt.id,movement:env.movements[usize::from(attempt.id)].to_string(),ahead_distance:pending.ahead,enqueued_at_turn:pending.turn,consumed_at_turn:turn,
++                    speculative_nodes,speculative_relations,canonical_nodes,canonical_relations,committed_nodes:recovery.committed_nodes,committed_relations:recovery.committed_relations,fallback_nodes:canonical_nodes-recovery.committed_nodes,fallback_relations:canonical_relations-recovery.committed_relations,
++                    discarded_speculative_nodes:speculative_nodes-recovery.committed_nodes,oracle_match,rollback_unchanged:true,unsafe_validation:mode_fatal.is_some(),completed_passes:actual.as_ref().map_or(0,|b|b.passes.len()),snapshot_bytes:0,
++                    forest:forest_summary.clone(),oracle:oracle_summary.clone(),recovery,timings:costs}});
++            }
++            let variants:Vec<_>=variants.into_iter().map(Option::unwrap).collect();let diff=Instant::now();let differences=Differences::between(&variants[0].core.recovery,&variants[1].core.recovery);difference_audit_ns+=diff.elapsed().as_nanos();
++            pairs.push(Pair{turn,execution_order:[labels[order[0]],labels[order[1]]],same_input_state,same_input_history,same_input_epoch,shared_data_identical,shared_forest_id:turn,shared_oracle_id:turn,comparison_clone_ns,comparison_clone_bytes,input_compare_ns,annotation_ns:pending.annotation_ns,consumers:pending.consumers,common_snapshot_bytes:pending.snapshot_bytes,common_timings:common_costs,variants,differences});
++            if let Some(reason)=fatal {report.unsafe_validation=true;report.fatal_reason=Some(reason);report.stopped_reason="unsafe-validation";report.incomplete_iteration=true;
++                for abandoned in queue.drain(..){report.abandoned_speculative_nodes+=abandoned.forest.native_nodes;report.timings.add(&abandoned.costs);}break;}
++            // Both independent executions passed. Advance one natural canonical
++            // state and root schedule, using the common oracle as owner.
++            canonical=oracle;history=oracle_history;advance(&mut schedule,&reference,base_nodes);
++
++        }
++        if report.unsafe_validation{break;}
++        assert!(queue.is_empty());report.incomplete_iteration=sample<env.movements.len()-1;if !report.incomplete_iteration{report.completed_depth=depth;}
++        report.stopped_reason=if report.incomplete_iteration{"tail-candidate-cap"}else{"first-restricted-iteration-complete"};break;
++    }
++    if report.restricted_depth.is_none(){report.prefix_nodes=canonical.stats.nodes;report.prefix_relations=canonical.evaluator.stats.relation_queries;}
++    report.canonical_nodes=canonical.stats.nodes;report.canonical_relations=canonical.evaluator.stats.relation_queries;report.elapsed_ns=started.elapsed().as_nanos();Ok(crate::consumed_prefix::Report{common:report,pairs,difference_audit_ns,annotation_ns:annotation_total_ns})
++}
++
++
+ fn same_passes(a: &Branch, b: &Branch) -> bool {
+     a.child == b.child && a.passes == b.passes
+ }
+diff --git a/src/engine.rs b/src/engine.rs
+index fd3bb5e0..dd3f4896 100644
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -32,6 +32,8 @@ impl Default for Config {
+ }
+ 
+ pub struct Search<const DIAGNOSTICS: bool = true, H: Host = NoHost> {
++    #[cfg(feature = "hierarchical-recovery")]
++    pub(crate) hierarchical: Option<crate::hierarchical_recovery::Context>,
+     pub evaluator: Evaluator<DIAGNOSTICS>,
+     pub config: Config,
+     pub(crate) candidates: Box<[MoveList]>,
+@@ -56,6 +58,8 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
+     pub(crate) fn research_clone(&self) -> Self {
+         assert!(self.timing.is_none() && self.limits.nodes.is_none() && self.control.is_none());
+         Self {
++            #[cfg(feature = "hierarchical-recovery")]
++            hierarchical: None,
+             evaluator: self.evaluator.research_clone(),
+             config: self.config,
+             candidates: self.candidates.clone(),
+@@ -119,6 +123,8 @@ impl<const DIAGNOSTICS: bool> Search<DIAGNOSTICS, NoHost> {
+ 
+     pub fn new(root: &Position) -> Self {
+         Self {
++            #[cfg(feature = "hierarchical-recovery")]
++            hierarchical: None,
+             evaluator: Evaluator::new(root),
+             config: Config::default(),
+             candidates: (0..PLIES).map(|_| MoveList::new()).collect(),
+@@ -152,6 +158,8 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
+     /// Transfer reusable storage; changing a host neither clones nor allocates search buffers.
+     pub fn map_host<N: Host>(self, host: N) -> (Search<DIAGNOSTICS, N>, H) {
+         let Self {
++            #[cfg(feature = "hierarchical-recovery")]
++            hierarchical,
+             evaluator,
+             config,
+             candidates,
+@@ -171,6 +179,8 @@ impl<const DIAGNOSTICS: bool, H: Host> Search<DIAGNOSTICS, H> {
+         } = self;
+         (
+             Search {
++                #[cfg(feature = "hierarchical-recovery")]
++                hierarchical,
+                 evaluator,
+                 config,
+                 candidates,
+diff --git a/src/lib.rs b/src/lib.rs
+index 064e15eb..664d90f0 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -50,8 +50,13 @@ pub mod work_clock;
+ 
+ #[cfg(feature = "branch-transactions")]
+ pub mod branch_transactions;
++#[cfg(feature = "hierarchical-recovery")]
++pub mod hierarchical_recovery;
+ #[cfg(feature = "branch-transactions")]
+ pub(crate) mod branch_journal;
+ 
+ #[cfg(feature = "child-preparation")]
+ pub(crate) mod child_preparation;
++
++#[cfg(feature = "consumed-prefix")]
++pub mod consumed_prefix;
+diff --git a/src/ordinary.rs b/src/ordinary.rs
+index 2d7419bc..0a6d6614 100644
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -719,6 +719,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+         let p = request.ply;
+         let target = p as i32 + request.depth;
+         if policy::quiescence_handoff(request.depth, p, self.config.maximum_depth) {
++            #[cfg(feature = "hierarchical-recovery")]
++            let _handoff = crate::hierarchical_recovery::handoff::<ALLOW_IIO,DIAGNOSTICS,H>(self,request,previous);
+             return self.visit_q(
+                 node,
+                 history,
+@@ -737,6 +739,13 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 false,
+             );
+         }
++        #[cfg(feature = "hierarchical-recovery")]
++        let recovery_token = match crate::hierarchical_recovery::enter_ordinary::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,previous) {
++            crate::hierarchical_recovery::Decision::Run(token)=>token,
++            crate::hierarchical_recovery::Decision::Accepted(score)=>return Ok(score),
++            crate::hierarchical_recovery::Decision::Fatal=>return Err(Stopped::HierarchicalAudit),
++        };
++        let recovered_returned = (|| {
+         self.charge_node(history)?;
+         if DIAGNOSTICS {
+             self.stats.ordinary_nodes += 1;
+@@ -838,6 +847,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 }
+                 let mut child = node.null_child();
+                 history.push(&child.position, None);
++                #[cfg(feature = "hierarchical-recovery")]
++                let recovery_site = crate::hierarchical_recovery::site(&self.hierarchical,crate::hierarchical_recovery::Site::Null);
+                 let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+@@ -852,6 +863,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                     },
+                     current,
+                 );
++                #[cfg(feature = "hierarchical-recovery")]
++                drop(recovery_site);
+                 history.pop();
+                 -returned?
+             };
+@@ -899,6 +912,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 preferred: remembered.move_hint,
+                 input,
+                 expected: self.candidates[p].as_slice().to_vec(),
++                #[cfg(feature = "consumed-prefix")]
++                proven_prefix: None,
+             });
+         }
+         self.extension_flags[p][..count].fill(0);
+@@ -928,6 +943,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 }
+                 let mut child = node.child(&self.evaluator.root, movement);
+                 history.push(&child.position, Some(movement));
++                #[cfg(feature = "hierarchical-recovery")]
++                let recovery_site = crate::hierarchical_recovery::site(&self.hierarchical,crate::hierarchical_recovery::Site::Mate);
+                 let returned = self.visit_q(
+                     &mut child,
+                     history,
+@@ -945,6 +962,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                     Some(true),
+                     false,
+                 );
++                #[cfg(feature = "hierarchical-recovery")]
++                drop(recovery_site);
+                 history.pop();
+                 let score = -returned?;
+                 if score >= 9000 {
+@@ -1054,7 +1073,11 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 if DIAGNOSTICS {
+                     self.stats.children += 1;
+                 }
+-                let returned = self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor);
++                let returned = {
++                    #[cfg(feature = "hierarchical-recovery")]
++                    let _site = crate::hierarchical_recovery::site(&self.hierarchical,crate::hierarchical_recovery::Site::Main{scout:!full_window,retry:false});
++                    self.visit_ordinary_impl::<ALLOW_IIO>(&mut child, history, child_request, predecessor)
++                };
+                 let returned = match returned {
+                     Ok(value) => Ok(-value),
+                     Err(stop) => Err(stop),
+@@ -1067,6 +1090,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
++                        let retried = {
++                        #[cfg(feature = "hierarchical-recovery")]
++                        let _site = crate::hierarchical_recovery::site(&self.hierarchical,crate::hierarchical_recovery::Site::Main{scout:false,retry:true});
+                         self.visit_ordinary_impl::<ALLOW_IIO>(
+                             &mut child,
+                             history,
+@@ -1078,6 +1104,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                             predecessor,
+                         )
+                         .map(|s| -s)
++                        };
++                        retried
+                     } else {
+                         Ok(score)
+                     }
+@@ -1122,6 +1150,11 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+         }
+         self.store_ordinary(query, best, preferred, quiet_checked, true);
+         Ok(best)
++        })();
++        #[cfg(feature = "hierarchical-recovery")]
++        { return crate::hierarchical_recovery::exit(self,node,recovery_token,recovered_returned); }
++        #[cfg(not(feature = "hierarchical-recovery"))]
++        recovered_returned
+     }
+ 
+     fn ordering_phase<const ALLOW_IIO: bool>(
+@@ -1181,6 +1214,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                 if DIAGNOSTICS {
+                     self.stats.iio_children += 1;
+                 }
++                #[cfg(feature = "hierarchical-recovery")]
++                let recovery_site = crate::hierarchical_recovery::site(&self.hierarchical,crate::hierarchical_recovery::Site::Iio{offset,start});
+                 let returned = self.visit_ordinary_impl::<ALLOW_IIO>(
+                     &mut child,
+                     history,
+@@ -1200,6 +1235,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Search<DIAGNOSTICS, H> {
+                         movement: Some(movement),
+                     },
+                 );
++                #[cfg(feature = "hierarchical-recovery")]
++                drop(recovery_site);
+                 history.pop();
+                 let score = -returned?;
+                 if score > best {
+diff --git a/src/quiescence.rs b/src/quiescence.rs
+index ec02d723..dc3abb2e 100644
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -37,6 +37,8 @@ pub struct Limits {
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub enum Stopped {
++    #[cfg(feature = "hierarchical-recovery")]
++    HierarchicalAudit,
+     NodeLimit(u64),
+     WorkPoll,
+     /// Bounded diagnostic refused actual internal-iterative-ordering entry.
+@@ -255,6 +257,12 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+         entry: Entry, checked: Option<bool>, replies_available: bool,
+         parent: O::Parent, observer: &mut O,
+     ) -> Result<i32, Stopped> {
++        #[cfg(feature = "hierarchical-recovery")]
++        let recovery_token = match crate::hierarchical_recovery::enter_q(self,node,history,entry,checked,replies_available,O::ENABLED) {
++            crate::hierarchical_recovery::Decision::Run(token)=>token,
++            crate::hierarchical_recovery::Decision::Accepted(score)=>return Ok(score),
++            crate::hierarchical_recovery::Decision::Fatal=>return Err(Stopped::HierarchicalAudit),
++        };
+         let entry_work = if O::ENABLED { self.work() } else { Work::default() };
+         let mut frame = O::Frame::default();
+         // The one shared body retains all early returns. The wrapper observes
+@@ -486,6 +494,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                     capture_exception,
+                     ..entry
+                 };
++                #[cfg(feature = "hierarchical-recovery")]
++                let recovery_site = crate::hierarchical_recovery::site(&self.hierarchical,crate::hierarchical_recovery::Site::Q);
+                 let returned = if O::ENABLED {
+                     let parent = O::parent(&node.retained);
+                     self.visit_q_impl(&mut child, history, child_entry, child_checked,
+@@ -493,6 +503,8 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                 } else {
+                     self.visit_q(&mut child, history, child_entry, child_checked, complete_replies)
+                 };
++                #[cfg(feature = "hierarchical-recovery")]
++                drop(recovery_site);
+                 history.pop();
+                 let score = -returned?;
+                 if score > best {
+@@ -523,6 +535,9 @@ impl<const DIAGNOSTICS: bool, H: crate::host::Host> Quiescence<DIAGNOSTICS, H> {
+                     &self.pv[entry.ply][..self.pv_len[entry.ply]], self.work());
+             }
+         }
++        #[cfg(feature = "hierarchical-recovery")]
++        { return crate::hierarchical_recovery::exit(self,node,recovery_token,returned); }
++        #[cfg(not(feature = "hierarchical-recovery"))]
+         returned
+     }
+ }
+diff --git a/src/remembered.rs b/src/remembered.rs
+index a5c3470e..7dd083c3 100644
+--- a/src/remembered.rs
++++ b/src/remembered.rs
+@@ -146,6 +146,61 @@ struct Group {
+     records: [Record; 4],
+ }
+ 
++impl Group {
++    /// One native replacement owner, shared by the table and sparse replay.
++    fn store(&mut self, store: Store, generation: u8) {
++        let record = Record::from_store(store, generation);
++        // Only retained slots participate in the identity match. Recent may
++        // duplicate an identity and is deliberately ignored during storage.
++        if let Some(index) = self.records[..RECENT].iter()
++            .position(|r| r.matches(generation, record.identity))
++        {
++            if record.depth < self.records[index].depth {
++                self.records[RECENT] = record;
++            } else {
++                self.records[index] = record;
++            }
++            return;
++        }
++        // An empty priority is less valuable than every valid signed depth.
++        if let Some(index) = self.records[..RECENT].iter()
++            .position(|r| r.generation != generation)
++        {
++            self.records[index] = record;
++            self.records[RECENT] = Record::default();
++            return;
++        }
++        let mut least = 0;
++        for index in 1..RECENT {
++            if self.records[index].depth < self.records[least].depth { least = index; }
++        }
++        if record.depth >= self.records[least].depth {
++            self.records[RECENT] = self.records[least];
++            self.records[least] = record;
++        } else {
++            self.records[RECENT] = record;
++        }
++    }
++
++    /// Metadata and successful mate-depth mutation retain their native order.
++    fn probe(&mut self, query: Query, required: i16, generation: u8) -> ProbeResult {
++        let mut result = ProbeResult::default();
++        let recent = &mut self.records[RECENT];
++        if recent.matches(generation, query.identity)
++            && recent.consider(query, required, &mut result)
++        {
++            return result;
++        }
++        for record in &mut self.records[..RECENT] {
++            if record.matches(generation, query.identity) {
++                record.consider(query, required, &mut result);
++                break;
++            }
++        }
++        result
++    }
++}
++
+ const _: () = assert!(std::mem::size_of::<Record>() == 12);
+ const _: () = assert!(std::mem::size_of::<Group>() == 48);
+ 
+@@ -208,63 +263,12 @@ impl RememberedTable {
+         if let Some(sink) = &self.research_sink {
+             sink.record(crate::branch_journal::Event::TTStore { store });
+         }
+-        let record = Record::from_store(store, self.generation);
+-        let group = &mut self.groups[store.query.group];
+-
+-        // Only retained slots participate in the identity match. Recent may
+-        // duplicate an identity and is deliberately ignored during storage.
+-        if let Some(index) = group.records[..RECENT].iter()
+-            .position(|r| r.matches(self.generation, record.identity))
+-        {
+-            if record.depth < group.records[index].depth {
+-                group.records[RECENT] = record;
+-            } else {
+-                group.records[index] = record;
+-            }
+-            return;
+-        }
+-
+-        // An empty priority is less valuable than every valid signed depth.
+-        if let Some(index) = group.records[..RECENT].iter()
+-            .position(|r| r.generation != self.generation)
+-        {
+-            group.records[index] = record;
+-            group.records[RECENT] = Record::default();
+-            return;
+-        }
+-
+-        let mut least = 0;
+-        for index in 1..RECENT {
+-            if group.records[index].depth < group.records[least].depth { least = index; }
+-        }
+-        if record.depth >= group.records[least].depth {
+-            group.records[RECENT] = group.records[least];
+-            group.records[least] = record;
+-        } else {
+-            group.records[RECENT] = record;
+-        }
++        self.groups[store.query.group].store(store, self.generation);
+     }
+ 
+     pub fn probe(&mut self, query: Query) -> ProbeResult {
+         let required = query.remaining_depth();
+-        let group = &mut self.groups[query.group];
+-        let mut result = ProbeResult::default();
+-        let recent = &mut group.records[RECENT];
+-        if recent.matches(self.generation, query.identity)
+-            && recent.consider(query, required, &mut result)
+-        {
+-            #[cfg(feature = "branch-transactions")]
+-            if let Some(sink) = &self.research_sink {
+-                sink.record(crate::branch_journal::Event::TTProbe { query, expected: result });
+-            }
+-            return result;
+-        }
+-        for record in &mut group.records[..RECENT] {
+-            if record.matches(self.generation, query.identity) {
+-                record.consider(query, required, &mut result);
+-                break;
+-            }
+-        }
++        let result = self.groups[query.group].probe(query, required, self.generation);
+         #[cfg(feature = "branch-transactions")]
+         if let Some(sink) = &self.research_sink {
+             sink.record(crate::branch_journal::Event::TTProbe { query, expected: result });
+@@ -273,6 +277,109 @@ impl RememberedTable {
+     }
+ }
+ 
++/// Reusable research-only overlay. Only touched 48-byte groups are copied.
++/// The coordinator must keep `base` unchanged between begin and commit/discard;
++/// generation/count checks catch reset/reallocation, not concurrent group writes.
++#[cfg(feature = "branch-transactions")]
++pub(crate) struct SparseStage {
++    groups: std::collections::HashMap<usize, Group>,
++    max_groups: usize,
++    base_generation: u8,
++    base_count: usize,
++    active: bool,
++    failed: bool,
++}
++
++#[cfg(feature = "branch-transactions")]
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) enum SparseStageError {
++    GroupLimit,
++    BaseChanged,
++    Inactive,
++}
++
++#[cfg(feature = "branch-transactions")]
++impl SparseStage {
++    pub(crate) fn new(max_groups: usize) -> Self {
++        Self { groups: std::collections::HashMap::new(), max_groups,
++            base_generation: 0, base_count: 0, active: false, failed: false }
++    }
++
++    /// Reuses allocation. Hash-map clearing cost is included in attempt setup.
++    pub(crate) fn begin(&mut self, base: &RememberedTable) {
++        self.groups.clear();
++        self.base_generation = base.generation;
++        self.base_count = base.groups.len();
++        self.active = true;
++        self.failed = false;
++    }
++
++    fn check(&mut self, base: &RememberedTable) -> Result<(), SparseStageError> {
++        let error = if !self.active || self.failed { Some(SparseStageError::Inactive) }
++            else if base.generation != self.base_generation || base.groups.len() != self.base_count {
++                Some(SparseStageError::BaseChanged)
++            } else { None };
++        if let Some(error) = error { self.failed = true; Err(error) } else { Ok(()) }
++    }
++
++    fn group(&mut self, base: &RememberedTable, index: usize) -> Result<&mut Group, SparseStageError> {
++        self.check(base)?;
++        if !self.groups.contains_key(&index) {
++            if self.groups.len() == self.max_groups {
++                self.failed = true;
++                return Err(SparseStageError::GroupLimit);
++            }
++            self.groups.insert(index, base.groups[index]);
++        }
++        Ok(self.groups.get_mut(&index).unwrap())
++    }
++
++    pub(crate) fn probe(&mut self, base: &RememberedTable, query: Query)
++        -> Result<ProbeResult, SparseStageError> {
++        let required = query.remaining_depth();
++        let generation = self.base_generation;
++        Ok(self.group(base, query.group)?.probe(query, required, generation))
++    }
++
++    pub(crate) fn store(&mut self, base: &RememberedTable, store: Store)
++        -> Result<(), SparseStageError> {
++        let generation = self.base_generation;
++        self.group(base, store.query.group)?.store(store, generation);
++        Ok(())
++    }
++
++    /// Publishes all touched groups only after the caller validates the range.
++    /// No journal hook runs here: replay effects are not new native demands.
++    pub(crate) fn commit(&mut self, base: &mut RememberedTable) -> Result<usize, SparseStageError> {
++        self.check(base)?;
++        let touched = self.groups.len();
++        for (index, group) in self.groups.drain() { base.groups[index] = group; }
++        self.active = false;
++        Ok(touched)
++    }
++
++    pub(crate) fn discard(&mut self) {
++        self.groups.clear();
++        self.active = false;
++        self.failed = false;
++    }
++
++    pub(crate) fn invalidate(&mut self) { self.failed = true; }
++
++    pub(crate) fn touched_groups(&self) -> usize { self.groups.len() }
++
++    pub(crate) fn touched_bytes(&self) -> usize { self.groups.len() * std::mem::size_of::<Group>() }
++
++    /// Conservative capacity rounding for buckets + control bytes; excludes
++    /// allocator bookkeeping and makes no claim of an exact allocator census.
++    pub(crate) fn estimated_bytes(&self) -> usize {
++        let capacity = self.groups.capacity();
++        let buckets = if capacity == 0 { 0 } else { (capacity + 1).next_power_of_two() };
++        std::mem::size_of::<Self>() + buckets
++            * (std::mem::size_of::<(usize, Group)>() + 1)
++    }
++}
++
+ #[cfg(feature = "branch-transactions")]
+ impl RememberedTable {
+     pub(crate) fn attach_sink(&mut self, sink: Option<crate::branch_journal::Sink>) {
+@@ -314,6 +421,93 @@ fn is_prime(value: usize) -> bool {
+     true
+ }
+ 
++#[cfg(all(test, feature = "branch-transactions"))]
++mod sparse_tests {
++    use super::*;
++
++    fn query(group: usize, identity: u32, depth: i32) -> Query {
++        Query { group, identity, ply: 1, target: depth + 1, lower: 0, upper: 9000 }
++    }
++
++    fn entry(group: usize, identity: u32, depth: i32, score: i32) -> Store {
++        Store { query: query(group, identity, depth), score, move_hint: None,
++            quiet_mate_checked: false, mark_depth: true }
++    }
++
++    #[test]
++    fn native_replacements_and_mate_mutation_match_full_table() {
++        let mut base = RememberedTable::with_groups(7);
++        for store in [entry(0, 1, 1, 9000), entry(0, 2, 3, 20), entry(0, 3, 4, 30)] {
++            base.store(store);
++        }
++        let before = base.research_clone();
++        let mut oracle = base.research_clone();
++        let mut stage = SparseStage::new(2);
++        stage.begin(&base);
++        let mate = query(0, 1, 19);
++        let observed = stage.probe(&base, mate).unwrap();
++        assert_eq!(observed, oracle.probe(mate));
++        assert_eq!(observed.marked_depth, Some(1));
++        assert_eq!(stage.probe(&base, mate).unwrap(), oracle.probe(mate));
++        assert!(base.research_eq(&before), "mate-depth raise must remain staged");
++        // Includes recent-only insertion, duplicate retained identity, equal
++        // depth overwrite and retained displacement after the mate-depth raise.
++        for store in [entry(0, 4, 2, 40), entry(0, 2, 1, 21),
++            entry(0, 2, 3, 22), entry(0, 5, 6, 50), entry(1, 6, -1, 60)] {
++            stage.store(&base, store).unwrap();
++            oracle.store(store);
++            for identity in 1..=6 {
++                let q = query(store.query.group, identity, 1);
++                assert_eq!(stage.probe(&base, q).unwrap(), oracle.probe(q));
++            }
++        }
++        assert_eq!(stage.touched_groups(), 2);
++        assert_eq!(stage.touched_bytes(), 96);
++        assert_eq!(stage.commit(&mut base), Ok(2));
++        assert!(base.research_eq(&oracle));
++        assert_eq!(stage.commit(&mut base), Err(SparseStageError::Inactive));
++    }
++
++    #[test]
++    fn discard_reinitializes_from_current_base_and_preserves_untouched_groups() {
++        let mut base = RememberedTable::with_groups(5);
++        let mut stage = SparseStage::new(2);
++        stage.begin(&base);
++        stage.store(&base, entry(0, 1, 2, 10)).unwrap();
++        stage.discard();
++        base.store(entry(0, 2, 4, 20));
++        base.store(entry(4, 3, 8, 30));
++        let mut oracle = base.research_clone();
++        stage.begin(&base);
++        stage.store(&base, entry(0, 4, 3, 40)).unwrap();
++        oracle.store(entry(0, 4, 3, 40));
++        assert_eq!(stage.commit(&mut base), Ok(1));
++        assert!(base.research_eq(&oracle), "untouched canonical group must survive");
++    }
++
++    #[test]
++    fn group_cap_and_reset_poison_commit_without_partial_writes() {
++        let mut base = RememberedTable::with_groups(3);
++        let before = base.research_clone();
++        let mut stage = SparseStage::new(1);
++        stage.begin(&base);
++        stage.store(&base, entry(0, 1, 2, 10)).unwrap();
++        assert_eq!(stage.store(&base, entry(1, 2, 2, 20)), Err(SparseStageError::GroupLimit));
++        assert_eq!(stage.commit(&mut base), Err(SparseStageError::Inactive));
++        assert!(base.research_eq(&before));
++        stage.begin(&base);
++        stage.store(&base, entry(0, 1, 2, 10)).unwrap();
++        base.clear();
++        let after_reset = base.research_clone();
++        assert_eq!(stage.commit(&mut base), Err(SparseStageError::BaseChanged));
++        assert!(base.research_eq(&after_reset));
++        let mut zero = SparseStage::new(0);
++        zero.begin(&base);
++        assert_eq!(zero.probe(&base, query(0, 1, 2)), Err(SparseStageError::GroupLimit));
++        assert_eq!(zero.commit(&mut base), Err(SparseStageError::Inactive));
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/src/hierarchical_recovery.rs b/src/hierarchical_recovery.rs
+new file mode 100644
+index 00000000..f3c8187a
+--- /dev/null
++++ b/src/hierarchical_recovery.rs
+@@ -0,0 +1,478 @@
++//! Exact-window hierarchical reuse in the fixed-completion serial pilot only.
++//! Shared effects are replayed with native owners; numerical outputs are reused
++//! only at actual calls. The independent oracle is an audit, never admissibility.
++use std::{cell::RefCell, rc::Rc, ops::Range, time::Instant, fmt::Write};
++use crate::{branch_journal::{Cursor,Log,Sink}, engine::{Config,Search}, evaluator::{EvalStats,Node,Parameters,Retained},
++    history::SearchHistory, host::Host, influence::Influence, ordinary::{Predecessor,Request},
++    quiescence::{Entry,Stats,Stopped}, remembered::SparseStage, types::Move};
++
++#[derive(Clone,Copy,Debug)]
++pub struct Caps {pub max_depth:u8,pub max_tail_candidates:usize,pub queue_depth:usize,pub log_events:usize,
++    pub max_segments:usize,pub max_recorded_nodes:u64,pub max_forest_bytes:usize,pub max_touched_groups:usize,pub oracle_trace_cap:usize}
++impl Default for Caps {fn default()->Self {Self{max_depth:6,max_tail_candidates:8,queue_depth:2,log_events:524288,
++    max_segments:131072,max_recorded_nodes:262144,max_forest_bytes:536870912,max_touched_groups:131072,oracle_trace_cap:131072}}}
++impl Caps {pub(crate) fn valid(self)->bool {self.max_depth==6&&self.max_tail_candidates==8&&self.queue_depth==2&&self.log_events==524288&&self.max_segments==131072&&self.max_recorded_nodes==262144&&self.max_forest_bytes==536870912&&self.max_touched_groups==131072&&self.oracle_trace_cap==131072}}
++
++#[derive(Clone,Copy,Debug,PartialEq,Eq)]
++pub(crate) enum Site {Root{pass:usize},Main{scout:bool,retry:bool},Null,Iio{offset:i32,start:usize},Mate,Q}
++#[derive(Clone,Debug,PartialEq,Eq)]
++pub(crate) struct Ordinary {allow_iio:bool,ply:usize,depth:i32,lower:i32,upper:i32,previous_extension:u8,iteration:i32,checked:Option<bool>,
++    previous_position:crate::position::Position,previous_map:Influence,previous_checked:bool,movement:Option<Move>}
++impl Ordinary {fn new<const A:bool>(request:Request,previous:Predecessor<'_>)->Self {Self{allow_iio:A,ply:request.ply,depth:request.depth,lower:request.lower,upper:request.upper,
++    previous_extension:request.previous_extension,iteration:request.iteration,checked:request.checked,previous_position:*previous.position,previous_map:*previous.influence,previous_checked:previous.checked,movement:previous.movement}}}
++#[derive(Clone,Debug,PartialEq,Eq)]
++enum Call {Ordinary(Ordinary),Q{ply:usize,target:i32,iteration:i32,lower:i32,upper:i32,analysis:i32,capture_exception:bool,checked:Option<bool>,replies_available:bool,replies:Option<Vec<Move>>,handoff:Option<Ordinary>}}
++#[derive(Clone,Debug,PartialEq,Eq)]
++struct Key {node:Node,history:SearchHistory,site:Site,geometry:bool,call:Call}
++impl Key {
++    fn ply(&self)->usize {match &self.call {Call::Ordinary(o)=>o.ply,Call::Q{ply,..}=>*ply}}
++    fn lookup(&self)->[u32;4] {[self.node.position.primary,self.node.position.secondary,self.ply() as u32,u32::from(matches!(self.call,Call::Q{..}))]}
++    fn extra_bytes(&self)->usize {self.history.research_bytes()-std::mem::size_of::<SearchHistory>()+match &self.call {Call::Q{replies:Some(v),..}=>v.capacity()*std::mem::size_of::<Move>(),_=>0}}
++}
++#[derive(Clone,PartialEq,Eq)]
++struct Epoch {root_side:crate::types::Color,phase:[u16;3],counts:[[u8;6];2],values:[[i32;5];2],squares:[[[i16;64];5];2],root_average:i32,
++    own:[i32;11],opponent:[i32;11],average:i32,draw:i32,opponent_selectivity:i32,draw_preference:i32,variation:u32,config:[usize;4],groups:usize}
++impl Epoch {fn new<const D:bool,H:Host>(search:&Search<D,H>)->Self {let e=&search.evaluator;let r=&e.root;Self{root_side:r.side,phase:[r.phase.opening,r.phase.middlegame,r.phase.endgame],counts:r.counts,values:r.values,squares:r.squares,root_average:r.average_depth,
++    own:e.parameters.own,opponent:e.parameters.opponent,average:e.parameters.average_depth,draw:e.parameters.draw,opponent_selectivity:e.parameters.opponent_selectivity,
++    draw_preference:e.draw_preference,variation:e.variation_range,config:[search.config.selectivity as usize,search.config.maximum_depth,search.config.analysis as usize,search.config.tts_bytes],groups:search.remembered.as_ref().map_or(0,|t|t.group_count())}}}
++
++macro_rules! stats_fields {($m:ident,$a:expr,$b:expr)=>{$m!($a,$b;nodes,generated,examined,children,projections,reply_probes,reused_reply_lists,optimistic_updates,unsafe_rejections,cutoffs,late_endgame_evaluations,ordinary_nodes,table_probes,table_hits,table_stores,fast_cutoffs,shallow_cutoffs,null_trials,mate_probes,iio_passes,iio_children,iio_nonzero_fresh_extensions,iio_initial_phases,iio_tail_phases,accumulated_extension_uses,scout_retries,refreshed_scout_retries,frontier_skips,material_threats)}}
++macro_rules! difference {($a:expr,$b:expr;$($f:ident),+)=>{{let mut a=$a;$(a.$f-=$b.$f;)+a}}}
++macro_rules! addition {($a:expr,$b:expr;$($f:ident),+)=>{{let mut a=$a;$(a.$f+=$b.$f;)+a}}}
++fn stat_delta(a:Stats,b:Stats)->Stats {stats_fields!(difference,a,b)}
++fn stat_add(a:Stats,b:Stats)->Stats {stats_fields!(addition,a,b)}
++fn eval_delta(a:EvalStats,b:EvalStats)->EvalStats {difference!(a,b;full,fast,influence_builds,pawn_reuses,pawn_replacements,relation_queries)}
++fn eval_add(a:EvalStats,b:EvalStats)->EvalStats {addition!(a,b;full,fast,influence_builds,pawn_reuses,pawn_replacements,relation_queries)}
++#[derive(Clone,Debug)]
++struct Output {score:i32,retained:Retained,stats:Stats,evaluations:EvalStats,pv:[Move;64],pv_len:usize}
++impl PartialEq for Output {fn eq(&self,b:&Self)->bool {self.score==b.score&&self.retained==b.retained&&self.stats==b.stats&&self.evaluations==b.evaluations&&self.pv_len==b.pv_len&&self.pv[..self.pv_len]==b.pv[..b.pv_len]}}
++impl Output {
++    fn capture<const D:bool,H:Host>(search:&Search<D,H>,node:&Node,ply:usize,score:i32,stats:Stats,evaluations:EvalStats)->Self {Self{score,retained:node.retained,stats:stat_delta(search.stats,stats),evaluations:eval_delta(search.evaluator.stats,evaluations),pv:search.pv[ply],pv_len:search.pv_len[ply]}}
++    fn install<const D:bool,H:Host>(&self,search:&mut Search<D,H>,node:&mut Node,ply:usize) {search.stats=stat_add(search.stats,self.stats);search.evaluator.stats=eval_add(search.evaluator.stats,self.evaluations);node.retained=self.retained;search.pv[ply][..self.pv_len].copy_from_slice(&self.pv[..self.pv_len]);search.pv_len[ply]=self.pv_len;}
++}
++struct Segment {consumer:Option<(usize,usize)>,direct_parent:Option<usize>,child_calls:usize,child_nodes:u64,child_examined:u64,coverage_complete:bool,key:Key,parent:Option<usize>,end:usize,start_cursor:Cursor,end_cursor:Cursor,range:Option<Range<usize>>,output:Option<Output>,gross_ns:u128,descendant_hooks_ns:u128}
++#[derive(Clone)]
++pub(crate) struct Forest {epoch:Rc<Epoch>,segments:Rc<Vec<Segment>>,index:Rc<Vec<([u32;4],usize)>>,pub(crate) log:Option<Rc<Log>>,pub(crate) native_nodes:u64,pub(crate) native_relations:u64,
++    pub(crate) metadata_bytes:usize,pub(crate) censored:bool,pub(crate) cap_reason:Option<&'static str>,pub(crate) hook_ns:u128,pub(crate) valid_segments:usize}
++fn forest_fixed_bytes()->usize {std::mem::size_of::<Forest>()+std::mem::size_of::<Epoch>()+std::mem::size_of::<Vec<Segment>>()+std::mem::size_of::<Vec<([u32;4],usize)>>() + 8*std::mem::size_of::<usize>()}
++impl Forest {pub(crate) fn shares_data(&self,other:&Self)->bool {Rc::ptr_eq(&self.epoch,&other.epoch)&&Rc::ptr_eq(&self.segments,&other.segments)&&Rc::ptr_eq(&self.index,&other.index)&&match (&self.log,&other.log){(Some(a),Some(b))=>Rc::ptr_eq(a,b),(None,None)=>true,_=>false}}
++    pub(crate) fn same_epoch(&self,search:&Search<true>)->bool {*self.epoch==Epoch::new(search)}
++    pub(crate) fn bytes(&self)->usize {self.metadata_bytes+self.log.as_ref().map_or(0,|l|l.estimated_bytes())}}
++#[derive(Clone,Debug,Default)]
++pub struct ForestSummary {pub segments:usize,pub valid_segments:usize,pub metadata_bytes:usize,pub bytes:usize,pub log_events:usize,pub log_attempted:usize,pub log_bytes:usize,
++    pub event_overflowed:bool,pub byte_overflowed:bool,pub censored:bool,pub cap_reason:Option<&'static str>,pub recording_hook_ns:u128,pub log_recording_ns:u128}
++impl Forest {pub(crate) fn summary(&self)->ForestSummary {let log=self.log.as_ref();ForestSummary{segments:self.segments.len(),valid_segments:self.valid_segments,metadata_bytes:self.metadata_bytes,bytes:self.bytes(),log_events:log.map_or(0,|l|l.events.len()),log_attempted:log.map_or(0,|l|l.attempted),log_bytes:log.map_or(0,|l|l.estimated_bytes()),event_overflowed:log.is_some_and(|l|l.event_overflowed),byte_overflowed:log.is_some_and(|l|l.byte_overflowed),censored:self.censored,cap_reason:self.cap_reason,recording_hook_ns:self.hook_ns,log_recording_ns:log.map_or(0,|l|l.recording_ns)}}}
++#[cfg(feature="consumed-prefix")]
++#[derive(Clone,Debug,Default)]
++pub struct ConsumerSummary {pub segments:usize,pub eligible:usize,pub proper_prefix:usize,pub fully_consumed:usize,pub eligible_nodes:u64,pub eligible_relations:u64,pub reasons:Vec<(&'static str,usize)>,pub prefix_length_bins:[u64;9],pub inventory_length_bins:[u64;9]}
++#[cfg(feature="consumed-prefix")]
++impl ConsumerSummary {fn note(&mut self,reason:&'static str){if let Some(row)=self.reasons.iter_mut().find(|r|r.0==reason){row.1+=1;}else{self.reasons.push((reason,1));}}
++    pub(crate) fn json(&self)->String {let reasons=self.reasons.iter().map(|(r,n)|format!("{{\"reason\":\"{r}\",\"count\":{n}}}")).collect::<Vec<_>>().join(",");format!("{{\"segments\":{},\"eligible\":{},\"proper_prefix\":{},\"fully_consumed\":{},\"eligible_nodes\":{},\"eligible_relations\":{},\"reasons\":[{}],\"prefix_length_bins\":{:?},\"inventory_length_bins\":{:?}}}",self.segments,self.eligible,self.proper_prefix,self.fully_consumed,self.eligible_nodes,self.eligible_relations,reasons,self.prefix_length_bins,self.inventory_length_bins)}}
++#[cfg(feature="consumed-prefix")]
++impl Forest {
++    /// This proof is finalized before the immutable forest is shared by either policy.
++    /// Inclusive native examined credit subtracts ALL immediate charged callees.
++    pub(crate) fn annotate_prefixes(&mut self)->ConsumerSummary {
++        use crate::branch_journal::Event;
++        let segments=Rc::get_mut(&mut self.segments).expect("unique annotation producer");
++        // A finalized missing child output/range invalidates ancestor coverage too.
++        for id in (0..segments.len()).rev(){let complete=segments[id].coverage_complete&&segments[id].output.is_some()&&segments[id].range.is_some();if !complete{if let Some(parent)=segments[id].direct_parent{segments[parent].coverage_complete=false;}}}
++        let mut result=ConsumerSummary{segments:segments.len(),..ConsumerSummary::default()};
++        let Some(log)=self.log.as_mut() else{if !segments.is_empty(){result.reasons.push(("missing-journal",segments.len()));}return result;};let log=Rc::get_mut(log).expect("unique annotation journal");
++        for segment in segments {
++            let reason=match &segment.key.call {
++                Call::Q{..}=>"quiescence",
++                Call::Ordinary(o) if !(1..=2).contains(&o.depth)=>"requested-depth",
++                Call::Ordinary(o)=>{
++                    if !segment.coverage_complete {"incomplete-child-coverage"}
++                    else if let (Some(output),Some(range))=(&segment.output,&segment.range) {
++                        if output.stats.nodes.checked_sub(segment.child_nodes)!=Some(1){"owned-node-credit"}
++                        else if let Some(k)=output.stats.examined.checked_sub(segment.child_examined) {
++                            let mut owned=None;let mut count=0;
++                            for at in range.clone(){if let Event::OrderMain{position,ply,..}=&log.events[at]{if *ply==o.ply&&*position==segment.key.node.position{owned=Some(at);count+=1;}}}
++                            if count!=1 {"owned-sort-count"} else {
++                                match &mut log.events[owned.unwrap()] {
++                                    Event::OrderMain{input,expected,proven_prefix,..}=>{
++                                        if input.len()!=expected.len(){"inventory-length"}
++                                        else if k==0||k>input.len() as u64 {"prefix-bounds"}
++                                        else {*proven_prefix=Some(k as usize);segment.consumer=Some((k as usize,input.len()));result.eligible+=1;
++                                            if k as usize==input.len(){result.fully_consumed+=1;}else{result.proper_prefix+=1;}
++                                            result.eligible_nodes+=output.stats.nodes;result.eligible_relations+=output.evaluations.relation_queries;
++                                            result.prefix_length_bins[bin(k)]+=1;result.inventory_length_bins[bin(input.len() as u64)]+=1;"eligible"}
++                                    },_=>unreachable!(),
++                                }
++                            }
++                        } else {"examined-credit"}
++                    } else {"missing-output-range"}
++                }
++            };result.note(reason);
++        }
++        result
++    }
++}
++#[derive(Clone,Debug)]
++pub struct Metrics {pub lookups:u64,pub entry_candidates:u64,pub entry_mismatches:u64,pub exact_matches:u64,pub unmatched_calls:u64,pub semantic_rejections:u64,pub validation_censored:u64,pub commits:u64,
++    pub committed_nodes:u64,pub committed_relations:u64,pub censored:u64,pub already_used:u64,pub maximal_ranges_disjoint:bool,pub touched_groups:u64,pub touched_bytes:u64,pub peak_staging_bytes:usize,
++    pub lookup_ns:u128,pub staging_ns:u128,pub validation_ns:u128,pub commit_ns:u128,pub audit_entry_ns:u128,pub audit_local_ns:u128,pub audit_counterfactual_ns:u128,pub accepted_oracle_gross_ns:u128,pub accepted_oracle_descendant_hooks_ns:u128,
++    pub matching_depth:[u64;64],pub surviving_size:[u64;9],pub segment_status_counts:[u64;4],pub valid_segment_status_counts:[u64;4],pub entry_mismatch_reasons:Vec<(&'static str,u64)>,pub entry_mismatch_size_by_reason:Vec<(&'static str,[u64;9])>,pub rejection_reasons:Vec<(&'static str,u64)>,pub censor_reasons:Vec<(&'static str,u64)>,pub committed_ranges:Vec<[u64;6]>,pub committed_range_oracle_costs:Vec<[u128;2]>,
++    pub order_main_prefix:u64,pub order_main_complete:u64,pub order_main_prefix_fallback:u64,pub order_rejections:[u64;9],pub order_suffix_only:[u64;9],pub order_prefix_changed:[u64;9],pub order_ineligible:[u64;9],pub order_inventory_changed:[u64;9],pub order_consumer_rejections:[[u64;9];3],pub order_depth_rejections:[[u64;9];3],pub semantic_rejection_size:[u64;9],pub rejection_size_by_reason:Vec<(&'static str,[u64;9])>,pub semantic_consumer_rejections:[[u64;9];3],pub fatal_reason:Option<&'static str>}
++impl Default for Metrics {fn default()->Self {Self{lookups:0,entry_candidates:0,entry_mismatches:0,exact_matches:0,unmatched_calls:0,semantic_rejections:0,validation_censored:0,commits:0,committed_nodes:0,committed_relations:0,censored:0,already_used:0,maximal_ranges_disjoint:true,touched_groups:0,touched_bytes:0,peak_staging_bytes:0,lookup_ns:0,staging_ns:0,validation_ns:0,commit_ns:0,audit_entry_ns:0,audit_local_ns:0,audit_counterfactual_ns:0,accepted_oracle_gross_ns:0,accepted_oracle_descendant_hooks_ns:0,matching_depth:[0;64],surviving_size:[0;9],segment_status_counts:[0;4],valid_segment_status_counts:[0;4],entry_mismatch_reasons:Vec::new(),entry_mismatch_size_by_reason:Vec::new(),rejection_reasons:Vec::new(),censor_reasons:Vec::new(),committed_ranges:Vec::new(),committed_range_oracle_costs:Vec::new(),order_main_prefix:0,order_main_complete:0,order_main_prefix_fallback:0,order_rejections:[0;9],order_suffix_only:[0;9],order_prefix_changed:[0;9],order_ineligible:[0;9],order_inventory_changed:[0;9],order_consumer_rejections:[[0;9];3],order_depth_rejections:[[0;9];3],semantic_rejection_size:[0;9],rejection_size_by_reason:Vec::new(),semantic_consumer_rejections:[[0;9];3],fatal_reason:None}}}
++fn bin(n:u64)->usize {match n {0=>0,1=>1,2..=7=>2,8..=31=>3,32..=127=>4,128..=511=>5,512..=2047=>6,2048..=8191=>7,_=>8}}
++enum Mode {Record{sink:Option<Sink>,audit:bool},Recover{oracle:Forest,cursor:usize,status:Vec<u8>,stage:SparseStage,policy:crate::branch_journal::OrderPolicy}}
++struct State {forest:Forest,mode:Mode,caps:Caps,stack:Vec<Option<usize>>,site:Site,handoff:Option<Ordinary>,base_nodes:u64,base_relations:u64,extra_bytes:usize,metrics:Metrics}
++#[derive(Clone)]
++pub(crate) struct Context(Rc<RefCell<State>>);
++pub(crate) struct Token {context:Context,id:Option<usize>,oracle:Option<usize>,stats:Stats,evaluations:EvalStats,ply:usize,started:Instant,hook_base:u128}
++pub(crate) enum Decision {Run(Option<Token>),Accepted(i32),Fatal}
++pub(crate) struct SiteGuard {saved:Option<(Context,Site)>}
++impl Drop for SiteGuard {fn drop(&mut self){if let Some((c,s))=&self.saved {c.0.borrow_mut().site=*s;}}}
++pub(crate) fn site(context:&Option<Context>,site:Site)->SiteGuard {SiteGuard{saved:context.as_ref().map(|c|{let prior=c.0.borrow().site;c.0.borrow_mut().site=site;(c.clone(),prior)})}}
++pub(crate) struct HandoffGuard {saved:Option<(Context,Option<Ordinary>)>}
++impl Drop for HandoffGuard {fn drop(&mut self){if let Some((c,prior))=self.saved.take(){c.0.borrow_mut().handoff=prior;}}}
++pub(crate) fn handoff<const A:bool,const D:bool,H:Host>(search:&Search<D,H>,request:Request,previous:Predecessor<'_>)->HandoffGuard {HandoffGuard{saved:search.hierarchical.as_ref().map(|c|{let prior=c.0.borrow_mut().handoff.replace(Ordinary::new::<A>(request,previous));(c.clone(),prior)})}}
++
++impl Context {
++    pub(crate) fn recording(search:&Search<true>,caps:Caps,audit:bool)->Self {let sink=(!audit).then(||Sink::bounded(caps.log_events,caps.max_forest_bytes/2));Self(Rc::new(RefCell::new(State{forest:Forest{epoch:Rc::new(Epoch::new(search)),segments:Rc::new(Vec::new()),index:Rc::new(Vec::new()),log:None,native_nodes:0,native_relations:0,metadata_bytes:forest_fixed_bytes(),censored:false,cap_reason:None,hook_ns:0,valid_segments:0},mode:Mode::Record{sink,audit},caps,stack:Vec::new(),site:Site::Root{pass:0},handoff:None,base_nodes:search.stats.nodes,base_relations:search.evaluator.stats.relation_queries,extra_bytes:0,metrics:Metrics{maximal_ranges_disjoint:true,..Metrics::default()}})))}
++    pub(crate) fn sink(&self)->Option<Sink> {match &self.0.borrow().mode {Mode::Record{sink,..}=>sink.clone(),_=>None}}
++    pub(crate) fn recovery(forest:Forest,oracle:Forest,caps:Caps)->Self {Self::recovery_policy(forest,oracle,caps,crate::branch_journal::OrderPolicy::Complete)}
++    pub(crate) fn recovery_policy(mut forest:Forest,oracle:Forest,caps:Caps,policy:crate::branch_journal::OrderPolicy)->Self {let started=Instant::now();let len=forest.segments.len();forest.hook_ns=0;
++        let context=Self(Rc::new(RefCell::new(State{forest,mode:Mode::Recover{oracle,cursor:0,status:vec![0;len],stage:SparseStage::new(caps.max_touched_groups),policy},caps,stack:Vec::new(),site:Site::Root{pass:0},handoff:None,base_nodes:0,base_relations:0,extra_bytes:0,metrics:Metrics{maximal_ranges_disjoint:true,..Metrics::default()}})));
++        let setup=started.elapsed().as_nanos();{let mut s=context.0.borrow_mut();s.forest.hook_ns=setup;s.metrics.staging_ns=setup;}context
++    }
++    pub(crate) fn metrics(&self)->Metrics {let s=self.0.borrow();let mut metrics=s.metrics.clone();if let Mode::Recover{status,..}=&s.mode {for (id,&state) in status.iter().enumerate(){metrics.segment_status_counts[state as usize]+=1;if s.forest.segments[id].output.is_some(){metrics.valid_segment_status_counts[state as usize]+=1;}}}metrics}
++    pub(crate) fn hook_ns(&self)->u128 {self.0.borrow().forest.hook_ns}
++    pub(crate) fn fatal(&self)->Option<&'static str> {self.0.borrow().metrics.fatal_reason}
++    pub(crate) fn finish_record(self,search:&Search<true>)->Forest {let cell=Rc::try_unwrap(self.0).ok().expect("recording context still borrowed");let mut s=cell.into_inner();assert!(s.stack.is_empty());
++        let sink=match s.mode {Mode::Record{sink,..}=>sink,_=>panic!("not recording")};let log=sink.map(|sink|sink.take());
++        if log.as_ref().is_some_and(|l|l.overflowed){s.forest.censored=true;s.forest.cap_reason.get_or_insert("journal-cap");}
++        for segment in Rc::get_mut(&mut s.forest.segments).unwrap() {segment.range=if let Some(log)=&log {log.range(segment.start_cursor,segment.end_cursor)}else{Some(0..0)};if segment.range.is_none(){segment.output=None;}}
++        Rc::get_mut(&mut s.forest.index).unwrap().reserve_exact(s.forest.segments.len());
++        for (id,segment) in s.forest.segments.iter().enumerate(){if segment.output.is_some(){Rc::get_mut(&mut s.forest.index).unwrap().push((segment.key.lookup(),id));}}
++        Rc::get_mut(&mut s.forest.index).unwrap().sort_unstable();s.forest.valid_segments=s.forest.index.len();s.forest.log=log.map(Rc::new);s.forest.native_nodes=search.stats.nodes-s.base_nodes;s.forest.native_relations=search.evaluator.stats.relation_queries-s.base_relations;
++        s.forest.metadata_bytes=s.forest.segments.capacity()*std::mem::size_of::<Segment>()+s.forest.index.capacity()*std::mem::size_of::<([u32;4],usize)>()+s.extra_bytes+forest_fixed_bytes();
++        s.forest
++    }
++}
++
++#[derive(Clone,Debug,Default)]
++pub struct Costs {pub prefix_ns:u128,pub snapshot_ns:u128,pub recording_setup_ns:u128,pub speculation_ns:u128,pub recording_finalize_ns:u128,pub canonical_execute_ns:u128,
++    pub oracle_snapshot_ns:u128,pub oracle_execute_ns:u128,pub oracle_compare_ns:u128,pub oracle_entry_ns:u128,pub oracle_local_ns:u128,pub recovery_hook_ns:u128,
++    pub lookup_ns:u128,pub staging_ns:u128,pub validation_ns:u128,pub commit_ns:u128,pub native_fallback_estimate_ns:u128,pub audit_counterfactual_ns:u128}
++impl Costs {pub(crate) fn add(&mut self,b:&Self) {macro_rules! add {($($f:ident),+)=>{$(self.$f+=b.$f;)+}}add!(prefix_ns,snapshot_ns,recording_setup_ns,speculation_ns,recording_finalize_ns,canonical_execute_ns,oracle_snapshot_ns,oracle_execute_ns,oracle_compare_ns,oracle_entry_ns,oracle_local_ns,recovery_hook_ns,lookup_ns,staging_ns,validation_ns,commit_ns,native_fallback_estimate_ns,audit_counterfactual_ns);}}
++#[derive(Clone,Debug)]
++pub struct Candidate {pub depth:u8,pub index:usize,pub id:u16,pub movement:String,pub ahead_distance:usize,pub enqueued_at_turn:usize,pub consumed_at_turn:usize,
++    pub speculative_nodes:u64,pub speculative_relations:u64,pub canonical_nodes:u64,pub canonical_relations:u64,pub committed_nodes:u64,pub committed_relations:u64,
++    pub fallback_nodes:u64,pub fallback_relations:u64,pub discarded_speculative_nodes:u64,pub oracle_match:bool,pub rollback_unchanged:bool,pub unsafe_validation:bool,
++    pub completed_passes:usize,pub snapshot_bytes:usize,pub forest:ForestSummary,pub oracle:ForestSummary,pub recovery:Metrics,pub timings:Costs}
++#[derive(Clone,Debug)]
++pub struct Report {pub caps:Caps,pub restricted_depth:Option<u8>,pub restricted_entry_nodes:Option<u64>,pub completed_depth:u8,pub incomplete_iteration:bool,pub stopped_reason:&'static str,
++    pub prefix_nodes:u64,pub prefix_relations:u64,pub canonical_nodes:u64,pub canonical_relations:u64,pub candidate_nodes:u64,pub candidate_relations:u64,
++    pub committed_nodes:u64,pub committed_relations:u64,pub fallback_nodes:u64,pub fallback_relations:u64,pub abandoned_speculative_nodes:u64,
++    pub unsafe_validation:bool,pub fatal_reason:Option<&'static str>,pub max_queue_len:usize,pub peak_queue_forest_bytes:usize,pub elapsed_ns:u128,pub timings:Costs,pub candidates:Vec<Candidate>}
++pub fn run(position:crate::position::Position,history:SearchHistory,parameters:Parameters,config:Config,caps:Caps)->Result<Report,String> {crate::branch_transactions::run_hierarchical(position,history,parameters,config,caps)}
++fn optional(reason:Option<&'static str>)->String {reason.map_or("null".into(),|r|format!("\"{r}\""))}
++impl ForestSummary {pub(crate) fn json(&self)->String {format!("{{\"segments\":{},\"valid_segments\":{},\"metadata_bytes\":{},\"bytes\":{},\"log_events\":{},\"log_attempted\":{},\"log_bytes\":{},\"event_overflowed\":{},\"byte_overflowed\":{},\"censored\":{},\"cap_reason\":{},\"recording_hook_ns\":{},\"log_recording_ns\":{}}}",self.segments,self.valid_segments,self.metadata_bytes,self.bytes,self.log_events,self.log_attempted,self.log_bytes,self.event_overflowed,self.byte_overflowed,self.censored,optional(self.cap_reason),self.recording_hook_ns,self.log_recording_ns)}}
++impl Costs {pub(crate) fn json(&self)->String {let executor=self.prefix_ns+self.snapshot_ns+self.recording_setup_ns+self.speculation_ns+self.recording_finalize_ns+self.canonical_execute_ns-self.oracle_local_ns-self.oracle_entry_ns-self.audit_counterfactual_ns;let audit=self.oracle_snapshot_ns+self.oracle_execute_ns+self.oracle_compare_ns+self.oracle_local_ns+self.oracle_entry_ns+self.audit_counterfactual_ns;
++    let mut json=format!("{{\"prefix_ns\":{},\"snapshot_ns\":{},\"recording_setup_ns\":{},\"speculation_ns\":{},\"recording_finalize_ns\":{},\"canonical_execute_ns\":{},\"oracle_snapshot_ns\":{},\"oracle_execute_ns\":{},\"oracle_compare_ns\":{},\"oracle_entry_ns\":{},\"oracle_local_ns\":{},\"recovery_hook_ns\":{},\"lookup_ns\":{},\"staging_ns\":{},\"validation_ns\":{},\"commit_ns\":{},\"native_fallback_estimate_ns\":{},\"executor_observed_ns\":{},\"audit_observed_ns\":{}}}",self.prefix_ns,self.snapshot_ns,self.recording_setup_ns,self.speculation_ns,self.recording_finalize_ns,self.canonical_execute_ns,self.oracle_snapshot_ns,self.oracle_execute_ns,self.oracle_compare_ns,self.oracle_entry_ns,self.oracle_local_ns,self.recovery_hook_ns,self.lookup_ns,self.staging_ns,self.validation_ns,self.commit_ns,self.native_fallback_estimate_ns,executor,audit);json.pop();write!(json,",\"audit_counterfactual_ns\":{}}}",self.audit_counterfactual_ns).unwrap();json}}
++impl Metrics {pub(crate) fn json(&self)->String {let entries=self.entry_mismatch_reasons.iter().map(|(reason,count)|format!("{{\"reason\":\"{reason}\",\"count\":{count}}}")).collect::<Vec<_>>().join(",");let censors=self.censor_reasons.iter().map(|(reason,count)|format!("{{\"reason\":\"{reason}\",\"count\":{count}}}")).collect::<Vec<_>>().join(",");let reasons=self.rejection_reasons.iter().map(|(reason,count)|format!("{{\"reason\":\"{reason}\",\"count\":{count}}}")).collect::<Vec<_>>().join(",");
++    let mut json=format!("{{\"lookups\":{},\"entry_candidates\":{},\"entry_mismatches\":{},\"exact_matches\":{},\"unmatched_calls\":{},\"semantic_rejections\":{},\"validation_censored\":{},\"commits\":{},\"committed_nodes\":{},\"committed_relations\":{},\"censored\":{},\"already_used\":{},\"maximal_ranges_disjoint\":{},\"touched_groups\":{},\"touched_bytes\":{},\"peak_staging_bytes\":{},\"lookup_ns\":{},\"staging_ns\":{},\"validation_ns\":{},\"commit_ns\":{},\"audit_entry_ns\":{},\"audit_local_ns\":{},\"accepted_oracle_gross_ns\":{},\"accepted_oracle_descendant_hooks_ns\":{},\"matching_depth\":{:?},\"surviving_size\":{:?},\"segment_status_counts\":{:?},\"valid_segment_status_counts\":{:?},\"entry_mismatch_reasons\":[{}],\"rejection_reasons\":[{}],\"censor_reasons\":[{}],\"committed_ranges\":{:?},\"fatal_reason\":{}}}",self.lookups,self.entry_candidates,self.entry_mismatches,self.exact_matches,self.unmatched_calls,self.semantic_rejections,self.validation_censored,self.commits,self.committed_nodes,self.committed_relations,self.censored,self.already_used,self.maximal_ranges_disjoint,self.touched_groups,self.touched_bytes,self.peak_staging_bytes,self.lookup_ns,self.staging_ns,self.validation_ns,self.commit_ns,self.audit_entry_ns,self.audit_local_ns,self.accepted_oracle_gross_ns,self.accepted_oracle_descendant_hooks_ns,self.matching_depth,self.surviving_size,self.segment_status_counts,self.valid_segment_status_counts,entries,reasons,censors,self.committed_ranges,optional(self.fatal_reason));json.pop();write!(json,",\"audit_counterfactual_ns\":{},\"committed_range_oracle_costs\":{:?},\"order_main_prefix\":{},\"order_main_complete\":{},\"order_main_prefix_fallback\":{},\"order_rejections\":{:?},\"order_suffix_only\":{:?},\"order_prefix_changed\":{:?},\"order_ineligible\":{:?},\"order_inventory_changed\":{:?},\"order_consumer_rejections\":{:?},\"order_depth_rejections\":{:?}}}",self.audit_counterfactual_ns,self.committed_range_oracle_costs,self.order_main_prefix,self.order_main_complete,self.order_main_prefix_fallback,self.order_rejections,self.order_suffix_only,self.order_prefix_changed,self.order_ineligible,self.order_inventory_changed,self.order_consumer_rejections,self.order_depth_rejections).unwrap();json.pop();let sizes=self.rejection_size_by_reason.iter().map(|(r,b)|format!("{{\"reason\":\"{r}\",\"bins\":{b:?}}}")).collect::<Vec<_>>().join(",");write!(json,",\"semantic_rejection_size\":{:?},\"semantic_consumer_rejections\":{:?},\"rejection_size_by_reason\":[{}]}}",self.semantic_rejection_size,self.semantic_consumer_rejections,sizes).unwrap();json.pop();let entries=self.entry_mismatch_size_by_reason.iter().map(|(r,b)|format!("{{\"reason\":\"{r}\",\"bins\":{b:?}}}")).collect::<Vec<_>>().join(",");write!(json,",\"entry_mismatch_size_by_reason\":[{}]}}",entries).unwrap();json}}
++impl Report {pub fn json(&self)->String {let c=self.caps;let mut out=format!("{{\"schema\":\"rook2-hierarchical-recovery-v1\",\"processId\":{},\"caps\":{{\"max_depth\":{},\"max_tail_candidates\":{},\"queue_depth\":{},\"log_events\":{},\"max_segments\":{},\"max_recorded_nodes\":{},\"max_forest_bytes\":{},\"max_touched_groups\":{},\"oracle_trace_cap\":{}}},\"zero_randomness\":true,\"fixed_completion\":true,\"no_host\":true,\"inline_full\":true,\"restricted_depth\":{},\"restricted_entry_nodes\":{},\"completed_depth\":{},\"incomplete_iteration\":{},\"stopped_reason\":\"{}\",\"prefix_nodes\":{},\"prefix_relations\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"candidate_nodes\":{},\"candidate_relations\":{},\"committed_nodes\":{},\"committed_relations\":{},\"fallback_nodes\":{},\"fallback_relations\":{},\"abandoned_speculative_nodes\":{},\"unsafe_validation\":{},\"fatal_reason\":{},\"max_queue_len\":{},\"peak_queue_forest_bytes\":{},\"elapsed_ns\":{},\"timings\":{},\"candidates\":[",std::process::id(),c.max_depth,c.max_tail_candidates,c.queue_depth,c.log_events,c.max_segments,c.max_recorded_nodes,c.max_forest_bytes,c.max_touched_groups,c.oracle_trace_cap,self.restricted_depth.map_or("null".into(),|v|v.to_string()),self.restricted_entry_nodes.map_or("null".into(),|v|v.to_string()),self.completed_depth,self.incomplete_iteration,self.stopped_reason,self.prefix_nodes,self.prefix_relations,self.canonical_nodes,self.canonical_relations,self.candidate_nodes,self.candidate_relations,self.committed_nodes,self.committed_relations,self.fallback_nodes,self.fallback_relations,self.abandoned_speculative_nodes,self.unsafe_validation,optional(self.fatal_reason),self.max_queue_len,self.peak_queue_forest_bytes,self.elapsed_ns,self.timings.json());
++    for (i,c) in self.candidates.iter().enumerate(){if i>0{out.push(',');}write!(out,"{{\"depth\":{},\"index\":{},\"id\":{},\"movement\":\"{}\",\"ahead_distance\":{},\"enqueued_at_turn\":{},\"consumed_at_turn\":{},\"speculative_nodes\":{},\"speculative_relations\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"committed_nodes\":{},\"committed_relations\":{},\"fallback_nodes\":{},\"fallback_relations\":{},\"discarded_speculative_nodes\":{},\"oracle_match\":{},\"rollback_unchanged\":{},\"unsafe_validation\":{},\"completed_passes\":{},\"snapshot_bytes\":{},\"forest\":{},\"oracle\":{},\"recovery\":{},\"timings\":{}}}",c.depth,c.index,c.id,c.movement,c.ahead_distance,c.enqueued_at_turn,c.consumed_at_turn,c.speculative_nodes,c.speculative_relations,c.canonical_nodes,c.canonical_relations,c.committed_nodes,c.committed_relations,c.fallback_nodes,c.fallback_relations,c.discarded_speculative_nodes,c.oracle_match,c.rollback_unchanged,c.unsafe_validation,c.completed_passes,c.snapshot_bytes,c.forest.json(),c.oracle.json(),c.recovery.json(),c.timings.json()).unwrap();}
++    out.push_str("],\"scope\":\"Serial fixed-completion simulation, not speedup. Accepted ranges are disjoint maximal recorded intervals; native fallback work is canonical credit minus accepted credit, not rejected-parent inclusive work. Lookup includes full Epoch comparisons and complete history clones, concrete prototype costs rather than a lower bound. rollback_unchanged reports the immutable-base staging construction invariant, not a per-attempt full-state snapshot audit; the independent late-write control runs separately. Sparse replay uses detached learning/pawns and immutable canonical TT until commit. Oracle traces/snapshots/comparisons are audit-only; oracle entry/cursor and local output audits are removed from the executor proxy; oracle segment gross elapsed includes measured descendant hook overhead and is not clean CPU saved. Record hook and Sink insertion times are subsets of speculative execution. Staging includes per-candidate status/sparse-workspace initialization. Recovery lookup/stage/validation/commit/entry-audit/local-audit are subsets of canonical execution. Uncharged ordinary-to-Q handoff is represented only by the Q entry with complete ordinary origin. segment_status_counts rows0 untouched-record,1 attempted-no-commit,2 consumed-by-maximal-commit,3 blocked-ancestor; these are record populations, not additive work or proof that canonical call demand was absent. Independent oracle coverage is local outputs/counters and root-final shared state; transient wrong shared writes later overwritten may escape that independent audit. Within-run semantic reuse may cross an ancestor administrative phase when complete actual-callee inputs/site and native dependencies match; immediate retry/retained continuation remains exact, and every recorded segment is consumed at most once. Controls execute separately as focused tests; old0/36 evidence unchanged.\"}");out}}
++
++
++impl Candidate {pub(crate) fn json(&self)->String {let c=self;format!("{{\"depth\":{},\"index\":{},\"id\":{},\"movement\":\"{}\",\"ahead_distance\":{},\"enqueued_at_turn\":{},\"consumed_at_turn\":{},\"speculative_nodes\":{},\"speculative_relations\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"committed_nodes\":{},\"committed_relations\":{},\"fallback_nodes\":{},\"fallback_relations\":{},\"discarded_speculative_nodes\":{},\"oracle_match\":{},\"rollback_unchanged\":{},\"unsafe_validation\":{},\"completed_passes\":{},\"snapshot_bytes\":{},\"forest\":{},\"oracle\":{},\"recovery\":{},\"timings\":{}}}",c.depth,c.index,c.id,c.movement,c.ahead_distance,c.enqueued_at_turn,c.consumed_at_turn,c.speculative_nodes,c.speculative_relations,c.canonical_nodes,c.canonical_relations,c.committed_nodes,c.committed_relations,c.fallback_nodes,c.fallback_relations,c.discarded_speculative_nodes,c.oracle_match,c.rollback_unchanged,c.unsafe_validation,c.completed_passes,c.snapshot_bytes,c.forest.json(),c.oracle.json(),c.recovery.json(),c.timings.json())}}
++pub(crate) fn enter_ordinary<const A:bool,const D:bool,H:Host>(search:&mut Search<D,H>,node:&mut Node,history:&SearchHistory,request:Request,previous:Predecessor<'_>)->Decision {
++    let Some(context)=search.hierarchical.clone() else{return Decision::Run(None)};let started=Instant::now();let site=context.0.borrow().site;
++    let key=Key{node:*node,history:history.clone(),site,geometry:search.geometry_permission(),call:Call::Ordinary(Ordinary::new::<A>(request,previous))};enter(context,search,node,key,started)
++}
++pub(crate) fn enter_q<const D:bool,H:Host>(search:&mut Search<D,H>,node:&mut Node,history:&SearchHistory,entry:Entry,checked:Option<bool>,replies_available:bool,observed:bool)->Decision {
++    let Some(context)=search.hierarchical.clone() else{return Decision::Run(None)};let started=Instant::now();assert!(!observed,"hierarchical pilot excludes observer side effects");let (site,handoff)={let mut s=context.0.borrow_mut();(s.site,s.handoff.take())};
++    let key=Key{node:*node,history:history.clone(),site,geometry:search.geometry_permission(),call:Call::Q{ply:entry.ply,target:entry.target,iteration:entry.iteration_depth,lower:entry.lower,upper:entry.upper,analysis:entry.analysis,capture_exception:entry.capture_exception,checked,replies_available,replies:(replies_available&&checked.unwrap_or_else(||crate::movegen::in_check(&node.position,node.position.side))).then(||search.candidates[entry.ply].as_slice().to_vec()),handoff}};enter(context,search,node,key,started)
++}
++
++fn censor(metrics:&mut Metrics,reason:&'static str) {metrics.validation_censored+=1;if let Some(row)=metrics.censor_reasons.iter_mut().find(|row|row.0==reason){row.1+=1;}else{metrics.censor_reasons.push((reason,1));}}
++fn mismatch(a:&Key,b:&Key)->&'static str {
++    if a.node.position!=b.node.position {return "position";}if a.node.retained!=b.node.retained{return "retained";}if a.history!=b.history{return "history";}if a.site!=b.site{return "call-site";}if a.geometry!=b.geometry{return "geometry";}
++    match (&a.call,&b.call) {
++        (Call::Ordinary(a),Call::Ordinary(b))=>{if (a.lower,a.upper)!=(b.lower,b.upper){"window"}else if a.previous_position!=b.previous_position||a.previous_map!=b.previous_map||a.previous_checked!=b.previous_checked||a.movement!=b.movement{"predecessor"}else if a.allow_iio!=b.allow_iio{"call-variant"}else{"ordinary-request"}},
++        (Call::Q{lower:a,upper:b,replies:c,handoff:d,..},Call::Q{lower:e,upper:f,replies:g,handoff:h,..})=>if(a,b)!=(e,f){"window"}else if c!=g{"reply-scratch"}else if d!=h{"handoff-origin"}else{"q-request"},
++        _=>"call-variant",
++    }
++}
++fn entry_mismatch(metrics:&mut Metrics,reason:&'static str){metrics.entry_mismatches+=1;if let Some(row)=metrics.entry_mismatch_reasons.iter_mut().find(|row|row.0==reason){row.1+=1;}else{metrics.entry_mismatch_reasons.push((reason,1));}}
++fn rejection(metrics:&mut Metrics,reason:&'static str,n:u64,consumer:Option<(usize,usize)>) {let b=bin(n);metrics.semantic_rejection_size[b]+=1;let c=consumer.map_or(0,|(k,len)|if k==len{1}else{2});metrics.semantic_consumer_rejections[c][b]+=1;if let Some(row)=metrics.rejection_size_by_reason.iter_mut().find(|row|row.0==reason){row.1[b]+=1;}else{let mut bins=[0;9];bins[b]=1;metrics.rejection_size_by_reason.push((reason,bins));}metrics.semantic_rejections+=1;if let Some(row)=metrics.rejection_reasons.iter_mut().find(|row|row.0==reason){row.1+=1;}else{metrics.rejection_reasons.push((reason,1));}}
++fn mark_censored(state:&mut State,reason:&'static str) {state.forest.censored=true;state.forest.cap_reason.get_or_insert(reason);}
++fn enter<const D:bool,H:Host>(context:Context,search:&mut Search<D,H>,node:&mut Node,key:Key,started:Instant)->Decision {
++    assert!(D&&!H::ACTIVE&&search.timing.is_none()&&search.limits.nodes.is_none()&&search.control.is_none());
++    assert_eq!(search.evaluator.configured_threads(),1);
++    let mut borrowed=context.0.borrow_mut();let s=&mut *borrowed;
++    let mut mode=std::mem::replace(&mut s.mode,Mode::Record{sink:None,audit:false});
++    let ply=key.ply();let stats=search.stats;let evaluations=search.evaluator.stats;
++    let mut id=None;let mut expected=None;let mut decision=None;
++    match &mut mode {
++        Mode::Record{sink,audit}=>{
++            assert!(*s.forest.epoch==Epoch::new(search),"recording epoch changed");
++            let cursor=sink.as_ref().map_or(Cursor{event_index:0,attempted:0},Sink::cursor);
++            let cap=if *audit {s.caps.oracle_trace_cap}else{s.caps.max_segments};
++            let extra=key.extra_bytes();let len=s.forest.segments.len();
++            let wanted_capacity=if len==s.forest.segments.capacity(){s.forest.segments.capacity().max(4).saturating_mul(2).min(cap)}else{s.forest.segments.capacity()};
++            let estimated=wanted_capacity*std::mem::size_of::<Segment>()+(len+1)*std::mem::size_of::<([u32;4],usize)>()+s.extra_bytes+extra+forest_fixed_bytes();
++            let reason=if cursor.attempted!=cursor.event_index {Some("journal-cap")}else if len==cap {Some("segment-cap")}else if search.stats.nodes-s.base_nodes>=s.caps.max_recorded_nodes {Some("recorded-node-cap")}else if estimated>s.caps.max_forest_bytes/2 {Some("metadata-byte-cap")}else{None};
++            if let Some(reason)=reason {mark_censored(s,reason);}else{
++                if len==s.forest.segments.capacity(){Rc::get_mut(&mut s.forest.segments).unwrap().reserve_exact(wanted_capacity-len);}
++                id=Some(len);s.extra_bytes+=extra;
++                let parent=s.stack.iter().rev().find_map(|id|*id);
++                Rc::get_mut(&mut s.forest.segments).unwrap().push(Segment{consumer:None,direct_parent:s.stack.last().copied().flatten(),child_calls:0,child_nodes:0,child_examined:0,coverage_complete:true,key,parent,end:len+1,start_cursor:cursor,end_cursor:cursor,range:None,output:None,gross_ns:0,descendant_hooks_ns:0});
++            }
++            if id.is_none() {if let Some(parent)=s.stack.last().copied().flatten(){Rc::get_mut(&mut s.forest.segments).unwrap()[parent].coverage_complete=false;}}
++            s.stack.push(id);
++        }
++        Mode::Recover{oracle,cursor,status,stage,policy}=>{
++            s.metrics.lookups+=1;
++            let audit_entry_start=Instant::now();
++            let oracle_valid=!oracle.censored&&*oracle.epoch==Epoch::new(search)&&oracle.segments.get(*cursor).is_some_and(|segment|segment.key==key&&segment.output.is_some());
++            let oracle_id=*cursor;
++            if oracle_valid {*cursor+=1;}
++            let audit_entry_elapsed=audit_entry_start.elapsed().as_nanos();s.metrics.audit_entry_ns+=audit_entry_elapsed;
++            if s.metrics.fatal_reason.is_some(){decision=Some(Decision::Fatal);}
++            else if oracle.censored {s.metrics.censored+=1;s.metrics.lookup_ns+=started.elapsed().as_nanos().saturating_sub(audit_entry_elapsed);}
++            else if !oracle_valid {
++                s.metrics.fatal_reason=Some("oracle-entry-mismatch");s.metrics.lookup_ns+=started.elapsed().as_nanos().saturating_sub(audit_entry_elapsed);decision=Some(Decision::Fatal);
++            } else {
++                expected=Some(oracle_id);
++                if *s.forest.epoch==Epoch::new(search) {
++                    let lookup=key.lookup();let begin=s.forest.index.partition_point(|row|row.0<lookup);let end=s.forest.index.partition_point(|row|row.0<=lookup);
++                    let mut matched=None;
++                    for row in &s.forest.index[begin..end] {s.metrics.entry_candidates+=1;let candidate=row.1;if status[candidate]!=0 {s.metrics.already_used+=1;continue;}
++                        if s.forest.segments[candidate].key!=key {let reason=mismatch(&s.forest.segments[candidate].key,&key);entry_mismatch(&mut s.metrics,reason);let size=bin(s.forest.segments[candidate].output.as_ref().unwrap().stats.nodes);if let Some(row)=s.metrics.entry_mismatch_size_by_reason.iter_mut().find(|r|r.0==reason){row.1[size]+=1;}else{let mut bins=[0;9];bins[size]=1;s.metrics.entry_mismatch_size_by_reason.push((reason,bins));}continue;}matched=Some(candidate);break;
++                    }
++                    s.metrics.lookup_ns+=started.elapsed().as_nanos().saturating_sub(audit_entry_elapsed);
++                    if matched.is_none(){s.metrics.unmatched_calls+=1;}
++                    if let Some(candidate)=matched {
++                        let segment_end=s.forest.segments[candidate].end;
++                        if status[candidate..segment_end].contains(&2) {
++                            s.metrics.maximal_ranges_disjoint=false;s.metrics.fatal_reason=Some("committed-range-overlap");
++                            s.mode=mode;return Decision::Fatal;
++                        }
++                        status[candidate]=1;s.metrics.exact_matches+=1;
++                        let segment=&s.forest.segments[candidate];let output=segment.output.as_ref().unwrap();
++                        let staging_start=Instant::now();stage.begin(search.remembered.as_ref().unwrap());
++                        let mut learning=search.learning.research_clone();let mut pawns=search.evaluator.research_pawns().research_clone();
++                        s.metrics.staging_ns+=staging_start.elapsed().as_nanos();
++                        let validation_start=Instant::now();
++                        let result=s.forest.log.as_ref().expect("speculative certificate").replay_range_policy(&search.evaluator.root,segment.range.clone().unwrap(),search.remembered.as_ref().unwrap(),stage,&mut learning,&mut pawns,*policy);
++                        s.metrics.validation_ns+=validation_start.elapsed().as_nanos().saturating_sub(result.order_observation_capture_ns);s.metrics.audit_counterfactual_ns+=result.order_observation_capture_ns;
++                        s.metrics.order_main_prefix+=u64::try_from(result.counts.order_main_prefix).expect("order count exceeds u64");s.metrics.order_main_complete+=u64::try_from(result.counts.order_main_complete).expect("order count exceeds u64");s.metrics.order_main_prefix_fallback+=u64::try_from(result.counts.order_main_prefix_fallback).expect("order count exceeds u64");
++                        if let Some(observation)=result.first_order_rejection.as_ref(){let audit=Instant::now();let c=observation.classify_order_only();let b=bin(output.stats.nodes);s.metrics.order_rejections[b]+=1;
++                            let consumer=if !c.prefix_eligible{0}else if c.k==Some(c.inventory_len){1}else{2};s.metrics.order_consumer_rejections[consumer][b]+=1;
++                            let depth=match &segment.key.call{Call::Ordinary(o) if o.depth==1=>0,Call::Ordinary(o) if o.depth==2=>1,_=>2};s.metrics.order_depth_rejections[depth][b]+=1;
++                            if !c.inventory_preserved{s.metrics.order_inventory_changed[b]+=1;}else if !c.prefix_eligible{s.metrics.order_ineligible[b]+=1;}else if c.this_order_suffix_only{s.metrics.order_suffix_only[b]+=1;}else{s.metrics.order_prefix_changed[b]+=1;}
++                            s.metrics.audit_counterfactual_ns+=audit.elapsed().as_nanos();}
++
++                        s.metrics.peak_staging_bytes=s.metrics.peak_staging_bytes.max(stage.estimated_bytes()+learning.research_bytes()+pawns.research_bytes());
++                        if let Some(rejected)=result.rejection {
++                            use crate::branch_journal::RejectionKind;
++                            match rejected.kind {
++                                RejectionKind::TTStageLimit|RejectionKind::Overflow=>censor(&mut s.metrics,rejected.kind.name()),
++                                RejectionKind::InvalidRange|RejectionKind::TTStageInvalid|RejectionKind::InvalidInventory=>{s.metrics.fatal_reason=Some(rejected.kind.name());decision=Some(Decision::Fatal);},
++                                _=>rejection(&mut s.metrics,rejected.kind.name(),output.stats.nodes,segment.consumer),
++                            }
++                        }
++                        else {
++                            // Semantic acceptance is decided before consulting this independent output audit.
++                            let audit_start=Instant::now();let reference=&oracle.segments[expected.unwrap()];
++                            let agrees=reference.output.as_ref()==Some(output);s.metrics.audit_local_ns+=audit_start.elapsed().as_nanos();
++                            if !agrees {stage.discard();s.metrics.fatal_reason=Some("accepted-local-oracle-mismatch");decision=Some(Decision::Fatal);}
++                            else {
++                                let commit_start=Instant::now();let touched=stage.touched_groups();let touched_bytes=stage.touched_bytes();
++                                if stage.commit(search.remembered.as_mut().unwrap()).is_err(){s.metrics.fatal_reason=Some("sparse-commit-failed");decision=Some(Decision::Fatal);}
++                                else {
++                                    search.learning=learning;*search.evaluator.research_pawns()=pawns;output.install(search,node,ply);
++                                    s.metrics.commits+=1;s.metrics.committed_nodes+=output.stats.nodes;s.metrics.committed_relations+=output.evaluations.relation_queries;
++                                    s.metrics.touched_groups+=touched as u64;s.metrics.touched_bytes+=touched_bytes as u64;
++                                    s.metrics.matching_depth[ply.min(63)]+=1;s.metrics.surviving_size[bin(output.stats.nodes)]+=1;
++                                    s.metrics.accepted_oracle_gross_ns+=reference.gross_ns;s.metrics.accepted_oracle_descendant_hooks_ns+=reference.descendant_hooks_ns;
++                                    let range=[candidate as u64,segment.end as u64,output.stats.nodes,output.evaluations.relation_queries,ply as u64,expected.unwrap() as u64];
++                                    s.metrics.committed_ranges.push(range);s.metrics.committed_range_oracle_costs.push([reference.gross_ns,reference.descendant_hooks_ns]);decision=Some(Decision::Accepted(output.score));
++                                    for item in &mut status[candidate..segment.end]{*item=2;}
++                                    let mut parent=segment.parent;while let Some(ancestor)=parent {status[ancestor]=3;parent=s.forest.segments[ancestor].parent;}
++
++                                }
++                                s.metrics.commit_ns+=commit_start.elapsed().as_nanos();
++                                if matches!(decision,Some(Decision::Accepted(_))) {let cursor_start=Instant::now();*cursor=reference.end;s.metrics.audit_entry_ns+=cursor_start.elapsed().as_nanos();}
++                            }
++                        }
++                    }
++                } else {entry_mismatch(&mut s.metrics,"epoch");s.metrics.unmatched_calls+=1;s.metrics.lookup_ns+=started.elapsed().as_nanos().saturating_sub(audit_entry_elapsed);}
++            }
++        }
++    }
++    s.mode=mode;
++    let hook=started.elapsed().as_nanos();s.forest.hook_ns+=hook;let hook_base=s.forest.hook_ns;
++    drop(borrowed);
++    decision.unwrap_or_else(||Decision::Run(Some(Token{context,id,oracle:expected,stats,evaluations,ply,started:Instant::now(),hook_base})))
++}
++
++pub(crate) fn exit<const D:bool,H:Host>(search:&mut Search<D,H>,node:&Node,token:Option<Token>,returned:Result<i32,Stopped>)->Result<i32,Stopped> {
++    let Some(token)=token else{return returned};let gross=token.started.elapsed().as_nanos();let hook_started=Instant::now();
++    let mut borrowed=token.context.0.borrow_mut();let s=&mut *borrowed;let descendant_hooks=s.forest.hook_ns-token.hook_base;
++    let mut mode=std::mem::replace(&mut s.mode,Mode::Record{sink:None,audit:false});let mut result=returned;
++    match &mut mode {
++        Mode::Record{sink,..}=>{
++            assert_eq!(s.stack.pop(),Some(token.id));
++            let delta=stat_delta(search.stats,token.stats);
++            let mut complete=returned.is_ok()&&token.id.is_some();
++            if let Some(id)=token.id {let end=s.forest.segments.len();let cursor=sink.as_ref().map_or(Cursor{event_index:0,attempted:0},Sink::cursor);
++                let output=returned.ok().map(|score|Output::capture(search,node,token.ply,score,token.stats,token.evaluations));
++                if output.as_ref().is_some_and(|o|o.stats.nodes>s.caps.max_recorded_nodes){mark_censored(s,"recorded-node-cap");}
++                let segment=&mut Rc::get_mut(&mut s.forest.segments).unwrap()[id];segment.end=end;segment.end_cursor=cursor;segment.gross_ns=gross;segment.descendant_hooks_ns=descendant_hooks;
++                if output.as_ref().is_some_and(|o|o.stats.nodes<=s.caps.max_recorded_nodes){assert_eq!(segment.key.node.position,node.position);segment.output=output;}
++                complete&=segment.output.is_some()&&segment.coverage_complete;
++            }
++            if let Some(parent)=s.stack.last().copied().flatten(){let parent=&mut Rc::get_mut(&mut s.forest.segments).unwrap()[parent];parent.child_calls+=1;
++                parent.child_nodes=parent.child_nodes.checked_add(delta.nodes).expect("child node accounting overflow");
++                parent.child_examined=parent.child_examined.checked_add(delta.examined).expect("child examined accounting overflow");parent.coverage_complete&=complete;}
++
++        }
++        Mode::Recover{oracle,cursor,..}=>{
++            if s.metrics.fatal_reason.is_none() {
++                if let Some(id)=token.oracle {let audit_start=Instant::now();let reference=&oracle.segments[id];let output=returned.ok().map(|score|Output::capture(search,node,token.ply,score,token.stats,token.evaluations));
++                    if output.as_ref()!=reference.output.as_ref()||*cursor!=reference.end {s.metrics.fatal_reason=Some("canonical-call-oracle-mismatch");result=Err(Stopped::HierarchicalAudit);}
++                    s.metrics.audit_local_ns+=audit_start.elapsed().as_nanos();
++                }
++            } else {result=Err(Stopped::HierarchicalAudit);}
++        }
++    }
++    s.mode=mode;s.forest.hook_ns+=hook_started.elapsed().as_nanos();result
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{branch_journal::Event,movegen::{self,MoveList},position::Position,quiescence::Limits,remembered::{Query,Store}};
++    pub(super) struct Fixture {pub(super) base:Search<true>,pub(super) history:SearchHistory,pub(super) node:Node,pub(super) previous:Position,pub(super) map:Influence,pub(super) movement:Option<Move>,pub(super) ply:usize}
++    impl Fixture {
++        pub(super) fn new(child:bool)->Self {let previous=Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();let mut base=Search::new(&previous);base.config.tts_bytes=65536;base.ensure_table().unwrap();base.bind_geometry_permission(&previous);let (root,map)=base.prepare_root_with_influence(previous);let mut history=SearchHistory::new(&previous);
++            let (node,movement,ply)=if child {let mut legal=MoveList::new();movegen::generate_legal(&previous,&mut legal);let movement=*legal.as_slice().iter().find(|m|m.to_string()=="e2e4").unwrap();let node=root.child(&base.evaluator.root,movement);history.push(&node.position,Some(movement));(node,Some(movement),1)}else{(root,None,0)};base.begin_owned_sequence(Limits{nodes:None});Self{base,history,node,previous,map,movement,ply}}
++        pub(super) fn request(&self,depth:i32,lower:i32,upper:i32)->Request {Request{ply:self.ply,depth,lower,upper,previous_extension:0,iteration:2,checked:Some(false)}}
++        pub(super) fn previous(&self)->Predecessor<'_>{Predecessor{position:&self.previous,influence:&self.map,checked:false,movement:self.movement}}
++        pub(super) fn call(&self,search:&mut Search<true>,node:&mut Node,history:&mut SearchHistory,ordinary:bool,depth:i32,lower:i32,upper:i32)->Result<i32,Stopped> {if ordinary {search.visit_ordinary(node,history,self.request(depth,lower,upper),self.previous())}else{search.visit_q(node,history,Entry{ply:self.ply,target:self.ply as i32+2,iteration_depth:2,lower,upper,analysis:search.config.analysis,capture_exception:false},Some(false),false)}}
++        pub(super) fn record(&self,base:&Search<true>,ordinary:bool,depth:i32,lower:i32,upper:i32,audit:bool,caps:Caps)->(Forest,Search<true>,Node,i32) {let mut state=base.research_clone();let mut node=self.node;let mut history=self.history.clone();let recorder=Context::recording(&state,caps,audit);state.research_attach_sink(recorder.sink());state.hierarchical=Some(recorder.clone());let score=self.call(&mut state,&mut node,&mut history,ordinary,depth,lower,upper).unwrap();state.hierarchical=None;state.research_attach_sink(None);assert_eq!(history,self.history);let forest=recorder.finish_record(&state);(forest,state,node,score)}
++        pub(super) fn recover(&self,mut state:Search<true>,forest:Forest,oracle:Forest,ordinary:bool,depth:i32,lower:i32,upper:i32)->(Search<true>,Node,Result<i32,Stopped>,Metrics) {let context=Context::recovery(forest,oracle,Caps::default());state.hierarchical=Some(context.clone());let mut history=self.history.clone();let mut node=self.node;let score=self.call(&mut state,&mut node,&mut history,ordinary,depth,lower,upper);state.hierarchical=None;assert_eq!(history,self.history);let metrics=context.metrics();(state,node,score,metrics)}
++    }
++
++    #[test]
++    fn accepts_irrelevant_tt_and_pawn_miss_state_with_native_committed_bytes() {
++        let fixture=Fixture::new(true);let (forest,speculative,_,_)=fixture.record(&fixture.base,false,0,-10000,10000,false,Caps::default());assert!(!forest.censored);
++        let mut canonical=fixture.base.research_clone();let group=canonical.remembered.as_ref().unwrap().group_count()-1;
++        canonical.remembered.as_mut().unwrap().store(Store{query:Query{group,identity:0x12345678,ply:1,target:4,lower:-10,upper:10},score:3,move_hint:None,quiet_mate_checked:false,mark_depth:true});
++        let identity=forest.log.as_ref().unwrap().events.iter().find_map(|e|if let Event::PawnSelect{identity,expected}=e {(!expected.reused).then_some(*identity)}else{None}).expect("fixture requests a native pawn miss");
++        let prior=crate::pawn_structure::fresh(&fixture.previous,&fixture.map,[1024;2]);canonical.evaluator.research_pawns().research_overwrite_slot(identity.wrapping_add(128),prior);
++        let (oracle,reference,expected_node,score)=fixture.record(&canonical,false,0,-10000,10000,true,Caps::default());
++        let (actual,node,result,metrics)=fixture.recover(canonical,forest,oracle,false,0,-10000,10000);
++        assert_eq!(result,Ok(score));assert_eq!(node,expected_node);assert!(actual.research_eq(&reference));assert!(!actual.research_eq(&speculative));assert_eq!(metrics.commits,1);assert!(metrics.fatal_reason.is_none());assert_eq!(metrics.committed_ranges.len(),1);
++    }
++
++    #[test]
++    fn late_sparse_rejection_leaves_independent_entry_snapshot_unchanged_and_censors_are_honest() {
++        let fixture=Fixture::new(true);let (mut forest,_,_,_)=fixture.record(&fixture.base,true,2,-10000,10000,false,Caps::default());
++        let log=Rc::get_mut(forest.log.as_mut().unwrap()).unwrap();let at=log.events.iter().enumerate().rev().find_map(|(i,event)|matches!(event,Event::TTProbe{..}).then_some(i)).unwrap();
++        assert!(log.events[..at].iter().any(|event|matches!(event,Event::TTStore{..})),"late mismatch follows real staged stores");
++        if let Event::TTProbe{expected,..}=&mut log.events[at]{expected.quiet_mate_checked=!expected.quiet_mate_checked;}
++        let (oracle,_,_,_)=fixture.record(&fixture.base,true,2,-10000,10000,true,Caps::default());let mut canonical=fixture.base.research_clone();let untouched=canonical.research_clone();let context=Context::recovery(forest,oracle,Caps::default());canonical.hierarchical=Some(context.clone());let mut node=fixture.node;
++        let decision=enter_ordinary::<true,true,_>(&mut canonical,&mut node,&fixture.history,fixture.request(2,-10000,10000),fixture.previous());assert!(matches!(decision,Decision::Run(_)));drop(decision);canonical.hierarchical=None;
++        assert!(canonical.research_eq(&untouched));assert_eq!(node,fixture.node);assert_eq!(context.metrics().semantic_rejections,1);assert_eq!(context.metrics().commits,0);assert!(context.fatal().is_none());
++        let mut caps=Caps::default();caps.log_events=1;let (censored,native,_,_)=fixture.record(&fixture.base,true,2,-10000,10000,false,caps);assert!(censored.censored);assert!(censored.log.as_ref().unwrap().overflowed);assert!(native.stats.nodes>0);
++        let (forest,_,_,_)=fixture.record(&fixture.base,false,0,-10000,10000,false,Caps::default());let (mut oracle,reference,_,score)=fixture.record(&fixture.base,false,0,-10000,10000,true,Caps::default());oracle.censored=true;
++        let (actual,_,returned,metrics)=fixture.recover(fixture.base.research_clone(),forest,oracle,false,0,-10000,10000);assert_eq!(returned,Ok(score));assert_eq!(metrics.commits,0);assert!(metrics.censored>0);assert!(actual.research_eq(&reference));
++    }
++
++    #[test]
++    fn changed_parent_order_runs_native_parent_and_recovers_surviving_actual_children() {
++        let mut fixture=Fixture::new(false);let score=fixture.base.evaluator.full(&mut fixture.node,&fixture.map,false).score;let lower=score+500;let upper=score+1500;
++        let (forest,_,_,_)=fixture.record(&fixture.base,true,2,lower,upper,false,Caps::default());
++        let changed=forest.log.as_ref().unwrap().events.iter().find_map(|e|if let Event::OrderMain{expected,..}=e {expected.last().copied()}else{None}).unwrap();
++        let mut canonical=fixture.base.research_clone();let mover=fixture.node.position.board[changed.from().0 as usize];canonical.learning.history[mover.color().index()][mover.kind().index()][changed.to().0 as usize]=1000;canonical.learning.total=1000;
++        let (oracle,reference,expected_node,expected_score)=fixture.record(&canonical,true,2,lower,upper,true,Caps::default());
++        // At depth1, changing the first move can raise best above the native
++        // frontier estimate and remove every common child demand. Use depth2
++        // and a high finite window to keep this control's actual child entries
++        // equal while changing only their canonical consumption order.
++        let recorded_children:Vec<_>=forest.segments.iter().filter(|s|s.parent==Some(0)).collect();
++        let canonical_children:Vec<_>=oracle.segments.iter().filter(|s|s.parent==Some(0)).collect();
++        assert!(recorded_children.len()>1);
++        assert_eq!(recorded_children.len(),canonical_children.len());
++        assert_ne!(recorded_children.iter().map(|s|s.key.history.previous_move()).collect::<Vec<_>>(),
++            canonical_children.iter().map(|s|s.key.history.previous_move()).collect::<Vec<_>>());
++        assert!(canonical_children.iter().all(|s|recorded_children.iter().any(|r|r.key==s.key)),
++            "fixture must preserve complete actual child entries despite changed parent order");
++        let (actual,node,result,metrics)=fixture.recover(canonical,forest,oracle,true,2,lower,upper);
++        assert_eq!(result,Ok(expected_score));assert_eq!(node,expected_node);assert!(actual.research_eq(&reference));assert!(metrics.rejection_reasons.iter().any(|(r,n)|*r=="ordinary-order"&&*n>0));assert!(metrics.commits>0,"a rejected ordering parent must retain matching actual descendants");assert!(metrics.matching_depth[1]>0);assert!(metrics.maximal_ranges_disjoint);assert!(metrics.fatal_reason.is_none());
++        let mut ranges=metrics.committed_ranges.clone();ranges.sort_unstable();assert!(ranges.windows(2).all(|p|p[0][1]<=p[1][0]));
++    }
++
++    #[test]
++    fn semantically_accepted_wrong_local_output_is_fatal_before_commit() {
++        let fixture=Fixture::new(true);let (mut forest,_,_,_)=fixture.record(&fixture.base,false,0,-10000,10000,false,Caps::default());Rc::get_mut(&mut forest.segments).unwrap()[0].output.as_mut().unwrap().score+=1;
++        let (oracle,_,_,_)=fixture.record(&fixture.base,false,0,-10000,10000,true,Caps::default());let canonical=fixture.base.research_clone();let untouched=canonical.research_clone();let (actual,node,result,metrics)=fixture.recover(canonical,forest,oracle,false,0,-10000,10000);
++        assert_eq!(result,Err(Stopped::HierarchicalAudit));assert_eq!(metrics.fatal_reason,Some("accepted-local-oracle-mismatch"));assert_eq!(metrics.semantic_rejections,0);assert_eq!(metrics.commits,0);assert_eq!(metrics.exact_matches,1);assert!(actual.research_eq(&untouched));assert_eq!(node,fixture.node);
++    }
++}
++
++#[cfg(all(test,feature="consumed-prefix"))]
++mod prefix_tests {
++    use super::*;
++    use super::tests::Fixture;
++    use crate::{branch_journal::{Event,OrderPolicy},movegen::{self,MoveList},remembered::{Query,Store}};
++
++    fn cutoff_fixture(fixed_hint:bool)->Fixture {
++        let mut f=Fixture::new(false);let mut legal=MoveList::new();movegen::generate_legal(&f.node.position,&mut legal);
++        // Native TT results force a genuine first-main cutoff; no observer,
++        // count policy or changed matcher manufactures an unconsumed suffix.
++        let hinted=legal.as_slice()[0];
++        for &movement in legal.as_slice(){let child=f.node.child(&f.base.evaluator.root,movement);let table=f.base.remembered.as_mut().unwrap();let group=table.group_for(&child.position);
++            table.store(Store{query:Query{group,identity:child.position.secondary,ply:1,target:33,lower:-10000,upper:10000},score:-100,move_hint:None,quiet_mate_checked:true,mark_depth:true});}
++        if fixed_hint{let table=f.base.remembered.as_mut().unwrap();let group=table.group_for(&f.node.position);table.store(Store{query:Query{group,identity:f.node.position.secondary,ply:0,target:0,lower:-10000,upper:10000},score:0,move_hint:Some(hinted),quiet_mate_checked:true,mark_depth:true});}
++        f
++    }
++    fn order(forest:&Forest)->(Vec<Move>,Option<usize>){forest.log.as_ref().unwrap().events.iter().find_map(|e|if let Event::OrderMain{ply:0,expected,proven_prefix,..}=e{Some((expected.clone(),*proven_prefix))}else{None}).unwrap()}
++    fn promote(f:&Fixture,movement:Move)->Search<true>{let mut s=f.base.research_clone();let p=f.node.position.board[movement.from().0 as usize];s.learning.history[p.color().index()][p.kind().index()][movement.to().0 as usize]=1000;s.learning.total=1000;s}
++    fn recover(f:&Fixture,mut state:Search<true>,forest:Forest,oracle:Forest,ordinary:bool,depth:i32,lower:i32,upper:i32,policy:OrderPolicy)->(Search<true>,Node,Result<i32,Stopped>,Metrics){let c=Context::recovery_policy(forest,oracle,Caps::default(),policy);state.hierarchical=Some(c.clone());let mut history=f.history.clone();let mut node=f.node;let result=f.call(&mut state,&mut node,&mut history,ordinary,depth,lower,upper);state.hierarchical=None;assert_eq!(history,f.history);(state,node,result,c.metrics())}
++
++    #[test]
++    fn unconsumed_suffix_accepts_same_canonical_input_where_complete_order_rejects(){
++        let f=cutoff_fixture(true);let(mut forest,_,_,_)=f.record(&f.base,true,2,-100,10,false,Caps::default());let consumers=forest.annotate_prefixes();let(expected,k)=order(&forest);assert_eq!(k,Some(1));assert!(consumers.proper_prefix>0);assert!(expected.len()>2);
++        let canonical=promote(&f,*expected.last().unwrap());let(oracle,reference,expected_node,score)=f.record(&canonical,true,2,-100,10,true,Caps::default());
++        let (complete,_,returned,cm)=recover(&f,canonical.research_clone(),forest.clone(),oracle.clone(),true,2,-100,10,OrderPolicy::Complete);assert_eq!(returned,Ok(score));assert!(complete.research_eq(&reference));assert!(cm.rejection_reasons.iter().any(|(r,n)|*r=="ordinary-order"&&*n>0));assert!(cm.order_suffix_only.iter().sum::<u64>()>0);
++        let(actual,node,returned,pm)=recover(&f,canonical,forest,oracle,true,2,-100,10,OrderPolicy::ConsumedPrefix);assert_eq!(returned,Ok(score));assert_eq!(node,expected_node);assert!(actual.research_eq(&reference));assert_eq!(pm.committed_ranges[0][0],0);assert!(pm.committed_nodes>cm.committed_nodes);assert_eq!(pm.semantic_rejections,0);assert!(pm.order_main_prefix>0);assert!(pm.fatal_reason.is_none());
++    }
++    #[test]
++    fn changed_consumed_move_rejects_then_runs_native(){
++        let f=cutoff_fixture(false);let(mut forest,_,_,_)=f.record(&f.base,true,2,-100,10,false,Caps::default());forest.annotate_prefixes();let(expected,k)=order(&forest);assert_eq!(k,Some(1));let canonical=promote(&f,*expected.last().unwrap());let(oracle,reference,node,score)=f.record(&canonical,true,2,-100,10,true,Caps::default());
++        let(actual,actual_node,result,m)=recover(&f,canonical,forest,oracle,true,2,-100,10,OrderPolicy::ConsumedPrefix);assert_eq!(result,Ok(score));assert_eq!(actual_node,node);assert!(actual.research_eq(&reference));assert!(m.order_prefix_changed.iter().sum::<u64>()>0);assert!(!m.committed_ranges.iter().any(|r|r[0]==0));assert!(m.fatal_reason.is_none());
++    }
++    #[test]
++    fn frontier_skipped_moves_are_inside_consumed_prefix(){
++        let mut f=Fixture::new(false);let score=f.base.evaluator.full(&mut f.node,&f.map,false).score;let lower=score+29;let upper=lower+100;
++        let(mut forest,native,_,_)=f.record(&f.base,true,1,lower,upper,false,Caps::default());forest.annotate_prefixes();let(expected,k)=order(&forest);assert_eq!(k,Some(expected.len()));assert!(native.stats.frontier_skips>0);assert!(forest.segments[0].child_calls<k.unwrap());
++        let movement=*expected.iter().find(|m|m.to_string()=="g1f3").unwrap();let canonical=promote(&f,movement);let(oracle,reference,node,score)=f.record(&canonical,true,1,lower,upper,true,Caps::default());let(actual,actual_node,result,m)=recover(&f,canonical,forest,oracle,true,1,lower,upper,OrderPolicy::ConsumedPrefix);
++        assert_eq!(result,Ok(score));assert_eq!(actual_node,node);assert!(actual.research_eq(&reference));assert!(m.order_prefix_changed.iter().sum::<u64>()>0);assert_eq!(m.order_suffix_only.iter().sum::<u64>(),0);assert!(!m.committed_ranges.iter().any(|r|r[0]==0));
++    }
++    #[test]
++    fn higher_depth_and_q_keep_complete_validation(){
++        let f=cutoff_fixture(true);let(mut forest,_,_,_)=f.record(&f.base,true,3,-100,10,false,Caps::default());forest.annotate_prefixes();let(expected,k)=order(&forest);assert_eq!(k,None);let canonical=promote(&f,*expected.last().unwrap());let(oracle,reference,_,score)=f.record(&canonical,true,3,-100,10,true,Caps::default());let(actual,_,result,m)=recover(&f,canonical,forest,oracle,true,3,-100,10,OrderPolicy::ConsumedPrefix);assert_eq!(result,Ok(score));assert!(actual.research_eq(&reference));assert!(m.order_ineligible.iter().sum::<u64>()>0);assert!(m.order_main_prefix_fallback>0);
++        let f=Fixture::new(true);let(mut forest,_,_,_)=f.record(&f.base,false,0,-10000,10000,false,Caps::default());let consumers=forest.annotate_prefixes();assert_eq!(consumers.eligible,0);let(oracle,reference,_,score)=f.record(&f.base,false,0,-10000,10000,true,Caps::default());let(actual,_,result,m)=recover(&f,f.base.research_clone(),forest,oracle,false,0,-10000,10000,OrderPolicy::ConsumedPrefix);assert_eq!(result,Ok(score));assert!(actual.research_eq(&reference));assert_eq!(m.order_main_prefix,0);
++    }
++    #[test]
++    fn missing_capped_or_ambiguous_coverage_never_annotates(){
++        let f=cutoff_fixture(true);let mut caps=Caps::default();caps.max_segments=1;let(mut forest,_,_,_)=f.record(&f.base,true,2,-100,10,false,caps);let c=forest.annotate_prefixes();assert!(forest.censored);assert_eq!(c.eligible,0);assert_eq!(order(&forest).1,None);assert!(!forest.segments[0].coverage_complete);
++        let mut caps=Caps::default();caps.log_events=1;let(mut forest,_,_,_)=f.record(&f.base,true,2,-100,10,false,caps);assert_eq!(forest.annotate_prefixes().eligible,0);
++        let(mut forest,_,_,_)=f.record(&f.base,true,2,-100,10,false,Caps::default());Rc::get_mut(&mut forest.segments).unwrap()[0].child_examined=u64::MAX;assert_eq!(forest.annotate_prefixes().eligible,0);assert_eq!(order(&forest).1,None);
++    }
++    #[test]
++    fn prefix_acceptance_still_makes_wrong_local_oracle_fatal_before_commit(){
++        let f=cutoff_fixture(true);let(mut forest,_,_,_)=f.record(&f.base,true,2,-100,10,false,Caps::default());forest.annotate_prefixes();let(expected,k)=order(&forest);assert_eq!(k,Some(1));let canonical=promote(&f,*expected.last().unwrap());let untouched=canonical.research_clone();let(oracle,_,_,_)=f.record(&canonical,true,2,-100,10,true,Caps::default());Rc::get_mut(&mut forest.segments).unwrap()[0].output.as_mut().unwrap().score+=1;
++        let(actual,node,result,m)=recover(&f,canonical,forest,oracle,true,2,-100,10,OrderPolicy::ConsumedPrefix);assert_eq!(result,Err(Stopped::HierarchicalAudit));assert_eq!(m.fatal_reason,Some("accepted-local-oracle-mismatch"));assert_eq!(m.commits,0);assert_eq!(m.semantic_rejections,0);assert!(actual.research_eq(&untouched));assert_eq!(node,f.node);
++    }
++}
+diff --git a/src/consumed_prefix.rs b/src/consumed_prefix.rs
+new file mode 100644
+index 00000000..04b19282
+--- /dev/null
++++ b/src/consumed_prefix.rs
+@@ -0,0 +1,41 @@
++//! Paired certificate discriminator. Numerical search and matching are unchanged.
++use std::fmt::Write;
++use crate::{hierarchical_recovery::{self as h,Costs,Candidate,ConsumerSummary},position::Position,history::SearchHistory,evaluator::Parameters,engine::Config};
++
++#[derive(Clone,Debug)]
++pub struct Variant {pub policy:&'static str,pub core:Candidate}
++#[derive(Clone,Debug,Default)]
++pub struct Differences {pub gross_new_maximal_nodes:u64,pub gross_new_maximal_relations:u64,pub gross_new_maximal_ranges:u64,pub net_committed_nodes:i128,pub net_committed_relations:i128,pub newly_covered_nodes:u64,pub newly_covered_relations:u64,pub gross_new_oracle_gross_ns:u128,pub gross_new_oracle_hooks_ns:u128,pub net_oracle_gross_ns:i128,pub net_oracle_hooks_ns:i128}
++impl Differences {
++    pub(crate) fn between(complete:&h::Metrics,prefix:&h::Metrics)->Self {
++        let mut d=Self{net_committed_nodes:prefix.committed_nodes as i128-complete.committed_nodes as i128,net_committed_relations:prefix.committed_relations as i128-complete.committed_relations as i128,net_oracle_gross_ns:prefix.accepted_oracle_gross_ns as i128-complete.accepted_oracle_gross_ns as i128,net_oracle_hooks_ns:prefix.accepted_oracle_descendant_hooks_ns as i128-complete.accepted_oracle_descendant_hooks_ns as i128,..Self::default()};
++        for (i,p) in prefix.committed_ranges.iter().enumerate(){let (start,end)=(p[5],p[5]+p[2]);
++            if !complete.committed_ranges.iter().any(|c|c[5]==start&&c[2]==p[2]){d.gross_new_maximal_ranges+=1;d.gross_new_maximal_nodes+=p[2];d.gross_new_maximal_relations+=p[3];d.gross_new_oracle_gross_ns+=prefix.committed_range_oracle_costs[i][0];d.gross_new_oracle_hooks_ns+=prefix.committed_range_oracle_costs[i][1];}
++            if complete.committed_ranges.iter().any(|c|c[5]<=start&&c[5]+c[2]>=end){continue;}
++            let mut n=p[2];let mut r=p[3];for c in &complete.committed_ranges {if start<=c[5]&&c[5]+c[2]<=end{n=n.checked_sub(c[2]).expect("disjoint canonical node coverage");r=r.checked_sub(c[3]).expect("disjoint canonical relation coverage");}else{assert!(c[5]+c[2]<=start||end<=c[5],"oracle subtree ranges must be laminar");}}
++            d.newly_covered_nodes+=n;d.newly_covered_relations+=r;
++        }d
++    }
++    fn json(&self)->String{format!("{{\"gross_new_maximal_nodes\":{},\"gross_new_maximal_relations\":{},\"gross_new_maximal_ranges\":{},\"net_committed_nodes\":{},\"net_committed_relations\":{},\"newly_covered_nodes\":{},\"newly_covered_relations\":{},\"gross_new_oracle_gross_ns\":{},\"gross_new_oracle_hooks_ns\":{},\"net_oracle_gross_ns\":{},\"net_oracle_hooks_ns\":{}}}",self.gross_new_maximal_nodes,self.gross_new_maximal_relations,self.gross_new_maximal_ranges,self.net_committed_nodes,self.net_committed_relations,self.newly_covered_nodes,self.newly_covered_relations,self.gross_new_oracle_gross_ns,self.gross_new_oracle_hooks_ns,self.net_oracle_gross_ns,self.net_oracle_hooks_ns)}
++}
++#[derive(Clone,Debug)]
++pub struct Pair {pub turn:usize,pub execution_order:[&'static str;2],pub same_input_state:bool,pub same_input_epoch:bool,pub same_input_history:bool,pub shared_data_identical:bool,pub shared_forest_id:usize,pub shared_oracle_id:usize,pub comparison_clone_ns:u128,pub comparison_clone_bytes:usize,pub input_compare_ns:u128,pub annotation_ns:u128,pub consumers:ConsumerSummary,pub common_snapshot_bytes:usize,pub common_timings:Costs,pub variants:Vec<Variant>,pub differences:Differences}
++#[derive(Clone,Debug)]
++pub struct Report {pub common:h::Report,pub pairs:Vec<Pair>,pub difference_audit_ns:u128,pub annotation_ns:u128}
++pub fn run(position:Position,history:SearchHistory,parameters:Parameters,config:Config,caps:h::Caps)->Result<Report,String>{crate::branch_transactions::run_consumed_prefix(position,history,parameters,config,caps)}
++impl Report {
++    pub fn unsafe_validation(&self)->bool{self.common.unsafe_validation}
++    pub fn json(&self)->String {
++        // Root/schedule common fields retain the historical renderer, with the
++        // shared timing ledger named explicitly. Its empty candidates are removed.
++        let mut out=self.common.json();let at=out.find(",\"candidates\":").unwrap();out.truncate(at);
++        for key in ["committed_nodes","committed_relations","fallback_nodes","fallback_relations"]{out=out.replacen(&format!(",\"{key}\":0"),"",1);}
++        out=out.replacen("rook2-hierarchical-recovery-v1","rook2-consumed-prefix-v1",1).replacen("\"timings\":","\"common_timings\":",1);
++        write!(out,",\"annotation_ns\":{},\"difference_audit_ns\":{},\"pairs\":[",self.annotation_ns,self.difference_audit_ns).unwrap();
++        for (i,p) in self.pairs.iter().enumerate(){if i>0{out.push(',');}write!(out,"{{\"turn\":{},\"execution_order\":[\"{}\",\"{}\"],\"same_input_state\":{},\"same_input_epoch\":{},\"same_input_history\":{},\"shared_data_identical\":{},\"shared_forest_id\":{},\"shared_oracle_id\":{},\"comparison_clone_ns\":{},\"comparison_clone_bytes\":{},\"input_compare_ns\":{},\"annotation_ns\":{},\"consumers\":{},\"variants\":[",p.turn,p.execution_order[0],p.execution_order[1],p.same_input_state,p.same_input_epoch,p.same_input_history,p.shared_data_identical,p.shared_forest_id,p.shared_oracle_id,p.comparison_clone_ns,p.comparison_clone_bytes,p.input_compare_ns,p.annotation_ns,p.consumers.json()).unwrap();
++            for (j,v) in p.variants.iter().enumerate(){if j>0{out.push(',');}write!(out,"{{\"policy\":\"{}\",\"core\":{}}}",v.policy,v.core.json()).unwrap();}write!(out,"],\"common_snapshot_bytes\":{},\"common_timings\":{},\"differences\":{}}}",p.common_snapshot_bytes,p.common_timings.json(),p.differences.json()).unwrap();}
++        out.push_str("],\"mode_totals\":[");
++        for (i,policy) in ["complete-order","consumed-prefix"].iter().enumerate(){if i>0{out.push(',');}let(mut n,mut r,mut cn,mut cr,mut fnodes,mut fr)=(0,0,0,0,0,0);let mut costs=Costs::default();for p in &self.pairs{for v in &p.variants{if v.policy==*policy{let c=&v.core;n+=c.canonical_nodes;r+=c.canonical_relations;cn+=c.committed_nodes;cr+=c.committed_relations;fnodes+=c.fallback_nodes;fr+=c.fallback_relations;costs.add(&c.timings);}}}write!(out,"{{\"policy\":\"{}\",\"canonical_nodes\":{},\"canonical_relations\":{},\"committed_nodes\":{},\"committed_relations\":{},\"fallback_nodes\":{},\"fallback_relations\":{},\"timings\":{}}}",policy,n,r,cn,cr,fnodes,fr,costs.json()).unwrap();}
++        out.push_str("],\"scope\":\"Serial paired semantic-certificate experiment; no speedup claim. Common speculative forest and independent canonical oracle are shared immutable Rc data, not repeated executions. Per-mode input Search/history copies are comparison-only audit costs, not real executor snapshots. common_timings records shared physical phases once; each standalone policy would pay those shared executor phases, and consumed-prefix additionally pays annotation_ns. Arm Costs contain only mode-specific execution/audits. Prefix derives owned examined credit after all immediate charged callees, includes frontier-skipped positions, and falls back to complete inventory when proof is unavailable. k==len is full consumption, never a suffix witness. Consumer eligible N/R sums are nested record-population sums, not disjoint work. Rejected-sort observation capture and first rejected MAIN sort classification are audit-only, does not establish later certificate validity. Gross new maximal ranges use canonical oracle subtree identities and may contain old accepted descendants; newly_covered removes old canonical coverage and net_committed is signed total difference. Oracle gross costs include hooks, not clean CPU saved. Output/counter audits plus root-final shared-state equality retain the known transient-overwritten-write assurance limit. Old flat0/36 and closed hierarchical artifacts remain unchanged.\"}");out
++    }
++}
+diff --git a/src/bin/rook2-hierarchical.rs b/src/bin/rook2-hierarchical.rs
+new file mode 100644
+index 00000000..88490d88
+--- /dev/null
++++ b/src/bin/rook2-hierarchical.rs
+@@ -0,0 +1,76 @@
++//! Isolated fixed-completion hierarchical recovery pilot; not a wire engine.
++use rook2::{hierarchical_recovery::{self, Caps}, engine::Config,
++    evaluator::Parameters, history::SearchHistory,
++    movegen::{self,MoveList}, position::Position};
++
++fn run() -> Result<(),String> {
++    let mut args=std::env::args().skip(1);
++    let mut input=None;
++    let mut caps=Caps::default();
++    while let Some(key)=args.next() {
++        let value=args.next().ok_or("missing option value")?;
++        match key.as_str() {
++            "--input"=>input=Some(value),
++            "--queue-depth"=>caps.queue_depth=value.parse().map_err(|_|"bad queue depth")?,
++            "--max-depth"=>caps.max_depth=value.parse().map_err(|_|"bad maximum depth")?,
++            "--max-tail"=>caps.max_tail_candidates=value.parse().map_err(|_|"bad tail cap")?,
++            "--log-events"=>caps.log_events=value.parse().map_err(|_|"bad log cap")?,
++            "--max-segments"=>caps.max_segments=value.parse().map_err(|_|"bad segment cap")?,
++            "--max-recorded-nodes"=>caps.max_recorded_nodes=value.parse().map_err(|_|"bad recorded node cap")?,
++            "--max-forest-bytes"=>caps.max_forest_bytes=value.parse().map_err(|_|"bad forest byte cap")?,
++            "--max-touched-groups"=>caps.max_touched_groups=value.parse().map_err(|_|"bad touched group cap")?,
++            _=>return Err(format!("unknown option {key}")),
++        }
++    }
++    let text=std::fs::read_to_string(input.ok_or("--input required")?).map_err(|e|e.to_string())?;
++    let mut fen=None;let mut moves=None;let mut own=None;let mut opponent=None;
++    let mut evaluation=None;let mut search=None;let mut randomness=None;
++    for line in text.lines() {
++        if line.is_empty() || line.starts_with('#') {continue;}
++        let (key,value)=line.split_once('=').ok_or("bad input assignment")?;
++        match key {
++            "case"=>{},
++            "fen"=>fen=Some(value.to_string()),
++            "moves"=>moves=Some(value.to_string()),
++            "own"=>own=Some(value.to_string()),
++            "opponent"=>opponent=Some(value.to_string()),
++            "evaluation"=>evaluation=Some(value.to_string()),
++            "search"=>search=Some(value.to_string()),
++            "randomness"=>randomness=Some(value.parse::<i32>().map_err(|_|"bad randomness")?),
++            _=>return Err(format!("unknown input key {key}")),
++        }
++    }
++    // These released profiling inputs use rnd=0; no claim is made about root
++    // seed adjustments or live Host/Clock behavior in this research adapter.
++    if randomness!=Some(0) {return Err("branch pilot admits only explicit zero randomness".into());}
++    fn numbers<const N:usize>(s:Option<String>)->Result<[i32;N],String> {
++        let values:Vec<i32>=s.ok_or("missing numerical input")?.split(',')
++            .map(|x|x.parse().map_err(|_|"bad numerical input".to_string())).collect::<Result<_,_>>()?;
++        values.try_into().map_err(|_|"wrong numerical input arity".into())
++    }
++    let eval=numbers::<3>(evaluation)?;
++    let parameters=Parameters {own:numbers(own)?,opponent:numbers(opponent)?,
++        average_depth:eval[0],draw:eval[1],opponent_selectivity:eval[2]};
++    let setup=numbers::<4>(search)?;
++    if setup[1]<1 || setup[2]<48 {return Err("invalid depth/table input".into());}
++    let config=Config {selectivity:setup[0],maximum_depth:setup[1] as usize,
++        tts_bytes:setup[2] as usize,analysis:setup[3]};
++    let mut position=Position::from_fen(&fen.ok_or("missing initial FEN")?)?;
++    let mut history=SearchHistory::new(&position);
++    for token in moves.ok_or("missing moves")?.split_whitespace() {
++        let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);
++        let movement=*legal.as_slice().iter().find(|m|m.to_string()==token)
++            .ok_or_else(||format!("invalid history move {token}"))?;
++        position=position.played_unchecked(movement);
++        history.push(&position,Some(movement));
++    }
++    history.mark_root();
++    let report=hierarchical_recovery::run(position,history,parameters,config,caps)?;
++    println!("{}",report.json());
++    if report.unsafe_validation {return Err("semantic acceptance disagrees with canonical execution".into());}
++    Ok(())
++}
++
++fn main() {
++    if let Err(error)=run() {eprintln!("hierarchical recovery pilot: {error}");std::process::exit(1);}
++}
+diff --git a/src/bin/rook2-consumed-prefix.rs b/src/bin/rook2-consumed-prefix.rs
+new file mode 100644
+index 00000000..1a09e11a
+--- /dev/null
++++ b/src/bin/rook2-consumed-prefix.rs
+@@ -0,0 +1,76 @@
++//! Isolated fixed-completion hierarchical recovery pilot; not a wire engine.
++use rook2::{hierarchical_recovery::Caps, consumed_prefix, engine::Config,
++    evaluator::Parameters, history::SearchHistory,
++    movegen::{self,MoveList}, position::Position};
++
++fn run() -> Result<(),String> {
++    let mut args=std::env::args().skip(1);
++    let mut input=None;
++    let mut caps=Caps::default();
++    while let Some(key)=args.next() {
++        let value=args.next().ok_or("missing option value")?;
++        match key.as_str() {
++            "--input"=>input=Some(value),
++            "--queue-depth"=>caps.queue_depth=value.parse().map_err(|_|"bad queue depth")?,
++            "--max-depth"=>caps.max_depth=value.parse().map_err(|_|"bad maximum depth")?,
++            "--max-tail"=>caps.max_tail_candidates=value.parse().map_err(|_|"bad tail cap")?,
++            "--log-events"=>caps.log_events=value.parse().map_err(|_|"bad log cap")?,
++            "--max-segments"=>caps.max_segments=value.parse().map_err(|_|"bad segment cap")?,
++            "--max-recorded-nodes"=>caps.max_recorded_nodes=value.parse().map_err(|_|"bad recorded node cap")?,
++            "--max-forest-bytes"=>caps.max_forest_bytes=value.parse().map_err(|_|"bad forest byte cap")?,
++            "--max-touched-groups"=>caps.max_touched_groups=value.parse().map_err(|_|"bad touched group cap")?,
++            _=>return Err(format!("unknown option {key}")),
++        }
++    }
++    let text=std::fs::read_to_string(input.ok_or("--input required")?).map_err(|e|e.to_string())?;
++    let mut fen=None;let mut moves=None;let mut own=None;let mut opponent=None;
++    let mut evaluation=None;let mut search=None;let mut randomness=None;
++    for line in text.lines() {
++        if line.is_empty() || line.starts_with('#') {continue;}
++        let (key,value)=line.split_once('=').ok_or("bad input assignment")?;
++        match key {
++            "case"=>{},
++            "fen"=>fen=Some(value.to_string()),
++            "moves"=>moves=Some(value.to_string()),
++            "own"=>own=Some(value.to_string()),
++            "opponent"=>opponent=Some(value.to_string()),
++            "evaluation"=>evaluation=Some(value.to_string()),
++            "search"=>search=Some(value.to_string()),
++            "randomness"=>randomness=Some(value.parse::<i32>().map_err(|_|"bad randomness")?),
++            _=>return Err(format!("unknown input key {key}")),
++        }
++    }
++    // These released profiling inputs use rnd=0; no claim is made about root
++    // seed adjustments or live Host/Clock behavior in this research adapter.
++    if randomness!=Some(0) {return Err("branch pilot admits only explicit zero randomness".into());}
++    fn numbers<const N:usize>(s:Option<String>)->Result<[i32;N],String> {
++        let values:Vec<i32>=s.ok_or("missing numerical input")?.split(',')
++            .map(|x|x.parse().map_err(|_|"bad numerical input".to_string())).collect::<Result<_,_>>()?;
++        values.try_into().map_err(|_|"wrong numerical input arity".into())
++    }
++    let eval=numbers::<3>(evaluation)?;
++    let parameters=Parameters {own:numbers(own)?,opponent:numbers(opponent)?,
++        average_depth:eval[0],draw:eval[1],opponent_selectivity:eval[2]};
++    let setup=numbers::<4>(search)?;
++    if setup[1]<1 || setup[2]<48 {return Err("invalid depth/table input".into());}
++    let config=Config {selectivity:setup[0],maximum_depth:setup[1] as usize,
++        tts_bytes:setup[2] as usize,analysis:setup[3]};
++    let mut position=Position::from_fen(&fen.ok_or("missing initial FEN")?)?;
++    let mut history=SearchHistory::new(&position);
++    for token in moves.ok_or("missing moves")?.split_whitespace() {
++        let mut legal=MoveList::new();movegen::generate_legal(&position,&mut legal);
++        let movement=*legal.as_slice().iter().find(|m|m.to_string()==token)
++            .ok_or_else(||format!("invalid history move {token}"))?;
++        position=position.played_unchecked(movement);
++        history.push(&position,Some(movement));
++    }
++    history.mark_root();
++    let report=consumed_prefix::run(position,history,parameters,config,caps)?;
++    println!("{}",report.json());
++    if report.unsafe_validation() {return Err("semantic acceptance disagrees with canonical execution".into());}
++    Ok(())
++}
++
++fn main() {
++    if let Err(error)=run() {eprintln!("consumed-prefix paired pilot: {error}");std::process::exit(1);}
++}

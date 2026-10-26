@@ -1,0 +1,144 @@
+{
+  "schema": "rook2-consumed-prefix-closure-v1",
+  "complete": true,
+  "nativeLives": 2,
+  "focusedTests": 34,
+  "newBuildsAfter08": 0,
+  "newTestsAfter08": 0,
+  "nativeRetries": 0,
+  "image": {
+    "path": "/home/legolas/rook2-experiments/consumed-prefix-20261025-02/build/rook2-consumed-prefix",
+    "sha256": "9cd791b4051632213edecbf71c519087b8b2a7f049254df050f0cf5557e91788",
+    "bytes": 8050592,
+    "pgo": false
+  },
+  "bindings": {
+    "/home/legolas/rook2-experiments/consumed-prefix-20261025-02/pipeline.json": "23cdf357ccff9d94043fb7bb91daca9a62ddf8b060cc85a1c0ed0e94fca29b7e",
+    "/home/legolas/rook2-experiments/consumed-prefix-20261025-02/build/receipt.json": "61c96c6d072ee85faa5e0a5fe817d33aa71842a7d47e668e32e013d7d69cf445",
+    "/home/legolas/rook2-experiments/consumed-prefix-20261025-continuation-01/reconciled.json": "c3d39e771f628e24790584af2418b1a62d563caaf9f180e62c99175a7bc5d407",
+    "/home/legolas/rook2-experiments/consumed-prefix-20261025-continuation-01/repair-proof.json": "49fe0ca472a004415141cd0ba0449b78ea3f6f515c3af44af76680ee180af675",
+    "/home/legolas/rook2-multicore/experiments/multicore-feasibility/consumed-prefix/policy.json": "5ac6741a87f15997df3b3db2d60b0ce5a922e9de58ed55c120faf399ea9deed6",
+    "/home/legolas/rook2-multicore/experiments/multicore-feasibility/consumed-prefix/prototype.patch": "88ab8bb5298d398a169e378fadb055cb21fe062ff4e8a90c9f4a4d11eee21941",
+    "/home/legolas/rook2-multicore/experiments/multicore-feasibility/consumed-prefix/preparation.json": "aa3b58c3ece49926461a607c734cab0b6359ed735e0989a2dc6d5df4e7d3ff45"
+  },
+  "rows": [
+    {
+      "case": "profile-08",
+      "modes": [
+        {
+          "policy": "complete-order",
+          "aheadCommittedNodes": 99,
+          "aheadCommittedRelations": 0,
+          "aheadCommittedSegments": 62,
+          "standaloneExecutorProxyNs": 58165231
+        },
+        {
+          "policy": "consumed-prefix",
+          "aheadCommittedNodes": 126,
+          "aheadCommittedRelations": 7,
+          "aheadCommittedSegments": 43,
+          "standaloneExecutorProxyNs": 58223885
+        }
+      ],
+      "canonicalGrainAhead": {
+        "gross_new_maximal_ranges": 13,
+        "gross_new_maximal_nodes": 81,
+        "gross_new_maximal_relations": 7,
+        "new_maximal_containing_old_descendants": 13,
+        "old_descendant_nodes_inside_new_maximal": 54,
+        "old_descendant_relations_inside_new_maximal": 0,
+        "common_covered_nodes": 99,
+        "common_covered_relations": 0,
+        "complete_only_nodes": 0,
+        "complete_only_relations": 0,
+        "newly_covered_nodes": 27,
+        "newly_covered_relations": 7,
+        "net_committed_nodes": 27,
+        "net_committed_relations": 7,
+        "gross_new_oracle_gross_ns": 151676,
+        "gross_new_oracle_hooks_ns": 56932,
+        "gross_new_oracle_proxy_ns": 94744,
+        "net_oracle_gross_ns": 89154,
+        "net_oracle_hooks_ns": 38843,
+        "new_maximal_size_bins": [
+          0,
+          0,
+          10,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "annotationNs": 48512
+    },
+    {
+      "case": "profile-35",
+      "modes": [
+        {
+          "policy": "complete-order",
+          "aheadCommittedNodes": 22573,
+          "aheadCommittedRelations": 49605,
+          "aheadCommittedSegments": 13509,
+          "standaloneExecutorProxyNs": 505703748
+        },
+        {
+          "policy": "consumed-prefix",
+          "aheadCommittedNodes": 24533,
+          "aheadCommittedRelations": 62399,
+          "aheadCommittedSegments": 12672,
+          "standaloneExecutorProxyNs": 523203949
+        }
+      ],
+      "canonicalGrainAhead": {
+        "gross_new_maximal_ranges": 1833,
+        "gross_new_maximal_nodes": 7608,
+        "gross_new_maximal_relations": 22039,
+        "new_maximal_containing_old_descendants": 1833,
+        "old_descendant_nodes_inside_new_maximal": 5648,
+        "old_descendant_relations_inside_new_maximal": 9245,
+        "common_covered_nodes": 22573,
+        "common_covered_relations": 49605,
+        "complete_only_nodes": 0,
+        "complete_only_relations": 0,
+        "newly_covered_nodes": 1960,
+        "newly_covered_relations": 12794,
+        "net_committed_nodes": 1960,
+        "net_committed_relations": 12794,
+        "gross_new_oracle_gross_ns": 15117811,
+        "gross_new_oracle_hooks_ns": 3289378,
+        "gross_new_oracle_proxy_ns": 11828433,
+        "net_oracle_gross_ns": 8225608,
+        "net_oracle_hooks_ns": 2221378,
+        "new_maximal_size_bins": [
+          0,
+          0,
+          1642,
+          176,
+          15,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "annotationNs": 9550381
+    }
+  ],
+  "disposition": "Close paired discriminator. No coarse >=128N ahead survivors; select a materially different internal-worker boundary rather than prefix tuning.",
+  "limits": [
+    "Instrumented serial proxies, not parallel speedup or clean saved CPU.",
+    "Local output/work and root-final shared-state audit; transient overwritten errors can escape.",
+    "Private staging invariant and focused rollback controls, not per-rejection whole-state auditing.",
+    "First naturally Restricted root-tail forecast, not internal split readiness.",
+    "Fixed-completion NoHost/timing absent/rnd0; no qualification or adoption."
+  ],
+  "failuresPreserved": [
+    "/home/legolas/rook2-experiments/consumed-prefix-20261025-preflight-01",
+    "/home/legolas/rook2-experiments/consumed-prefix-20261025-01",
+    "/home/legolas/rook2-experiments/consumed-prefix-20261025-02/pipeline.json"
+  ],
+  "continuationProof": "/home/legolas/rook2-experiments/consumed-prefix-20261025-continuation-01/repair-proof.json"
+}
