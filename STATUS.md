@@ -65,12 +65,22 @@ changed, with 29 focused controls and all 60 replay lives passing. A missing idl
 adapter export was repaired after benchmark collection; five unstarted idle probes
 and the composed audit pass, with completed runs and original clocks preserved.
 
-Next selected: one unchanged-source own-PGO/full54 comparison, using a fresh joint
-1/2/3 profile and six configurations: accepted serial, preserved67d modes2/3 and
-new modes1/2/3. This tests whether the improved two-thread path survives PGO while
-retaining the three-thread and serial options. No tuning, qualification or adoption
-is selected. Conditional inventory variants, fresh-Influence fusion and frontier
-batching remain reserves; retained epoch3 remains the strongest complete54 result.
+The [whole-FULL own-PGO/full54 comparison](experiments/multicore-feasibility/whole-full-own-pgo/report.md)
+passes 162 training and 324 comparison lives with no failure or retry. Its gain is
+much smaller: new2 64.004516s versus prior67d2 64.208272s (0.317% lower, 41/54 lower
+cases). New3 60.846776s versus prior67d3 60.721374s is 0.207% higher; new1 68.802407s
+versus accepted serial 68.293755s is 0.745% higher. These single observations do
+not establish repeatability, parity or a source-level cause for small differences.
+Retained67d remains the strongest complete54 candidate; no whole-helper retune,
+replacement or qualification is selected.
+
+Next selected: one generic comparison of observer-free inventory65 modes3/4 against
+preserved3 and the original observed4. Remove diagnostic counters, clocks and late
+accounting locks from matching new modes; retain actual synchronization, ownership,
+generation and semantic charges. A faster lean3 alone is not a fourth-thread gain.
+No additional census, parallel graph or PGO is selected. Fresh-Influence fusion and
+frontier batching remain reserves; accepted main and all positive artifacts remain
+preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

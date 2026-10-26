@@ -32,7 +32,7 @@ resolution after parking. These costs matter when choosing a thread budget.
 | Can pure results survive failed branch speculation? | Yes, but the same-fixture [census](../../experiments/multicore-feasibility/coarse-pure-salvage/report.md) found only 5.596ms of newly unavailable first-demand kernel proxy; its current pool construction cost already exceeded that. Those representation costs are not universal lower bounds. |
 | Was the failed color split inherently too small? | The original three-thread graph lost, but [direct epoch transport](../../experiments/multicore-feasibility/epoch-colors/report.md) improved it enough to beat two threads. This is a net architecture result, not isolated mutex nanoseconds. |
 | Does adding move generation supply useful fourth-thread work? | [Conditional inventory4](../../experiments/multicore-feasibility/epoch-inventory-four/report.md) supplied exact lists at substantial actual demand, but the measured implementation was 0.81% slower than preserved3 and used 1.344x CPU. It remains parked. |
-| Does direct epoch transport also help one helper? | The [whole-FULL trial](../../experiments/multicore-feasibility/whole-full-epoch/report.md) improves mode2 by 2.62% across three cases, with separated ranges in each and less total CPU. It remains 2.31% slower than retained3 in aggregate, using 0.682x its CPU. Own-PGO/full54 validation is selected. |
+| Does direct epoch transport also help one helper? | The [generic whole-FULL trial](../../experiments/multicore-feasibility/whole-full-epoch/report.md) improves mode2 by 2.62%, but [own-PGO/full54](../../experiments/multicore-feasibility/whole-full-own-pgo/report.md) reduces that to a descriptive 0.317%. Three threads remain faster. Keep the tested alternative without replacing the retained candidate or extrapolating generic gains. |
 
 Readiness, useful demand and net acceleration are separate questions. Inventory
 sampling includes timestamps and color histogram work before its FULL-complete
@@ -51,12 +51,24 @@ pass. A later idle-wrapper import failure and its bounded repair are preserved;
 no completed benchmark was repeated. Unchanged mode3 also shows some timing drift,
 so the experiment does not isolate a universal transport cost.
 
-The next selected step is one unchanged-source own-PGO/full54 comparison: fresh
-joint-mode training, then accepted serial, preserved67d modes2/3 and new modes1/2/3.
-This tests whether one binary can retain the faster three-thread option and improve
-its less CPU-intensive two-thread option without materially taxing serial mode.
-Inventory revisions, fresh-map fusion and frontier batching remain unselected
-alternatives. No workload-specific mode selector follows from these three cases.
+Own-PGO/full54 is now complete: 162 training lives and 324 comparison lives pass
+without failure or retry. New2 records 64.004516s versus prior2 64.208272s, with
+41/54 cases lower. New3 records 60.846776s versus retained3 60.721374s; new1 is
+68.802407s versus accepted serial 68.293755s. These small differences have only one
+observation per cell; no repeated-run uncertainty or isolated source attribution
+follows. The large generic gain did not transfer to this production comparison.
+No whole-helper tuning or replacement is selected.
+
+The next selected discriminator removes research accounting from matching
+inventory65 modes3/4. The old inventory producer performs three diagnostic atomic
+updates per successful list, and late demand/discard takes a Control lock solely
+for accounting after its transport lease ends. Remove those observations while
+retaining real synchronization, installed-row ownership, generation policy and
+semantic charges. Compare preserved3/observed4/new lean3/new lean4. The fourth
+worker must add value against its matching lean3 as well as the retained candidate;
+shared cleanup alone is a separate result. No gain is assumed from sampled
+readiness, and no new census, staged-input graph or PGO is selected. Fresh-map
+fusion and frontier batching remain reserves.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

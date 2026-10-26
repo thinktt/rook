@@ -1,17 +1,14 @@
-# Whole-FULL epoch: unchanged-source own-PGO and full54
+# Whole-FULL unchanged-source own-PGO/full54
 
-Selected after the [generic closure](../whole-full-epoch/report.md), source setup
-99a42049 and result1c68dd32. Preparation only; no new native work started.
-Reuse the exact64-file source and29 focused controls. One joint1/2/3 profile
-(162 original lives), canonical merge plus actual byte-identical remerge, one
-use-only ExtTSP build, cheap13CLI+two fallback searches, then324 descriptive
-comparison lives and six idle probes. No source retune, small screen or broad
-qualification. The prior idle lazy-import adapter is explicitly exported in the
-new wrapper before data; original helpers and all prior records stay unchanged.
+Completed first attempt:162 joint-mode training lives, actual byte-identical
+independent remerge, one use build,13CLI+two fallback searches,324 original
+comparison lives/3744posts and six idle probes pass. Full54 direct sums new2
+64.004516s vs prior2 64.208272s (−0.3173%); prior3 remains fastest60.721374s,
+new3 60.846776s and new1 68.802407s vs accepted serial68.293755s.
 
-Configs: accepted5cf serial; prior67d011 modes2/3; new modes1/2/3. Original54 once
-per configuration, no warmups or repeats; balanced rotated schedule. Main14,
-helper6/color second4, H0–3,8–13; unassigned siblings15/7/5.
-One persisted3600s clock includes builds/training/merge/remerge/gaps/audits;
-collection1800s/life180s. Raw artifacts belong outside Git under
-`/home/legolas/rook2-experiments/whole-full-own-pgo-20261026-01`.
+[Report](report.md), [all54 rows](full54.csv), [results](results.json),
+[closure](closure.json), [plan](plan.md), [policy](policy.json).
+Exact source64 and prior29 controls are reused unchanged. No new source retune,
+repair/retrain/repeat, broad qualification, adoption or external action.
+Raw products: `/home/legolas/rook2-experiments/whole-full-own-pgo-20261026-01`.
+Native work is stopped; preserve prior67d and newa8dd as separate research artifacts.
