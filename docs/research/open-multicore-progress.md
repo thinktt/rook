@@ -145,10 +145,26 @@ supports eager totality; null descendants use deeper rows, and sorting/learning/
 logical charges stay at original demand. Public/FRESH/observer/root/Q and modes1/2
 retain their original routes. A readiness hint grants no output ownership and
 must not hide terminal failure. Old sampled join and generation costs cover
-different populations and cannot prove slack. Select one original35/08/43
-preserved3/matching off3/on3 fixed36+3 generic lane after affected focused admission,
-with no tuning or automatic PGO. No result exists yet. Frontier batching and a
-prospective writer-region transport layout remain separate unselected reserves.
+different populations and cannot prove slack.
+
+The [fixed generic trial](../../experiments/multicore-feasibility/owner-local-inventory/README.md)
+is positive: preserved3 7.751493s, matching off3 7.759613s and on3 7.545679s.
+On3 improves2.76% versus matching off and2.66% versus preserved; all three
+observed ranges separate and CPU falls. Case43 contributes most of the total.
+All47 focused controls and36 original replay lives/420 posts plus three idle
+probes pass. An initial test-only private-method compile error was repaired
+before any test or workload execution; failed receipts and the original clock
+are preserved. Production source was unchanged by that repair. Residual join
+timing excludes eager generation, so it is not a saved-work measurement.
+
+Select one unchanged own-PGO/full54 discriminator:216 training lives (54 each
+inline1/current2/colors3-off/colors3-on), one merge and independent remerge/use
+build, then270 single observations comparing accepted serial5cf, retained67d3,
+new inline1/off3/on3. Five idle probes follow. New versus matching-off prices
+the policy; retained controls price the common build/profile/source effects.
+No production result or qualification follows yet, and no tuning is selected.
+Frontier batching and a prospective writer-region transport layout remain
+separate unselected reserves.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

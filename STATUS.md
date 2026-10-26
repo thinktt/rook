@@ -131,15 +131,20 @@ without repair or repeat. The private enclosing guard drains actual readers on
 success/error/unwind; removing snapshots still changes access and layout costs.
 Park unchanged, with no causal attribution, PGO or qualification claim.
 
-The [source assessment](docs/research/owner-local-inventory-overlap.md) at
-`510cd4e8` supports a distinct coordinator-local inventory trial. Select one
-readiness-conditional policy: after pawn/local work, generate directly into the
-private parent row only if the matching color pair is not already complete.
-This avoids the prior fourth worker's dispatch/list transfer; wasted generation
-and extra critical-path work remain. One preserved3/matching off3/on3 fixed36+3
-generic lane is authorized after affected focused admission, not yet measured.
-No tuning, PGO or adoption is selected. Retained artifacts and release bytes remain
-preserved.
+The [owner-local inventory trial](experiments/multicore-feasibility/owner-local-inventory/README.md)
+is positive: preserved3 7.751493s, matching off3 7.759613s, on3 7.545679s. On3
+improves the summed medians by 2.76% versus off3 and 2.66% versus preserved3;
+all three ranges separate and whole CPU falls. Case43 supplies most of the gain.
+All47 focused controls and36 replay lives/420 posts plus three idle probes pass;
+one test-only visibility compile repair is preserved, with no completed-life
+repeat or clock reset. This is direct private-row generation on the coordinator
+only while the color pair appears unfinished, with original demand accounting.
+
+Select one unchanged own-PGO/full54 lane:216 training lives across modes1/2/3off/
+3on, one merge/use build with independent remerge, then270 descriptive comparisons
+across accepted serial, retained3, new inline1/off3/on3 plus five idle probes.
+No production result exists yet. No tuning, qualification or adoption is selected;
+retained artifacts and release bytes remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
