@@ -187,13 +187,23 @@ generation demand among Q FULLs57.85/73.45/63.59% on35/08/43, substantially belo
 ordinary demand, with neither current readiness-admitted costs nor remaining
 helper time established.
 
-Select one finite generic Q extension: preserve ordinary-on in all configurations,
-compare its exact4b40 generic image against matching new Q-off/Q-on on the original
-35/08/43 fixed36+3 schedule after affected checks. Keep actual FULL selection,
-private row flags, original accounting and owned transport unchanged; no hot
-census, tuning or automatic PGO. This tests a kernel-overlap opportunity, not
-Q branch parallelism. No Q result exists yet. Frontier batching and writer-region
-layout remain other unselected reserves.
+The [finite Q trial](../../experiments/multicore-feasibility/q-owner-local/README.md)
+passes17 affected controls,14 CLI/two fallback checks and36 original replay lives/
+420 posts plus three idle probes, first attempt. Ordinary-on stays active in all
+three configurations. Preserved4b40 totals7.624830s, matching Q-off7.664552s and
+Q-on7.537385s. Q-on improves1.15% versus preserved and1.66% versus matching off,
+with lower CPU. Most net gain is43 with separated ranges against both controls;
+35 separates only against matching off and08 overlaps. The off build drifts0.52%
+above preserved. This is positive but narrow evidence, not demonstrated breadth.
+
+Select one unchanged68-source own-PGO/full54 lane:216 training lives spanning
+inline1/current2 (both hooks requested but dormant) and ordinary-on/Q-off3/Q-on3,
+one merge/independent remerge/use build, then270 single observations against
+accepted5cf/current3d and matching new inline/off/on plus five idle probes.
+Reuse affected and prior evidence, bind the corrected metadata API before data,
+and retain3d as leader until the result. No retuning, qualification or adoption
+is selected. This remains kernel overlap, not Q branch parallelism. Frontier
+batching and writer-region layout are other unselected reserves.
 
 The latest three-thread image is `3d914cddf415cfb109bdabaf6eaf5b2384c3ca537a37a2f37a691c28ac5e91cc`,
 with profile `bf909cd4b9a489f3de23e1b0b2d5bb45c0069f690354d76510636c8fed54cd1f`;

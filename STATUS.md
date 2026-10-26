@@ -162,9 +162,14 @@ adoption. The [Q source assessment](docs/research/q-owner-local-tactical-overlap
 at578e679a finds a safe private extension at both actual unchecked-Q FULL seams.
 Its independent capacity bound is417<512 on coherent ancestry; old Q FULL demand
 is only57.85/73.45/63.59% on35/08/43, not a current timing or readiness estimate.
-Select one preserved ordinary-on/matching Q-off/Q-on generic36+3 discriminator
-after affected controls, keeping the ordinary win and all retained artifacts.
-No Q result, PGO or qualification is claimed yet.
+The [Q generic discriminator](experiments/multicore-feasibility/q-owner-local/README.md)
+passes17 affected checks and36 replay lives/420 posts plus three idle probes,
+first attempt. Sums are preserved ordinary-on7.624830s, matching Q-off7.664552s,
+Q-on7.537385s:1.15% and1.66% lower, respectively, with lower CPU. Most net gain
+comes from43;35 separates only versus matching off, and08 ranges overlap.
+Select one unchanged own-PGO/full54 comparison,216 training then270 comparisons
+plus five idle probes, reusing existing evidence.3d914c remains the research
+leader pending that result; no Q production gain or qualification is claimed.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
