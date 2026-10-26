@@ -1,6 +1,9 @@
 # Fixed epoch-slot colors transport
 
-Status: implementation/tool preparation, before any build or native run.
+Status: closed; [results](report.md), [summary](results.json), [bound identities](closure.json).
+32 fresh controls,13CLI+2affinity controls and fixed48+4/560posts pass firstattempt.
+Epoch3 median sum7.735016s vs old3 8.368089s/current2 8.029709s:7.57%/3.67% lower,
+with1.445x current2 CPU. Retain for separately selected own-PGO/full54; no adoption.
 [Plan](plan.md), [policy](policy.json), [reviewed ownership proof](ownership-proof.md).
 One isolated transport change compares against preserved old colors3 and sibling
 current2/inline. No numerical changes, tuning campaign or production adoption.
