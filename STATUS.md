@@ -81,11 +81,18 @@ matching lean3. All 48 replay lives/560 posts and four idle probes pass; 40 sele
 controls pass after one fixture epoch/count correction, with the original failure
 and a pre-native hash rejection preserved. No production repair or benchmark repeat.
 
-Next selected: a bounded source/existing-image review of the common lean-mode
-regression. Observation removal also changes worker-state layout; inspect concrete
-offsets and writer ownership before proposing another variant. No engine execution,
-build, padding change or PGO is selected. Fresh-Influence fusion and frontier
-batching remain reserves; accepted main and all positive artifacts remain preserved.
+The [existing-image layout review](docs/research/observer-free-layout-review.md)
+at `40322440` identifies changed allocation size/alignment and output packing, but
+no unique cause. Request/done spacing remains compact and the proposed per-FULL
+Flight/waiting same-line explanation is excluded. Heap-base alignment and actual
+coherence traffic are unknown.
+
+Next selected: one old-concrete-layout/observation-free counterfactual, requiring
+compiled layout verification before a fixed six-configuration 72-life generic
+comparison. Keep the lean installed marker/callers and disabled observations;
+restore original shared types/storage rather than sweep padding. Compare matching
+observed/unobserved3/4, retained3 and lean3. No PGO, new parallel graph or adoption
+is selected; accepted main and all positive artifacts remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

@@ -1,0 +1,145 @@
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -8 +8,2 @@
+-//! observation traffic is absent from both color and inventory paths.
++//! observation traffic is absent from both color and inventory paths. Concrete
++//! inventory65 field storage is retained and safely initialized but never sampled.
+@@ -22,0 +24 @@
++use std::time::Instant;
+@@ -62,0 +65 @@
++    published: Option<Instant>,
+@@ -69,0 +73,3 @@
++    ready_ns: u64,
++    kernel_ns: u64,
++    copy_ns: u64,
+@@ -75,0 +82 @@
++            ready_ns: 0, kernel_ns: 0, copy_ns: 0,
+@@ -83,0 +91,2 @@
++    ready_ns: u64,
++    generation_ns: u64,
+@@ -89,0 +99 @@
++            ready_ns: 0, generation_ns: 0,
+@@ -150,0 +161,2 @@
++    published: Option<Instant>,
++    owner_ready_ns: Option<u64>,
+@@ -151,0 +164 @@
++    colors_completed: bool,
+@@ -170,0 +184,2 @@
++    readiness: Readiness,
++    inventory: InventoryStats,
+@@ -178,0 +194 @@
++    production: InventoryProduction,
+@@ -262 +278 @@
+-                input: UnsafeCell::new(Packet { generation: 0, position, influence }),
++                input: UnsafeCell::new(Packet { generation: 0, position, influence, published: None }),
+@@ -270,0 +287 @@
++            production: InventoryProduction::new(),
+@@ -427 +444 @@
+-                generation, position: *position, influence: *influence,
++                generation, position: *position, influence: *influence, published: None,
+@@ -438 +455 @@
+-            inventory,
++            published: None, owner_ready_ns: None, inventory, colors_completed: false,
+@@ -715 +732 @@
+-        SideOutput { generation, activity, opposite_shelter }
++        SideOutput { generation, activity, opposite_shelter, ready_ns: 0, kernel_ns: 0, copy_ns: 0 }
+@@ -934,0 +952,98 @@
++}
++
++// Preserve inventory65 concrete storage and alignment, including Metric's
++// u128 field. These fields remain inert; no observation collection methods exist.
++struct Metric {
++    count: u64,
++    sum_ns: u128,
++    min_ns: u64,
++    max_ns: u64,
++    log2_ns: [u64; 64],
++}
++
++impl Default for Metric {
++    fn default() -> Self {
++        Self { count: 0, sum_ns: 0, min_ns: 0, max_ns: 0, log2_ns: [0; 64] }
++    }
++}
++
++#[derive(Default)]
++struct Readiness {
++    dispatches: u64,
++    sampled_dispatches: u64,
++    completed_samples: u64,
++    discarded_samples: u64,
++    failed_samples: u64,
++    owner_missing_samples: u64,
++    paired_samples: u64,
++    owner_ready_at_or_after_both: u64,
++    sides_after_owner: u64,
++    white_last: u64,
++    black_last: u64,
++    sides_tied: u64,
++    white_ready: Metric,
++    black_ready: Metric,
++    owner_ready: Metric,
++    white_kernel: Metric,
++    black_kernel: Metric,
++    white_copy: Metric,
++    black_copy: Metric,
++    join_wait: Metric,
++    owner_after_sides: Metric,
++    reader_imbalance: Metric,
++    join_elapsed: Metric,
++}
++
++struct InventoryProduction {
++    completed: AtomicU64,
++    generated: AtomicU64,
++    domain_unavailable: AtomicU64,
++    generated_moves: AtomicU64,
++    sampled_completed: AtomicU64,
++}
++
++impl InventoryProduction {
++    fn new() -> Self {
++        Self {
++            completed: AtomicU64::new(0), generated: AtomicU64::new(0),
++            domain_unavailable: AtomicU64::new(0), generated_moves: AtomicU64::new(0),
++            sampled_completed: AtomicU64::new(0),
++        }
++    }
++
++}
++
++#[derive(Default)]
++struct InventoryStats {
++    requested: u64,
++    settled: u64,
++    installed: u64,
++    settled_unavailable: u64,
++    demanded: u64,
++    demanded_moves: u64,
++    discarded: u64,
++    interposed_demanded: u64,
++    interposed_discarded: u64,
++    unsettled_discarded: u64,
++    failed: u64,
++    sampled_requested: u64,
++    sampled_settled: u64,
++    sampled_installed: u64,
++    sampled_unavailable: u64,
++    sampled_demanded: u64,
++    sampled_discarded: u64,
++    sampled_unsettled_discarded: u64,
++    sampled_failed: u64,
++    ready: Metric,
++    generation: Metric,
++    numerical_full_complete: Metric,
++    acquire: Metric,
++    acquire_wait: Metric,
++    ready_after_full: Metric,
++    full_after_ready: Metric,
++    install: Metric,
++    install_duration: Metric,
++    demand: Metric,
++    demand_after_install: Metric,
++    discard: Metric,
++    discard_after_install: Metric,

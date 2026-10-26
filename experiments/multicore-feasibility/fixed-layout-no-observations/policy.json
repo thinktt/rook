@@ -1,0 +1,102 @@
+{
+  "schema": "rook2-fixed-layout-no-observations-policy-v1",
+  "cases": [
+    "profile-35",
+    "profile-08",
+    "profile-43"
+  ],
+  "variants": [
+    "retained3",
+    "observed3",
+    "observed4",
+    "lean3",
+    "fixed3",
+    "fixed4"
+  ],
+  "warmupsPerCell": 1,
+  "observationsPerCell": 3,
+  "rotations": [
+    [
+      0,
+      1,
+      2
+    ],
+    [
+      3,
+      4,
+      5
+    ],
+    [
+      0,
+      1,
+      2
+    ]
+  ],
+  "successfulReplayLives": 72,
+  "measuredReplayLives": 54,
+  "idleProbes": 6,
+  "cliControls": 15,
+  "fallbackReplayLives": 2,
+  "fallbackRequestedBudget": 4,
+  "fallbackPermittedCpuCounts": [
+    1,
+    2
+  ],
+  "effectiveBudgetRule": "min(requested, permitted, 4); unchanged default/query behavior",
+  "coordinatorCpu": 14,
+  "helperCpus": [
+    6,
+    4,
+    2
+  ],
+  "helperOrder": [
+    "rook2-eval-whit",
+    "rook2-eval-blac",
+    "rook2-inventory"
+  ],
+  "housekeepingCpus": [
+    0,
+    1,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "unassignedOwnedSiblings": [
+    15,
+    7,
+    5,
+    3
+  ],
+  "limits": {
+    "pipelineSeconds": 3600,
+    "perFocusedSelectorSeconds": 300,
+    "genericBuildSeconds": 300,
+    "cliAffinitySeconds": 420,
+    "collectionSeconds": 1800,
+    "collectionDriverSeconds": 1900,
+    "reconcileSeconds": 120,
+    "perNativeLifeSeconds": 180,
+    "placementSeconds": 10,
+    "firstInputGateSeconds": 12
+  },
+  "spinBudget": 4096,
+  "pgo": false,
+  "automaticExtension": false,
+  "repeatCompletedLife": false,
+  "scope": "One old-layout observer-free3/4 counterfactual; same actual ownership/numerical/generation policy; no PGO, broad qualification, adoption or automatic follow-on.",
+  "productionObservations": false,
+  "disabledReport": {
+    "enabled": false
+  },
+  "retainedReports": "retained3 original colors; observed3/4 original colors/inventory formats validated unchanged",
+  "rotationRule": "(caseIndex*3+repeatIndex)%6; nine measured global rotations; each configuration in each position once or twice, not perfect per-case balance",
+  "disabledVariants": [
+    "lean3",
+    "fixed3",
+    "fixed4"
+  ],
+  "layoutAdmissionRequiredBeforeCollection": true
+}

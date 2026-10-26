@@ -67,12 +67,18 @@ pre-native hash rejection are preserved. Production ownership/math stayed fixed,
 but deleting observations and their storage changed both operations and layout.
 The result does not isolate the benefit or cost of the old counters.
 
-The next selected work is source/existing-image inspection only: determine what
-changed in the offsets and ownership of hot worker state, and whether a concrete
-layout-preserving discriminator is justified. Previously cold storage may have
-separated independent writers; unknown heap alignment and actual coherence costs
-must remain explicit. No new build, native run, padding variant or PGO is selected.
-Fresh-map fusion and frontier batching remain reserves.
+The [existing-image review](observer-free-layout-review.md) finds a changed
+allocation size/alignment (15,584/16 to 1,720/8 bytes) and smaller/reordered outputs,
+but no unique cause. Request/done spacing was already compact, and per-FULL Flight
+and waiting cannot share a 64-byte line in the lean layout. Actual heap-base phase
+and coherence traffic are unknown.
+
+One counterfactual is selected: restore original concrete shared field storage
+while keeping observation operations disabled and the installed receipt minimal.
+Verify the compiled layout before timing. Compare matching observed/unobserved3/4,
+retained3 and lean3 in one fixed generic stream; no padding sweep or PGO. This
+tests the representation confound without promising a cache explanation. Fresh-map
+fusion and frontier batching remain reserves.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.
