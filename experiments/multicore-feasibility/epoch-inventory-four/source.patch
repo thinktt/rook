@@ -1,0 +1,1303 @@
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -1 +1 @@
+-//! Fixed epoch input and independently owned color outputs for FULL calls.
++//! Epoch colors plus an optional sparse ordinary-inventory reader for FULL.
+@@ -12,0 +13 @@
++use crate::movegen::{self, MoveList};
+@@ -15 +16 @@
+-use crate::types::Color;
++use crate::types::{Color, PieceKind};
+@@ -35,0 +37,18 @@
++    inventory: bool,
++}
++
++impl DispatchToken {
++    pub(crate) const fn inventory_requested(self) -> bool { self.inventory }
++}
++
++/// Installed activation-local work. This owns no transport lease and is neither
++/// Copy nor Clone. Demand/discard consumes it once, even after descendant epochs.
++pub(crate) struct InventoryReceipt {
++    generation: u64,
++    moves: usize,
++    sample: Option<InventorySample>,
++}
++
++struct InventorySample {
++    published: Instant,
++    installed_ns: u64,
+@@ -64,0 +84,17 @@
++struct InventoryOutput {
++    generation: u64,
++    available: bool,
++    list: MoveList,
++    ready_ns: u64,
++    generation_ns: u64,
++}
++
++impl InventoryOutput {
++    fn initial() -> Self {
++        Self {
++            generation: 0, available: false, list: MoveList::new(),
++            ready_ns: 0, generation_ns: 0,
++        }
++    }
++}
++
+@@ -69,10 +105,13 @@
+-}
+-
+-// SAFETY: This private implementation covers only these three concrete cells.
+-// The single &mut ColorsWorker coordinator writes input under Control only with
+-// Flight::None. None follows either both matching done Acquire loads plus ended
+-// output reads, or BOTH real parked/exited acknowledgments. A request Release,
+-// acquired by each reader before borrowing input, publishes the initialized
+-// packet. Each reader's lexical Packet borrow (including sampled Instant reads)
+-// ends BEFORE its output write and done Release. Matching done Acquire loads
+-// therefore retire both input borrows and publish the separate scalar outputs.
++    inventory_output: UnsafeCell<InventoryOutput>,
++}
++
++// SAFETY: This private implementation covers only the concrete input, two
++// scalar color outputs and the initialized inventory list output. A single
++// &mut coordinator writes input under Control only with Flight::None. That state
++// follows matching done Acquire checks for the flight's ACTUAL participants and
++// ended output reads, or all configured readers' real parked/exited acknowledgments.
++// The colors request publishes input to both colors; only the private sparse
++// inventory request grants the third reader a borrow. Skipped epochs grant none.
++// Each Packet reference (including sampled timing) and each producer output
++// reference ends before its reader's done Release. Seeing another reader's stop
++// or done is never retirement of the still-running participant.
+@@ -80,7 +119,9 @@
+-// Only reader i writes output_i. Complete reads it only after matching done,
+-// while holding Control and requiring Published(g). Those Copy reads end before
+-// Flight becomes None. A later request Release, acquired by reader i, carries
+-// this reverse edge before its next output write. Close claims Discarding under
+-// the same Control and never reads/writes cells. It holds that claim until BOTH
+-// readers are parked/exited; terminal observation alone cannot retire a peer.
+-// No mutable reference to Shared, Cells, or both output cells is ever formed.
++// Only reader i writes output_i. Complete reads the scalar colors after their
++// done Acquire under Control/Published. A participating flight becomes Joined;
++// settle reads only the inventory used slice after its done Acquire under that
++// same Control/Joined ownership. All respective reads end before Flight::None.
++// A later acquired request carries the reverse edge before each output overwrite;
++// inventory uses its own sparse request, independent of skipped color epochs.
++// Close claims Published OR Joined as Discarding and holds it until every actual
++// configured reader is parked/exited. Neither scope guards nor park touch cells.
++// No mutable reference to Shared, Cells, or the whole output collection is formed.
+@@ -118,0 +160,2 @@
++    inventory: bool,
++    colors_completed: bool,
+@@ -125,0 +169 @@
++    Joined(Metadata),
+@@ -135 +179 @@
+-    failures: [Option<String>; 2],
++    failures: [Option<String>; 3],
+@@ -137,0 +182 @@
++    inventory: InventoryStats,
+@@ -143 +188,4 @@
+-    readers: [Reader; 2],
++    inventory_request: AtomicU64,
++    readers: [Reader; 3],
++    helper_count: usize,
++    production: InventoryProduction,
+@@ -199 +247 @@
+-    threads: [Option<JoinHandle<()>>; 2],
++    threads: [Option<JoinHandle<()>>; 3],
+@@ -208,0 +257,6 @@
++    pub(crate) fn start_with_inventory() -> Result<Self, String> {
++        Self::start_with_count(Startup::default(), 3)
++    }
++
++    pub(crate) fn inventory_enabled(&self) -> bool { self.shared.helper_count == 3 }
++
+@@ -209,0 +264,5 @@
++        Self::start_with_count(startup, 2)
++    }
++
++    fn start_with_count(startup: Startup, helper_count: usize) -> Result<Self, String> {
++        assert!((2..=3).contains(&helper_count));
+@@ -218,0 +278 @@
++                inventory_output: UnsafeCell::new(InventoryOutput::initial()),
+@@ -221 +281,4 @@
+-            readers: [Reader::new(), Reader::new()],
++            inventory_request: AtomicU64::new(0),
++            readers: [Reader::new(), Reader::new(), Reader::new()],
++            helper_count,
++            production: InventoryProduction::new(),
+@@ -235 +298 @@
+-            shared, threads: [None, None], generation: 0, close_error_reported: false,
++            shared, threads: [None, None, None], generation: 0, close_error_reported: false,
+@@ -237 +300 @@
+-        for side in 0..2 {
++        for side in 0..helper_count {
+@@ -247 +310 @@
+-                .name(if side == 0 { "rook2-eval-white" } else { "rook2-eval-black" }.into())
++                .name(match side { 0 => "rook2-eval-white", 1 => "rook2-eval-black", _ => "rook2-inventory" }.into())
+@@ -289 +352 @@
+-        for unstarted in side + 1..2 {
++        for unstarted in side + 1..self.shared.helper_count {
+@@ -334,0 +398,14 @@
++        self.dispatch_inner(position, influence, material, mobility_weights, shelter_weights, false)
++    }
++
++    pub(crate) fn dispatch_with_inventory(
++        &mut self, position: &Position, influence: &Influence, material: i32,
++        mobility_weights: [i32; 2], shelter_weights: [i32; 2], coherent: bool,
++    ) -> Result<DispatchToken, String> {
++        self.dispatch_inner(position, influence, material, mobility_weights, shelter_weights, coherent)
++    }
++
++    fn dispatch_inner(
++        &mut self, position: &Position, influence: &Influence, material: i32,
++        mobility_weights: [i32; 2], shelter_weights: [i32; 2], coherent: bool,
++    ) -> Result<DispatchToken, String> {
+@@ -358,0 +436 @@
++        let inventory = coherent && self.inventory_enabled();
+@@ -374,0 +453,4 @@
++        if inventory {
++            control.inventory.requested += 1;
++            if sampled { control.inventory.sampled_requested += 1; }
++        }
+@@ -383 +465 @@
+-            published, owner_ready_ns: None,
++            published, owner_ready_ns: None, inventory, colors_completed: false,
+@@ -386,0 +469,3 @@
++        // Sparse participant only: a root/Q/colors-only call does not alter
++        // this request or invent a completion from the inventory reader.
++        if inventory { self.shared.inventory_request.store(generation, Ordering::Release); }
+@@ -388 +473 @@
+-        Ok(DispatchToken { generation, sampled })
++        Ok(DispatchToken { generation, sampled, inventory })
+@@ -418 +503 @@
+-        let metadata = match control.flight {
++        let mut metadata = match control.flight {
+@@ -447 +532,2 @@
+-        control.flight = Flight::None;
++        metadata.colors_completed = true;
++        control.flight = if metadata.inventory { Flight::Joined(metadata) } else { Flight::None };
+@@ -461,0 +548,84 @@
++    /// Called only after the caller's numerical FULL finish and before any null
++    /// recursion. A Joined flight keeps every actual input participant leased.
++    pub(crate) fn settle_inventory(
++        &mut self, token: DispatchToken, destination: &mut MoveList,
++    ) -> Result<Option<InventoryReceipt>, String> {
++        if !token.inventory { return Ok(None); }
++        let numerical_complete = if token.sampled { Some(Instant::now()) } else { None };
++        if wait_inventory(&self.shared, token.generation).is_err() { return Err(self.failure()); }
++        let mut control = control_lock(&self.shared);
++        let metadata = match control.flight {
++            Flight::Joined(metadata) if metadata.generation == token.generation
++                && metadata.inventory && !control.closing && !terminal(&self.shared) => metadata,
++            _ => return Err("inventory settlement lost its Joined flight".into()),
++        };
++        if !inventory_done(&self.shared, token.generation) {
++            return Err("inventory settlement before its matching done epoch".into());
++        }
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.inventory_consuming);
++        let acquired = metadata.published.map(|_| Instant::now());
++        // SAFETY: This actual participant's done Acquire retires its Packet and
++        // output borrows. Joined under Control excludes close and publication.
++        // Copy only the used slice and scalar length. Every output reference
++        // ends before Flight::None, hence before a later inventory request
++        // Release/Acquire permits its sole writer's next mutation.
++        let (available, moves, ready_ns, generation_ns) = {
++            let output = unsafe { &*self.shared.cells.inventory_output.get() };
++            if output.generation != token.generation {
++                return Err("inventory output generation mismatch".into());
++            }
++            if output.available {
++                let len = output.list.len;
++                destination.moves[..len].copy_from_slice(output.list.as_slice());
++                destination.len = len;
++            }
++            (output.available, output.list.len, output.ready_ns, output.generation_ns)
++        };
++        let installed = if available { metadata.published.map(|_| Instant::now()) } else { None };
++        control.inventory.settled += 1;
++        if available { control.inventory.installed += 1; }
++        else { control.inventory.settled_unavailable += 1; }
++        let sample = if let Some(published) = metadata.published {
++            let full_ns = elapsed_ns(published, numerical_complete.expect("sampled FULL boundary"));
++            let acquired_ns = elapsed_ns(published, acquired.expect("sampled acquisition"));
++            control.inventory.record_settle(available, ready_ns, generation_ns, full_ns, acquired_ns);
++            installed.map(|end| {
++                let installed_ns = elapsed_ns(published, end);
++                control.inventory.install.record(installed_ns);
++                control.inventory.install_duration.record(installed_ns.saturating_sub(acquired_ns));
++                InventorySample { published, installed_ns }
++            })
++        } else { None };
++        control.flight = Flight::None;
++        drop(control);
++        Ok(if available { Some(InventoryReceipt { generation: token.generation, moves, sample }) } else { None })
++    }
++
++    /// Accounting only: the installed row belongs to its ordinary activation,
++    /// so descendant FULL epochs never revoke this receipt or its prepared list.
++    pub(crate) fn inventory_demand(&self, receipt: InventoryReceipt) {
++        let resolved = receipt.sample.as_ref().map(|sample| duration_ns(sample.published.elapsed()));
++        let mut control = control_lock(&self.shared);
++        control.inventory.demanded += 1;
++        control.inventory.demanded_moves += receipt.moves as u64;
++        if self.generation > receipt.generation { control.inventory.interposed_demanded += 1; }
++        if let (Some(sample), Some(ns)) = (receipt.sample, resolved) {
++            control.inventory.sampled_demanded += 1;
++            control.inventory.demand.record(ns);
++            control.inventory.demand_after_install.record(ns.saturating_sub(sample.installed_ns));
++        }
++    }
++
++    pub(crate) fn inventory_discard(&self, receipt: InventoryReceipt) {
++        let resolved = receipt.sample.as_ref().map(|sample| duration_ns(sample.published.elapsed()));
++        let mut control = control_lock(&self.shared);
++        control.inventory.discarded += 1;
++        if self.generation > receipt.generation { control.inventory.interposed_discarded += 1; }
++        if let (Some(sample), Some(ns)) = (receipt.sample, resolved) {
++            control.inventory.sampled_discarded += 1;
++            control.inventory.discard.record(ns);
++            control.inventory.discard_after_install.record(ns.saturating_sub(sample.installed_ns));
++        }
++    }
++
+@@ -469 +639,9 @@
+-        control_lock(&self.shared).readiness.json()
++        let control = control_lock(&self.shared);
++        let mut report = control.readiness.json();
++        report.pop();
++        report.push_str(",\"inventory\":");
++        if self.inventory_enabled() {
++            report.push_str(&control.inventory.json(&self.shared.production, control.readiness.dispatches));
++        } else { report.push_str("{\"enabled\":false}"); }
++        report.push('}');
++        report
+@@ -486 +664 @@
+-        for side in 0..2 {
++        for side in 0..self.shared.helper_count {
+@@ -509,0 +688,10 @@
++    pub(crate) fn parked_probe_for_test(&self) -> impl Fn() -> bool + 'static {
++        let shared = Arc::clone(&self.shared);
++        move || {
++            let control = control_lock(&shared);
++            all_state(&shared, PARKED) && control.scopes == 0
++                && !control.closing && matches!(control.flight, Flight::None)
++        }
++    }
++
++    #[cfg(test)]
+@@ -545 +733 @@
+-        let generation = shared.request.load(Ordering::Acquire);
++        let generation = own_request(shared, side).load(Ordering::Acquire);
+@@ -550 +738 @@
+-            let access_started = if generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
++            let access_started = if side < 2 && generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
+@@ -557,0 +746,14 @@
++            if side == 2 {
++                // This helper forms no reference on colors-only epochs. It
++                // mutates only its concrete initialized list on its own request.
++                let production = unsafe { compute_inventory(shared, generation)? };
++                #[cfg(test)]
++                test_reader_gate(shared, &shared.tests.before_done[side], side)?;
++                shared.production.record(production);
++                reader.done.store(generation, Ordering::Release);
++                seen = generation;
++                #[cfg(test)]
++                test_pause(shared, &shared.tests.before_latch[side]);
++                signal_completion(shared);
++                continue;
++            }
+@@ -617 +819,66 @@
+-fn side_name(side: usize) -> &'static str { if side == 0 { "white" } else { "black" } }
++/// The coherent permission belongs to the private ordinary caller, never a
++/// public/root/Q placement guess. One king each closes king indexing. The
++/// generator excludes king victims, including on an attacked opposite king;
++/// opposite-king safety is not a precondition of its read-only projection.
++/// Within coherent geometry, all source squares/tag planes are valid. Generated
++/// targets come from checked offsets/rays; EP validates its behind offset before
++/// projection; castle squares are fixed home-rank squares. The sole double-step
++/// unwrap is protected by the initial pawn rank. Checker emission stops at two.
++/// generate_legal uses LIMIT=MOVE_CAPACITY and returns after each reaching push
++/// (including each promotion), so no later push can observe a full list.
++/// Prefix reordering stays within that existing length. No remaining valid
++/// unsupported domain was found; this argument does not rely on catching an
++/// aborting production panic or silently replacing worker failure with a skip.
++fn inventory_domain(position: &Position) -> bool {
++    position.counts[Color::White.index()][PieceKind::King.index()] == 1
++        && position.counts[Color::Black.index()][PieceKind::King.index()] == 1
++}
++
++struct ProductionRecord {
++    available: bool,
++    moves: usize,
++    sampled: bool,
++}
++
++/// Caller acquired the private sparse request. Only inventory reader owns this
++/// output; no whole Cells mutable borrow or stack MoveList copy is constructed.
++unsafe fn compute_inventory(shared: &Shared, generation: u64) -> Result<ProductionRecord, String> {
++    let result = {
++        let packet = unsafe { &*shared.cells.input.get() };
++        if packet.generation != generation { return Err("inventory input generation mismatch".into()); }
++        // SAFETY: The previous inventory slice reads ended before this acquired
++        // inventory request Release; only this reader mutates this concrete cell.
++        let output = unsafe { &mut *shared.cells.inventory_output.get() };
++        output.generation = generation;
++        output.available = false;
++        output.list.clear();
++        let started = packet.published.map(|_| Instant::now());
++        let available = inventory_domain(&packet.position);
++        #[cfg(test)]
++        let available = !shared.tests.force_inventory_unavailable.swap(false, Ordering::SeqCst) && available;
++        if available {
++            movegen::generate_legal(&packet.position, &mut output.list);
++            output.available = true;
++        }
++        #[cfg(test)]
++        test_reader_gate(shared, &shared.tests.in_input[2], 2)?;
++        output.generation_ns = started.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
++        let sampled = packet.published.is_some();
++        // Final Packet/timing access. Both this Packet ref and the mutable
++        // output reference end before the caller publishes inventory done.
++        output.ready_ns = packet.published.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
++        ProductionRecord {
++            available: output.available, moves: output.list.len,
++            sampled,
++        }
++    };
++    Ok(result)
++}
++
++fn side_name(side: usize) -> &'static str {
++    match side { 0 => "white", 1 => "black", _ => "inventory" }
++}
++
++fn own_request(shared: &Shared, side: usize) -> &AtomicU64 {
++    if side == 2 { &shared.inventory_request } else { &shared.request }
++}
+@@ -620 +887 @@
+-    shared.readers.iter().all(|reader| reader.state.load(Ordering::Acquire) == state)
++    shared.readers[..shared.helper_count].iter().all(|reader| reader.state.load(Ordering::Acquire) == state)
+@@ -624 +891 @@
+-    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), PARKED | FAILED | STOPPED))
++    shared.readers[..shared.helper_count].iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), PARKED | FAILED | STOPPED))
+@@ -628 +895 @@
+-    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
++    shared.readers[..shared.helper_count].iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
+@@ -634 +901 @@
+-    shared.readers.iter().all(|reader| reader.done.load(Ordering::Acquire) == generation)
++    shared.readers[..2].iter().all(|reader| reader.done.load(Ordering::Acquire) == generation)
+@@ -659,0 +927,8 @@
++fn inventory_done(shared: &Shared, generation: u64) -> bool {
++    shared.readers[2].done.load(Ordering::Acquire) == generation
++}
++
++fn requested_done(shared: &Shared, generation: u64, inventory: bool) -> bool {
++    if inventory { inventory_done(shared, generation) } else { both_done(shared, generation) }
++}
++
+@@ -660,0 +936,10 @@
++    wait_for(shared, generation, false)
++}
++
++fn wait_inventory(shared: &Shared, generation: u64) -> Result<(), String> {
++    wait_for(shared, generation, true)
++}
++
++/// The sole coordinator uses the two stages sequentially. Predicate selection
++/// changes no SC exchange, Sleep handshake, or the fixed4096-spin policy.
++fn wait_for(shared: &Shared, generation: u64, inventory: bool) -> Result<(), String> {
+@@ -663 +948 @@
+-        if both_done(shared, generation) { return Ok(()); }
++        if requested_done(shared, generation, inventory) { return Ok(()); }
+@@ -680 +965 @@
+-        let done = both_done(shared, generation);
++        let done = requested_done(shared, generation, inventory);
+@@ -697 +982 @@
+-            reader.failed_generation.store(shared.request.load(Ordering::Acquire), Ordering::Relaxed);
++            reader.failed_generation.store(own_request(shared, side).load(Ordering::Acquire), Ordering::Relaxed);
+@@ -711 +996 @@
+-    if let Flight::Published(metadata) = control.flight {
++    if let Flight::Published(metadata) | Flight::Joined(metadata) = control.flight {
+@@ -719 +1004 @@
+-        Flight::Published(metadata) | Flight::Discarding(metadata) => metadata,
++        Flight::Published(metadata) | Flight::Joined(metadata) | Flight::Discarding(metadata) => metadata,
+@@ -721 +1006 @@
+-    if metadata.published.is_some() {
++    if metadata.published.is_some() && !metadata.colors_completed {
+@@ -723,0 +1009,9 @@
++    }
++    if metadata.inventory {
++        if has_failure(control) {
++            control.inventory.failed += 1;
++            if metadata.published.is_some() { control.inventory.sampled_failed += 1; }
++        } else {
++            control.inventory.unsettled_discarded += 1;
++            if metadata.published.is_some() { control.inventory.sampled_unsettled_discarded += 1; }
++        }
+@@ -755 +1049 @@
+-    if terminal(shared) || shared.request.load(Ordering::Acquire) != seen { return; }
++    if terminal(shared) || own_request(shared, side).load(Ordering::Acquire) != seen { return; }
+@@ -890,0 +1185,110 @@
++/// One actual inventory producer writes these bounded observations. Atomics
++/// permit a report snapshot; they grant no packet or output ownership.
++struct InventoryProduction {
++    completed: AtomicU64,
++    generated: AtomicU64,
++    domain_unavailable: AtomicU64,
++    generated_moves: AtomicU64,
++    sampled_completed: AtomicU64,
++}
++
++impl InventoryProduction {
++    fn new() -> Self {
++        Self {
++            completed: AtomicU64::new(0), generated: AtomicU64::new(0),
++            domain_unavailable: AtomicU64::new(0), generated_moves: AtomicU64::new(0),
++            sampled_completed: AtomicU64::new(0),
++        }
++    }
++
++    fn record(&self, record: ProductionRecord) {
++        self.completed.fetch_add(1, Ordering::Relaxed);
++        if record.available {
++            self.generated.fetch_add(1, Ordering::Relaxed);
++            self.generated_moves.fetch_add(record.moves as u64, Ordering::Relaxed);
++        } else { self.domain_unavailable.fetch_add(1, Ordering::Relaxed); }
++        if record.sampled { self.sampled_completed.fetch_add(1, Ordering::Relaxed); }
++    }
++}
++
++#[derive(Default)]
++struct InventoryStats {
++    requested: u64,
++    settled: u64,
++    installed: u64,
++    settled_unavailable: u64,
++    demanded: u64,
++    demanded_moves: u64,
++    discarded: u64,
++    interposed_demanded: u64,
++    interposed_discarded: u64,
++    unsettled_discarded: u64,
++    failed: u64,
++    sampled_requested: u64,
++    sampled_settled: u64,
++    sampled_installed: u64,
++    sampled_unavailable: u64,
++    sampled_demanded: u64,
++    sampled_discarded: u64,
++    sampled_unsettled_discarded: u64,
++    sampled_failed: u64,
++    ready: Metric,
++    generation: Metric,
++    numerical_full_complete: Metric,
++    acquire: Metric,
++    acquire_wait: Metric,
++    ready_after_full: Metric,
++    full_after_ready: Metric,
++    install: Metric,
++    install_duration: Metric,
++    demand: Metric,
++    demand_after_install: Metric,
++    discard: Metric,
++    discard_after_install: Metric,
++}
++
++impl InventoryStats {
++    fn record_settle(&mut self, available: bool, ready: u64, generation: u64, full: u64, acquire: u64) {
++        self.sampled_settled += 1;
++        if available { self.sampled_installed += 1; } else { self.sampled_unavailable += 1; }
++        self.ready.record(ready);
++        self.generation.record(generation);
++        self.numerical_full_complete.record(full);
++        self.acquire.record(acquire);
++        self.acquire_wait.record(acquire.saturating_sub(full));
++        self.ready_after_full.record(ready.saturating_sub(full));
++        self.full_after_ready.record(full.saturating_sub(ready));
++    }
++
++    fn json(&self, production: &InventoryProduction, dispatches: u64) -> String {
++        let mut output = String::new();
++        let pending = self.installed-self.demanded-self.discarded;
++        let sampled_pending = self.sampled_installed-self.sampled_demanded-self.sampled_discarded;
++        write!(output, "{{\"schema\":\"rook2-conditional-inventory-v1\",\"enabled\":true,\"sample_stride\":{SAMPLE_STRIDE},\"sampling\":\"color_epoch_mod_512\",\"requested\":{},\"nonparticipants\":{},\"completed\":{},\"generated\":{},\"domainUnavailable\":{},\"generatedMoves\":{},\"settled\":{},\"installed\":{},\"settledUnavailable\":{},\"demanded\":{},\"discarded\":{},\"unsettledDiscarded\":{},\"failed\":{},\"pendingReceipts\":{},\"demandedMoves\":{},\"interposedDemanded\":{},\"interposedDiscarded\":{},\"sampledRequested\":{},\"sampledCompleted\":{},\"sampledSettled\":{},\"sampledInstalled\":{},\"sampledUnavailable\":{},\"sampledDemanded\":{},\"sampledDiscarded\":{},\"sampledUnsettledDiscarded\":{},\"sampledFailed\":{},\"sampledPendingReceipts\":{},\"metrics\":{{",
++            self.requested, dispatches-self.requested, production.completed.load(Ordering::Relaxed),
++            production.generated.load(Ordering::Relaxed), production.domain_unavailable.load(Ordering::Relaxed),
++            production.generated_moves.load(Ordering::Relaxed), self.settled, self.installed,
++            self.settled_unavailable, self.demanded, self.discarded, self.unsettled_discarded,
++            self.failed, pending, self.demanded_moves, self.interposed_demanded, self.interposed_discarded,
++            self.sampled_requested, production.sampled_completed.load(Ordering::Relaxed),
++            self.sampled_settled, self.sampled_installed, self.sampled_unavailable, self.sampled_demanded,
++            self.sampled_discarded, self.sampled_unsettled_discarded, self.sampled_failed, sampled_pending).unwrap();
++        let metrics = [
++            ("ready", &self.ready), ("generation", &self.generation),
++            ("numerical_full_complete", &self.numerical_full_complete), ("acquire", &self.acquire),
++            ("acquire_wait", &self.acquire_wait), ("ready_after_full", &self.ready_after_full),
++            ("full_after_ready", &self.full_after_ready), ("install", &self.install),
++            ("install_duration", &self.install_duration), ("demand", &self.demand),
++            ("demand_after_install", &self.demand_after_install), ("discard", &self.discard),
++            ("discard_after_install", &self.discard_after_install),
++        ];
++        for (index, (name, metric)) in metrics.iter().enumerate() {
++            if index != 0 { output.push(','); }
++            write!(output, "\"{name}\":").unwrap();
++            metric.write_json(&mut output);
++        }
++        output.push_str("}}");
++        output
++    }
++}
++
+@@ -903,4 +1307,4 @@
+-    input: [Mutex<TestGate>; 2],
+-    in_input: [Mutex<TestGate>; 2],
+-    before_done: [Mutex<TestGate>; 2],
+-    before_latch: [Mutex<TestGate>; 2],
++    input: [Mutex<TestGate>; 3],
++    in_input: [Mutex<TestGate>; 3],
++    before_done: [Mutex<TestGate>; 3],
++    before_latch: [Mutex<TestGate>; 3],
+@@ -909,0 +1314 @@
++    inventory_consuming: Mutex<TestGate>,
+@@ -913,0 +1319 @@
++    force_inventory_unavailable: AtomicBool,
+@@ -921,4 +1327,4 @@
+-            input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
+-            in_input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
+-            before_done: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
+-            before_latch: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            in_input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            before_done: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            before_latch: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
+@@ -927,0 +1334 @@
++            inventory_consuming: Mutex::new(TestGate::default()),
+@@ -931,0 +1339 @@
++            force_inventory_unavailable: AtomicBool::new(false),
+@@ -1585 +1993,355 @@
+-}
++    fn inventory_dispatch(worker: &mut ColorsWorker, packet: &Fixture) -> DispatchToken {
++        worker.dispatch_with_inventory(
++            &packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights, true,
++        ).unwrap()
++    }
++
++    fn inventory_expected(actual: &MoveList, position: &Position) {
++        let mut expected = MoveList::new();
++        movegen::generate_legal(position, &mut expected);
++        assert_eq!(actual.as_slice(), expected.as_slice());
++    }
++
++    #[test]
++    fn inventory_sparse_requests_and_receipts_survive_many_descendant_epochs() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        assert!(worker.inventory_enabled());
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let first = inventory_dispatch(&mut worker, &packet);
++        assert!(first.inventory_requested());
++        worker.complete().unwrap();
++        let mut parent_row = MoveList::new();
++        let first_receipt = worker.settle_inventory(first, &mut parent_row).unwrap().unwrap();
++        for _ in 0..97 {
++            let token = dispatch(&mut worker, &packet);
++            assert!(!token.inventory_requested());
++            worker.complete().unwrap();
++            assert!(worker.settle_inventory(token, &mut MoveList::new()).unwrap().is_none());
++        }
++        assert_eq!(worker.shared.inventory_request.load(Ordering::Acquire), first.generation);
++        assert_eq!(worker.shared.readers[2].done.load(Ordering::Acquire), first.generation);
++        let second = inventory_dispatch(&mut worker, &packet);
++        assert!(second.generation > first.generation + 90);
++        worker.complete().unwrap();
++        let mut child_row = MoveList::new();
++        let second_receipt = worker.settle_inventory(second, &mut child_row).unwrap().unwrap();
++        inventory_expected(&parent_row, &packet.position);
++        inventory_expected(&child_row, &packet.position);
++        worker.inventory_demand(first_receipt); // Never compare against latest for admission.
++        dispatch(&mut worker, &packet);
++        worker.complete().unwrap();
++        worker.inventory_discard(second_receipt);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++        let control = control_lock(&worker.shared);
++        assert_eq!(control.inventory.requested, 2);
++        assert_eq!(control.inventory.installed, 2);
++        assert_eq!(control.inventory.demanded, 1);
++        assert_eq!(control.inventory.discarded, 1);
++        assert_eq!(control.inventory.interposed_demanded, 1);
++        assert_eq!(control.inventory.interposed_discarded, 1);
++        assert_eq!(worker.shared.production.completed.load(Ordering::Relaxed), 2);
++    }
++
++    #[test]
++    fn inventory_native_unsorted_special_and_checked_lists_are_exact() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for fen in [
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
++            "4k3/8/8/2PpP3/8/8/8/4K3 w - d6 0 1",
++            "4k3/P7/8/8/8/8/8/4K3 w - - 0 1",
++            "4r1k1/8/8/8/8/8/8/4K3 w - - 0 1",
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            assert!(inventory_domain(&position));
++            let packet = Fixture {
++                position, influence: Influence::build(&position), material: 0,
++                mobility_weights: [1024; 2], shelter_weights: [1024; 2],
++            };
++            let token = inventory_dispatch(&mut worker, &packet);
++            worker.complete().unwrap();
++            let mut row = MoveList::new();
++            let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++            inventory_expected(&row, &position);
++            worker.inventory_demand(receipt);
++        }
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++        assert_eq!(control_lock(&worker.shared).inventory.demanded, 5);
++    }
++
++    #[test]
++    fn inventory_unavailable_and_noncoherent_calls_never_prepare_or_invent_done() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = worker.dispatch_with_inventory(
++            &packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights, false,
++        ).unwrap();
++        assert!(!token.inventory_requested());
++        worker.complete().unwrap();
++        let mut row = MoveList::new();
++        row.len = 1;
++        assert!(worker.settle_inventory(token, &mut row).unwrap().is_none());
++        assert_eq!(row.len, 1);
++        assert_eq!(worker.shared.inventory_request.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.readers[2].done.load(Ordering::Acquire), 0);
++        let position = Position::from_fen("8/8/8/8/8/4k3/4R3/4K3 w - - 0 1").unwrap();
++        assert!(inventory_domain(&position));
++        let map = Influence::build(&position);
++        let token = worker.dispatch_with_inventory(&position, &map, 0, [1024; 2], [1024; 2], true).unwrap();
++        worker.complete().unwrap();
++        let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++        inventory_expected(&row, &position);
++        let opposite_king = position.piece_squares(Color::Black, PieceKind::King)[0];
++        assert!(row.as_slice().iter().all(|movement| movement.to() != opposite_king));
++        worker.inventory_demand(receipt);
++        // Conditional unavailable-path control only, not a native-domain witness.
++        worker.shared.tests.force_inventory_unavailable.store(true, Ordering::SeqCst);
++        row.moves[0] = crate::types::Move::NONE;
++        row.len = 1;
++        let token = worker.dispatch_with_inventory(&position, &map, 0, [1024; 2], [1024; 2], true).unwrap();
++        worker.complete().unwrap();
++        assert!(worker.settle_inventory(token, &mut row).unwrap().is_none());
++        assert_eq!(row.as_slice(), &[crate::types::Move::NONE]);
++        assert!(!worker.shared.tests.force_inventory_unavailable.load(Ordering::SeqCst));
++        assert_eq!(worker.shared.production.domain_unavailable.load(Ordering::Relaxed), 1);
++        assert_eq!(control_lock(&worker.shared).inventory.settled_unavailable, 1);
++        let mut missing = position;
++        missing.counts[0][PieceKind::King.index()] = 0;
++        assert!(!inventory_domain(&missing)); // Guard stops before king indexing.
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn inventory_two_stage_complete_keeps_input_until_delayed_third_reader() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        block(&worker.shared, 2);
++        let token = inventory_dispatch(&mut worker, &packet);
++        entered(&worker.shared, 2);
++        worker.complete().unwrap(); // Exactly two colors; inventory remains blocked.
++        assert!(matches!(control_lock(&worker.shared).flight, Flight::Joined(_)));
++        assert_eq!(worker.shared.readers[2].done.load(Ordering::Acquire), 0);
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        let shared = Arc::clone(&worker.shared);
++        let before = shared.tests.registrations.load(Ordering::SeqCst);
++        let settle = thread::spawn(move || {
++            let mut row = MoveList::new();
++            let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++            (worker, row, receipt)
++        });
++        registered(&shared, before+1);
++        assert!(matches!(control_lock(&shared).flight, Flight::Joined(_)));
++        release(&shared, 2, false);
++        let (mut worker, row, receipt) = settle.join().unwrap();
++        inventory_expected(&row, &packet.position);
++        worker.inventory_demand(receipt);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn inventory_published_and_joined_close_wait_all_helpers_without_double_color_sample() {
++        for joined in [false, true] {
++            let mut worker = ColorsWorker::start_with_inventory().unwrap();
++            assert!(worker.is_parked());
++            worker.generation = SAMPLE_STRIDE-1;
++            let scope = worker.start_active_scope().unwrap();
++            block_at(&worker.shared.tests.in_input[2]);
++            let packet = packet();
++            inventory_dispatch(&mut worker, &packet);
++            entered_at(&worker.shared, &worker.shared.tests.in_input[2]);
++            if joined { worker.complete().unwrap(); }
++            let (sent, received) = mpsc::channel();
++            let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++            closing(&worker.shared);
++            assert!(received.try_recv().is_err());
++            assert!(matches!(control_lock(&worker.shared).flight,
++                Flight::Discarding(metadata) if metadata.colors_completed == joined));
++            release_at(&worker.shared, &worker.shared.tests.in_input[2], false);
++            close.join().unwrap();
++            assert!(received.recv().unwrap().is_ok());
++            assert!(worker.is_parked());
++            {
++                let control = control_lock(&worker.shared);
++                assert_eq!(control.readiness.sampled_dispatches, 1);
++                assert_eq!(control.readiness.completed_samples, u64::from(joined));
++                assert_eq!(control.readiness.discarded_samples, u64::from(!joined));
++                assert_eq!(control.inventory.sampled_unsettled_discarded, 1);
++                assert_eq!(control.inventory.installed, 0);
++            }
++            let next = worker.start_active_scope().unwrap();
++            let token = inventory_dispatch(&mut worker, &packet);
++            worker.complete().unwrap();
++            let mut row = MoveList::new();
++            let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++            worker.inventory_discard(receipt);
++            next.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn inventory_failure_wakes_second_stage_and_never_fabricates_third_done() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block_at(&worker.shared.tests.in_input[2]);
++        let token = inventory_dispatch(&mut worker, &packet());
++        entered_at(&worker.shared, &worker.shared.tests.in_input[2]);
++        worker.complete().unwrap();
++        let shared = Arc::clone(&worker.shared);
++        let before = shared.tests.registrations.load(Ordering::SeqCst);
++        let waiter = thread::spawn(move || wait_inventory(&shared, token.generation));
++        registered(&worker.shared, before+1);
++        release_at(&worker.shared, &worker.shared.tests.in_input[2], true);
++        assert!(waiter.join().unwrap().is_err());
++        assert_eq!(worker.shared.readers[2].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.readers[2].failed_generation.load(Ordering::Acquire), token.generation);
++        assert!(scope.finish().is_err());
++        assert!(worker.shutdown().is_err());
++        assert_eq!(control_lock(&worker.shared).inventory.failed, 1);
++        no_flight(&worker.shared);
++    }
++
++    #[test]
++    fn inventory_second_stage_registration_and_spurious_wake_use_same_sc_latch() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block(&worker.shared, 2);
++        let token = inventory_dispatch(&mut worker, &packet());
++        entered(&worker.shared, 2);
++        worker.complete().unwrap();
++        let shared = Arc::clone(&worker.shared);
++        let before = shared.tests.registrations.load(Ordering::SeqCst);
++        let waiter = thread::spawn(move || wait_inventory(&shared, token.generation));
++        registered(&worker.shared, before+1);
++        {
++            let _sleep = worker.shared.sleep.lock().unwrap();
++            worker.shared.completed.notify_all();
++        }
++        registered(&worker.shared, before+2);
++        release(&worker.shared, 2, false);
++        waiter.join().unwrap().unwrap();
++        let mut row = MoveList::new();
++        let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++        worker.inventory_discard(receipt);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn inventory_used_slice_reads_end_before_close_and_next_private_request() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = inventory_dispatch(&mut worker, &packet);
++        worker.complete().unwrap();
++        block_at(&worker.shared.tests.inventory_consuming);
++        let shared = Arc::clone(&worker.shared);
++        let settling = thread::spawn(move || {
++            let mut row = MoveList::new();
++            row.moves[400] = crate::types::Move::new(
++                crate::types::Square(0), crate::types::Square(8), crate::types::MoveKind::Ordinary,
++            );
++            let tail = row.moves[400];
++            let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++            assert_eq!(row.moves[400], tail, "only the used slice may be installed");
++            (worker, row, receipt)
++        });
++        entered_at(&shared, &shared.tests.inventory_consuming);
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        assert!(received.try_recv().is_err());
++        release_at(&shared, &shared.tests.inventory_consuming, false);
++        let (mut worker, first_row, receipt) = settling.join().unwrap();
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        let next = worker.start_active_scope().unwrap();
++        let token = inventory_dispatch(&mut worker, &packet);
++        worker.complete().unwrap();
++        let mut next_row = MoveList::new();
++        let next_receipt = worker.settle_inventory(token, &mut next_row).unwrap().unwrap();
++        inventory_expected(&first_row, &packet.position);
++        inventory_expected(&next_row, &packet.position);
++        worker.inventory_demand(receipt);
++        worker.inventory_discard(next_receipt);
++        next.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn inventory_third_startup_failure_and_max_epoch_join_all_actual_threads() {
++        for startup in [
++            Startup { fail_spawn: Some(2), ..Startup::default() },
++            Startup { fail_entry: Some(2), ..Startup::default() },
++            Startup { panic_entry: Some(2), ..Startup::default() },
++        ] {
++            assert!(ColorsWorker::start_with_count(startup, 3).is_err());
++        }
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        assert!(worker.is_parked());
++        worker.generation = u64::MAX-1;
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = inventory_dispatch(&mut worker, &packet);
++        assert_eq!(token.generation, u64::MAX);
++        worker.complete().unwrap();
++        let mut row = MoveList::new();
++        let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++        worker.inventory_discard(receipt);
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        assert_eq!(worker.shared.inventory_request.load(Ordering::Acquire), u64::MAX);
++        assert_eq!(worker.shared.readers[2].done.load(Ordering::Acquire), u64::MAX);
++        assert!(all_terminal(&worker.shared));
++        assert!(worker.threads.iter().all(Option::is_none));
++        no_flight(&worker.shared);
++        scope.finish().unwrap();
++        assert!(worker.shutdown().is_err());
++    }
++
++    #[test]
++    fn inventory_sampled_installed_receipts_pair_full_ready_install_and_late_demand() {
++        let mut worker = ColorsWorker::start_with_inventory().unwrap();
++        assert!(worker.is_parked());
++        worker.generation = SAMPLE_STRIDE-1;
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = inventory_dispatch(&mut worker, &packet);
++        worker.owner_ready(token).unwrap();
++        worker.complete().unwrap();
++        let mut row = MoveList::new();
++        let receipt = worker.settle_inventory(token, &mut row).unwrap().unwrap();
++        for _ in 0..3 {
++            dispatch(&mut worker, &packet);
++            worker.complete().unwrap();
++        }
++        worker.inventory_demand(receipt);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++        let control = control_lock(&worker.shared);
++        let inventory = &control.inventory;
++        assert_eq!(inventory.sampled_requested, 1);
++        assert_eq!(inventory.sampled_settled, 1);
++        assert_eq!(inventory.sampled_installed, 1);
++        assert_eq!(inventory.sampled_demanded, 1);
++        assert_eq!(inventory.interposed_demanded, 1);
++        assert_eq!(inventory.ready.count, 1);
++        assert_eq!(inventory.numerical_full_complete.count, 1);
++        assert_eq!(inventory.install.count, 1);
++        assert_eq!(inventory.demand_after_install.count, 1);
++        assert_eq!(inventory.ready_after_full.sum_ns as i128-inventory.full_after_ready.sum_ns as i128,
++            inventory.ready.sum_ns as i128-inventory.numerical_full_complete.sum_ns as i128);
++        assert_eq!(control.readiness.completed_samples, 1);
++    }
++
++}
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -354 +354 @@
+-    /// is min(requested, permitted, 3). Later placement does not change this cap.
++    /// is min(requested, permitted, 4). Later placement does not change this cap.
+@@ -374 +374 @@
+-                available => requested.min(available).min(3),
++                available => requested.min(available).min(4),
+@@ -399,2 +399,5 @@
+-            3 => {
+-                let replacement = if let Some(worker) = self.colors_worker.as_ref() {
++            3 | 4 => {
++                let inventory = configured == 4;
++                let replacement = if let Some(worker) = self.colors_worker.as_ref()
++                    .filter(|worker| worker.inventory_enabled() == inventory)
++                {
+@@ -403 +406,7 @@
+-                } else { Some(crate::colors_worker::ColorsWorker::start()?) };
++                } else {
++                    Some(if inventory {
++                        crate::colors_worker::ColorsWorker::start_with_inventory()?
++                    } else {
++                        crate::colors_worker::ColorsWorker::start()?
++                    })
++                };
+@@ -406 +415,4 @@
+-                if let Some(worker) = replacement { self.colors_worker = Some(worker); }
++                if let Some(worker) = replacement {
++                    if let Some(old) = self.colors_worker.as_mut() { old.shutdown()?; }
++                    self.colors_worker = Some(worker);
++                }
+@@ -418 +430,3 @@
+-        if self.colors_worker.is_some() { 3 } else if self.full_worker.is_some() { 2 } else { 1 }
++        if let Some(worker) = self.colors_worker.as_ref() {
++            if worker.inventory_enabled() { 4 } else { 3 }
++        } else if self.full_worker.is_some() { 2 } else { 1 }
+@@ -496 +510 @@
+-            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".into())
++            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false,\"inventory\":{\"enabled\":false}}".into())
+@@ -601,0 +616,35 @@
++        self.full_impl_inventory::<FRESH, _, _>(
++            node, influence, in_check, observer, details, None,
++        ).0
++    }
++
++    /// Only ordinary search can request early inventory. Public/root/Q/FRESH
++    /// entrypoints retain their original FULL demand and supplied-map authority.
++    pub(crate) fn full_ordinary(
++        &mut self, node: &mut Node, influence: &Influence, in_check: bool,
++        coherent: bool, destination: &mut crate::movegen::MoveList,
++    ) -> (Evaluation, Option<crate::colors_worker::InventoryReceipt>) {
++        self.full_impl_inventory::<false, _, _>(
++            node, influence, in_check, |_| {}, |_| {}, Some((coherent, destination)),
++        )
++    }
++
++    pub(crate) fn inventory_demand(&self, receipt: Option<crate::colors_worker::InventoryReceipt>) {
++        if let Some(receipt) = receipt {
++            self.colors_worker.as_ref().expect("inventory receipt lacks its owner")
++                .inventory_demand(receipt);
++        }
++    }
++
++    pub(crate) fn inventory_discard(&self, receipt: Option<crate::colors_worker::InventoryReceipt>) {
++        if let Some(receipt) = receipt {
++            self.colors_worker.as_ref().expect("inventory receipt lacks its owner")
++                .inventory_discard(receipt);
++        }
++    }
++
++    fn full_impl_inventory<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        &mut self, node: &mut Node, influence: &Influence, in_check: bool,
++        observer: F, details: D,
++        mut inventory: Option<(bool, &mut crate::movegen::MoveList)>,
++    ) -> (Evaluation, Option<crate::colors_worker::InventoryReceipt>) {
+@@ -607 +656 @@
+-        let call_scope = if let Some(worker) = self.colors_worker.as_ref() {
++        let mut call_scope = if let Some(worker) = self.colors_worker.as_ref() {
+@@ -615,3 +664,10 @@
+-        let colors_token = self.colors_worker.as_mut().map(|worker| worker.dispatch(
+-            position, influence, material, self.weights.mobility, self.weights.shelter,
+-        ).unwrap_or_else(|error|panic!("colors dispatch failed: {error}")));
++        let colors_token = self.colors_worker.as_mut().map(|worker| {
++            let dispatched = if let Some((coherent, _)) = inventory.as_ref() {
++                worker.dispatch_with_inventory(position, influence, material,
++                    self.weights.mobility, self.weights.shelter, *coherent)
++            } else {
++                worker.dispatch(position, influence, material,
++                    self.weights.mobility, self.weights.shelter)
++            };
++            dispatched.unwrap_or_else(|error|panic!("colors dispatch failed: {error}"))
++        });
+@@ -695 +751,7 @@
+-        Self::finish_full_worker_scope(call_scope);
++        // Preserve the original pre-composition close for public/FRESH/root/Q
++        // and current2 calls, including potentially blocking observers. Only an
++        // actual third-reader participant retains this scope through settlement.
++        let inventory_participant = colors_token.is_some_and(|token| token.inventory_requested());
++        if !inventory_participant {
++            Self::finish_full_worker_scope(call_scope.take());
++        }
+@@ -740 +802 @@
+-        self.finish_observed(position, base, in_check, progress, queries, |finished| {
++        let evaluation = self.finish_observed(position, base, in_check, progress, queries, |finished| {
+@@ -747 +809,11 @@
+-        })
++        });
++        let receipt = if let (Some(token), Some((_, destination))) =
++            (colors_token, inventory.as_mut())
++        {
++            if token.inventory_requested() {
++                self.colors_worker.as_mut().unwrap().settle_inventory(token, destination)
++                    .unwrap_or_else(|error|panic!("inventory settlement failed: {error}"))
++            } else { None }
++        } else { None };
++        Self::finish_full_worker_scope(call_scope);
++        (evaluation, receipt)
+@@ -1305,0 +1378,4 @@
++
++#[cfg(test)]
++#[path = "evaluator/inventory_four_tests.rs"]
++mod inventory_four_tests;
+diff --git a/src/evaluator/colors_tests.rs b/src/evaluator/colors_tests.rs
+--- a/src/evaluator/colors_tests.rs
++++ b/src/evaluator/colors_tests.rs
+@@ -367 +367 @@
+-    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,4));
+@@ -369 +369 @@
+-    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,3));
++    assert_eq!((session.requested_threads().unwrap(),session.configured_threads().unwrap()),(usize::MAX,4));
+diff --git a/src/evaluator/inventory_four_tests.rs b/src/evaluator/inventory_four_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/inventory_four_tests.rs
+@@ -0,0 +1,194 @@
++//! Actual ordinary producer/consumption ownership, including null descendants.
++use super::*;
++use crate::{engine::Search, history::SearchHistory, movegen::{self, MoveList}, ordinary};
++use crate::quiescence::{Limits, Stopped};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++
++fn inventory_counter<const D: bool>(evaluator: &Evaluator<D>, key: &str) -> u64 {
++    let report=evaluator.colors_worker.as_ref().unwrap().readiness_report();
++    let inventory=report.split("\"inventory\":").nth(1).unwrap();
++    let rest=inventory.split(&format!("\"{key}\":")).nth(1).unwrap();
++    rest.chars().take_while(|c|c.is_ascii_digit()).collect::<String>().parse().unwrap()
++}
++
++fn mode4<const D:bool>(position:&Position)->Evaluator<D> {
++    let mut evaluator=Evaluator::new(position);
++    evaluator.set_threads_with_affinity(4,||Ok(4)).unwrap();
++    assert_eq!(evaluator.configured_threads(),4);
++    evaluator
++}
++
++#[test]
++fn private_ordinary_full_installs_exact_native_unsorted_special_inventories() {
++    let initial=Position::from_fen(START).unwrap();
++    let mut worker=mode4::<true>(&initial);
++    let mut serial=Evaluator::<true>::new(&initial);
++    let scope=worker.full_worker_scope();
++    for fen in [START,
++        "4k3/8/8/8/8/8/4r3/4K3 w - - 0 1",
++        "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
++        "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
++        "7k/P7/8/8/8/8/8/K7 w - - 0 1"]
++    {
++        let position=Position::from_fen(fen).unwrap();position.validate().unwrap();
++        serial.begin_search(&position);worker.begin_search(&position);
++        let map=Influence::build(&position);let checked=movegen::in_check(&position,position.side);
++        let mut a=Node::root(position,&serial.root);let mut b=a;
++        let mut expected=MoveList::new();movegen::generate_legal(&position,&mut expected);
++        let mut installed=MoveList::new();
++        let actual=worker.full_ordinary(&mut b,&map,checked,true,&mut installed);
++        assert_eq!(actual.0,serial.full(&mut a,&map,checked));assert_eq!(a,b);
++        assert_eq!(worker.stats,serial.stats);assert_eq!(installed.as_slice(),expected.as_slice());
++        assert!(actual.1.is_some());worker.inventory_demand(actual.1);
++    }
++    Evaluator::<true>::finish_full_worker_scope(scope);
++    assert!(worker.colors_worker.as_ref().unwrap().is_parked());
++    assert_eq!(inventory_counter(&worker,"requested"),5);
++    assert_eq!(inventory_counter(&worker,"demanded"),5);
++    assert_eq!(inventory_counter(&worker,"pendingReceipts"),0);
++}
++
++#[test]
++fn receipt_survives_later_epochs_without_retaining_packet_or_latest_epoch_authority() {
++    let position=Position::from_fen(START).unwrap();let mut worker=mode4::<false>(&position);
++    let map=Influence::build(&position);let mut node=Node::root(position,&worker.root);
++    let scope=worker.full_worker_scope();let mut row=MoveList::new();
++    let (_,receipt)=worker.full_ordinary(&mut node,&map,false,true,&mut row);
++    let expected=row.as_slice().to_vec();assert!(receipt.is_some());
++    for _ in 0..33 {worker.full(&mut node,&map,false);}
++    assert_eq!(row.as_slice(),expected);worker.inventory_demand(receipt);
++    Evaluator::<false>::finish_full_worker_scope(scope);
++    assert_eq!(inventory_counter(&worker,"requested"),1);
++    assert_eq!(inventory_counter(&worker,"interposedDemanded"),1);
++    assert_eq!(inventory_counter(&worker,"pendingReceipts"),0);
++}
++
++fn null_call(inventory:bool,cutoff:bool,node_limit:u64)->(Result<i32,Stopped>,Search<true>,Node) {
++    let initial=Position::from_fen(START).unwrap();
++    let previous=initial.null_child();let position=previous.null_child();
++    let mut search=Search::<true>::new(&position);search.config.tts_bytes=65536;
++    if inventory {search.evaluator.set_threads_with_affinity(4,||Ok(4)).unwrap();}
++    let scope=search.evaluator.full_worker_scope();
++    search.ensure_table().unwrap();search.bind_geometry_permission(&position);
++    let (mut node,map)=search.prepare_root_with_influence(position);
++    let score=search.evaluator.full(&mut node,&map,false).score;
++    if !cutoff {assert!(score>0);}
++    // Keep the null child within the native FAST refresh band so even the
++    // cutoff witness interposes a real descendant FULL epoch.
++    let upper=if cutoff {-100} else {score};
++    let mut history=SearchHistory::new(&previous);history.push(&position,None);
++    search.begin_owned_sequence(Limits{nodes:Some(node_limit)});
++    let result=search.visit_ordinary(&mut node,&mut history,
++        ordinary::Request{ply:1,depth:3,lower:upper-1,upper,previous_extension:0,iteration:4,checked:Some(false)},
++        ordinary::Predecessor{position:&previous,influence:&map,checked:false,movement:None});
++    assert!(search.stats.null_trials>0);assert_eq!(history.search_ply(),1);history.pop();
++    Evaluator::<true>::finish_full_worker_scope(scope);
++    (result,search,node)
++}
++
++fn equal_owner(actual:&Search<true>,expected:&Search<true>) {
++    assert_eq!(actual.work(),expected.work());assert_eq!(actual.stats,expected.stats);
++    assert_eq!(actual.evaluator.stats,expected.evaluator.stats);
++    assert_eq!(actual.learning.history,expected.learning.history);
++    assert_eq!(actual.learning.killers,expected.learning.killers);
++    assert_eq!(actual.learning.total,expected.learning.total);
++    // Unobserved deeper scratch may differ; live parent row must match.
++    assert_eq!(actual.candidates[1].as_slice(),expected.candidates[1].as_slice());
++}
++
++#[test]
++fn actual_null_continue_retains_parent_list_and_receipt_across_descendant_full_epochs() {
++    let (expected,serial,a)=null_call(false,false,200000);
++    let (actual,worker,b)=null_call(true,false,200000);
++    assert_eq!(actual,expected);assert!(actual.is_ok());assert_eq!(a,b);equal_owner(&worker,&serial);
++    assert!(inventory_counter(&worker.evaluator,"interposedDemanded")>0);
++    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
++    assert!(worker.evaluator.colors_worker.as_ref().unwrap().is_parked());
++}
++
++#[test]
++fn actual_null_cutoff_discards_parent_receipt_after_descendants_without_charging_generation() {
++    let (expected,serial,a)=null_call(false,true,200000);
++    let (actual,worker,b)=null_call(true,true,200000);
++    assert_eq!(actual,expected);assert!(actual.is_ok());assert_eq!(a,b);
++    assert_eq!(worker.work(),serial.work());assert_eq!(worker.stats,serial.stats);
++    assert_eq!(worker.evaluator.stats,serial.evaluator.stats);
++    assert_eq!(worker.stats.generated,0);
++    assert_eq!(inventory_counter(&worker.evaluator,"demanded"),0);
++    assert!(inventory_counter(&worker.evaluator,"discarded")>0);
++    assert!(inventory_counter(&worker.evaluator,"interposedDiscarded")>0);
++    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
++}
++
++#[test]
++fn actual_null_stop_discards_parent_receipt_and_next_search_can_reuse_worker() {
++    let (expected,mut serial,a)=null_call(false,true,1);
++    let (actual,mut worker,b)=null_call(true,true,1);
++    assert_eq!(expected,Err(Stopped::NodeLimit(1)));assert_eq!(actual,expected);assert_eq!(a,b);
++    assert_eq!(worker.work(),serial.work());assert_eq!(worker.stats,serial.stats);
++    assert_eq!(worker.evaluator.stats,serial.evaluator.stats);
++    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
++    assert_eq!(inventory_counter(&worker.evaluator,"discarded"),1);
++    let position=Position::from_fen(START).unwrap();
++    let mut ah=SearchHistory::new(&position);let mut bh=SearchHistory::new(&position);
++    let a=serial.run_iterations(position,&mut ah,2,Limits::default()).unwrap();
++    let b=worker.run_iterations(position,&mut bh,2,Limits::default()).unwrap();
++    assert_eq!((a.score,a.pv,a.work,a.stats,a.evaluations),(b.score,b.pv,b.work,b.stats,b.evaluations));
++    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
++}
++
++#[test]
++fn full_bound_return_discards_eager_result_at_actual_ordinary_owner() {
++    let position=Position::from_fen(START).unwrap();let previous=position.null_child();
++    let mut search=Search::<true>::new(&position);search.config.tts_bytes=65536;
++    search.evaluator.set_threads_with_affinity(4,||Ok(4)).unwrap();
++    search.ensure_table().unwrap();search.bind_geometry_permission(&position);
++    let (mut node,map)=search.prepare_root_with_influence(position);
++    let mut history=SearchHistory::new(&previous);history.push(&position,None);
++    search.begin_owned_sequence(Limits::default());
++    let scope=search.evaluator.full_worker_scope();
++    let result=search.visit_ordinary(&mut node,&mut history,
++        ordinary::Request{ply:1,depth:1,lower:-10000,upper:-10000,previous_extension:0,iteration:2,checked:Some(false)},
++        ordinary::Predecessor{position:&previous,influence:&map,checked:false,movement:None});
++    Evaluator::<true>::finish_full_worker_scope(scope);
++    assert_eq!(result,Ok(-10000));assert_eq!(search.stats.generated,0);
++    assert_eq!(inventory_counter(&search.evaluator,"requested"),1);
++    assert_eq!(inventory_counter(&search.evaluator,"discarded"),1);
++    assert_eq!(inventory_counter(&search.evaluator,"pendingReceipts"),0);
++}
++
++#[test]
++fn public_full_fresh_fast_and_actual_q_search_do_not_request_inventory() {
++    let position=Position::from_fen(START).unwrap();let mut worker=Search::<true>::new(&position);
++    worker.config.tts_bytes=65536;worker.evaluator.set_threads_with_affinity(4,||Ok(4)).unwrap();
++    let map=Influence::build(&position);let mut node=Node::root(position,&worker.evaluator.root);
++    let parked=worker.evaluator.colors_worker.as_ref().unwrap().parked_probe_for_test();
++    worker.evaluator.full_observed(&mut node,&map,false,|_|assert!(parked(),"public observer kept helpers active"));
++    worker.evaluator.fresh_observed(&mut node,&map,false,|_|assert!(parked(),"FRESH observer kept helpers active"));
++    worker.evaluator.fast(&node,false);
++    let mut history=SearchHistory::new(&position);
++    worker.run_iterations(position,&mut history,1,Limits::default()).unwrap();
++    assert_eq!(inventory_counter(&worker.evaluator,"requested"),0);
++    assert!(worker.evaluator.colors_worker.as_ref().unwrap().is_parked());
++}
++
++#[test]
++fn mode4_cap_and_reconfiguration_preserve_cache_and_query_failure_state() {
++    let position=Position::from_fen(START).unwrap();let mut worker=mode4::<true>(&position);
++    let map=Influence::build(&position);let mut node=Node::root(position,&worker.root);
++    worker.full(&mut node,&map,false);
++    for (requested,permitted,expected) in [(9,4,4),(4,3,3),(4,2,2),(4,1,1),(3,4,3),(4,8,4)] {
++        let before=worker.stats;
++        worker.set_threads_with_affinity(requested,||Ok(permitted)).unwrap();
++        assert_eq!((worker.requested_threads(),worker.configured_threads()),(requested,expected));
++        assert_eq!(worker.stats,before);
++        worker.full(&mut node,&map,false);
++        assert_eq!(worker.stats.pawn_reuses,before.pawn_reuses+1);
++        let before=worker.stats;
++        assert!(worker.set_threads_with_affinity(4,||Err("controlled affinity failure".into())).is_err());
++        assert_eq!(worker.configured_threads(),expected);assert_eq!(worker.stats,before);
++    }
++    worker.set_threads_with_affinity(1,||panic!("default1 queried affinity")).unwrap();
++    assert_eq!(worker.configured_threads(),1);
++}
+diff --git a/src/ordinary.rs b/src/ordinary.rs
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -814 +814,3 @@
+-        let evaluation = self.evaluator.full(node, map, checked);
++        let (evaluation, mut inventory_receipt) = self.evaluator.full_ordinary(
++            node, map, checked, coherent_geometry, &mut self.candidates[p],
++        );
+@@ -820,0 +823 @@
++            self.evaluator.inventory_discard(inventory_receipt.take());
+@@ -856 +859,7 @@
+-                -returned?
++                match returned {
++                    Ok(score) => -score,
++                    Err(stopped) => {
++                        self.evaluator.inventory_discard(inventory_receipt.take());
++                        return Err(stopped);
++                    }
++                }
+@@ -861,0 +871 @@
++                self.evaluator.inventory_discard(inventory_receipt.take());
+@@ -867 +877,7 @@
+-        movegen::generate_legal(&position, &mut self.candidates[p]);
++        // The row and receipt belong to this activation, not the worker's latest
++        // epoch: a completed null subtree may have published many newer epochs.
++        if inventory_receipt.is_some() {
++            self.evaluator.inventory_demand(inventory_receipt.take());
++        } else {
++            movegen::generate_legal(&position, &mut self.candidates[p]);
++        }
+diff --git a/src/session.rs b/src/session.rs
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -139 +139 @@
+-    /// Positive total request, configured to at most three research engine threads.
++    /// Positive total request, configured to at most four research engine threads.

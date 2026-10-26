@@ -47,12 +47,15 @@ The exact `67d01108` image/profile/source are retained in the experiment; canoni
 branch source and accepted release bytes are unchanged. Broad exact-image
 qualification/adoption are not yet selected.
 
-The next selected work is SOURCE-ONLY assessment of a fourth worker: retain the
-positive epoch color consumers and add ordinary inventory as a conditional third
-input reader. Reuse the [scratch/dataflow assessment](docs/research/after-colors-dataflow-choice.md)
-while proving skipped-epoch ownership and pricing the actual overlap window.
-No fourth-worker implementation/run is selected. Whole-FULL transport
-generalization, fresh-Influence fusion and frontier batching remain reserves.
+The [fourth-worker source assessment](docs/research/after-epoch-fourth-worker-choice.md)
+led to one selected integration and generic trial: retain the positive epoch color
+consumers and add ordinary inventory as a conditional third input reader. Sparse
+requests avoid empty root/Q acknowledgments; packet retirement spans final FULL
+composition and inventory settlement before null recursion. Exact eager-generation
+domain and activation-local parent state remain explicit proof obligations. The
+fixed trial compares preserved generic3 and new modes1/2/3/4 on35/08/43; no result
+exists yet. Whole-FULL transport generalization, fresh-Influence fusion and
+frontier batching remain reserves.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
