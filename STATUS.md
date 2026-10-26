@@ -95,12 +95,18 @@ lives/840 posts plus six idle probes pass. Fixed3 recovered most of lean3's loss
 representation sensitivity without establishing a cache cause or a net four-thread
 win. No further inventory/layout variant or PGO is selected.
 
-Next selected: source-only design of fresh coherent Influence construction fused
-with the two existing color FULL helpers. Restrict to actual FULL/scratch-None
-demand; preserve supplied maps, canonical pawn/cache order and numerical ownership.
-Review concrete caller seams, two-phase row publication/retirement and the existing
-single-coordinator cold-wakeup boundary before selecting implementation. No new
-build/run or adoption; accepted main and all positive artifacts remain preserved.
+The [fresh-Influence design](docs/research/fresh-influence-fusion-design.md) is closed
+at `42518617`. Next selected: one integrated discriminator using two disjoint
+profile cells, helper-local complete maps and coordinator-owned canonical scratch.
+Fuse only actual coherent FULL/scratch-None demand at the reviewed private seams;
+preserve supplied maps and all other fallbacks. FreshDelivered gates final
+retirement and only the coordinator uses the cold waiter.
+
+Compare preserved7ac3 with same-image new unfused3/fused3 in one fixed36+3 generic
+stream after focused admission. Report rowReady epochs only after shutdown as
+activation evidence; add no hot census. All copies, peer barriers and publication
+costs count. No inventory, PGO, adoption or external work is selected; accepted main
+and all positive artifacts remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

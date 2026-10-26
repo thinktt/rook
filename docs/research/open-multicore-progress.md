@@ -80,13 +80,20 @@ records7.721670s:1.223% below matching3, but0.072% above retained3 at1.334x CPU.
 Representation materially changes the result; neither isolated cache attribution
 nor a net four-thread win follows. Further inventory/layout variants are unselected.
 
-The next source-design question moves additional serial work onto the existing
-two helpers: construct native coherent Influence profiles in parallel at actual
-FULL/scratch-None demand, then continue the current color chains. Preserve supplied
-maps, scratch authority and canonical pawn/cache order. Concrete row publication,
-peer readiness, one coordinator waiter, final retirement and original callback
-boundaries need review before implementation. No new census, build or run is
-selected. Frontier batching remains a reserve.
+The [fresh-Influence design](fresh-influence-fusion-design.md) is now reviewed and
+one integrated discriminator is selected. It moves native coherent profile
+construction onto the two existing helpers at actual FULL/scratch-None demand,
+then continues their color chains. Each row has one writer; helpers acquire both
+and assemble local maps, while the coordinator installs canonical scratch before
+its original pawn/cache work. FreshDelivered gates final retirement and only the
+coordinator registers a cold waiter. Supplied maps and all other fallbacks retain
+their current authority.
+
+Compare preserved7ac3 and matching new unfused3/fused3 in one fixed36+3 generic
+stream. The384B of helper/canonical map copies, extra publications, peer barrier
+and data/code changes are costs, not assumed savings. Cold post-shutdown row epochs
+witness activation without a new hot census. No inventory integration, PGO or
+automatic extension is selected. Frontier batching remains a reserve.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

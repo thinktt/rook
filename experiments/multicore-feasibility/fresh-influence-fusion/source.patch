@@ -1,0 +1,1117 @@
+diff --git a/src/bin/rook2.rs b/src/bin/rook2.rs
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -74,0 +75 @@
++    let mut fresh_fusion = false;
+@@ -88,0 +90 @@
++            "--fresh-influence-fusion" => fresh_fusion = true,
+@@ -102,0 +105 @@
++    session.set_fresh_influence_fusion(fresh_fusion).map_err(Failure::Message)?;
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -35,0 +36,8 @@
++    fresh: bool,
++}
++
++/// Supplied maps keep their original authority. Fresh is admitted only by the
++/// private caller's existing coherent-placement permission.
++enum Input {
++    Supplied(Influence),
++    FreshCoherent,
+@@ -42 +50 @@
+-    influence: Influence,
++    input: Input,
+@@ -69,10 +77,8 @@
+-}
+-
+-// SAFETY: This private implementation covers only these three concrete cells.
+-// The single &mut ColorsWorker coordinator writes input under Control only with
+-// Flight::None. None follows either both matching done Acquire loads plus ended
+-// output reads, or BOTH real parked/exited acknowledgments. A request Release,
+-// acquired by each reader before borrowing input, publishes the initialized
+-// packet. Each reader's lexical Packet borrow (including sampled Instant reads)
+-// ends BEFORE its output write and done Release. Matching done Acquire loads
+-// therefore retire both input borrows and publish the separate scalar outputs.
++    white_row: UnsafeCell<[u8; 64]>,
++    black_row: UnsafeCell<[u8; 64]>,
++}
++
++// SAFETY: This private implementation covers initialized Packet/output cells
++// and two DISJOINT initialized 64-byte row cells. Only the one &mut coordinator
++// writes Packet under Control/None. Published request Release/Acquire grants
++// each immutable Packet borrow; a Packet is never patched after publication.
+@@ -80,7 +86,17 @@
+-// Only reader i writes output_i. Complete reads it only after matching done,
+-// while holding Control and requiring Published(g). Those Copy reads end before
+-// Flight becomes None. A later request Release, acquired by reader i, carries
+-// this reverse edge before its next output write. Close claims Discarding under
+-// the same Control and never reads/writes cells. It holds that claim until BOTH
+-// readers are parked/exited; terminal observation alone cannot retire a peer.
+-// No mutable reference to Shared, Cells, or both output cells is ever formed.
++// Supplied jobs touch no row cell or row-ready epoch. For Fresh(g), helper i
++// alone mutates row_i, ends that mutable borrow, then publishes row_ready_i=g
++// Release. Both exact row-ready Acquires permit only immutable row copies.
++// Helpers copy both rows to a LOCAL Influence and end all row accesses before
++// their unchanged kernels. The coordinator copies rows under matching
++// FreshProducing/Control and ends row accesses before FreshDelivered. Readiness
++// never retires the input: every Packet/map/output borrow ends before actual
++// done Release; complete requires FreshDelivered for fresh work and both done
++// Acquires. It ends scalar output reads before Control/None.
++//
++// A later request Release/Acquire carries these ended peer/owner row reads and
++// output reads before each next writer, including across supplied gaps. Final
++// close claims any live phase as Discarding until BOTH real parked/exited
++// acknowledgments. Stop alone never fabricates peer retirement. Scope/parking
++// code never touches cells. No whole Cells or shared Influence mutable reference
++// is formed. Only the coordinator registers on Sleep; peer polling holds neither
++// Control nor Sleep. No input, row, map, or output reference escapes a compute/copy.
+@@ -89,0 +106,4 @@
++    fn row(&self, side: usize) -> &UnsafeCell<[u8; 64]> {
++        if side == 0 { &self.white_row } else { &self.black_row }
++    }
++
+@@ -125,0 +146,2 @@
++    FreshProducing(Metadata),
++    FreshDelivered(Metadata),
+@@ -142,0 +165 @@
++    row_ready: [AtomicU64; 2],
+@@ -200,0 +224 @@
++    delivery_pending: bool,
+@@ -216 +240 @@
+-                input: UnsafeCell::new(Packet { generation: 0, position, influence, published: None }),
++                input: UnsafeCell::new(Packet { generation: 0, position, input: Input::Supplied(influence), published: None }),
+@@ -218,0 +243,2 @@
++                white_row: UnsafeCell::new([0; 64]),
++                black_row: UnsafeCell::new([0; 64]),
+@@ -220,0 +247 @@
++            row_ready: [AtomicU64::new(0), AtomicU64::new(0)],
+@@ -235 +262,2 @@
+-            shared, threads: [None, None], generation: 0, close_error_reported: false,
++            shared, threads: [None, None], generation: 0, delivery_pending: false,
++            close_error_reported: false,
+@@ -334,0 +363,15 @@
++        self.dispatch_input(position, Input::Supplied(*influence), material, mobility_weights, shelter_weights)
++    }
++
++    /// PRECONDITION: the private Search seal establishes coherent placement.
++    pub(crate) fn dispatch_fresh(
++        &mut self, position: &Position, material: i32,
++        mobility_weights: [i32; 2], shelter_weights: [i32; 2],
++    ) -> Result<DispatchToken, String> {
++        self.dispatch_input(position, Input::FreshCoherent, material, mobility_weights, shelter_weights)
++    }
++
++    fn dispatch_input(
++        &mut self, position: &Position, input: Input, material: i32,
++        mobility_weights: [i32; 2], shelter_weights: [i32; 2],
++    ) -> Result<DispatchToken, String> {
+@@ -358,0 +402 @@
++        let fresh = matches!(&input, Input::FreshCoherent);
+@@ -364 +408 @@
+-                generation, position: *position, influence: *influence, published: None,
++                generation, position: *position, input, published: None,
+@@ -381 +425 @@
+-        control.flight = Flight::Published(Metadata {
++        let metadata = Metadata {
+@@ -384 +428,2 @@
+-        });
++        };
++        control.flight = if fresh { Flight::FreshProducing(metadata) } else { Flight::Published(metadata) };
+@@ -388 +433,2 @@
+-        Ok(DispatchToken { generation, sampled })
++        self.delivery_pending = fresh;
++        Ok(DispatchToken { generation, sampled, fresh })
+@@ -395,2 +441,3 @@
+-        let Flight::Published(ref mut metadata) = control.flight else {
+-            return Err("colors owner-ready has no published flight".into());
++        let metadata = match &mut control.flight {
++            Flight::Published(metadata) | Flight::FreshDelivered(metadata) => metadata,
++            _ => return Err("colors owner-ready has no delivered or supplied flight".into()),
+@@ -411,0 +459 @@
++        if self.delivery_pending { return Err("colors fresh map has not been delivered".into()); }
+@@ -419 +467 @@
+-            Flight::Published(metadata) if metadata.generation == generation
++            Flight::Published(metadata) | Flight::FreshDelivered(metadata) if metadata.generation == generation
+@@ -459,0 +508,39 @@
++    }
++
++    /// Deliver only this fresh epoch into empty caller-owned canonical scratch.
++    /// Sleep is released before Control; no worker-storage reference escapes.
++    pub(crate) fn acquire_fresh_map(
++        &mut self, token: DispatchToken, scratch: &mut Option<Influence>,
++    ) -> Result<(), String> {
++        if scratch.is_some() { return Err("fresh map requires empty scratch".into()); }
++        if !token.fresh || token.generation != self.generation || !self.delivery_pending {
++            return Err("fresh map token is not pending delivery".into());
++        }
++        if wait_rows(&self.shared, token.generation).is_err() { return Err(self.failure()); }
++        let mut control = control_lock(&self.shared);
++        let metadata = match control.flight {
++            Flight::FreshProducing(metadata) if metadata.generation == token.generation
++                && !control.closing && !terminal(&self.shared) => metadata,
++            _ => return Err("fresh map lost ownership of its producing flight".into()),
++        };
++        if !both_rows_ready(&self.shared, token.generation) {
++            return Err("fresh map acquired before both matching rows".into());
++        }
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.map_consuming);
++        // SAFETY: Both matching row-ready Acquires publish complete immutable
++        // rows. FreshProducing under Control excludes close or reuse. The Copy
++        // result owns its bytes; all row accesses end before delivery below.
++        *scratch = Some(unsafe { copy_fresh_rows(&self.shared) });
++        control.flight = Flight::FreshDelivered(metadata);
++        self.delivery_pending = false;
++        Ok(())
++    }
++
++    /// Necessary synchronization epochs, read cold after joined shutdown. This
++    /// witnesses activation, not the number of eligible or fused requests.
++    pub(crate) fn fusion_epochs(&self) -> [u64; 2] {
++        [
++            self.shared.row_ready[0].load(Ordering::Acquire),
++            self.shared.row_ready[1].load(Ordering::Acquire),
++        ]
+@@ -558 +645,3 @@
+-            let output = unsafe { compute_input(shared, side, generation, access_started)? };
++            let Some(output) = (unsafe { compute_input(shared, side, generation, access_started)? }) else {
++                return Ok(()); // Stop retires only this actual reader on loop exit.
++            };
+@@ -588 +677 @@
+-) -> Result<SideOutput, String> {
++) -> Result<Option<SideOutput>, String> {
+@@ -590,2 +679,2 @@
+-        // SAFETY: The caller's request Acquire and the done/retirement protocol
+-        // exclude input mutation for this entire block.
++        // SAFETY: Request Acquire publishes this immutable Packet. No next
++        // writer can proceed before both actual done or actual exit retirement.
+@@ -595,3 +683,0 @@
+-        // Existing field name/timer positions remain: this now observes input
+-        // access setup, with no packet memcpy or input mutex. Actual direct
+-        // packet cache traffic occurs inside the following kernel interval.
+@@ -602 +688,36 @@
+-        let activity = activity::compute_side(&packet.position, &packet.influence, color);
++        let local_map: Influence;
++        let influence = match &packet.input {
++            Input::Supplied(influence) => influence,
++            Input::FreshCoherent => {
++                {
++                    // SAFETY: This is this helper's separate row cell. The
++                    // acquired new request follows all prior epoch row readers.
++                    let row = unsafe { &mut *shared.cells.row(side).get() };
++                    #[cfg(test)]
++                    test_reader_gate(shared, &shared.tests.row_input[side], side)?;
++                    Influence::build_coherent_row(&packet.position, color, row);
++                }
++                #[cfg(test)]
++                test_reader_gate(shared, &shared.tests.before_row_ready[side], side)?;
++                // Every row mutation/borrow ended before publication. These
++                // exchanges are unconditional, including when no waiter exists.
++                shared.row_ready[side].store(generation, Ordering::Release);
++                #[cfg(test)]
++                test_pause(shared, &shared.tests.before_row_signal[side]);
++                signal_completion(shared);
++                #[cfg(test)]
++                test_reader_gate(shared, &shared.tests.after_row_ready[side], side)?;
++                // Helpers never register another cold waiter and never park
++                // merely because the last scope closed during this live job.
++                while !both_rows_ready(shared, generation) {
++                    if terminal(shared) { return Ok(None); }
++                    spin_loop();
++                }
++                if terminal(shared) { return Ok(None); }
++                // SAFETY: Both exact Acquires publish complete immutable rows.
++                // The current flight retains them until both actual done.
++                local_map = unsafe { copy_fresh_rows(shared) };
++                &local_map
++            }
++        };
++        let activity = activity::compute_side(&packet.position, influence, color);
+@@ -604 +725 @@
+-            &packet.position, &packet.influence, color.opponent(), activity.pressure,
++            &packet.position, influence, color.opponent(), activity.pressure,
+@@ -609,2 +730,3 @@
+-        // Last Packet access, sampled or otherwise. There is no output mutex;
+-        // the same ready clock sits immediately before output publication.
++        // The original sparse clocks stay in their phase positions. Fresh
++        // kernel/ready intervals include row build, publication, peer wait and
++        // local assembly; they are not the old supplied-map phase partition.
+@@ -614 +736,12 @@
+-    Ok(output)
++    Ok(Some(output))
++}
++
++/// Caller acquired BOTH matching row-ready epochs and retains the flight.
++/// Copies own initialized bytes; no worker-storage reference escapes.
++unsafe fn copy_fresh_rows(shared: &Shared) -> Influence {
++    Influence {
++        profiles: [
++            unsafe { shared.cells.white_row.get().read() },
++            unsafe { shared.cells.black_row.get().read() },
++        ],
++    }
+@@ -659,0 +793,4 @@
++fn both_rows_ready(shared: &Shared, generation: u64) -> bool {
++    shared.row_ready.iter().all(|ready| ready.load(Ordering::Acquire) == generation)
++}
++
+@@ -660,0 +798,13 @@
++    wait_phase(shared, generation, false)
++}
++
++fn wait_rows(shared: &Shared, generation: u64) -> Result<(), String> {
++    wait_phase(shared, generation, true)
++}
++
++fn phase_ready(shared: &Shared, generation: u64, rows: bool) -> bool {
++    if rows { both_rows_ready(shared, generation) } else { both_done(shared, generation) }
++}
++
++/// Only the coordinator calls this cold wait. Helpers never register on it.
++fn wait_phase(shared: &Shared, generation: u64, rows: bool) -> Result<(), String> {
+@@ -663 +813 @@
+-        if both_done(shared, generation) { return Ok(()); }
++        if phase_ready(shared, generation, rows) { return Ok(()); }
+@@ -680 +830 @@
+-        let done = both_done(shared, generation);
++        let done = phase_ready(shared, generation, rows);
+@@ -711 +861 @@
+-    if let Flight::Published(metadata) = control.flight {
++    if let Flight::Published(metadata) | Flight::FreshProducing(metadata) | Flight::FreshDelivered(metadata) = control.flight {
+@@ -719 +869,2 @@
+-        Flight::Published(metadata) | Flight::Discarding(metadata) => metadata,
++        Flight::Published(metadata) | Flight::FreshProducing(metadata)
++        | Flight::FreshDelivered(metadata) | Flight::Discarding(metadata) => metadata,
+@@ -906,0 +1058,5 @@
++    row_input: [Mutex<TestGate>; 2],
++    before_row_ready: [Mutex<TestGate>; 2],
++    before_row_signal: [Mutex<TestGate>; 2],
++    after_row_ready: [Mutex<TestGate>; 2],
++    map_consuming: Mutex<TestGate>,
+@@ -924,0 +1081,5 @@
++            row_input: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            before_row_ready: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            before_row_signal: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            after_row_ready: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
++            map_consuming: Mutex::new(TestGate::default()),
+@@ -1585 +1746,273 @@
+-}
++    fn fresh_dispatch(worker: &mut ColorsWorker, packet: &Fixture) -> DispatchToken {
++        worker.dispatch_fresh(&packet.position, packet.material,
++            packet.mobility_weights, packet.shelter_weights).unwrap()
++    }
++
++    fn wait_row(shared: &Shared, side: usize, generation: u64) {
++        while shared.row_ready[side].load(Ordering::Acquire) != generation { thread::yield_now(); }
++    }
++
++    #[test]
++    fn fresh_delivery_is_required_and_canonical_map_matches_native_chain() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = fresh_dispatch(&mut worker, &packet);
++        assert!(worker.complete().is_err(), "undelivered fresh work must not retire");
++        let custom = Influence { profiles: [[173; 64]; 2] };
++        let mut occupied = Some(custom);
++        assert!(worker.acquire_fresh_map(token, &mut occupied).is_err());
++        assert_eq!(occupied, Some(custom));
++        let mut scratch = None;
++        worker.acquire_fresh_map(token, &mut scratch).unwrap();
++        assert_eq!(scratch, Some(packet.influence));
++        assert!(worker.acquire_fresh_map(token, &mut None).is_err());
++        worker.owner_ready(token).unwrap();
++        assert_output(worker.complete().unwrap(), &packet);
++        assert_eq!(worker.fusion_epochs(), [token.generation; 2]);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn fresh_supplied_gaps_preserve_authority_and_reset_reused_scalar_rows() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let first = fresh_dispatch(&mut worker, &packet);
++        let mut scratch = None;
++        worker.acquire_fresh_map(first, &mut scratch).unwrap();
++        assert_output(worker.complete().unwrap(), &packet);
++        let mut contrary = packet;
++        contrary.influence = Influence { profiles: std::array::from_fn(|side|
++            std::array::from_fn(|square| (side*113+square*71+17) as u8)) };
++        for _ in 0..33 {
++            let token = dispatch(&mut worker, &contrary);
++            assert!(!token.fresh);
++            assert_output(worker.complete().unwrap(), &contrary);
++            assert_eq!(worker.fusion_epochs(), [first.generation; 2]);
++        }
++        let position = Position::from_fen("7k/8/8/8/8/8/4P3/K7 w - - 0 1").unwrap();
++        let scalar = Fixture { position, influence: Influence::build(&position), material: -91,
++            mobility_weights: [0, 10240], shelter_weights: [3101, 17] };
++        let second = fresh_dispatch(&mut worker, &scalar);
++        assert!(second.generation > first.generation+30);
++        assert!(worker.acquire_fresh_map(first, &mut None).is_err());
++        let mut scratch = None;
++        worker.acquire_fresh_map(second, &mut scratch).unwrap();
++        assert_eq!(scratch, Some(scalar.influence));
++        assert_output(worker.complete().unwrap(), &scalar);
++        assert_eq!(worker.fusion_epochs(), [second.generation; 2]);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn fresh_delayed_row_keeps_delivery_and_final_close_ownership() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block_at(&worker.shared.tests.row_input[0]);
++        let packet = packet();
++        let token = fresh_dispatch(&mut worker, &packet);
++        entered_at(&worker.shared, &worker.shared.tests.row_input[0]);
++        wait_row(&worker.shared, 1, token.generation);
++        assert!(worker.complete().is_err());
++        let shared = Arc::clone(&worker.shared);
++        let before = shared.tests.registrations.load(Ordering::SeqCst);
++        let acquisition = thread::spawn(move || {
++            let mut scratch = None;
++            let result = worker.acquire_fresh_map(token, &mut scratch);
++            (worker, result, scratch)
++        });
++        registered(&shared, before+1);
++        let close = thread::spawn(move || scope.finish());
++        while !control_lock(&shared).closing { thread::yield_now(); }
++        release_at(&shared, &shared.tests.row_input[0], false);
++        let (mut worker, result, scratch) = acquisition.join().unwrap();
++        assert!(result.is_err() && scratch.is_none());
++        close.join().unwrap().unwrap();
++        assert!(worker.is_parked());
++        no_flight(&shared);
++        let scope = worker.start_active_scope().unwrap();
++        let token = fresh_dispatch(&mut worker, &packet);
++        let mut scratch = None;
++        worker.acquire_fresh_map(token, &mut scratch).unwrap();
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn fresh_owner_copy_wins_close_but_early_helper_done_cannot_retire_delivery() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let token = fresh_dispatch(&mut worker, &packet);
++        for side in 0..2 { wait_done(&worker.shared, side, token.generation); }
++        assert!(worker.complete().is_err());
++        block_at(&worker.shared.tests.map_consuming);
++        let shared = Arc::clone(&worker.shared);
++        let acquisition = thread::spawn(move || {
++            let mut scratch = None;
++            worker.acquire_fresh_map(token, &mut scratch).unwrap();
++            (worker, scratch)
++        });
++        entered_at(&shared, &shared.tests.map_consuming);
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        assert!(received.try_recv().is_err());
++        release_at(&shared, &shared.tests.map_consuming, false);
++        let (mut worker, scratch) = acquisition.join().unwrap();
++        assert_eq!(scratch, Some(packet.influence));
++        close.join().unwrap();
++        received.recv().unwrap().unwrap();
++        assert!(worker.is_parked());
++        assert!(worker.complete().is_err());
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn fresh_partial_row_failure_and_postpublication_failure_drain_real_peers() {
++        for after_publication in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let shared = Arc::clone(&worker.shared);
++            let failing = if after_publication { &shared.tests.after_row_ready[0] }
++                else { &shared.tests.before_row_ready[0] };
++            block_at(failing);
++            if after_publication { block_at(&shared.tests.row_input[1]); }
++            let token = fresh_dispatch(&mut worker, &packet());
++            entered_at(&shared, failing);
++            if after_publication { entered_at(&shared, &shared.tests.row_input[1]); }
++            else { wait_row(&shared, 1, token.generation); }
++            let wait_shared = Arc::clone(&shared);
++            let before = shared.tests.registrations.load(Ordering::SeqCst);
++            let waiter = thread::spawn(move || wait_rows(&wait_shared, token.generation));
++            registered(&shared, before+1);
++            release_at(&shared, failing, true);
++            assert!(waiter.join().unwrap().is_err());
++            if after_publication { release_at(&shared, &shared.tests.row_input[1], false); }
++            assert!(scope.finish().is_err());
++            assert!(worker.shutdown().is_err());
++            assert!(all_terminal(&shared));
++            assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++            assert_eq!(shared.readers[1].done.load(Ordering::Acquire), 0);
++            if !after_publication { assert_eq!(shared.row_ready[0].load(Ordering::Acquire), 0); }
++            no_flight(&shared);
++        }
++    }
++
++    #[test]
++    fn fresh_spurious_row_wake_and_late_row_notification_cross_done_wait_safely() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block_at(&worker.shared.tests.before_row_ready[side]); }
++        block_at(&worker.shared.tests.before_row_signal[0]);
++        let packet = packet();
++        let token = fresh_dispatch(&mut worker, &packet);
++        for side in 0..2 { entered_at(&worker.shared, &worker.shared.tests.before_row_ready[side]); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter_shared = Arc::clone(&shared);
++        let waiter = thread::spawn(move || wait_rows(&waiter_shared, token.generation));
++        registered(&shared, 1);
++        {
++            let _sleep = shared.sleep.lock().unwrap();
++            shared.completed.notify_all();
++        }
++        registered(&shared, 2);
++        release_at(&shared, &shared.tests.before_row_ready[0], false);
++        entered_at(&shared, &shared.tests.before_row_signal[0]);
++        release_at(&shared, &shared.tests.before_row_ready[1], false);
++        waiter.join().unwrap().unwrap();
++        let mut scratch = None;
++        worker.acquire_fresh_map(token, &mut scratch).unwrap();
++        assert_eq!(scratch, Some(packet.influence));
++        let before = shared.tests.registrations.load(Ordering::SeqCst);
++        let completion = thread::spawn(move || {
++            let output = worker.complete().unwrap();
++            (worker, output)
++        });
++        registered(&shared, before+1);
++        release_at(&shared, &shared.tests.before_row_signal[0], false);
++        let (mut worker, output) = completion.join().unwrap();
++        assert_output(output, &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn fresh_next_epoch_rows_follow_old_consumption_and_max_epoch_never_wraps() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        block_at(&worker.shared.tests.before_latch[0]);
++        let packet = packet();
++        let first = fresh_dispatch(&mut worker, &packet);
++        entered_at(&worker.shared, &worker.shared.tests.before_latch[0]);
++        wait_done(&worker.shared, 1, first.generation);
++        let mut scratch = None;
++        worker.acquire_fresh_map(first, &mut scratch).unwrap();
++        assert_output(worker.complete().unwrap(), &packet);
++        let position = Position::from_fen("7k/8/8/8/8/8/4P3/K7 w - - 0 1").unwrap();
++        let next = Fixture { position, influence: Influence::build(&position), material: -193,
++            mobility_weights: [10240, 0], shelter_weights: [17, 3101] };
++        let token = fresh_dispatch(&mut worker, &next);
++        wait_row(&worker.shared, 1, token.generation);
++        release_at(&worker.shared, &worker.shared.tests.before_latch[0], false);
++        let mut scratch = None;
++        worker.acquire_fresh_map(token, &mut scratch).unwrap();
++        assert_eq!(scratch, Some(next.influence));
++        assert_output(worker.complete().unwrap(), &next);
++        scope.finish().unwrap();
++        assert!(worker.is_parked());
++        worker.generation = u64::MAX-1; // Quiescent/no flight; never forge readiness or done.
++        let scope = worker.start_active_scope().unwrap();
++        let token = fresh_dispatch(&mut worker, &next);
++        let mut scratch = None;
++        worker.acquire_fresh_map(token, &mut scratch).unwrap();
++        assert_output(worker.complete().unwrap(), &next);
++        assert_eq!(worker.fusion_epochs(), [u64::MAX; 2]);
++        assert!(worker.dispatch_fresh(&next.position, next.material,
++            next.mobility_weights, next.shelter_weights).is_err());
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert!(both_done(&worker.shared, u64::MAX));
++        assert!(all_terminal(&worker.shared));
++        scope.finish().unwrap();
++        assert!(worker.shutdown().is_err());
++    }
++
++    #[test]
++    fn fresh_unpublished_failure_and_undelivered_shutdown_do_not_invent_done() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        worker.shared.tests.fail_before_publish.store(true, Ordering::SeqCst);
++        assert!(worker.dispatch_fresh(&packet.position, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        assert_eq!(worker.fusion_epochs(), [0, 0]);
++        no_flight(&worker.shared);
++        block_at(&worker.shared.tests.row_input[1]);
++        let token = fresh_dispatch(&mut worker, &packet);
++        entered_at(&worker.shared, &worker.shared.tests.row_input[1]);
++        wait_row(&worker.shared, 0, token.generation);
++        let shared = Arc::clone(&worker.shared);
++        let (sent, received) = mpsc::channel();
++        let shutdown = thread::spawn(move || {
++            worker.shutdown().unwrap();
++            sent.send(()).unwrap();
++            worker
++        });
++        wait_state(&shared, 0, STOPPED);
++        assert!(received.try_recv().is_err());
++        assert_eq!(shared.readers[1].done.load(Ordering::Acquire), 0);
++        release_at(&shared, &shared.tests.row_input[1], false);
++        let worker = shutdown.join().unwrap();
++        assert!(worker.threads.iter().all(Option::is_none));
++        assert!(all_terminal(&shared));
++        assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++        assert_eq!(shared.readers[1].done.load(Ordering::Acquire), 0);
++        no_flight(&shared);
++        scope.finish().unwrap();
++    }
++
++}
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -8 +8 @@
+-use crate::position::Position;
++use crate::position::{Phase, Position};
+@@ -276,0 +277,9 @@
++/// Owns a request and its lexical call scope before any map phase begins.
++struct FullLaunch {
++    call_scope: Option<FullWorkerScope>,
++    colors_token: Option<crate::colors_worker::DispatchToken>,
++    phase: Phase,
++    material: i32,
++    weights: Weights,
++}
++
+@@ -284,0 +294 @@
++    fresh_influence_fusion: bool,
+@@ -308,0 +319 @@
++            fresh_influence_fusion: self.fresh_influence_fusion,
+@@ -342,0 +354 @@
++            fresh_influence_fusion: false,
+@@ -413,0 +426,5 @@
++    /// Private experiment switch; eligibility remains actual trusted FULL demand.
++    pub fn set_fresh_influence_fusion(&mut self, enabled: bool) {
++        self.fresh_influence_fusion = enabled;
++    }
++
+@@ -491 +508 @@
+-        if let Some(worker) = self.colors_worker.as_mut() {
++        let (mut report, rows) = if let Some(worker) = self.colors_worker.as_mut() {
+@@ -493 +510 @@
+-            Ok(worker.readiness_report())
++            (worker.readiness_report(), worker.fusion_epochs())
+@@ -496,2 +513,6 @@
+-            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".into())
+-        }
++            ("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".into(), [0, 0])
++        };
++        assert_eq!(report.pop(), Some('}'));
++        // Read only after joined shutdown: this witnesses activation, not counts.
++        Ok(format!("{report},\"fusion\":{{\"enabled\":{},\"rowReady\":[{},{}]}}}}",
++            self.fresh_influence_fusion, rows[0], rows[1]))
+@@ -594,9 +615,2 @@
+-    fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
+-        &mut self,
+-        node: &mut Node,
+-        influence: &Influence,
+-        in_check: bool,
+-        observer: F,
+-        details: D,
+-    ) -> Evaluation {
+-        let position = &node.position;
++    /// Launch once. None is reserved for a trusted private fresh-map request.
++    fn begin_full(&mut self, position: &Position, influence: Option<&Influence>) -> FullLaunch {
+@@ -605,2 +619 @@
+-        // Standalone public evaluator calls get a one-call lifetime. Search
+-        // owners already hold an outer scope, so their handoff stays active.
++        let weights = self.weights;
+@@ -615,16 +628,60 @@
+-        let colors_token = self.colors_worker.as_mut().map(|worker| worker.dispatch(
+-            position, influence, material, self.weights.mobility, self.weights.shelter,
+-        ).unwrap_or_else(|error|panic!("colors dispatch failed: {error}")));
+-        // Snapshot every worker input on every FULL, including authoritative
+-        // supplied maps and the current root-bound weights after begin_search.
+-        if let Some(worker) = self.full_worker.as_mut() {
+-            worker
+-                .dispatch(
+-                    position,
+-                    influence,
+-                    material,
+-                    self.weights.mobility,
+-                    self.weights.shelter,
+-                )
+-                .unwrap_or_else(|error| panic!("FULL evaluator dispatch failed: {error}"));
+-        }
++        // Construct the scope owner before dispatch: any error/unwind drains it.
++        let mut launch = FullLaunch { call_scope, colors_token: None, phase, material, weights };
++        if let Some(worker) = self.colors_worker.as_mut() {
++            let token = if let Some(map) = influence {
++                worker.dispatch(position, map, launch.material, launch.weights.mobility, launch.weights.shelter)
++            } else {
++                worker.dispatch_fresh(position, launch.material, launch.weights.mobility, launch.weights.shelter)
++            }.unwrap_or_else(|error|panic!("colors dispatch failed: {error}"));
++            launch.colors_token = Some(token);
++        } else if let Some(worker) = self.full_worker.as_mut() {
++            worker.dispatch(position, influence.expect("fresh map requires colors"), launch.material,
++                launch.weights.mobility, launch.weights.shelter)
++                .unwrap_or_else(|error|panic!("FULL evaluator dispatch failed: {error}"));
++        } else {
++            assert!(influence.is_some(), "fresh map requires colors");
++        }
++        launch
++    }
++
++    /// Only guarded Search FULL seams pass trusted permission. Some stays authoritative.
++    pub(crate) fn full_for_search<'a>(&mut self, node: &mut Node,
++        scratch: &'a mut Option<Influence>, in_check: bool, coherent_geometry: bool,
++    ) -> (Evaluation, &'a Influence) {
++        #[cfg(feature = "child-preparation")]
++        let fuse = false; // Preserve the archived prepared-map/chain owners.
++        #[cfg(not(feature = "child-preparation"))]
++        let fuse = self.fresh_influence_fusion && self.colors_worker.is_some()
++            && coherent_geometry && scratch.is_none();
++        if fuse {
++            let launch = self.begin_full(&node.position, None);
++            self.colors_worker.as_mut().expect("fresh map requires colors")
++                .acquire_fresh_map(launch.colors_token.expect("fresh token"), scratch)
++                .unwrap_or_else(|error|panic!("colors map acquisition failed: {error}"));
++            #[cfg(test)]
++            COHERENT_BUILDS.with(|count|count.set(count.get()+1));
++            if DIAGNOSTICS { self.stats.influence_builds += 1; }
++            let map = scratch.as_ref().expect("fresh map was not installed");
++            let evaluation = self.full_body::<false, _, _>(node, map, in_check, |_| {}, |_| {}, launch);
++            (evaluation, map)
++        } else {
++            let map = self.ensure_influence_for_search(&node.position, scratch, coherent_geometry);
++            let evaluation = self.full(node, map, in_check);
++            (evaluation, map)
++        }
++    }
++
++    fn full_impl<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        &mut self, node: &mut Node, influence: &Influence, in_check: bool,
++        observer: F, details: D,
++    ) -> Evaluation {
++        let launch = self.begin_full(&node.position, Some(influence));
++        self.full_body::<FRESH, _, _>(node, influence, in_check, observer, details, launch)
++    }
++
++    fn full_body<const FRESH: bool, F: FnOnce(Components), D: FnOnce(FullDetails)>(
++        &mut self, node: &mut Node, influence: &Influence, in_check: bool,
++        observer: F, details: D, launch: FullLaunch,
++    ) -> Evaluation {
++        let FullLaunch {call_scope, colors_token, phase, material, weights} = launch;
++        let position = &node.position;
+@@ -644 +701 @@
+-            position,influence,material,self.weights.mobility,self.weights.shelter));
++            position,influence,material,weights.mobility,weights.shelter));
+@@ -652,2 +709,2 @@
+-                self.weights.mobility,
+-                self.weights.shelter,
++                weights.mobility,
++                weights.shelter,
+@@ -662 +719 @@
+-            self.weights.structure,
++            weights.structure,
+@@ -675 +732 @@
+-                self.weights.progress,
++                weights.progress,
+@@ -679 +736 @@
+-        let central = positional_terms::central(influence, phase, self.weights.central);
++        let central = positional_terms::central(influence, phase, weights.central);
+@@ -934,0 +992,4 @@
++            if !STAGES && !OBSERVE {
++                return Selection {evaluation: self.full_for_search(node, scratch, false, coherent_geometry).0,
++                    initially_full: true, fast_score: None, refreshed: false};
++            }
+@@ -957 +1018,3 @@
+-        let evaluation = if refresh {
++        let evaluation = if refresh && !STAGES && !OBSERVE {
++            self.full_for_search(node, scratch, false, coherent_geometry).0
++        } else if refresh {
+@@ -1305,0 +1369,4 @@
++
++#[cfg(test)]
++#[path = "evaluator/fusion_tests.rs"]
++mod fusion_tests;
+diff --git a/src/evaluator/fusion_tests.rs b/src/evaluator/fusion_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/fusion_tests.rs
+@@ -0,0 +1,157 @@
++//! Actual private FULL demand and canonical owner state, not speculative work.
++use super::*;
++use crate::{engine::Search, history::SearchHistory, movegen, ordinary};
++use crate::quiescence::{Entry, Limits};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const MIDDLE: &str = "r3k2r/ppp2ppp/2npbn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2Q1RK1 b kq - 0 10";
++const SPARSE: &str = "7k/8/8/8/8/8/P7/K7 w - - 0 1";
++
++fn evaluator(position: &Position, fused: bool, budget: usize) -> Evaluator<true> {
++    let mut e = Evaluator::new(position);
++    e.set_threads_with_affinity(budget, || Ok(3)).unwrap();
++    e.set_fresh_influence_fusion(fused);
++    e
++}
++fn rows(e: &Evaluator<true>) -> [u64;2] {
++    e.colors_worker.as_ref().map_or([0,0], |w|w.fusion_epochs())
++}
++fn active_rows(e: &Evaluator<true>) -> u64 {
++    let r=rows(e);assert_eq!(r[0],r[1]);assert!(r[0]>0);r[0]
++}
++fn same_owner(a:&Search<true>,b:&Search<true>) {
++    assert_eq!(a.work(),b.work());assert_eq!(a.stats,b.stats);
++    assert_eq!(a.evaluator.stats,b.evaluator.stats);
++    assert_eq!(a.learning.history,b.learning.history);
++    assert_eq!(a.learning.killers,b.learning.killers);
++    assert_eq!(a.learning.total,b.learning.total);
++}
++
++#[test]
++fn fresh_full_maps_weights_cache_retained_and_single_build_charge_match_unfused() {
++    let initial=Position::from_fen(START).unwrap();
++    let (mut a,mut b)=(evaluator(&initial,false,3),evaluator(&initial,true,3));
++    let mut asymmetric=Parameters::default();
++    asymmetric.own=[133,73,151,87,200,121,19,313,207,251,49];
++    asymmetric.opponent=[91,128,67,142,80,57,183,47,333,107,229];
++    asymmetric.draw=-173;asymmetric.average_depth=13;
++    for (index,fen) in [START,MIDDLE,SPARSE,"4k3/8/8/8/8/8/4r3/4K3 w - - 0 1"].into_iter().enumerate() {
++        let p=Position::from_fen(fen).unwrap();p.validate().unwrap();
++        a.parameters=asymmetric.clone();b.parameters=asymmetric.clone();
++        if index==2 {a.parameters.own[6..].fill(0);b.parameters.own[6..].fill(0);}
++        a.begin_search(&p);b.begin_search(&p);
++        let (mut x,mut y)=(Node::root(p,&a.root),Node::root(p,&b.root));
++        for _ in 0..2 {
++            let (mut am,mut bm)=(None,None);let before=coherent_build_count();
++            let checked=movegen::in_check(&p,p.side);
++            let (av,ar)=a.full_for_search(&mut x,&mut am,checked,true);
++            let (bv,br)=b.full_for_search(&mut y,&mut bm,checked,true);
++            assert_eq!(ar,br);assert_eq!(*br,Influence::build_coherent(&p));
++            assert_eq!(coherent_build_count()-before,2);
++            assert_eq!(av,bv);assert_eq!(x,y);assert_eq!(a.stats,b.stats);
++            assert!(b.colors_worker.as_ref().unwrap().is_parked());active_rows(&b);
++        }
++        assert_eq!(b.stats.influence_builds,2);
++    }
++    assert_eq!(rows(&a),[0,0]);
++}
++
++#[test]
++fn some_maps_general_ensure_and_fast_only_selection_never_start_row_work() {
++    let p=Position::from_fen(START).unwrap();let mut a=evaluator(&p,false,3);let mut b=evaluator(&p,true,3);
++    let mut contrary=Influence::build(&p);contrary.profiles[0][0]^=127;
++    let (mut x,mut y)=(Node::root(p,&a.root),Node::root(p,&b.root));
++    let (mut am,mut bm)=(Some(contrary),Some(contrary));
++    let av=a.full_for_search(&mut x,&mut am,false,true).0;
++    let bv=b.full_for_search(&mut y,&mut bm,false,true).0;
++    assert_eq!(av,bv);assert_eq!(x,y);assert_eq!(am,bm);assert_eq!(bm,Some(contrary));
++    assert_eq!(a.stats,b.stats);assert_eq!(b.stats.influence_builds,0);assert_eq!(rows(&b),[0,0]);
++    let mut lazy=None;
++    assert_eq!(*b.ensure_influence_for_search(&p,&mut lazy,true),Influence::build_coherent(&p));
++    assert_eq!(rows(&b),[0,0]);
++    let score=b.fast(&y,false).score;let mut never=None;let before=b.stats.influence_builds;
++    let selected=b.select_noncheck_for_search(&mut y,score+250,score+251,false,&mut never,true);
++    assert!(!selected.initially_full && !selected.refreshed);assert!(never.is_none());
++    assert_eq!(b.stats.influence_builds,before);assert_eq!(rows(&b),[0,0]);
++}
++
++#[test]
++fn public_fresh_noncoherent_and_one_two_thread_paths_keep_existing_authority_and_parking() {
++    let p=Position::from_fen(MIDDLE).unwrap();
++    for budget in [1,2] {
++        let (mut a,mut b)=(evaluator(&p,false,budget),evaluator(&p,true,budget));
++        let (mut x,mut y)=(Node::root(p,&a.root),Node::root(p,&b.root));
++        let (mut am,mut bm)=(None,None);
++        assert_eq!(a.full_for_search(&mut x,&mut am,false,true).0,b.full_for_search(&mut y,&mut bm,false,true).0);
++        assert_eq!(am,bm);assert_eq!(x,y);assert_eq!(a.stats,b.stats);assert_eq!(rows(&b),[0,0]);
++    }
++    let mut b=evaluator(&p,true,3);let mut node=Node::root(p,&b.root);let mut scratch=None;
++    b.full_for_search(&mut node,&mut scratch,false,false);assert_eq!(rows(&b),[0,0]);
++    let parked=b.colors_worker.as_ref().unwrap().parked_probe_for_test();
++    let map=scratch.unwrap();
++    b.full_observed(&mut node,&map,false,|_|assert!(parked()));
++    b.fresh_observed(&mut node,&map,false,|_|assert!(parked()));
++    assert_eq!(rows(&b),[0,0]);
++}
++
++fn search(p:&Position,fused:bool)->Search<true> {
++    let mut s=Search::new(p);s.config.tts_bytes=65536;
++    s.evaluator.set_threads_with_affinity(3,||Ok(3)).unwrap();
++    s.evaluator.set_fresh_influence_fusion(fused);s.ensure_table().unwrap();s
++}
++
++#[test]
++fn actual_root_ordinary_and_unchecked_q_calls_match_native_owner_state() {
++    let p=Position::from_fen(START).unwrap();let previous=p.null_child();
++    let (mut a,mut b)=(search(&p,false),search(&p,true));
++    a.bind_geometry_permission(&p);b.bind_geometry_permission(&p);
++    let (mut x,am)=a.prepare_root_with_influence(p);let (mut y,bm)=b.prepare_root_with_influence(p);
++    assert_eq!(x,y);assert_eq!(am,bm);same_owner(&a,&b);let root_epoch=active_rows(&b.evaluator);
++    let (mut ah,mut bh)=(SearchHistory::new(&previous),SearchHistory::new(&previous));
++    ah.push(&p,None);bh.push(&p,None);a.begin_owned_sequence(Limits::default());b.begin_owned_sequence(Limits::default());
++    let request=ordinary::Request{ply:1,depth:1,lower:-10000,upper:10000,previous_extension:0,iteration:2,checked:Some(false)};
++    let av=a.visit_ordinary(&mut x,&mut ah,request,ordinary::Predecessor{position:&previous,influence:&am,checked:false,movement:None});
++    let bv=b.visit_ordinary(&mut y,&mut bh,request,ordinary::Predecessor{position:&previous,influence:&bm,checked:false,movement:None});
++    assert_eq!(av,bv);assert_eq!(x,y);same_owner(&a,&b);assert!(active_rows(&b.evaluator)>root_epoch);
++    let q=Position::from_fen(SPARSE).unwrap();let (mut a,mut b)=(search(&q,false),search(&q,true));
++    a.bind_geometry_permission(&q);b.bind_geometry_permission(&q);
++    let (mut x,_)=a.prepare_root_with_influence(q);let (mut y,_)=b.prepare_root_with_influence(q);
++    let before=active_rows(&b.evaluator);let full_before=b.evaluator.stats.full;
++    let entry=Entry{ply:0,target:0,iteration_depth:2,lower:-10000,upper:10000,analysis:0,capture_exception:false};
++    let av=a.visit_q(&mut x,&mut SearchHistory::new(&q),entry,Some(false),false);
++    let bv=b.visit_q(&mut y,&mut SearchHistory::new(&q),entry,Some(false),false);
++    assert_eq!(av,bv);assert_eq!(x,y);same_owner(&a,&b);
++    assert!(b.evaluator.stats.full>full_before);assert!(active_rows(&b.evaluator)>before);
++}
++
++#[test]
++fn fixed_iterations_and_node_stop_preserve_output_learning_work_and_reuse() {
++    for limit in [None,Some(1)] {
++        let p=Position::from_fen(START).unwrap();let (mut a,mut b)=(search(&p,false),search(&p,true));
++        let (mut ah,mut bh)=(SearchHistory::new(&p),SearchHistory::new(&p));
++        let av=a.run_iterations(p,&mut ah,2,Limits{nodes:limit});
++        let bv=b.run_iterations(p,&mut bh,2,Limits{nodes:limit});
++        match (av,bv) {
++            (Ok(x),Ok(y))=>assert_eq!((x.score,x.pv,x.work,x.stats,x.evaluations),(y.score,y.pv,y.work,y.stats,y.evaluations)),
++            (Err(x),Err(y))=>assert_eq!(format!("{x:?}"),format!("{y:?}")),
++            _=>panic!("fused stop disposition changed"),
++        }
++        same_owner(&a,&b);active_rows(&b.evaluator);
++        assert!(b.evaluator.colors_worker.as_ref().unwrap().is_parked());
++        let av=a.run_iterations(p,&mut ah,1,Limits::default()).unwrap();
++        let bv=b.run_iterations(p,&mut bh,1,Limits::default()).unwrap();
++        assert_eq!((av.score,av.pv,av.work),(bv.score,bv.pv,bv.work));same_owner(&a,&b);
++    }
++}
++
++#[test]
++fn cold_joined_report_binds_switch_and_matching_native_row_epochs() {
++    let p=Position::from_fen(START).unwrap();
++    for fused in [false,true] {
++        let mut e=evaluator(&p,fused,3);let mut node=Node::root(p,&e.root);let mut scratch=None;
++        e.full_for_search(&mut node,&mut scratch,false,true);
++        let expected=rows(&e);let report=e.finish_colors_report().unwrap();
++        assert!(report.contains(&format!("\"fusion\":{{\"enabled\":{fused},\"rowReady\":[{},{}]}}",expected[0],expected[1])));
++        assert_eq!(expected[0],expected[1]);assert_eq!(expected[0]>0,fused);
++    }
++}
+diff --git a/src/influence.rs b/src/influence.rs
+--- a/src/influence.rs
++++ b/src/influence.rs
+@@ -43,0 +44,6 @@
++    }
++
++    /// Same private coherent-placement precondition as build_coherent. Fill
++    /// exactly one native row; public scalar construction remains independent.
++    pub(crate) fn build_coherent_row(position: &Position, side: Color, destination: &mut [u8; 64]) {
++        coherent::build_row(position, side, destination);
+diff --git a/src/influence/coherent.rs b/src/influence/coherent.rs
+--- a/src/influence/coherent.rs
++++ b/src/influence/coherent.rs
+@@ -16,0 +17,9 @@
++    for side in [Color::White, Color::Black] {
++        build_row(position, side, &mut result.profiles[side.index()]);
++    }
++    result
++}
++
++/// One native color profile, shared by serial coherent build and fresh workers.
++/// The destination may contain an older epoch; every output byte is overwritten.
++pub(super) fn build_row(position: &Position, side: Color, row: &mut [u8; 64]) {
+@@ -18,30 +27,7 @@
+-    for side in [Color::White, Color::Black] {
+-        let bishops = position.piece_squares(side, PieceKind::Bishop);
+-        let rooks = position.piece_squares(side, PieceKind::Rook);
+-        let queens = position.piece_squares(side, PieceKind::Queen);
+-        if bishops.is_empty() && rooks.is_empty() && queens.is_empty() {
+-            // Retain actual scalar P/N/K source lists, targets, order and wrapping.
+-            for &source in position.piece_squares(side, PieceKind::Pawn) {
+-                debug_assert!(source.0 < 64);
+-                let targets = &PAWN_TARGETS[side.index()][(source.0 & 63) as usize];
+-                for &target in &targets.squares[..targets.len as usize] {
+-                    result.add(side, Square(target & 63), Contribution::Pawn as u8);
+-                }
+-            }
+-            for &source in position.piece_squares(side, PieceKind::Knight) {
+-                debug_assert!(source.0 < 64);
+-                let targets = &KNIGHT_SOURCES[(source.0 & 63) as usize];
+-                for &target in &targets.squares[..targets.len as usize] {
+-                    result.add(side, Square(target & 63), Contribution::Minor as u8);
+-                }
+-            }
+-            for &source in position.piece_squares(side, PieceKind::King) {
+-                debug_assert!(source.0 < 64);
+-                let targets = &KING_TARGETS[(source.0 & 63) as usize];
+-                for &target in &targets.squares[..targets.len as usize] {
+-                    result.add(side, Square(target & 63), Contribution::Weak as u8);
+-                }
+-            }
+-            continue; // No bit-counter setup or transpose for this color.
+-        }
+-        let mut sums = BitSums { planes: [0; 8] };
++    let bishops = position.piece_squares(side, PieceKind::Bishop);
++    let rooks = position.piece_squares(side, PieceKind::Rook);
++    let queens = position.piece_squares(side, PieceKind::Queen);
++    if bishops.is_empty() && rooks.is_empty() && queens.is_empty() {
++        // A reusable row must start at zero on the scalar shortcut.
++        row.fill(0);
++        // Retain actual scalar P/N/K source lists, targets, order and wrapping.
+@@ -50 +36,5 @@
+-            sums.add::<6>(influence_pawn_targets(side, source));
++            let targets = &PAWN_TARGETS[side.index()][(source.0 & 63) as usize];
++            for &target in &targets.squares[..targets.len as usize] {
++                let code = &mut row[(target & 63) as usize];
++                *code = code.wrapping_add(Contribution::Pawn as u8);
++            }
+@@ -54 +44,5 @@
+-            sums.add::<4>(influence_knight_targets(source));
++            let targets = &KNIGHT_SOURCES[(source.0 & 63) as usize];
++            for &target in &targets.squares[..targets.len as usize] {
++                let code = &mut row[(target & 63) as usize];
++                *code = code.wrapping_add(Contribution::Minor as u8);
++            }
+@@ -58,17 +52,34 @@
+-            sums.add::<0>(influence_king_targets(source));
+-        }
+-        for &source in bishops {
+-            let (normal, weak) = slider_masks::<2>(planes, side, source);
+-            sums.add_slider::<4>(normal, weak);
+-        }
+-        for &source in rooks {
+-            let (normal, weak) = slider_masks::<3>(planes, side, source);
+-            sums.add_slider::<2>(normal, weak);
+-        }
+-        for &source in queens {
+-            let (normal, weak) = slider_masks::<4>(planes, side, source);
+-            sums.add_slider::<1>(normal, weak);
+-        }
+-        sums.store(&mut result.profiles[side.index()]);
+-    }
+-    result
++            let targets = &KING_TARGETS[(source.0 & 63) as usize];
++            for &target in &targets.squares[..targets.len as usize] {
++                let code = &mut row[(target & 63) as usize];
++                *code = code.wrapping_add(Contribution::Weak as u8);
++            }
++        }
++        return; // No bit-counter setup or transpose for this color.
++    }
++    let mut sums = BitSums { planes: [0; 8] };
++    for &source in position.piece_squares(side, PieceKind::Pawn) {
++        debug_assert!(source.0 < 64);
++        sums.add::<6>(influence_pawn_targets(side, source));
++    }
++    for &source in position.piece_squares(side, PieceKind::Knight) {
++        debug_assert!(source.0 < 64);
++        sums.add::<4>(influence_knight_targets(source));
++    }
++    for &source in position.piece_squares(side, PieceKind::King) {
++        debug_assert!(source.0 < 64);
++        sums.add::<0>(influence_king_targets(source));
++    }
++    for &source in bishops {
++        let (normal, weak) = slider_masks::<2>(planes, side, source);
++        sums.add_slider::<4>(normal, weak);
++    }
++    for &source in rooks {
++        let (normal, weak) = slider_masks::<3>(planes, side, source);
++        sums.add_slider::<2>(normal, weak);
++    }
++    for &source in queens {
++        let (normal, weak) = slider_masks::<4>(planes, side, source);
++        sums.add_slider::<1>(normal, weak);
++    }
++    sums.store(row);
+@@ -313,0 +325,55 @@
++
++
++#[cfg(test)]
++mod row_tests {
++    use super::*;
++
++    fn compare(position: &Position, row: &mut [u8; 64]) {
++        position.validate().unwrap();
++        let scalar = Influence::build(position);
++        assert_eq!(build(position), scalar);
++        for side in [Color::White, Color::Black] {
++            build_row(position, side, row);
++            assert_eq!(*row, scalar.profiles[side.index()]);
++        }
++    }
++
++    #[test]
++    fn native_rows_match_scalar_with_mixed_routes_and_reused_destination() {
++        let mut row = [0xa5; 64];
++        for fen in [
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++            "7k/8/8/8/8/8/4P3/K7 w - - 0 1",
++            "7k/8/3n4/2B5/3R4/8/8/K7 w - - 0 1",
++            "r3k2r/pp1n1p2/2b1q1p1/3pP3/2BN1P2/1Q3N2/PP4PP/R3K2R w KQkq - 0 1",
++            "6k1/8/8/8/Q1Q1Q3/8/8/K7 w - - 0 1",
++        ] {
++            compare(&Position::from_fen(fen).unwrap(), &mut row);
++        }
++    }
++
++    #[test]
++    fn native_row_wrapping_and_source_multiplicity_survive_extraction() {
++        let mut row = [255; 64];
++        for (fen, expected) in [
++            ("7k/8/3N1N2/2N3N1/8/2NP1PN1/3N1N2/K7 w - - 0 1", 0),
++            ("B6k/8/3N1N2/2N3N1/8/2NP1PN1/3N1N2/K7 w - - 0 1", 16),
++        ] {
++            let position = Position::from_fen(fen).unwrap();
++            compare(&position, &mut row);
++            build_row(&position, Color::White, &mut row);
++            assert_eq!(row[crate::types::Square::parse("e4").unwrap().0 as usize], expected);
++            let mut chronology = position;
++            for side in 0..2 {
++                let mut begin = 0;
++                for count in chronology.counts[side] {
++                    let end = begin + usize::from(count);
++                    chronology.squares[side][begin..end].reverse();
++                    begin = end;
++                }
++            }
++            compare(&chronology, &mut row);
++            assert_eq!(build(&chronology), build(&position));
++        }
++    }
++}
+diff --git a/src/ordinary.rs b/src/ordinary.rs
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -813,2 +813,3 @@
+-        let map = self.evaluator.ensure_influence_for_search(&position, &mut scratch, coherent_geometry);
+-        let evaluation = self.evaluator.full(node, map, checked);
++        let (evaluation, map) = self.evaluator.full_for_search(
++            node, &mut scratch, checked, coherent_geometry,
++        );
+diff --git a/src/quiescence.rs b/src/quiescence.rs
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -155,7 +155,2 @@
+-        let influence = self.evaluator.ensure_influence_for_search(
+-            &position, &mut scratch, coherent_geometry,
+-        );
+-        self.evaluator.full(
+-            &mut root,
+-            influence,
+-            movegen::in_check(&position, position.side),
++        self.evaluator.full_for_search(
++            &mut root, &mut scratch, movegen::in_check(&position, position.side), coherent_geometry,
+diff --git a/src/session.rs b/src/session.rs
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -142,0 +143,6 @@
++    }
++
++    pub fn set_fresh_influence_fusion(&mut self, enabled: bool) -> Result<(), String> {
++        self.search.as_mut().ok_or("search is currently active")?.evaluator
++            .set_fresh_influence_fusion(enabled);
++        Ok(())
