@@ -1,0 +1,1319 @@
+diff --git a/src/evaluator_worker.rs b/src/evaluator_worker.rs
+--- a/src/evaluator_worker.rs
++++ b/src/evaluator_worker.rs
+@@ -1 +1 @@
+-//! Activity -> Shelter worker for confirmed FULL calls.
++//! Whole Activity -> Shelter work for confirmed FULL calls.
+@@ -3,6 +3,6 @@
+-//! Packet and result slots are reusable owned storage, never borrowed from a
+-//! caller's stack. Successful dispatch/complete allocate no memory or threads.
+-//! The worker spins only inside an owned active search/call scope. Outside those
+-//! scopes it acknowledges empty transport slots and sleeps on a condition.
+-//! Scheduling delays never cause an engine wall-time abort. Affinity is inherited
+-//! from the creator; controlled benchmark placement belongs to its supervisor.
++//! One initialized epoch input and one initialized scalar output replace Slots.
++//! The one owning coordinator publishes under Control; the helper reads directly
++//! without a packet copy or a kernel mutex. Matching done retires all input
++//! access, and output consumption precedes a later request's reverse edge.
++//! Lexical scopes bound spinning and acknowledge real parking; affinity remains
++//! inherited. No scheduling delay is interpreted as a wall-time engine failure.
+@@ -13,0 +14 @@
++use std::cell::UnsafeCell;
+@@ -15 +16 @@
+-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
++use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+@@ -21,2 +21,0 @@
+-const REQUESTED: u8 = 2;
+-const COMPLETE: u8 = 3;
+@@ -55,0 +55 @@
++    generation: u64,
+@@ -62,0 +63,35 @@
++#[derive(Clone, Copy)]
++struct Output {
++    generation: u64,
++    value: ActivityShelter,
++}
++
++struct Cells {
++    input: UnsafeCell<Packet>,
++    output: UnsafeCell<Output>,
++}
++
++// SAFETY: This private Sync implementation covers only these concrete cells.
++// Only the single &mut ActivityShelterWorker coordinator writes input, under
++// Control with Flight::None. None follows either matching done Acquire plus
++// ended output reads, or a real helper PARKED/exited acknowledgment. Request
++// Release/Acquire publishes the initialized packet before its immutable borrow.
++// compute_input contains every Packet reference, returns only Copy scalars, and
++// ends those references BEFORE the helper output write and done Release.
++//
++// Only the helper writes output. Complete reads it after matching done Acquire,
++// under Control while requiring Published(g). The scalar Copy read ends before
++// Flight::None. A later request Release, acquired before the helper's next write,
++// supplies the reverse output-consumption edge. Close claims Discarding under
++// that same Control until actual parking/exit, and never touches either cell.
++// No mutable reference to Shared or the whole Cells container is constructed.
++unsafe impl Sync for Cells {}
++
++#[derive(Clone, Copy, Default)]
++enum Flight {
++    #[default]
++    None,
++    Published(u64),
++    Discarding(u64),
++}
++
+@@ -64,3 +99,5 @@
+-struct Slots {
+-    packet: Option<Packet>,
+-    output: Option<ActivityShelter>,
++struct Control {
++    scopes: usize,
++    closing: bool,
++    shutdown: bool,
++    flight: Flight,
+@@ -68 +104,0 @@
+-    completion_waiting: bool,
+@@ -71,0 +108,3 @@
++    cells: Cells,
++    request: AtomicU64,
++    done: AtomicU64,
+@@ -77 +116,2 @@
+-    slots: Mutex<Slots>,
++    // One coordinator waiter only. Sleep and Control are never held together.
++    sleep: Mutex<()>,
+@@ -78,0 +119 @@
++    waiting: AtomicBool,
+@@ -80 +121,5 @@
+-    test_gate: Mutex<TestGate>,
++    tests: TestHooks,
++}
++
++#[derive(Clone, Copy, Default)]
++struct Startup {
+@@ -82,19 +127,4 @@
+-    test_wake: Condvar,
+-}
+-
+-#[cfg(test)]
+-#[derive(Default)]
+-struct TestGate {
+-    blocked: bool,
+-    entered: bool,
+-    fail: bool,
+-}
+-
+-#[derive(Default)]
+-struct Control {
+-    scopes: usize,
+-    parking: bool,
+-}
+-
+-/// No evaluator or Search borrow survives activation. The final guard waits
+-/// for the helper to discard any abandoned packet/output and acknowledge sleep.
++    kind: StartupKind,
++}
++
++/// This Send guard owns lifecycle metadata, never a caller or cell borrow.
+@@ -129,0 +160 @@
++    generation: u64,
+@@ -135,4 +166,8 @@
+-        Self::start_with(run_active)
+-    }
+-
+-    fn start_with(entry: fn(&Shared) -> Result<(), String>) -> Result<Self, String> {
++        Self::start_with(Startup::default())
++    }
++
++    fn start_with(startup: Startup) -> Result<Self, String> {
++        let position = Position::from_fen(
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++        ).map_err(|error| format!("cannot initialize Activity/Shelter input: {error}"))?;
++        let influence = Influence::build(&position);
+@@ -139,0 +175,14 @@
++            cells: Cells {
++                input: UnsafeCell::new(Packet {
++                    generation: 0, position, influence, material: 0,
++                    mobility_weights: [1024; 2], shelter_weights: [1024; 2],
++                }),
++                output: UnsafeCell::new(Output {
++                    generation: 0,
++                    value: ActivityShelter {
++                        activity: Activity::default(), shelter: Shelter::default(),
++                    },
++                }),
++            },
++            request: AtomicU64::new(0),
++            done: AtomicU64::new(0),
+@@ -145 +194 @@
+-            slots: Mutex::new(Slots::default()),
++            sleep: Mutex::new(()),
+@@ -146,0 +196 @@
++            waiting: AtomicBool::new(false),
+@@ -148,3 +198 @@
+-            test_gate: Mutex::new(TestGate::default()),
+-            #[cfg(test)]
+-            test_wake: Condvar::new(),
++            tests: TestHooks::new(startup),
+@@ -152,2 +200,15 @@
+-        let worker_shared = Arc::clone(&shared);
+-        let thread = thread::Builder::new()
++        #[cfg(not(test))]
++        let _ = startup;
++        let mut worker = Self {
++            shared, thread: None, generation: 0, close_error_reported: false,
++        };
++        #[cfg(test)]
++        if startup.kind == StartupKind::SpawnFailure {
++            // This is an unstarted reader, with no possible outstanding access.
++            publish_terminal(&worker.shared, Some("controlled startup spawn failure".into()));
++            let failure = worker.failure();
++            let _ = worker.shutdown();
++            return Err(failure);
++        }
++        let worker_shared = Arc::clone(&worker.shared);
++        let handle = thread::Builder::new()
+@@ -156 +217,7 @@
+-                let result = std::panic::catch_unwind(|| entry(&worker_shared));
++                // Only this concrete loop is asserted unwind-safe: its Packet
++                // references cannot escape compute_input. Unwind drops them
++                // before this outer handler acknowledges actual exit. A partial
++                // output is never read without matching successful done.
++                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
++                    || run_active(&worker_shared),
++                ));
+@@ -163,7 +230,12 @@
+-            })
+-            .map_err(|error| format!("cannot start Activity/Shelter worker: {error}"))?;
+-        let mut worker = Self {
+-            shared,
+-            thread: Some(thread),
+-            close_error_reported: false,
+-        };
++            });
++        match handle {
++            Ok(handle) => worker.thread = Some(handle),
++            Err(error) => {
++                publish_terminal(&worker.shared, Some(format!(
++                    "cannot start Activity/Shelter worker: {error}",
++                )));
++                let failure = worker.failure();
++                let _ = worker.shutdown();
++                return Err(failure);
++            }
++        }
+@@ -171 +243 @@
+-        while worker.shared.state.load(Ordering::Acquire) == STARTING {
++        while worker.shared.state.load(Ordering::Acquire) != PARKED && !terminal(&worker.shared) {
+@@ -174 +246 @@
+-        let state = worker.shared.state.load(Ordering::Acquire);
++        let parked = worker.shared.state.load(Ordering::Acquire) == PARKED && !terminal(&worker.shared);
+@@ -176,3 +248 @@
+-        if state == PARKED {
+-            Ok(worker)
+-        } else {
++        if parked { Ok(worker) } else {
+@@ -187 +257 @@
+-        while control.parking && !terminal(&self.shared) {
++        while control.closing && !terminal(&self.shared) {
+@@ -190,3 +260 @@
+-        if terminal(&self.shared) {
+-            return Err(self.failure());
+-        }
++        if terminal(&self.shared) { return Err(failure_in(&control)); }
+@@ -197,2 +264,0 @@
+-            // A prior closing guard may still be an acknowledgment waiter on
+-            // this condition. Wake all so activation cannot wake only it.
+@@ -200 +266 @@
+-            while self.shared.state.load(Ordering::Acquire) == PARKED && !terminal(&self.shared) {
++            while self.shared.state.load(Ordering::Acquire) != IDLE && !terminal(&self.shared) {
+@@ -203 +269 @@
+-            if self.shared.state.load(Ordering::Acquire) != IDLE {
++            if terminal(&self.shared) {
+@@ -206,2 +272 @@
+-                drop(control);
+-                return Err(self.failure());
++                return Err(failure_in(&control));
+@@ -214,3 +279,2 @@
+-    /// Evaluator FULL calls have one owning coordinator. An existing outer
+-    /// scope encloses this whole call, so its fast path needs no lifecycle lock
+-    /// or Arc clone. A standalone call gets an owned wake/park guard instead.
++    /// The owning coordinator has an existing enclosing scope on this fast
++    /// path. Standalone direct calls get their original owned wake/park guard.
+@@ -223,6 +286,0 @@
+-    }
+-
+-    #[cfg(test)]
+-    pub(crate) fn is_parked(&self) -> bool {
+-        self.shared.state.load(Ordering::Acquire) == PARKED
+-            && self.shared.active_scopes.load(Ordering::Acquire) == 0
+@@ -239,4 +297,53 @@
+-        if self.shared.active_scopes.load(Ordering::Acquire) == 0
+-            || self.shared.state.load(Ordering::Acquire) != IDLE {
+-            return Err(self.failure());
+-        }
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.before_dispatch);
++        // Control is the publication lease; a scope-count load alone is not.
++        let mut control = control_lock(&self.shared);
++        if control.scopes == 0 || control.closing || terminal(&self.shared) {
++            return Err(failure_in(&control));
++        }
++        if !matches!(control.flight, Flight::None) {
++            return Err("Activity/Shelter dispatch while a flight is still owned".into());
++        }
++        let Some(generation) = self.generation.checked_add(1) else {
++            let error = "Activity/Shelter epoch exhausted".to_string();
++            control.failure = Some(error.clone());
++            control.closing = true;
++            self.shared.stop.store(true, Ordering::Release);
++            self.shared.wake.notify_all();
++            drop(control);
++            signal_completion(&self.shared);
++            // No reset, wrap, request0, or invented done: actually join first.
++            let _ = self.shutdown();
++            return Err(error);
++        };
++        // SAFETY: Flight::None under Control proves old input access and
++        // output consumption ended. Only this single coordinator writes input.
++        unsafe {
++            self.shared.cells.input.get().write(Packet {
++                generation, position: *position, influence: *influence, material,
++                mobility_weights, shelter_weights,
++            });
++        }
++        #[cfg(test)]
++        if self.shared.tests.fail_before_publish.swap(false, Ordering::SeqCst) {
++            // Still initialized but unpublished. No lease, request or epoch
++            // advanced, so the same next epoch may be installed by a later call.
++            return Err("controlled worker failure before publication".into());
++        }
++        control.flight = Flight::Published(generation);
++        // All fallible preparation precedes this store. Nothing may roll back
++        // a published request to None without done or actual parked/exited drain.
++        self.shared.request.store(generation, Ordering::Release);
++        self.generation = generation;
++        Ok(())
++    }
++
++    pub(crate) fn complete(&mut self) -> Result<ActivityShelter, String> {
++        let generation = self.generation;
++        if generation == 0 { return Err("Activity/Shelter complete without a dispatch".into()); }
++        if wait_completion(&self.shared, generation).is_err() { return Err(self.failure()); }
++        // Sleep is already released. Acquire the ownership mutex only after
++        // matching done, and revalidate against a final guard that could win.
++        let mut control = control_lock(&self.shared);
++        if !matches!(control.flight, Flight::Published(epoch) if epoch == generation)
++            || control.closing || terminal(&self.shared)
+@@ -244,23 +351,18 @@
+-            let mut slots = self
+-                .shared
+-                .slots
+-                .lock()
+-                .map_err(|_| "worker slot poisoned")?;
+-            debug_assert!(slots.packet.is_none() && slots.output.is_none());
+-            slots.packet = Some(Packet {
+-                position: *position,
+-                influence: *influence,
+-                material,
+-                mobility_weights,
+-                shelter_weights,
+-            });
+-        }
+-        self.shared.state.store(REQUESTED, Ordering::Release);
+-        Ok(())
+-    }
+-
+-    pub(crate) fn complete(&mut self) -> Result<ActivityShelter, String> {
+-        let mut slots = completion_slots(&self.shared)?;
+-        let output = slots.output.take().ok_or("worker completed without an output")?;
+-        self.shared.state.store(IDLE, Ordering::Release);
+-        Ok(output)
++            return Err("Activity/Shelter completion lost ownership of its flight".into());
++        }
++        if self.shared.done.load(Ordering::Acquire) != generation {
++            return Err("Activity/Shelter completion before matching done".into());
++        }
++        #[cfg(test)]
++        test_pause(&self.shared, &self.shared.tests.consuming);
++        // SAFETY: Matching done Acquire publishes this initialized Copy scalar
++        // output and retires all input references. Published under Control
++        // excludes close. This read ends before None and any later request's
++        // Release/Acquire permits the helper to overwrite the output cell.
++        let output = unsafe { self.shared.cells.output.get().read() };
++        if output.generation != generation {
++            return Err("Activity/Shelter output generation mismatch".into());
++        }
++        control.flight = Flight::None;
++        drop(control);
++        Ok(output.value)
+@@ -273,9 +375 @@
+-    fn failure(&self) -> String {
+-        self.shared
+-            .slots
+-            .lock()
+-            .unwrap_or_else(|e| e.into_inner())
+-            .failure
+-            .clone()
+-            .unwrap_or_else(|| "Activity/Shelter worker entered an invalid state".into())
+-    }
++    fn failure(&self) -> String { failure_in(&control_lock(&self.shared)) }
+@@ -284,9 +377,0 @@
+-        if self.thread.is_none() {
+-            if self.shared.state.load(Ordering::Acquire) == FAILED {
+-                self.close_error_reported = true;
+-                return Err(self.failure());
+-            }
+-            return Ok(());
+-        }
+-        // This also covers unwinding after dispatch: finish or discard the
+-        // pending owned packet, then terminate before its storage is released.
+@@ -294,0 +380,5 @@
++            control.shutdown = true;
++            control.closing = true;
++            claim_discard(&mut control);
++            control.scopes = 0;
++            self.shared.active_scopes.store(0, Ordering::Release);
+@@ -296,3 +385,0 @@
+-            self.shared.active_scopes.store(0, Ordering::Release);
+-            control.scopes = 0;
+-            control.parking = false;
+@@ -301,6 +388,16 @@
+-        let handle = self.thread.take().unwrap();
+-        // No worker/control/slot lock may remain held across this join. The
+-        // external owner may impose a deadline; the engine does not infer a
+-        // terminal error merely from how long the helper was unscheduled.
+-        if handle.join().is_err() {
+-            publish_terminal(&self.shared, Some("Activity/Shelter worker exited with an uncaught panic".into()));
++        // Every terminal publisher exchanges the same latch, even if false.
++        // Never hold Control while taking Sleep or while joining the helper.
++        signal_completion(&self.shared);
++        if let Some(handle) = self.thread.take() {
++            if handle.join().is_err() {
++                publish_terminal(&self.shared, Some(
++                    "Activity/Shelter worker exited with an uncaught panic".into(),
++                ));
++            }
++        }
++        let mut control = control_lock(&self.shared);
++        debug_assert!(quiescent(&self.shared));
++        control.flight = Flight::None;
++        control.closing = false;
++        self.shared.wake.notify_all();
++        if control.failure.is_some() {
+@@ -308,10 +405 @@
+-            return Err("Activity/Shelter worker exited with an uncaught panic".into());
+-        }
+-        {
+-            let mut slots = self.shared.slots.lock().unwrap_or_else(|error| error.into_inner());
+-            slots.packet = None;
+-            slots.output = None;
+-        }
+-        if self.shared.state.load(Ordering::Acquire) == FAILED {
+-            self.close_error_reported = true;
+-            return Err(self.failure());
++            return Err(failure_in(&control));
+@@ -319,0 +408,7 @@
++    }
++
++    #[cfg(test)]
++    pub(crate) fn is_parked(&self) -> bool {
++        let control = control_lock(&self.shared);
++        self.shared.state.load(Ordering::Acquire) == PARKED
++            && control.scopes == 0 && !control.closing && matches!(control.flight, Flight::None)
+@@ -325,2 +419,0 @@
+-        // shutdown keeps terminal failure sticky, including after join. An
+-        // explicitly returned close Err discharges duplicate destructor reports.
+@@ -340,6 +433,15 @@
+-    park(shared)?;
+-    while !shared.stop.load(Ordering::Acquire) {
+-        if shared.state.load(Ordering::Acquire) != REQUESTED {
+-            if shared.active_scopes.load(Ordering::Acquire) == 0 {
+-                park(shared)?;
+-                continue;
++    #[cfg(test)]
++    match shared.tests.startup.kind {
++        StartupKind::Failure => return Err("controlled startup failure".into()),
++        StartupKind::Stop => return Ok(()),
++        StartupKind::Panic => panic!("controlled startup panic"),
++        _ => {}
++    }
++    let mut seen = 0;
++    park(shared, seen);
++    loop {
++        if terminal(shared) { return Ok(()); }
++        let generation = shared.request.load(Ordering::Acquire);
++        if generation != seen {
++            if generation == 0 || generation < seen {
++                return Err("Activity/Shelter worker observed nonincreasing epoch".into());
+@@ -346,0 +449,24 @@
++            #[cfg(test)]
++            {
++                test_reader_gate(shared, &shared.tests.before_input)?;
++                if shared.tests.startup.kind == StartupKind::StopAfterRequest { return Ok(()); }
++            }
++            // SAFETY: This acquired request publishes the immutable input, and
++            // no next input write can occur before done or this reader's exit.
++            let output = unsafe { compute_input(shared, generation)? };
++            // compute_input returned only Copy scalars: no Packet borrow remains.
++            // SAFETY: Only this reader writes this cell; the acquired next
++            // request also orders prior coordinator output consumption.
++            unsafe { shared.cells.output.get().write(output); }
++            #[cfg(test)]
++            test_reader_gate(shared, &shared.tests.before_done)?;
++            shared.done.store(generation, Ordering::Release);
++            seen = generation;
++            #[cfg(test)]
++            test_pause(shared, &shared.tests.before_latch);
++            signal_completion(shared);
++            continue;
++        }
++        if shared.active_scopes.load(Ordering::Acquire) == 0 {
++            park(shared, seen);
++        } else {
+@@ -348,9 +474,11 @@
+-            continue;
+-        }
+-        let packet = shared
+-            .slots
+-            .lock()
+-            .map_err(|_| "worker slot poisoned")?
+-            .packet
+-            .take()
+-            .ok_or("worker request has no packet")?;
++        }
++    }
++}
++
++/// Only called after request(g) Acquire. No reference or pointer escapes.
++unsafe fn compute_input(shared: &Shared, generation: u64) -> Result<Output, String> {
++    let output = {
++        // SAFETY: The caller acquired publication and owns this one reader's
++        // borrow until its done Release or its actual exit handler.
++        let packet = unsafe { &*shared.cells.input.get() };
++        if packet.generation != generation { return Err("Activity/Shelter input generation mismatch".into()); }
+@@ -358,7 +486,4 @@
+-        test_gate(shared)?;
+-        let output = compute(
+-            &packet.position,
+-            &packet.influence,
+-            packet.material,
+-            packet.mobility_weights,
+-            packet.shelter_weights,
++        test_reader_gate(shared, &shared.tests.in_input)?;
++        let value = compute(
++            &packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights,
+@@ -366,11 +491,9 @@
+-        let notify = {
+-            let mut slots = shared.slots.lock().map_err(|_| "worker slot poisoned")?;
+-            slots.output = Some(output);
+-            shared.state.store(COMPLETE, Ordering::Release);
+-            slots.completion_waiting
+-        };
+-        // Registering a blocked waiter and publishing its predicate use Slots.
+-        // The usual spin completion adds no condition notification call.
+-        if notify { shared.completed.notify_all(); }
+-    }
+-    Ok(())
++        Output { generation, value }
++    };
++    Ok(output)
++}
++
++fn terminal(shared: &Shared) -> bool { shared.stop.load(Ordering::Acquire) }
++
++fn quiescent(shared: &Shared) -> bool {
++    matches!(shared.state.load(Ordering::Acquire), PARKED | FAILED | STOPPED)
+@@ -383,3 +506,17 @@
+-/// Slots guards completion predicates. Nothing holding this guard may acquire
+-/// Control: terminal/lifecycle code consistently locks Control before Slots.
+-fn completion_slots(shared: &Shared) -> Result<MutexGuard<'_, Slots>, String> {
++fn failure_in(control: &Control) -> String {
++    control.failure.clone().unwrap_or_else(|| "Activity/Shelter worker entered an invalid or stopped state".into())
++}
++
++/// Every successful done and every terminal publication unconditionally performs
++/// this SC RMW. A publisher consuming true owes a Sleep-coordinated notification.
++/// A publisher before registration carries its preceding done/stop publication
++/// through that shared RMW chain to the waiter's following Acquire recheck.
++/// Control is always released before this function is called.
++fn signal_completion(shared: &Shared) {
++    if shared.waiting.swap(false, Ordering::SeqCst) {
++        let _sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
++        shared.completed.notify_all();
++    }
++}
++
++fn wait_completion(shared: &Shared, generation: u64) -> Result<(), String> {
+@@ -387 +524,2 @@
+-        if shared.state.load(Ordering::Acquire) != REQUESTED { break; }
++        if terminal(shared) { return Err("Activity/Shelter completion stopped".into()); }
++        if shared.done.load(Ordering::Acquire) == generation { return Ok(()); }
+@@ -390,10 +528,22 @@
+-    let mut slots = shared.slots.lock().map_err(|_| "worker slot poisoned")?;
+-    while shared.state.load(Ordering::Acquire) == REQUESTED {
+-        slots.completion_waiting = true;
+-        slots = shared.completed.wait(slots).map_err(|_| "worker slot poisoned")?;
+-    }
+-    slots.completion_waiting = false;
+-    if shared.state.load(Ordering::Acquire) != COMPLETE {
+-        return Err(slots.failure.clone().unwrap_or_else(|| "Activity/Shelter worker entered an invalid state".into()));
+-    }
+-    Ok(slots)
++    let mut sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
++    loop {
++        #[cfg(test)]
++        test_pause(shared, &shared.tests.before_registration);
++        // The single waiter re-registers on every iteration, including after
++        // spurious/early wakes. Sleep excludes notify slipping into the gap
++        // between this Acquire predicate recheck and atomic unlock/sleep.
++        shared.waiting.swap(true, Ordering::SeqCst);
++        #[cfg(test)]
++        {
++            shared.tests.registrations.fetch_add(1, Ordering::SeqCst);
++            test_pause(shared, &shared.tests.after_registration);
++        }
++        let stopped = terminal(shared);
++        let done = shared.done.load(Ordering::Acquire) == generation;
++        if stopped || done {
++            shared.waiting.swap(false, Ordering::SeqCst);
++            drop(sleep);
++            return if stopped { Err("Activity/Shelter completion stopped".into()) } else { Ok(()) };
++        }
++        sleep = shared.completed.wait(sleep).unwrap_or_else(|error| error.into_inner());
++    }
+@@ -403,17 +553,21 @@
+-    let mut control = control_lock(shared);
+-    let mut slots = shared.slots.lock().unwrap_or_else(|error| error.into_inner());
+-    let state = if let Some(error) = failure {
+-        slots.failure = Some(error);
+-        FAILED
+-    } else { STOPPED };
+-    shared.state.store(state, Ordering::Release);
+-    control.parking = false;
+-    // Both predicate families include terminal state, and that transition is
+-    // published with both associated mutexes held. Neither wake can be lost.
+-    shared.completed.notify_all();
+-    shared.wake.notify_all();
+-}
+-
+-fn terminal(shared: &Shared) -> bool {
+-    shared.stop.load(Ordering::Acquire)
+-        || matches!(shared.state.load(Ordering::Acquire), FAILED | STOPPED)
++    {
++        let mut control = control_lock(shared);
++        if let Some(error) = failure {
++            // Keep the original terminal failure sticky across shutdown retries.
++            if control.failure.is_none() { control.failure = Some(error); }
++            shared.state.store(FAILED, Ordering::Release);
++        } else if shared.state.load(Ordering::Acquire) != FAILED {
++            shared.state.store(STOPPED, Ordering::Release);
++        }
++        // Actual loop exit (including unwind), or a genuinely unstarted reader,
++        // is retirement. Observing stop alone is not retirement of a live reader.
++        shared.stop.store(true, Ordering::Release);
++        shared.wake.notify_all();
++    }
++    signal_completion(shared);
++}
++
++fn claim_discard(control: &mut Control) {
++    if let Flight::Published(generation) = control.flight {
++        control.flight = Flight::Discarding(generation);
++    }
+@@ -424,3 +578,6 @@
+-    // Shutdown owns and drains the transport. A guard outliving the worker's
+-    // owner has no remaining lifecycle action and must not underflow its count.
+-    if shared.stop.load(Ordering::Acquire) { return Ok(()); }
++    if control.shutdown && control.scopes == 0 {
++        // A concurrent shutdown owns join, but this guard still waits for real
++        // quiescence rather than assuming a requested stop has retired input.
++        while !quiescent(shared) { control = wait_control(shared, control); }
++        return Ok(());
++    }
+@@ -431,2 +588,23 @@
+-    control.parking = true;
+-    while control.parking && !terminal(shared) {
++    control.closing = true;
++    claim_discard(&mut control);
++    while !quiescent(shared) { control = wait_control(shared, control); }
++    // Discard metadata only. No scope/parking code reads or clears either cell.
++    if let Flight::Discarding(generation) = control.flight {
++        debug_assert_eq!(shared.request.load(Ordering::Acquire), generation);
++    }
++    control.flight = Flight::None;
++    control.closing = false;
++    shared.wake.notify_all();
++    if terminal(shared) { Err(failure_in(&control)) } else { Ok(()) }
++}
++
++/// Recheck the unseen request while holding the same Control as dispatch before
++/// acknowledging PARKED. An already published request must finish or actually
++/// exit first. No input/output access is performed by parking.
++fn park(shared: &Shared, seen: u64) {
++    let mut control = control_lock(shared);
++    if terminal(shared) || shared.request.load(Ordering::Acquire) != seen { return; }
++    if control.scopes != 0 { return; }
++    shared.state.store(PARKED, Ordering::Release);
++    shared.wake.notify_all();
++    while control.scopes == 0 && !terminal(shared) {
+@@ -435,25 +613 @@
+-    if matches!(shared.state.load(Ordering::Acquire), FAILED | STOPPED) {
+-        return Err(shared.slots.lock().unwrap_or_else(|error| error.into_inner())
+-            .failure.clone().unwrap_or_else(|| "worker stopped while parking".into()));
+-    }
+-    Ok(())
+-}
+-
+-/// Called after any outstanding native computation. Clearing transport slots
+-/// precedes the PARKED release and parking acknowledgment under the same lock
+-/// used by activation, avoiding a lost wake or a stale next-lifetime output.
+-fn park(shared: &Shared) -> Result<(), String> {
+-    let mut control = control_lock(shared);
+-    if control.scopes != 0 { return Ok(()); }
+-    {
+-        let mut slots = shared.slots.lock().map_err(|_| "worker slot poisoned while parking")?;
+-        slots.packet = None;
+-        slots.output = None;
+-    }
+-    shared.state.store(PARKED, Ordering::Release);
+-    control.parking = false;
+-    shared.wake.notify_all();
+-    while control.scopes == 0 && !shared.stop.load(Ordering::Acquire) {
+-        control = shared.wake.wait(control).unwrap_or_else(|error| error.into_inner());
+-    }
+-    if !shared.stop.load(Ordering::Acquire) {
++    if !terminal(shared) {
+@@ -463,6 +617,3 @@
+-    Ok(())
+-}
+-
+-fn wait_control<'a>(
+-    shared: &'a Shared, control: MutexGuard<'a, Control>,
+-) -> MutexGuard<'a, Control> {
++}
++
++fn wait_control<'a>(shared: &'a Shared, control: MutexGuard<'a, Control>) -> MutexGuard<'a, Control> {
+@@ -473,2 +624,59 @@
+-fn test_gate(shared: &Shared) -> Result<(), String> {
+-    let mut gate = shared.test_gate.lock().unwrap();
++#[derive(Clone, Copy, Default, PartialEq, Eq)]
++enum StartupKind {
++    #[default]
++    Normal,
++    Failure,
++    Stop,
++    Panic,
++    SpawnFailure,
++    StopAfterRequest,
++}
++
++#[cfg(test)]
++#[derive(Default)]
++struct TestGate {
++    blocked: bool,
++    entered: bool,
++    fail: bool,
++    panic: bool,
++}
++
++#[cfg(test)]
++struct TestHooks {
++    startup: Startup,
++    before_input: Mutex<TestGate>,
++    in_input: Mutex<TestGate>,
++    before_done: Mutex<TestGate>,
++    before_latch: Mutex<TestGate>,
++    consuming: Mutex<TestGate>,
++    before_dispatch: Mutex<TestGate>,
++    before_registration: Mutex<TestGate>,
++    after_registration: Mutex<TestGate>,
++    wake: Condvar,
++    registrations: AtomicUsize,
++    fail_before_publish: AtomicBool,
++}
++
++#[cfg(test)]
++impl TestHooks {
++    fn new(startup: Startup) -> Self {
++        Self {
++            startup,
++            before_input: Mutex::new(TestGate::default()),
++            in_input: Mutex::new(TestGate::default()),
++            before_done: Mutex::new(TestGate::default()),
++            before_latch: Mutex::new(TestGate::default()),
++            consuming: Mutex::new(TestGate::default()),
++            before_dispatch: Mutex::new(TestGate::default()),
++            before_registration: Mutex::new(TestGate::default()),
++            after_registration: Mutex::new(TestGate::default()),
++            wake: Condvar::new(),
++            registrations: AtomicUsize::new(0),
++            fail_before_publish: AtomicBool::new(false),
++        }
++    }
++}
++
++#[cfg(test)]
++fn test_pause(shared: &Shared, mutex: &Mutex<TestGate>) {
++    let mut gate = mutex.lock().unwrap();
+@@ -476,4 +684,9 @@
+-    shared.test_wake.notify_all();
+-    while gate.blocked {
+-        gate = shared.test_wake.wait(gate).unwrap();
+-    }
++    shared.tests.wake.notify_all();
++    while gate.blocked { gate = shared.tests.wake.wait(gate).unwrap(); }
++}
++
++#[cfg(test)]
++fn test_reader_gate(shared: &Shared, mutex: &Mutex<TestGate>) -> Result<(), String> {
++    test_pause(shared, mutex);
++    let gate = mutex.lock().unwrap();
++    if gate.panic { panic!("controlled Activity/Shelter worker panic"); }
+@@ -486,7 +699,3 @@
+-    use std::time::{Duration, Instant};
+-
+-    // Every worker, including test workers, inherits its creator's allowed CPU
+-    // set. Controlled placement belongs to the external test supervisor.
+-    fn worker() -> ActivityShelterWorker {
+-        ActivityShelterWorker::start_with(run_active).unwrap()
+-    }
++    use std::sync::mpsc;
++
++    fn worker() -> ActivityShelterWorker { ActivityShelterWorker::start().unwrap() }
+@@ -499,5 +708,2 @@
+-            position,
+-            influence: Influence::build(&position),
+-            material: 193,
+-            mobility_weights: [2017, 633],
+-            shelter_weights: [997, 3101],
++            generation: 0, position, influence: Influence::build(&position),
++            material: 193, mobility_weights: [2017, 633], shelter_weights: [997, 3101],
+@@ -508,23 +714,2 @@
+-        worker.dispatch(
+-            &packet.position, &packet.influence, packet.material,
+-            packet.mobility_weights, packet.shelter_weights,
+-        ).unwrap();
+-    }
+-
+-    fn block_job(shared: &Shared) {
+-        let mut gate = shared.test_gate.lock().unwrap();
+-        gate.blocked = true;
+-        gate.entered = false;
+-        gate.fail = false;
+-    }
+-
+-    fn wait_job_entered(shared: &Shared) {
+-        let mut gate = shared.test_gate.lock().unwrap();
+-        while !gate.entered { gate = shared.test_wake.wait(gate).unwrap(); }
+-    }
+-
+-    fn release_job(shared: &Shared, fail: bool) {
+-        let mut gate = shared.test_gate.lock().unwrap();
+-        gate.blocked = false;
+-        gate.fail = fail;
+-        shared.test_wake.notify_all();
++        worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).unwrap();
+@@ -540,2 +725,38 @@
+-    #[test]
+-    fn startup_and_standalone_scopes_park_with_empty_slots() {
++    fn block(mutex: &Mutex<TestGate>) {
++        *mutex.lock().unwrap() = TestGate { blocked: true, ..TestGate::default() };
++    }
++
++    fn entered(shared: &Shared, mutex: &Mutex<TestGate>) {
++        let mut gate = mutex.lock().unwrap();
++        while !gate.entered { gate = shared.tests.wake.wait(gate).unwrap(); }
++    }
++
++    fn release(shared: &Shared, mutex: &Mutex<TestGate>, fail: bool) {
++        let mut gate = mutex.lock().unwrap();
++        gate.blocked = false;
++        gate.fail = fail;
++        shared.tests.wake.notify_all();
++    }
++
++    fn block_job(shared: &Shared) { block(&shared.tests.before_input); }
++    fn wait_job_entered(shared: &Shared) { entered(shared, &shared.tests.before_input); }
++    fn release_job(shared: &Shared, fail: bool) { release(shared, &shared.tests.before_input, fail); }
++
++    fn registered(shared: &Shared, count: usize) {
++        while shared.tests.registrations.load(Ordering::SeqCst) < count { thread::yield_now(); }
++    }
++
++    fn closing(shared: &Shared) {
++        while !control_lock(shared).closing { thread::yield_now(); }
++    }
++
++    fn wait_done(shared: &Shared, generation: u64) {
++        while shared.done.load(Ordering::Acquire) != generation { thread::yield_now(); }
++    }
++
++    fn no_flight(shared: &Shared) {
++        assert!(matches!(control_lock(shared).flight, Flight::None));
++    }
++
++    #[test]
++    fn startup_and_standalone_scopes_park_with_retired_flight() {
+@@ -545,4 +766,2 @@
+-        assert!(worker.dispatch(
+-            &packet.position, &packet.influence, packet.material,
+-            packet.mobility_weights, packet.shelter_weights,
+-        ).is_err(), "unscoped dispatch must fail");
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
+@@ -552,7 +771 @@
+-            let actual = worker.complete().unwrap();
+-            let expected = compute(
+-                &packet.position, &packet.influence, packet.material,
+-                packet.mobility_weights, packet.shelter_weights,
+-            );
+-            assert_eq!(actual.activity, expected.activity);
+-            assert_eq!(actual.shelter, expected.shelter);
++            assert_numerical_output(worker.complete().unwrap(), &packet);
+@@ -561,2 +774 @@
+-            let slots = worker.shared.slots.lock().unwrap();
+-            assert!(slots.packet.is_none() && slots.output.is_none());
++            no_flight(&worker.shared);
+@@ -571 +782,0 @@
+-        assert!(!worker.is_parked());
+@@ -576,2 +787 @@
+-        let packet = packet();
+-        dispatch(&mut worker, &packet);
++        dispatch(&mut worker, &packet());
+@@ -581,0 +792 @@
++        worker.shutdown().unwrap();
+@@ -590,2 +800,0 @@
+-        // Intentionally omit complete: closing the scope waits for the native
+-        // computation, discards its output and acknowledges empty parked slots.
+@@ -595 +804 @@
+-        assert!(worker.complete().is_err(), "old output must not cross a scope");
++        assert!(worker.complete().is_err(), "discarded output cannot cross a scope");
+@@ -597,2 +806,2 @@
+-        worker.complete().unwrap();
+-        drop(next);
++        assert_numerical_output(worker.complete().unwrap(), &packet);
++        next.finish().unwrap();
+@@ -606,2 +815,2 @@
+-        let slots = worker.shared.slots.lock().unwrap();
+-        assert!(slots.packet.is_none() && slots.output.is_none());
++        no_flight(&worker.shared);
++        worker.shutdown().unwrap();
+@@ -614,3 +823,19 @@
+-        let packet = packet();
+-        dispatch(&mut worker, &packet);
+-        worker.shutdown().unwrap();
++        block(&worker.shared.tests.in_input);
++        dispatch(&mut worker, &packet());
++        entered(&worker.shared, &worker.shared.tests.in_input);
++        let shared = Arc::clone(&worker.shared);
++        let (sent, received) = mpsc::channel();
++        let shutdown = thread::spawn(move || {
++            worker.shutdown().unwrap();
++            sent.send(()).unwrap();
++            worker
++        });
++        while !shared.stop.load(Ordering::Acquire) { thread::yield_now(); }
++        let (guard_sent, guard_received) = mpsc::channel();
++        let guard = thread::spawn(move || { guard_sent.send(scope.finish()).unwrap(); });
++        assert!(received.try_recv().is_err());
++        assert!(guard_received.try_recv().is_err());
++        release(&shared, &shared.tests.in_input, false);
++        let worker = shutdown.join().unwrap();
++        guard.join().unwrap();
++        assert!(guard_received.recv().unwrap().is_ok());
+@@ -619 +844 @@
+-        scope.finish().unwrap();
++        no_flight(&shared);
+@@ -632,4 +857 @@
+-        // Observe publication first, without consuming it. The public complete
+-        // call must use the predicate, rather than wait for another notification.
+-        drop(completion_slots(&worker.shared).unwrap());
+-        assert_eq!(worker.shared.state.load(Ordering::Acquire), COMPLETE);
++        wait_done(&worker.shared, worker.generation);
+@@ -636,0 +859 @@
++        assert!(worker.complete().is_err(), "a completed epoch is consumed once");
+@@ -643,6 +866,3 @@
+-        fn fail(_shared: &Shared) -> Result<(), String> { Err("controlled startup failure".into()) }
+-        fn stop(_shared: &Shared) -> Result<(), String> { Ok(()) }
+-        let failed = ActivityShelterWorker::start_with(fail);
+-        assert!(failed.is_err());
+-        assert_eq!(failed.err().unwrap(), "controlled startup failure");
+-        assert!(ActivityShelterWorker::start_with(stop).is_err());
++        for kind in [StartupKind::Failure, StartupKind::Stop, StartupKind::Panic, StartupKind::SpawnFailure] {
++            assert!(ActivityShelterWorker::start_with(Startup { kind }).is_err());
++        }
+@@ -653,0 +874,29 @@
++        let scope = worker.start_active_scope().unwrap();
++        block(&worker.shared.tests.in_input);
++        dispatch(&mut worker, &packet());
++        entered(&worker.shared, &worker.shared.tests.in_input);
++        block(&worker.shared.tests.after_registration);
++        let shared = Arc::clone(&worker.shared);
++        let generation = worker.generation;
++        let completion = thread::spawn(move || wait_completion(&shared, generation).is_err());
++        entered(&worker.shared, &worker.shared.tests.after_registration);
++        let parking = thread::spawn(move || scope.finish().is_err());
++        closing(&worker.shared);
++        release(&worker.shared, &worker.shared.tests.in_input, true);
++        while worker.shared.state.load(Ordering::Acquire) != FAILED { thread::yield_now(); }
++        release(&worker.shared, &worker.shared.tests.after_registration, false);
++        assert!(completion.join().unwrap());
++        assert!(parking.join().unwrap());
++        assert_eq!(worker.shared.done.load(Ordering::Acquire), 0);
++        let failure = worker.shutdown().unwrap_err();
++        assert_eq!(worker.shutdown().unwrap_err(), failure);
++        assert!(worker.check_running().is_err());
++        assert!(worker.thread.is_none());
++        no_flight(&worker.shared);
++    }
++
++    #[test]
++    fn normal_terminal_stop_wakes_a_blocked_completion_waiter_and_joins() {
++        let mut worker = ActivityShelterWorker::start_with(Startup {
++            kind: StartupKind::StopAfterRequest,
++        }).unwrap();
+@@ -659,5 +908,72 @@
+-        let completion = thread::spawn(move || {
+-            let result = completion_slots(&shared);
+-            let failed = result.is_err();
+-            drop(result);
+-            failed
++        let generation = worker.generation;
++        let completion = thread::spawn(move || wait_completion(&shared, generation).is_err());
++        registered(&worker.shared, 1);
++        release_job(&worker.shared, false);
++        assert!(completion.join().unwrap());
++        assert!(scope.finish().is_err());
++        worker.shutdown().unwrap();
++        assert_eq!(worker.shared.state.load(Ordering::Acquire), STOPPED);
++        assert_eq!(worker.shared.done.load(Ordering::Acquire), 0);
++        assert!(worker.thread.is_none());
++    }
++
++    #[test]
++    fn epoch_delayed_input_blocks_discard_and_reuse() {
++        let mut worker = worker();
++        let scope = worker.start_active_scope().unwrap();
++        block(&worker.shared.tests.in_input);
++        let packet = packet();
++        dispatch(&mut worker, &packet);
++        entered(&worker.shared, &worker.shared.tests.in_input);
++        let generation = worker.generation;
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        closing(&worker.shared);
++        assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(epoch) if epoch == generation));
++        assert!(received.try_recv().is_err());
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        release(&worker.shared, &worker.shared.tests.in_input, false);
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        assert!(worker.is_parked());
++        let scope = worker.start_active_scope().unwrap();
++        dispatch(&mut worker, &packet);
++        assert_eq!(worker.generation, generation+1);
++        assert_numerical_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn epoch_output_write_is_not_retirement_before_done_release() {
++        let mut worker = worker();
++        let scope = worker.start_active_scope().unwrap();
++        block(&worker.shared.tests.before_done);
++        dispatch(&mut worker, &packet());
++        entered(&worker.shared, &worker.shared.tests.before_done);
++        assert_eq!(worker.shared.done.load(Ordering::Acquire), 0);
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        closing(&worker.shared);
++        assert!(received.try_recv().is_err());
++        assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
++        release(&worker.shared, &worker.shared.tests.before_done, false);
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        assert!(worker.is_parked());
++        no_flight(&worker.shared);
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn epoch_close_wins_dispatch_and_output_consumption_wins_close() {
++        let mut worker = worker();
++        let scope = worker.start_active_scope().unwrap();
++        block(&worker.shared.tests.before_dispatch);
++        let shared = Arc::clone(&worker.shared);
++        let dispatching = thread::spawn(move || {
++            let packet = packet();
++            assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++                packet.mobility_weights, packet.shelter_weights).is_err());
++            worker
+@@ -665,14 +981,56 @@
+-        let parking = thread::spawn(move || scope.finish().is_err());
+-        // These are fixed test barriers, not a wall-time engine policy. The
+-        // external test supervisor bounds a regression that loses either wake.
+-        loop {
+-            let waiting = worker.shared.slots.lock().unwrap().completion_waiting;
+-            let parking = worker.shared.control.lock().unwrap().parking;
+-            if waiting && parking { break; }
+-            thread::yield_now();
+-        }
+-        release_job(&worker.shared, true);
+-        assert!(completion.join().unwrap());
+-        assert!(parking.join().unwrap());
+-        let failure = worker.shutdown().unwrap_err(); // Explicitly discharge failed owner.
+-        assert_eq!(worker.shutdown().unwrap_err(), failure, "a retry must retain terminal failure");
++        entered(&shared, &shared.tests.before_dispatch);
++        scope.finish().unwrap();
++        release(&shared, &shared.tests.before_dispatch, false);
++        let mut worker = dispatching.join().unwrap();
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        assert_eq!(worker.generation, 0);
++        worker.shutdown().unwrap();
++
++        let mut worker = self::worker();
++        let scope = worker.start_active_scope().unwrap();
++        block(&worker.shared.tests.consuming);
++        let packet = packet();
++        dispatch(&mut worker, &packet);
++        let shared = Arc::clone(&worker.shared);
++        let complete = thread::spawn(move || {
++            assert_numerical_output(worker.complete().unwrap(), &packet);
++            worker
++        });
++        entered(&shared, &shared.tests.consuming);
++        let (sent, received) = mpsc::channel();
++        let close = thread::spawn(move || { sent.send(scope.finish()).unwrap(); });
++        assert!(received.try_recv().is_err());
++        release(&shared, &shared.tests.consuming, false);
++        let mut worker = complete.join().unwrap();
++        close.join().unwrap();
++        assert!(received.recv().unwrap().is_ok());
++        assert!(worker.is_parked());
++        no_flight(&shared);
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn epoch_unpublished_failure_rolls_back_and_max_epoch_drains_without_wrap() {
++        let mut worker = worker();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        worker.shared.tests.fail_before_publish.store(true, Ordering::SeqCst);
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        assert_eq!(worker.generation, 0);
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        no_flight(&worker.shared);
++        dispatch(&mut worker, &packet);
++        assert_numerical_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        assert!(worker.is_parked());
++        worker.generation = u64::MAX-1; // No flight/reader borrow; never forge done.
++        let scope = worker.start_active_scope().unwrap();
++        dispatch(&mut worker, &packet);
++        assert_eq!(worker.generation, u64::MAX);
++        assert_numerical_output(worker.complete().unwrap(), &packet);
++        assert!(worker.dispatch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights).is_err());
++        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert_eq!(worker.shared.done.load(Ordering::Acquire), u64::MAX);
++        assert_eq!(worker.shared.state.load(Ordering::Acquire), STOPPED);
+@@ -680,16 +1038,30 @@
+-        assert!(worker.check_running().is_err());
+-    }
+-
+-    #[test]
+-    fn normal_terminal_stop_wakes_a_blocked_completion_waiter_and_joins() {
+-        fn stop_after_request(shared: &Shared) -> Result<(), String> {
+-            park(shared)?;
+-            while shared.state.load(Ordering::Acquire) != REQUESTED {
+-                if shared.stop.load(Ordering::Acquire) { return Ok(()); }
+-                spin_loop();
+-            }
+-            // This controlled entry exits a stopped, abandoned request without
+-            // publishing COMPLETE. Only the terminal notification can wake it.
+-            test_gate(shared)
+-        }
+-        let mut worker = ActivityShelterWorker::start_with(stop_after_request).unwrap();
++        no_flight(&worker.shared);
++        scope.finish().unwrap();
++        assert!(worker.shutdown().is_err());
++    }
++
++    #[test]
++    fn epoch_completion_before_waiter_registration_uses_sc_chain() {
++        let mut worker = worker();
++        let scope = worker.start_active_scope().unwrap();
++        block_job(&worker.shared);
++        block(&worker.shared.tests.before_registration);
++        dispatch(&mut worker, &packet());
++        wait_job_entered(&worker.shared);
++        let shared = Arc::clone(&worker.shared);
++        let generation = worker.generation;
++        let waiter = thread::spawn(move || wait_completion(&shared, generation));
++        entered(&worker.shared, &worker.shared.tests.before_registration);
++        release_job(&worker.shared, false);
++        wait_done(&worker.shared, generation);
++        release(&worker.shared, &worker.shared.tests.before_registration, false);
++        waiter.join().unwrap().unwrap();
++        assert!(!worker.shared.waiting.load(Ordering::SeqCst));
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn epoch_completion_during_registration_and_spurious_wake() {
++        let mut worker = worker();
+@@ -701,9 +1073,3 @@
+-        let completion = thread::spawn(move || {
+-            let result = completion_slots(&shared);
+-            let failed = result.is_err();
+-            drop(result);
+-            failed
+-        });
+-        while !worker.shared.slots.lock().unwrap().completion_waiting { thread::yield_now(); }
+-        // Model a terminal owner stop while a slow helper is in its owned
+-        // computation. No host polling or alternate numerical path is inserted.
++        let generation = worker.generation;
++        let waiter = thread::spawn(move || wait_completion(&shared, generation));
++        registered(&worker.shared, 1);
+@@ -711,7 +1077,4 @@
+-            let mut control = control_lock(&worker.shared);
+-            worker.shared.stop.store(true, Ordering::Release);
+-            worker.shared.active_scopes.store(0, Ordering::Release);
+-            control.scopes = 0;
+-            control.parking = false;
+-            worker.shared.wake.notify_all();
+-        }
++            let _sleep = worker.shared.sleep.lock().unwrap();
++            worker.shared.completed.notify_all();
++        }
++        registered(&worker.shared, 2);
+@@ -719,2 +1082,2 @@
+-        assert!(completion.join().unwrap());
+-        worker.shutdown().unwrap();
++        waiter.join().unwrap().unwrap();
++        worker.complete().unwrap();
+@@ -722,3 +1085,74 @@
+-        assert!(worker.thread.is_none());
+-        assert_eq!(worker.shared.state.load(Ordering::Acquire), STOPPED);
+-    }
++        worker.shutdown().unwrap();
++
++        let mut worker = self::worker();
++        let scope = worker.start_active_scope().unwrap();
++        block_job(&worker.shared);
++        block(&worker.shared.tests.after_registration);
++        dispatch(&mut worker, &packet());
++        wait_job_entered(&worker.shared);
++        let shared = Arc::clone(&worker.shared);
++        let generation = worker.generation;
++        let waiter = thread::spawn(move || wait_completion(&shared, generation));
++        entered(&worker.shared, &worker.shared.tests.after_registration);
++        release_job(&worker.shared, false);
++        wait_done(&worker.shared, generation);
++        release(&worker.shared, &worker.shared.tests.after_registration, false);
++        waiter.join().unwrap().unwrap();
++        worker.complete().unwrap();
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn epoch_delayed_prior_latch_orders_output_reuse_through_next_request() {
++        let mut worker = worker();
++        let scope = worker.start_active_scope().unwrap();
++        block(&worker.shared.tests.before_latch);
++        let mut packet = packet();
++        dispatch(&mut worker, &packet);
++        entered(&worker.shared, &worker.shared.tests.before_latch);
++        assert_numerical_output(worker.complete().unwrap(), &packet);
++        let prior = worker.generation;
++        packet.material = -193;
++        packet.mobility_weights = [0, 10240];
++        packet.shelter_weights = [3101, 0];
++        dispatch(&mut worker, &packet);
++        assert_eq!(worker.shared.done.load(Ordering::Acquire), prior);
++        release(&worker.shared, &worker.shared.tests.before_latch, false);
++        assert_numerical_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn epoch_reader_unwind_retires_input_or_partial_output_without_fabricated_done() {
++        for in_input in [true, false] {
++            let mut worker = worker();
++            let scope = worker.start_active_scope().unwrap();
++            let shared = Arc::clone(&worker.shared);
++            let gate = if in_input { &shared.tests.in_input } else { &shared.tests.before_done };
++            block(gate);
++            dispatch(&mut worker, &packet());
++            entered(&shared, gate);
++            {
++                let mut point = gate.lock().unwrap();
++                point.panic = true;
++                point.blocked = false;
++                shared.tests.wake.notify_all();
++            }
++            while shared.state.load(Ordering::Acquire) != FAILED { thread::yield_now(); }
++            assert_eq!(shared.done.load(Ordering::Acquire), 0);
++            assert!(scope.finish().is_err());
++            assert!(worker.shutdown().is_err());
++            no_flight(&shared);
++        }
++    }
++}
++
++
++/// Preserved old wall-delay control is separate from the finite focused group.
++/// It remains opt-in under an external supervisor, never an engine deadline.
++#[cfg(test)]
++mod wall_delay_tests {
++    use super::*;
++    use std::time::{Duration, Instant};
+@@ -729,6 +1163,16 @@
+-        let mut worker = worker();
+-        let scope = worker.start_active_scope().unwrap();
+-        let packet = packet();
+-        block_job(&worker.shared);
+-        dispatch(&mut worker, &packet);
+-        wait_job_entered(&worker.shared);
++        let mut worker = ActivityShelterWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let position = Position::from_fen(
++            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
++        ).unwrap();
++        let influence = Influence::build(&position);
++        {
++            let mut gate = worker.shared.tests.before_input.lock().unwrap();
++            gate.blocked = true;
++            gate.entered = false;
++        }
++        worker.dispatch(&position, &influence, 193, [2017, 633], [997, 3101]).unwrap();
++        {
++            let mut gate = worker.shared.tests.before_input.lock().unwrap();
++            while !gate.entered { gate = worker.shared.tests.wake.wait(gate).unwrap(); }
++        }
+@@ -739 +1183,2 @@
+-            release_job(&shared, false);
++            shared.tests.before_input.lock().unwrap().blocked = false;
++            shared.tests.wake.notify_all();
+@@ -744 +1189,3 @@
+-        assert_numerical_output(actual, &packet);
++        let expected = compute(&position, &influence, 193, [2017, 633], [997, 3101]);
++        assert_eq!(actual.activity, expected.activity);
++        assert_eq!(actual.shelter, expected.shelter);
+@@ -748,3 +1195,2 @@
+-        assert!(worker.thread.is_none());
+-    }
+-}
++    }
++}

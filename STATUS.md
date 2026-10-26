@@ -5,6 +5,8 @@ under the restored [mission](docs/deterministic-multicore-mission.md), without m
 branch queues primary. The owner authorized a new open-ended goal after clearing
 the earlier goal. The two-thread result below remains a preserved baseline.
 No further adoption, release or external gate has been selected.
+The [lead synthesis](docs/research/open-multicore-progress.md) connects the current
+results, architectural lessons and next decision.
 
 The latest [wide internal-branch trial](experiments/multicore-feasibility/wide-internal/report.md)
 exercised actual 1/2/4/8-thread configurations on a hindsight-selected substantial
@@ -47,15 +49,21 @@ The exact `67d01108` image/profile/source are retained in the experiment; canoni
 branch source and accepted release bytes are unchanged. Broad exact-image
 qualification/adoption are not yet selected.
 
-The [fourth-worker source assessment](docs/research/after-epoch-fourth-worker-choice.md)
-led to one selected integration and generic trial: retain the positive epoch color
-consumers and add ordinary inventory as a conditional third input reader. Sparse
-requests avoid empty root/Q acknowledgments; packet retirement spans final FULL
-composition and inventory settlement before null recursion. Exact eager-generation
-domain and activation-local parent state remain explicit proof obligations. The
-fixed trial compares preserved generic3 and new modes1/2/3/4 on35/08/43; no result
-exists yet. Whole-FULL transport generalization, fresh-Influence fusion and
-frontier batching remain reserves.
+The [conditional fourth-worker trial](experiments/multicore-feasibility/epoch-inventory-four/report.md)
+is parked at `7074456e`: its three-case median sum was 0.81% slower than preserved3
+at 1.344x CPU, despite a 0.52% gain against its own slower mode3. All 50 focused
+controls and 60 replay lives passed. Sparse participation, used-list installation
+and activation-local state across null descendants worked, but complete delivery
+costs erased the net gain. Sampled producer timing and observation overhead do
+not establish a lower bound for every simpler or earlier delivery design.
+
+Next selected: one isolated whole-FULL one-helper epoch transport discriminator
+from the positive epoch64 source. Keep the complete numerical kernel and API;
+replace the old mode2 slot locking/copy transport and compare preserved modes2/3
+with new same-image modes1/2/3. No new timing exists yet. No additional observer
+framework, parameter sweep or PGO is selected. Conditional inventory variants,
+fresh-Influence fusion and frontier batching remain reserves; retained epoch3
+remains the stronger measured candidate.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
