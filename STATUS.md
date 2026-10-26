@@ -122,13 +122,20 @@ RSS is about53,000KiB per case versus19,000KiB for packet controls. This is not
 original timed-protocol replay.
 Park unchanged; no PGO or architecture rescue is selected.
 
-Next selected is lexically borrowed FULL input with one controller/table and the
-original two color chains. An enclosing private call must drain actual readers
-on success/error/unwind before caller inputs can expire. Compare preserved7ac3,
-matched scoped-owned3 and scoped-borrowed3 in one fixed36+3 original-protocol lane
-after focused admission. This tests transport costs without replicated state;
-it creates no new arithmetic width. No qualification, adoption or external work
-is selected, and all positive artifacts remain preserved.
+The [borrowed-input trial](experiments/multicore-feasibility/borrowed-full-input/README.md)
+is negative: preserved3 7.779674s, scoped-owned3 7.914857s and scoped-borrowed3
+8.172098s. Borrowing loses to matching owned in all three cases with separated
+ranges; its aggregate is 3.25% higher. All 49 focused controls, 14 CLI controls,
+two affinity fallbacks and 36 replay lives/420 posts plus three idle probes pass
+without repair or repeat. The private enclosing guard drains actual readers on
+success/error/unwind; removing snapshots still changes access and layout costs.
+Park unchanged, with no causal attribution, PGO or qualification claim.
+
+Next is a source-only assessment of coordinator-local ordinary move generation
+during existing color-helper work. Direct per-ply scratch writes could avoid
+the prior fourth worker's dispatch and list transfer, but wasted generation and
+extra critical-path work remain. No implementation or native lane is selected.
+All retained artifacts and accepted release bytes remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

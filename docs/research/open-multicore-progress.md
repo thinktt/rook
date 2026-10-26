@@ -124,16 +124,27 @@ root policy and common study-only unwind differ from production protocol/recipe;
 these totals must not be compared directly with the full54 surveys. Park this
 implementation unchanged rather than tune or reprofile it.
 
-Select the distinct borrowed-input transport experiment next. Retain one search
-controller, TT and pawn owner. A private enclosing call, with an inaccessible
-armed cleanup guard, must drain every actual input reader before returning or
-unwinding. A forgettable returned token and the outer activation scope alone do
-not establish that lifetime. Match scoped-owned and scoped-borrowed transports,
-with identical numerical/observation policy, against preserved7ac3 in one original
-35/08/43 fixed36+3 lane after focused controls. Copy removal does not remove cache
-transfer, publication or retirement; source/stack layout can worsen sharing.
-No PGO, combined mechanism or qualification is selected. Frontier batching remains
-a separate reserve.
+The [borrowed-input experiment](../../experiments/multicore-feasibility/borrowed-full-input/README.md)
+also loses: preserved3 7.779674s, matching scoped-owned3 7.914857s and borrowed3
+8.172098s. Borrowed is 3.25% slower than matching owned, with separated ranges in
+all three cases and higher whole CPU. All49 focused controls,14 CLI controls,
+two affinity fallbacks and36 original-protocol lives/420 posts plus three idle
+probes pass first attempt. The inaccessible per-call guard protects caller input
+lifetimes through actual reader retirement, including owner unwind and terminal
+joins; legacy token dispatch stays owned. Root source review found no concrete
+blocker in those paths. This finite evidence does not establish general safety
+or a causal cache explanation. Park unchanged without PGO or a rescue variant.
+
+Next assess coordinator-local ordinary inventory during existing epoch3 helper
+work. This differs from inventory4: generate directly into the unused parent
+scratch row on the coordinator, after its pawn/local work and before joining
+the two color readers. There is no third helper or list transfer, but generation
+may exceed the actual wait and may be discarded at bounds/threat/null cutoffs.
+Preserve original ordering, logical charges and all public/observer boundaries;
+prove per-ply ownership and totality before choosing an implementation. Old
+sampled join and generation costs cover different populations and cannot prove
+available slack. Only a bounded source recommendation is selected. Frontier
+batching remains a separate reserve.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.
