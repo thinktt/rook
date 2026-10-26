@@ -106,21 +106,34 @@ first attempt; final epochs match every actual reader. CPU is1.56024x matching3.
 Park this fixed design. It establishes neither an isolated reduction cost nor a
 general impossibility of wider arithmetic, and does not justify tuning this trial.
 
-Select a distinct replicated-control experiment next. Three private search/TT/
-learning instances follow the same deterministic transitions; one owner retains
-pawn-cache authority. Role scalar outputs are exchanged once and every lane uses
-the same numerical finishing and complete semantic N/R. Local inputs eliminate
-input publication, at the cost of duplicate search, map construction and full
-table capacity. The expected gain is modest or negative; this is a test of a
-different execution foundation, not a claim of independent branch search.
+The [replicated-control study](../../experiments/multicore-feasibility/replicated-control/README.md)
+is now measured. Three private search/TT/learning instances follow identical
+transitions, one owner retains pawn-cache authority, and one scalar allgather
+feeds common local finishing. All29 controls, three depth2 exact audits and60
+depth8 timing lives pass without repair or repeat. The audits cover61/59/121 FULLs,
+exact structured inputs/outputs and selected final state. All20 native outcomes
+per case agree across five modes; this is finite evidence, not a universal proof.
 
-The bounded prototype uses actual fixed-completion NoHost depth8 search and
-matched preserved/new inline and packet controls. This entry has narrower root
-and host semantics than ordinary timed production. Collective audit, cancellation
-and two-slot reverse-ownership proof precede one generic comparison; no hot census,
-PGO or qualification is selected. Three completion waiters cannot reuse the old
-single-waiter latch. A bounded active-spin protocol is acceptable for the joined
-research prototype. Borrowed inputs and frontier batching remain separate reserves.
+Replica3 records6.746727s versus matching packet3 6.490515s, preserved packet3
+6.440053s and preserved inline1 7.327634s. It gains7.93% over serial but loses3.95%
+to matching packet3 and4.76% to preserved packet3. Case35 dominates the loss;
+08/43 improve against the slower matching packet build, without a convincing
+preserved-baseline advantage. Replica RSS is about53,000KiB per case versus about
+19,000KiB for packet controls. Shared collective storage is704B. NoHost fixed-depth
+root policy and common study-only unwind differ from production protocol/recipe;
+these totals must not be compared directly with the full54 surveys. Park this
+implementation unchanged rather than tune or reprofile it.
+
+Select the distinct borrowed-input transport experiment next. Retain one search
+controller, TT and pawn owner. A private enclosing call, with an inaccessible
+armed cleanup guard, must drain every actual input reader before returning or
+unwinding. A forgettable returned token and the outer activation scope alone do
+not establish that lifetime. Match scoped-owned and scoped-borrowed transports,
+with identical numerical/observation policy, against preserved7ac3 in one original
+35/08/43 fixed36+3 lane after focused controls. Copy removal does not remove cache
+transfer, publication or retirement; source/stack layout can worsen sharing.
+No PGO, combined mechanism or qualification is selected. Frontier batching remains
+a separate reserve.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

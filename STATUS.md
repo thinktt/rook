@@ -112,13 +112,23 @@ separated ranges; CPU is1.56024x matching3. All49 focused controls,48 replay
 lives/560 posts and4 idle probes pass first attempt. Final epochs verify all three
 arithmetic readers participated. No tuning or PGO rescue is selected.
 
-Next selected is an isolated replicated-control/collective-FULL prototype:
-three private Search/TT/learning instances, owner-only pawn cache, scalar exchange
-and local numerical finishing. It tests input locality/publication against
-duplicated control and memory costs. Use matched preserved/new source controls
-and actual fixed-completion NoHost depth8 search, not the original timed protocol;
-one finite generic comparison is selected after focused admission. Borrowed input
-remains a separate reserve. No qualification, adoption or external work is selected.
+The [replicated-control study](experiments/multicore-feasibility/replicated-control/README.md)
+passes29 focused controls, three exact depth2 audits and60 depth8 lives first
+attempt. Replica3 records6.746727s versus matching packet3 6.490515s and preserved
+packet3 6.440053s:3.95% and4.76% slower. It remains7.93% faster than preserved
+inline1 in this fixed-completion NoHost study. All20 outcomes per case agree;
+the depth2 audits cover61/59/121 FULLs and selected final state. Replicated peak
+RSS is about53,000KiB per case versus19,000KiB for packet controls. This is not
+original timed-protocol replay.
+Park unchanged; no PGO or architecture rescue is selected.
+
+Next selected is lexically borrowed FULL input with one controller/table and the
+original two color chains. An enclosing private call must drain actual readers
+on success/error/unwind before caller inputs can expire. Compare preserved7ac3,
+matched scoped-owned3 and scoped-borrowed3 in one fixed36+3 original-protocol lane
+after focused admission. This tests transport costs without replicated state;
+it creates no new arithmetic width. No qualification, adoption or external work
+is selected, and all positive artifacts remain preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

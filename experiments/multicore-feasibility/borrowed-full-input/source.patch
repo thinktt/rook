@@ -1,0 +1,1146 @@
+diff --git a/src/bin/rook2.rs b/src/bin/rook2.rs
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -74,0 +75 @@
++    let mut borrowed_inputs = false;
+@@ -88,0 +90 @@
++            "--borrow-full-inputs" => borrowed_inputs = true,
+@@ -100,0 +103,2 @@
++    session.set_borrowed_inputs(borrowed_inputs)
++        .map_err(|message| Failure::Message(format!("rook2: {message}\n")))?;
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -6 +6,2 @@
+-//! parking touch metadata only. Successful calls allocate no storage or threads.
++//! parking never clears a live input. Scoped calls keep caller borrows behind an
++//! inaccessible drain guard. Successful calls allocate no storage or threads.
+@@ -38 +39,10 @@
+-/// Concrete initialized storage, never a fabricated or zeroed Position.
++#[derive(Clone, Copy, PartialEq, Eq)]
++enum InputMode { Owned, Borrowed }
++
++/// Empty is initialized storage, never a fabricated Position or reference.
++enum Input {
++    Empty,
++    Owned { position: Position, influence: Influence },
++    Borrowed { position: *const Position, influence: *const Influence },
++}
++
+@@ -41,2 +51 @@
+-    position: Position,
+-    influence: Influence,
++    input: Input,
+@@ -72,2 +81,3 @@
+-// The single &mut ColorsWorker coordinator writes input under Control only with
+-// Flight::None. None follows either both matching done Acquire loads plus ended
++// The single &mut ColorsWorker coordinator installs input under Control only
++// with Flight::None; descriptor clearing requires actual retirement. None follows
++// either both matching done Acquire loads plus ended
+@@ -84,2 +94,5 @@
+-// the same Control and never reads/writes cells. It holds that claim until BOTH
+-// readers are parked/exited; terminal observation alone cannot retire a peer.
++// the same Control. It clears Input only after BOTH readers are parked/exited;
++// terminal observation alone cannot retire a peer. Borrowed pointers come from
++// EpochGuard's immutable references, which outlive this flight's actual drain.
++// Only with_epoch's inaccessible guard may install Borrowed; legacy dispatch
++// always owns a snapshot. No caller receives a forgettable lifetime obligation.
+@@ -87,0 +101,3 @@
++// SAFETY: The same concrete protocol keeps pointer referents alive and immutable
++// across thread moves. Cells is private and never escapes that owning protocol.
++unsafe impl Send for Cells {}
+@@ -170 +186 @@
+-/// Send guards may alter lifecycle metadata but never touch any cell.
++/// Send guards may clear a descriptor only after actual final-scope retirement.
+@@ -201,0 +218,22 @@
++    input_mode: InputMode,
++}
++
++/// Never exposed to owner_work or returned. Forgetting a public token therefore
++/// cannot release caller borrows while a helper still holds an input reference.
++struct EpochGuard<'w, 'p, 'i> {
++    worker: &'w mut ColorsWorker,
++    position: &'p Position,
++    influence: &'i Influence,
++    installation: Option<u64>,
++    armed: bool,
++}
++
++impl Drop for EpochGuard<'_, '_, '_> {
++    fn drop(&mut self) {
++        if self.armed {
++            if let Some(generation) = self.installation {
++                // Cleanup itself does not panic or release live caller borrows.
++                self.worker.drain_epoch(generation);
++            }
++        }
++    }
+@@ -210,4 +247,0 @@
+-        let position = Position::from_fen(
+-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+-        ).map_err(|error| format!("cannot initialize colors input: {error}"))?;
+-        let influence = Influence::build(&position);
+@@ -216 +250 @@
+-                input: UnsafeCell::new(Packet { generation: 0, position, influence, published: None }),
++                input: UnsafeCell::new(Packet { generation: 0, input: Input::Empty, published: None }),
+@@ -235,0 +270 @@
++            input_mode: InputMode::Owned,
+@@ -326,0 +362,39 @@
++    pub(crate) fn set_borrowed(&mut self, borrowed: bool) -> Result<(), String> {
++        let control = control_lock(&self.shared);
++        if control.scopes != 0 || control.closing || control.shutdown || terminal(&self.shared)
++            || !matches!(control.flight, Flight::None) || !all_state(&self.shared, PARKED)
++            || !input_empty(&self.shared)
++        {
++            return Err("colors input mode requires an idle live worker".into());
++        }
++        self.input_mode = if borrowed { InputMode::Borrowed } else { InputMode::Owned };
++        Ok(())
++    }
++
++    pub(crate) fn with_epoch<R>(
++        &mut self,
++        position: &Position,
++        influence: &Influence,
++        material: i32,
++        mobility_weights: [i32; 2],
++        shelter_weights: [i32; 2],
++        owner_work: impl FnOnce() -> R,
++    ) -> Result<(R, ActivityShelter), String> {
++        let mode = self.input_mode;
++        let mut epoch = EpochGuard {
++            worker: self, position, influence, installation: None, armed: true,
++        };
++        // SAFETY: The unexposed guard already owns the exclusive worker borrow
++        // and both immutable caller borrows. Every exit drains its installation.
++        let token = unsafe { epoch.worker.dispatch_input(
++            epoch.position, epoch.influence, material, mobility_weights,
++            shelter_weights, mode, &mut epoch.installation,
++        ) }?;
++        let owned = owner_work();
++        epoch.worker.owner_ready(token)?;
++        let chain = epoch.worker.complete()?;
++        // complete cleared Input after done/output retirement under Control.
++        epoch.armed = false;
++        Ok((owned, chain))
++    }
++
+@@ -334,0 +409,19 @@
++        // The legacy escaping token path ALWAYS owns inputs, even when the
++        // enclosing evaluator API is configured to borrow.
++        let mut installation = None;
++        // SAFETY: Owned never retains any caller pointer.
++        unsafe { self.dispatch_input(position, influence, material, mobility_weights,
++            shelter_weights, InputMode::Owned, &mut installation) }
++    }
++
++    /// Borrowed mode may only be called with a live inaccessible EpochGuard.
++    unsafe fn dispatch_input(
++        &mut self,
++        position: &Position,
++        influence: &Influence,
++        material: i32,
++        mobility_weights: [i32; 2],
++        shelter_weights: [i32; 2],
++        mode: InputMode,
++        installation: &mut Option<u64>,
++    ) -> Result<DispatchToken, String> {
+@@ -344,0 +438,3 @@
++        }
++        if !input_empty(&self.shared) {
++            return Err("colors dispatch with an unretired input".into());
+@@ -359,0 +456,8 @@
++        let input = match mode {
++            InputMode::Owned => Input::Owned { position: *position, influence: *influence },
++            InputMode::Borrowed => Input::Borrowed {
++                position: position as *const Position, influence: influence as *const Influence,
++            },
++        };
++        // Armed BEFORE installing caller pointers, including unpublished unwind.
++        *installation = Some(generation);
+@@ -364 +468 @@
+-                generation, position: *position, influence: *influence, published: None,
++                generation, input, published: None,
+@@ -370,0 +475 @@
++            clear_input(&self.shared);
+@@ -446,0 +552,2 @@
++        // Both actual input borrows and the owner's output reads have ended.
++        clear_input(&self.shared);
+@@ -467,0 +575,63 @@
++    /// Cleanup never returns while this installation can retain caller borrows.
++    /// It runs in the sole coordinator, including during owner-work unwind.
++    fn drain_epoch(&mut self, generation: u64) {
++        loop {
++            let mut control = control_lock(&self.shared);
++            match control.flight {
++                Flight::None => {
++                    if input_empty(&self.shared) { return; }
++                    // No published flight: only our unpublished installation
++                    // may still have a descriptor. No request admitted a reader.
++                    let installed = unsafe { (*self.shared.cells.input.get()).generation };
++                    if installed == generation
++                        && self.shared.request.load(Ordering::Acquire) != generation
++                    {
++                        clear_input(&self.shared);
++                        return;
++                    }
++                    // Impossible ownership mismatch: join rather than erase
++                    // some other descriptor while its lifetime is uncertain.
++                    drop(control);
++                    let _ = self.shutdown();
++                    return;
++                }
++                Flight::Published(metadata) if metadata.generation == generation => {
++                    if terminal(&self.shared) {
++                        drop(control);
++                        let _ = self.shutdown();
++                        return;
++                    }
++                    if both_done(&self.shared, generation) {
++                        // Discard scalar outputs without reading them. Our
++                        // flight still owns Control, so final close cannot race.
++                        retire_flight(&self.shared, &mut control);
++                        return;
++                    }
++                    drop(control);
++                    // This wait is sequential with complete's wait: never a
++                    // second waiter and never holding Control/Sleep together.
++                    if wait_completion(&self.shared, generation).is_err() {
++                        let _ = self.shutdown();
++                        return;
++                    }
++                }
++                Flight::Discarding(metadata) if metadata.generation == generation => {
++                    // Final close owns this flight. Do not steal its claim even
++                    // if both done arrive: await its actual parked/exited drain.
++                    if terminal(&self.shared) {
++                        drop(control);
++                        let _ = self.shutdown();
++                        return;
++                    }
++                    control = wait_control(&self.shared, control);
++                    drop(control);
++                }
++                _ => {
++                    drop(control);
++                    let _ = self.shutdown();
++                    return;
++                }
++            }
++        }
++    }
++
+@@ -469,0 +640,17 @@
++    }
++
++    /// Cold witness only after real joins. Failure paths retain actual done
++    /// epochs; they are never manufactured to match request for reporting.
++    pub(crate) fn scoped_report(&self) -> Result<String, String> {
++        let control = control_lock(&self.shared);
++        if !control.shutdown || self.threads.iter().any(Option::is_some)
++            || !all_terminal(&self.shared)
++        {
++            return Err("colors scoped report requires joined shutdown".into());
++        }
++        let mode = if self.input_mode == InputMode::Borrowed { "borrowed" } else { "owned" };
++        let request = self.shared.request.load(Ordering::Acquire);
++        let white = self.shared.readers[0].done.load(Ordering::Acquire);
++        let black = self.shared.readers[1].done.load(Ordering::Acquire);
++        let retired = matches!(control.flight, Flight::None) && input_empty(&self.shared);
++        Ok(format!("{{\"mode\":\"{mode}\",\"request\":{request},\"done\":[{white},{black}],\"retired\":{retired}}}"))
+@@ -497,3 +684,4 @@
+-        // marked retired by failed_spawn. No guard or shutdown mutates cells.
+-        debug_assert!(quiescent(&self.shared));
+-        retire_flight(&mut control);
++        // marked retired by failed_spawn. Only now may shutdown clear Input.
++        // Actual joins are sufficient even if a terminal bookkeeping handler
++        // itself unwound. Avoid a cleanup assertion during owner-work unwind.
++        retire_flight(&self.shared, &mut control);
+@@ -593,0 +782,11 @@
++        let (position, influence) = match &packet.input {
++            Input::Empty => return Err("colors reader observed an empty input".into()),
++            Input::Owned { position, influence } => (position, influence),
++            Input::Borrowed { position, influence } => {
++                // SAFETY: Only with_epoch's unexposed guard publishes these
++                // provenance-preserving pointers. It keeps their immutable
++                // referents alive until both actual readers retire, even on
++                // owner unwind, terminal error and concurrent final close.
++                unsafe { (&**position, &**influence) }
++            }
++        };
+@@ -602 +801,5 @@
+-        let activity = activity::compute_side(&packet.position, &packet.influence, color);
++        #[cfg(test)]
++        // Pause after real references form and BEFORE their kernel reads, so a
++        // delayed test reader demonstrably retains both borrowed referents.
++        test_reader_gate(shared, &shared.tests.in_input[side], side)?;
++        let activity = activity::compute_side(position, influence, color);
+@@ -604 +807 @@
+-            &packet.position, &packet.influence, color.opponent(), activity.pressure,
++            position, influence, color.opponent(), activity.pressure,
+@@ -606,2 +808,0 @@
+-        #[cfg(test)]
+-        test_reader_gate(shared, &shared.tests.in_input[side], side)?;
+@@ -716 +917,17 @@
+-fn retire_flight(control: &mut Control) {
++/// Caller holds Control. Reads only the input discriminant; concurrent helpers
++/// may only borrow it immutably, and no other coordinator writer can exist.
++fn input_empty(shared: &Shared) -> bool {
++    unsafe { matches!(&(*shared.cells.input.get()).input, Input::Empty) }
++}
++
++/// Caller holds Control and has established either unpublished installation,
++/// both matching done plus ended output reads, or real BOTH-reader retirement.
++fn clear_input(shared: &Shared) {
++    // SAFETY: No input reference can remain under the caller's retirement proof.
++    // Mutate only this concrete field; never form a whole mutable cell borrow.
++    unsafe { std::ptr::addr_of_mut!((*shared.cells.input.get()).input).write(Input::Empty); }
++}
++
++/// Caller owns Published plus both done, or has BOTH actual quiet/joined readers.
++fn retire_flight(shared: &Shared, control: &mut Control) {
++    clear_input(shared);
+@@ -745 +962 @@
+-    retire_flight(&mut control);
++    retire_flight(shared, &mut control);
+@@ -751 +968 @@
+-/// No cell access here. Under Control an unseen published epoch must be handled
++/// No cell access in park. Under Control an unseen published epoch must be handled
+@@ -1029 +1246,353 @@
+-        assert!(matches!(control_lock(shared).flight, Flight::None));
++        let control = control_lock(shared);
++        assert!(matches!(control.flight, Flight::None));
++        assert!(input_empty(shared));
++    }
++
++    fn scoped<R>(worker: &mut ColorsWorker, packet: &Fixture, work: impl FnOnce() -> R)
++        -> Result<(R, ActivityShelter), String>
++    {
++        worker.with_epoch(&packet.position, &packet.influence, packet.material,
++            packet.mobility_weights, packet.shelter_weights, work)
++    }
++
++    #[test]
++    fn colors_scoped_modes_cold_configuration_and_legacy_owned_dispatch() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            assert!(worker.scoped_report().is_err());
++            let scope = worker.start_active_scope().unwrap();
++            assert!(worker.set_borrowed(!borrowed).is_err());
++            let packet = packet();
++            let shared = Arc::clone(&worker.shared);
++            let (answer, output) = scoped(&mut worker, &packet, || {
++                let _control = control_lock(&shared);
++                let input = unsafe { &(*shared.cells.input.get()).input };
++                match input {
++                    Input::Borrowed { position, influence } if borrowed => {
++                        assert_eq!(*position, &packet.position as *const Position);
++                        assert_eq!(*influence, &packet.influence as *const Influence);
++                    }
++                    Input::Owned { .. } if !borrowed => (),
++                    _ => panic!("configured scoped mode was not used"),
++                }
++                73
++            }).unwrap();
++            assert_eq!(answer, 73);
++            assert_output(output, &packet);
++            no_flight(&worker.shared);
++            dispatch(&mut worker, &packet);
++            {
++                let _control = control_lock(&worker.shared);
++                assert!(unsafe { matches!(&(*worker.shared.cells.input.get()).input,
++                    Input::Owned { .. }) });
++            }
++            assert_output(worker.complete().unwrap(), &packet);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++            let report = worker.scoped_report().unwrap();
++            assert!(report.contains(if borrowed { "\"mode\":\"borrowed\"" }
++                else { "\"mode\":\"owned\"" }));
++            assert!(report.contains("\"request\":2,\"done\":[2,2],\"retired\":true"));
++            assert!(worker.set_borrowed(false).is_err());
++        }
++    }
++
++    #[test]
++    fn colors_scoped_healthy_abandonment_retires_with_outer_scope_and_reuses() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let outer = worker.start_active_scope().unwrap();
++            let packet = packet();
++            let mode = worker.input_mode;
++            {
++                let mut epoch = EpochGuard { worker: &mut worker,
++                    position: &packet.position, influence: &packet.influence,
++                    installation: None, armed: true };
++                // Test the same inaccessible guard's healthy abandonment path.
++                unsafe { epoch.worker.dispatch_input(epoch.position, epoch.influence,
++                    packet.material, packet.mobility_weights, packet.shelter_weights,
++                    mode, &mut epoch.installation) }.unwrap();
++            }
++            no_flight(&worker.shared);
++            assert_eq!(worker.shared.active_scopes.load(Ordering::Acquire), 1);
++            assert!(both_done(&worker.shared, 1));
++            let (_, output) = scoped(&mut worker, &packet, || ()).unwrap();
++            assert_output(output, &packet);
++            no_flight(&worker.shared);
++            outer.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_scoped_owner_unwind_waits_for_live_input_despite_outer_scope() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let outer = worker.start_active_scope().unwrap();
++            block_at(&worker.shared.tests.in_input[0]);
++            let shared = Arc::clone(&worker.shared);
++            let owner_shared = Arc::clone(&shared);
++            let (sent, received) = mpsc::channel();
++            let owner = thread::spawn(move || {
++                let packet = packet();
++                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                    let _ = scoped(&mut worker, &packet, || {
++                        entered_at(&owner_shared, &owner_shared.tests.in_input[0]);
++                        panic!("scoped owner unwind while input is borrowed");
++                    });
++                }));
++                assert!(result.is_err());
++                no_flight(&worker.shared);
++                sent.send(()).unwrap();
++                let (_, output) = scoped(&mut worker, &packet, || ()).unwrap();
++                assert_output(output, &packet);
++                worker
++            });
++            entered_at(&shared, &shared.tests.in_input[0]);
++            registered(&shared, 1);
++            assert!(received.try_recv().is_err());
++            {
++                let _control = control_lock(&shared);
++                assert!(!input_empty(&shared));
++            }
++            release_at(&shared, &shared.tests.in_input[0], false);
++            received.recv().unwrap();
++            let mut worker = owner.join().unwrap();
++            assert_eq!(worker.shared.active_scopes.load(Ordering::Acquire), 1);
++            outer.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_scoped_helper_failure_joins_peer_holding_input_before_return() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let outer = worker.start_active_scope().unwrap();
++            for side in 0..2 { block_at(&worker.shared.tests.in_input[side]); }
++            let shared = Arc::clone(&worker.shared);
++            let (sent, received) = mpsc::channel();
++            let owner = thread::spawn(move || {
++                let packet = packet();
++                assert!(scoped(&mut worker, &packet, || ()).is_err());
++                no_flight(&worker.shared);
++                assert!(worker.threads.iter().all(Option::is_none));
++                sent.send(()).unwrap();
++                worker
++            });
++            for side in 0..2 { entered_at(&shared, &shared.tests.in_input[side]); }
++            release_at(&shared, &shared.tests.in_input[0], true);
++            wait_state(&shared, 0, FAILED);
++            assert_eq!(shared.readers[1].done.load(Ordering::Acquire), 0);
++            assert!(received.try_recv().is_err());
++            {
++                let _control = control_lock(&shared);
++                assert!(!input_empty(&shared));
++            }
++            release_at(&shared, &shared.tests.in_input[1], false);
++            received.recv().unwrap();
++            let worker = owner.join().unwrap();
++            assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++            assert!(worker.scoped_report().unwrap().contains("\"retired\":true"));
++            outer.finish().unwrap();
++            // The operation already reported its terminal failure; Drop is quiet.
++            drop(worker);
++        }
++    }
++
++    #[test]
++    fn colors_scoped_owner_unwind_and_helper_failure_recover_poison_without_second_panic() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let outer = worker.start_active_scope().unwrap();
++            for side in 0..2 { block_at(&worker.shared.tests.in_input[side]); }
++            let shared = Arc::clone(&worker.shared);
++            let owner_shared = Arc::clone(&shared);
++            let (sent, received) = mpsc::channel();
++            let owner = thread::spawn(move || {
++                let packet = packet();
++                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                    let _ = scoped(&mut worker, &packet, || {
++                        for side in 0..2 {
++                            entered_at(&owner_shared, &owner_shared.tests.in_input[side]);
++                        }
++                        let _poison = control_lock(&owner_shared);
++                        panic!("owner unwind poisons Control before terminal drain");
++                    });
++                }));
++                assert!(result.is_err());
++                assert!(worker.threads.iter().all(Option::is_none));
++                no_flight(&worker.shared);
++                sent.send(()).unwrap();
++                worker
++            });
++            for side in 0..2 { entered_at(&shared, &shared.tests.in_input[side]); }
++            release_at(&shared, &shared.tests.in_input[0], true);
++            wait_state(&shared, 0, FAILED);
++            while !control_lock(&shared).shutdown { thread::yield_now(); }
++            assert!(received.try_recv().is_err());
++            {
++                let _control = control_lock(&shared);
++                assert!(!input_empty(&shared));
++            }
++            release_at(&shared, &shared.tests.in_input[1], false);
++            received.recv().unwrap();
++            let worker = owner.join().unwrap();
++            outer.finish().unwrap();
++            drop(worker);
++        }
++    }
++
++    #[test]
++    fn colors_scoped_final_close_wins_without_guard_stealing_discarding() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            block_at(&worker.shared.tests.in_input[0]);
++            let shared = Arc::clone(&worker.shared);
++            let (continue_owner, owner_continue) = mpsc::channel();
++            let (sent, received) = mpsc::channel();
++            let owner = thread::spawn(move || {
++                let packet = packet();
++                assert!(scoped(&mut worker, &packet, || owner_continue.recv().unwrap()).is_err());
++                no_flight(&worker.shared);
++                sent.send(()).unwrap();
++                worker
++            });
++            entered_at(&shared, &shared.tests.in_input[0]);
++            let closer = thread::spawn(move || scope.finish().unwrap());
++            closing(&shared);
++            continue_owner.send(()).unwrap();
++            {
++                let control = control_lock(&shared);
++                assert!(matches!(control.flight, Flight::Discarding(_)));
++                assert!(!input_empty(&shared));
++            }
++            assert!(received.try_recv().is_err());
++            release_at(&shared, &shared.tests.in_input[0], false);
++            closer.join().unwrap();
++            received.recv().unwrap();
++            let mut worker = owner.join().unwrap();
++            assert!(worker.is_parked());
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_scoped_completion_wins_control_before_final_close() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            block_at(&worker.shared.tests.consuming);
++            let shared = Arc::clone(&worker.shared);
++            let owner = thread::spawn(move || {
++                let packet = packet();
++                let (_, output) = scoped(&mut worker, &packet, || ()).unwrap();
++                assert_output(output, &packet);
++                worker
++            });
++            entered_at(&shared, &shared.tests.consuming);
++            let (sent, received) = mpsc::channel();
++            let closer = thread::spawn(move || sent.send(scope.finish()).unwrap());
++            assert!(received.try_recv().is_err());
++            release_at(&shared, &shared.tests.consuming, false);
++            let mut worker = owner.join().unwrap();
++            closer.join().unwrap();
++            received.recv().unwrap().unwrap();
++            no_flight(&worker.shared);
++            assert!(worker.is_parked());
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_scoped_unpublished_borrow_rolls_back_before_error_and_reuse() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            worker.shared.tests.fail_before_publish.store(true, Ordering::SeqCst);
++            let mut ran_owner = false;
++            assert!(scoped(&mut worker, &packet, || ran_owner = true).is_err());
++            assert!(!ran_owner);
++            no_flight(&worker.shared);
++            assert_eq!(worker.generation, 0);
++            assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++            assert_eq!(control_lock(&worker.shared).readiness.dispatches, 0);
++            let (_, output) = scoped(&mut worker, &packet, || ()).unwrap();
++            assert_output(output, &packet);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_scoped_done_to_latch_delay_allows_empty_then_next_input() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            block_at(&worker.shared.tests.before_latch[0]);
++            let packet = packet();
++            let (_, output) = scoped(&mut worker, &packet, || ()).unwrap();
++            assert_output(output, &packet);
++            entered_at(&worker.shared, &worker.shared.tests.before_latch[0]);
++            no_flight(&worker.shared);
++            let shared = Arc::clone(&worker.shared);
++            let mut next = self::packet();
++            next.material = -193;
++            next.influence.profiles[0][0] ^= 17;
++            let (_, output) = scoped(&mut worker, &next, || {
++                // Next Packet is published while the old helper still owes only
++                // its metadata latch work, with every old input reference gone.
++                assert_eq!(shared.request.load(Ordering::Acquire), 2);
++                release_at(&shared, &shared.tests.before_latch[0], false);
++            }).unwrap();
++            assert_output(output, &next);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_scoped_early_terminal_reader_drains_without_fabricating_done() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start_with(Startup {
++                stop_after_request: Some(0), ..Startup::default()
++            }).unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            let scope = worker.start_active_scope().unwrap();
++            assert!(scoped(&mut worker, &packet(), || ()).is_err());
++            no_flight(&worker.shared);
++            assert!(worker.threads.iter().all(Option::is_none));
++            assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
++            scope.finish().unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_scoped_max_epoch_then_exhaustion_clears_and_joins() {
++        for borrowed in [false, true] {
++            let mut worker = ColorsWorker::start().unwrap();
++            worker.set_borrowed(borrowed).unwrap();
++            worker.generation = u64::MAX - 1;
++            let scope = worker.start_active_scope().unwrap();
++            let packet = packet();
++            let (_, output) = scoped(&mut worker, &packet, || ()).unwrap();
++            assert_output(output, &packet);
++            assert!(both_done(&worker.shared, u64::MAX));
++            assert_eq!(scoped(&mut worker, &packet, || ()).err().unwrap(), "colors epoch exhausted");
++            no_flight(&worker.shared);
++            assert!(worker.threads.iter().all(Option::is_none));
++            assert!(worker.scoped_report().unwrap().contains("\"retired\":true"));
++            scope.finish().unwrap();
++        }
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -264,0 +265,8 @@
++/// Owner-only results before joined Activity/shelter and common final rounds.
++struct FullOwnerWork {
++    components: Components,
++    pawn_queries: u64,
++    pawn_reused: bool,
++    inline_chain: Option<evaluator_worker::ActivityShelter>,
++}
++
+@@ -286,0 +295 @@
++    borrowed_inputs: bool,
+@@ -310,0 +320 @@
++            borrowed_inputs: self.borrowed_inputs,
+@@ -344,0 +355 @@
++            borrowed_inputs: false,
+@@ -403 +414,5 @@
+-                } else { Some(crate::colors_worker::ColorsWorker::start()?) };
++                } else {
++                    let mut worker = crate::colors_worker::ColorsWorker::start()?;
++                    worker.set_borrowed(self.borrowed_inputs)?;
++                    Some(worker)
++                };
+@@ -418,0 +434,11 @@
++    }
++
++    /// Private research transport choice; total thread capacity stays unchanged.
++    pub fn set_borrowed_inputs(&mut self, borrowed: bool) -> Result<(), String> {
++        #[cfg(feature = "child-preparation")]
++        if borrowed && self.child_preparation.is_some() {
++            return Err("borrowed FULL inputs cannot nest child preparation".into());
++        }
++        if let Some(worker) = self.colors_worker.as_mut() { worker.set_borrowed(borrowed)?; }
++        self.borrowed_inputs = borrowed;
++        Ok(())
+@@ -432,0 +459 @@
++        if self.borrowed_inputs && budget > 1 { return Err("borrowed FULL inputs cannot nest child preparation".into()); }
+@@ -493 +520,6 @@
+-            Ok(worker.readiness_report())
++            let mut report = worker.readiness_report();
++            report.pop();
++            report.push_str(",\"scopedInput\":");
++            report.push_str(&worker.scoped_report()?);
++            report.push('}');
++            Ok(report)
+@@ -496 +528 @@
+-            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false}".into())
++            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false,\"scopedInput\":{\"enabled\":false}}".into())
+@@ -602,0 +635 @@
++        let retained = node.retained;
+@@ -615,13 +648,10 @@
+-        let colors_token = self.colors_worker.as_mut().map(|worker| worker.dispatch(
+-            position, influence, material, self.weights.mobility, self.weights.shelter,
+-        ).unwrap_or_else(|error|panic!("colors dispatch failed: {error}")));
+-        // Snapshot every worker input on every FULL, including authoritative
+-        // supplied maps and the current root-bound weights after begin_search.
+-        if let Some(worker) = self.full_worker.as_mut() {
+-            worker
+-                .dispatch(
+-                    position,
+-                    influence,
+-                    material,
+-                    self.weights.mobility,
+-                    self.weights.shelter,
++        let weights = self.weights;
++        let root = &self.root;
++        let pawns = &mut self.pawns;
++        let (owner, chain) = if let Some(worker) = self.colors_worker.as_mut() {
++            // These captures borrow only disjoint fields. Position and the exact
++            // supplied map stay immutable in their caller-owned storage through
++            // the enclosing operation's actual reader retirement, even unwind.
++            worker.with_epoch(position, influence, material, weights.mobility, weights.shelter, || {
++                Self::full_owner_work::<FRESH>(
++                    position, influence, retained, root, weights, pawns, phase, material, || None,
+@@ -629,6 +659,5 @@
+-                .unwrap_or_else(|error| panic!("FULL evaluator dispatch failed: {error}"));
+-        }
+-        let selected = if FRESH {
+-            pawn_structure::Selection {
+-                structure: pawn_structure::fresh(position, influence, [1024; 2]),
+-                reused: false,
++            }).unwrap_or_else(|error| panic!("colors scoped FULL failed: {error}"))
++        } else {
++            if let Some(worker) = self.full_worker.as_mut() {
++                worker.dispatch(position, influence, material, weights.mobility, weights.shelter)
++                    .unwrap_or_else(|error| panic!("FULL evaluator dispatch failed: {error}"));
+@@ -636,2 +665,24 @@
+-        } else {
+-            self.pawns.select(position, influence)
++            let inline = self.full_worker.is_none();
++            #[cfg(feature = "child-preparation")]
++            let child_preparation = &mut self.child_preparation;
++            let owner = Self::full_owner_work::<FRESH>(
++                position, influence, retained, root, weights, pawns, phase, material, || {
++                    // Preserve archive prepared-result authority and inline1's
++                    // Activity position between pawn inputs and local terms.
++                    #[cfg(feature = "child-preparation")]
++                    let prepared = child_preparation.as_mut().and_then(|pool| pool.take_chain(
++                        position, influence, material, weights.mobility, weights.shelter,
++                    ));
++                    #[cfg(not(feature = "child-preparation"))]
++                    let prepared: Option<evaluator_worker::ActivityShelter> = None;
++                    if inline {
++                        Some(prepared.unwrap_or_else(|| evaluator_worker::compute(
++                            position, influence, material, weights.mobility, weights.shelter,
++                        )))
++                    } else { None }
++                },
++            );
++            let chain = if let Some(worker) = self.full_worker.as_mut() {
++                worker.complete().unwrap_or_else(|error| panic!("FULL evaluator completion failed: {error}"))
++            } else { owner.inline_chain.unwrap() };
++            (owner, chain)
+@@ -639,56 +690,2 @@
+-        let pawn = pawn_terms::compute(position, influence, &selected.structure);
+-        // Keep inline execution at the original chain position. Both routes
+-        // invoke the same numerical kernels and share the composition below.
+-        #[cfg(feature = "child-preparation")]
+-        let prepared_chain=self.child_preparation.as_mut().and_then(|pool|pool.take_chain(
+-            position,influence,material,self.weights.mobility,self.weights.shelter));
+-        #[cfg(not(feature = "child-preparation"))]
+-        let prepared_chain: Option<evaluator_worker::ActivityShelter> = None;
+-        let inline_chain = if self.full_worker.is_none() && self.colors_worker.is_none() {
+-            Some(prepared_chain.unwrap_or_else(||evaluator_worker::compute(
+-                position,
+-                influence,
+-                material,
+-                self.weights.mobility,
+-                self.weights.shelter,
+-            )))
+-        } else {
+-            None
+-        };
+-        let structure = pawn_progress::structure_weighted(
+-            phase,
+-            pawn.structure,
+-            pawn.piece,
+-            self.weights.structure,
+-        );
+-        // This producer has no state or charged relation work. At a zero final
+-        // phase factor, its weighted result is identically zero.
+-        let progress = if phase.middlegame == 0 && phase.endgame == 0 {
+-            0
+-        } else {
+-            pawn_progress::selected(
+-                position,
+-                influence,
+-                &selected.structure,
+-                phase,
+-                material,
+-                self.weights.progress,
+-            )
+-            .weighted
+-        };
+-        let central = positional_terms::central(influence, phase, self.weights.central);
+-        let patterns = positional_terms::patterns(position);
+-        let squares = self.root.square_balance_from(position, node.retained.nonking_squares);
+-        // No retained changes, tempo, relation-ledger publication or finishing
+-        // occurs until the actual worker output has joined the owner branch.
+-        let chain = if let Some(worker) = self.colors_worker.as_mut() {
+-            worker.owner_ready(colors_token.unwrap())
+-                .unwrap_or_else(|error|panic!("colors owner-ready failed: {error}"));
+-            worker.complete().unwrap_or_else(|error|panic!("colors completion failed: {error}"))
+-        } else if let Some(worker) = self.full_worker.as_mut() {
+-            worker
+-                .complete()
+-                .unwrap_or_else(|error| panic!("FULL evaluator completion failed: {error}"))
+-        } else {
+-            inline_chain.unwrap()
+-        };
++        // Every actual color input borrow is retired before node retention,
++        // callbacks, ledger publication, tempo or original native finishing.
+@@ -713,12 +710,5 @@
+-        let components = Components {
+-            material,
+-            squares,
+-            pawn_structure: structure,
+-            pawn_progress: progress,
+-            activity: activity.weighted,
+-            central: central.weighted,
+-            shelter: shelter.weighted,
+-            bishops: patterns.bishop_coordination,
+-            patterns: patterns.opening,
+-            tempo,
+-        };
++        let mut components = owner.components;
++        components.activity = activity.weighted;
++        components.shelter = shelter.weighted;
++        components.tempo = tempo;
++        let progress = components.pawn_progress;
+@@ -728 +718 @@
+-        let queries = pawn.relation_queries + activity.relation_queries;
++        let queries = owner.pawn_queries + activity.relation_queries;
+@@ -731 +721 @@
+-            if selected.reused {
++            if owner.pawn_reused {
+@@ -745 +735 @@
+-                pawn_entry_reused: selected.reused,
++                pawn_entry_reused: owner.pawn_reused,
+@@ -748,0 +739,46 @@
++    /// One native owner body for inline, whole-helper and both scoped color
++    /// transports. It has no whole-Evaluator or mutable-Node reference.
++    #[inline]
++    fn full_owner_work<const FRESH: bool>(
++        position: &Position,
++        influence: &Influence,
++        retained: Retained,
++        root: &RootContext,
++        weights: Weights,
++        pawns: &mut PawnCache,
++        phase: crate::position::Phase,
++        material: i32,
++        inline: impl FnOnce() -> Option<evaluator_worker::ActivityShelter>,
++    ) -> FullOwnerWork {
++        let selected = if FRESH {
++            pawn_structure::Selection {
++                structure: pawn_structure::fresh(position, influence, [1024; 2]), reused: false,
++            }
++        } else { pawns.select(position, influence) };
++        let pawn = pawn_terms::compute(position, influence, &selected.structure);
++        let inline_chain = inline();
++        let structure = pawn_progress::structure_weighted(
++            phase, pawn.structure, pawn.piece, weights.structure,
++        );
++        // This producer has no state or charged relation work. At a zero final
++        // phase factor, its weighted result is identically zero.
++        let progress = if phase.middlegame == 0 && phase.endgame == 0 { 0 } else {
++            pawn_progress::selected(
++                position, influence, &selected.structure, phase, material, weights.progress,
++            ).weighted
++        };
++        let central = positional_terms::central(influence, phase, weights.central);
++        let patterns = positional_terms::patterns(position);
++        let squares = root.square_balance_from(position, retained.nonking_squares);
++        FullOwnerWork {
++            components: Components {
++                material, squares, pawn_structure: structure, pawn_progress: progress,
++                central: central.weighted, bishops: patterns.bishop_coordination,
++                patterns: patterns.opening, ..Components::default()
++            },
++            pawn_queries: pawn.relation_queries,
++            pawn_reused: selected.reused,
++            inline_chain,
++        }
++    }
++
+@@ -1305,0 +1342,4 @@
++
++#[cfg(test)]
++#[path = "evaluator/borrowed_tests.rs"]
++mod borrowed_tests;
+diff --git a/src/session.rs b/src/session.rs
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -142,0 +143,4 @@
++    }
++
++    pub fn set_borrowed_inputs(&mut self, borrowed: bool) -> Result<(), String> {
++        self.search.as_mut().ok_or("search is currently active")?.evaluator.set_borrowed_inputs(borrowed)
+diff --git a/src/evaluator/borrowed_tests.rs b/src/evaluator/borrowed_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/borrowed_tests.rs
+@@ -0,0 +1,217 @@
++//! Focused actual Evaluator/Search controls for scoped input transports.
++use super::*;
++use crate::engine::Search;
++use crate::history::SearchHistory;
++use crate::quiescence::Limits;
++use std::panic::{catch_unwind, AssertUnwindSafe};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const MIDDLE: &str = "r3k2r/ppp2ppp/2npbn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2Q1RK1 b kq - 0 10";
++const ENDING: &str = "6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40";
++const EMPTY: &str = "7k/8/8/8/8/8/8/K7 w - - 0 1";
++const FIRST: &str = "7k/6P1/1p1pP3/4pP2/8/2p5/4P3/K7 w - - 0 1";
++const COLLISION: &str = "7k/8/2p4P/2p5/7P/1p6/p5PP/K7 w - - 0 1";
++const GROUP_ZERO: &str = "7k/8/8/8/6P1/3P4/8/K7 w - - 0 1";
++
++fn position(fen: &str) -> Position { Position::from_fen(fen).unwrap() }
++
++fn evaluator<const D: bool>(root: &Position, budget: usize, borrowed: bool) -> Evaluator<D> {
++    let mut evaluator = Evaluator::new(root);
++    evaluator.set_borrowed_inputs(borrowed).unwrap();
++    evaluator.set_threads_with_affinity(budget, || Ok(3)).unwrap();
++    evaluator
++}
++
++fn asymmetric() -> Parameters {
++    Parameters {
++        own: [133, 73, 151, 87, 200, 121, 19, 313, 207, 251, 49],
++        opponent: [91, 128, 67, 142, 80, 57, 183, 47, 333, 107, 229],
++        average_depth: 13, draw: -173, opponent_selectivity: 31,
++    }
++}
++
++#[derive(Debug, PartialEq, Eq)]
++struct Observed { evaluation: Evaluation, node: Node, details: FullDetails }
++
++fn observe<const D: bool>(
++    evaluator: &mut Evaluator<D>, mut node: Node, map: &Influence, checked: bool, fresh: bool,
++) -> Observed {
++    let before = evaluator.stats;
++    let mut details = None;
++    let evaluation = if fresh {
++        evaluator.fresh_detailed_observed(&mut node, map, checked, |value| details = Some(value))
++    } else {
++        evaluator.full_detailed_observed(&mut node, map, checked, |value| details = Some(value))
++    };
++    assert_eq!(evaluator.stats.relation_queries - before.relation_queries, evaluation.relation_queries);
++    assert_eq!(evaluator.stats.full - before.full, u64::from(D));
++    let details = details.unwrap();
++    assert_eq!(details.base, details.components.base());
++    assert_eq!(node.retained.positional, details.components.positional());
++    assert_eq!(node.retained.pawn_progress, details.components.pawn_progress);
++    assert_eq!(node.retained.age, 0);
++    Observed { evaluation, node, details }
++}
++
++#[test]
++fn borrowed_detailed_full_and_fresh_match_inline_and_owned_with_root_weights_and_supplied_maps() {
++    fn verify<const D: bool>() {
++        let root = position(START);
++        let mut serial = evaluator::<D>(&root, 1, false);
++        let mut owned = evaluator::<D>(&root, 3, false);
++        let mut borrowed = evaluator::<D>(&root, 3, true);
++        let mut zero = Parameters::default();
++        zero.own[6..].fill(0);
++        zero.opponent[6..].fill(0);
++        for fen in [START, MIDDLE, ENDING] {
++            let current = position(fen);
++            for parameters in [Parameters::default(), asymmetric(), zero.clone()] {
++                for evaluator in [&mut serial, &mut owned, &mut borrowed] {
++                    evaluator.parameters = parameters.clone();
++                    evaluator.begin_search(&current);
++                }
++                for map in [Influence::build(&current), Influence { profiles: [[255; 64], [0; 64]] }] {
++                    let before = (current, map);
++                    for checked in [false, true] {
++                        let mut node = Node::root(current, &serial.root);
++                        node.retained.positional = 731;
++                        node.retained.pawn_progress = -193;
++                        node.retained.age = 17;
++                        for fresh in [false, false, true, false] {
++                            let expected = observe(&mut serial, node, &map, checked, fresh);
++                            assert_eq!(observe(&mut owned, node, &map, checked, fresh), expected);
++                            assert_eq!(observe(&mut borrowed, node, &map, checked, fresh), expected);
++                            assert_eq!(owned.stats, serial.stats);
++                            assert_eq!(borrowed.stats, serial.stats);
++                        }
++                    }
++                    assert_eq!((current, map), before);
++                }
++            }
++        }
++        assert!(borrowed.colors_worker.as_ref().unwrap().is_parked());
++        let report = borrowed.finish_colors_report().unwrap();
++        assert!(report.contains("\"scopedInput\":{") && report.contains("\"mode\":\"borrowed\""));
++        assert!(report.contains("\"retired\":true"));
++    }
++    verify::<true>();
++    verify::<false>();
++}
++
++#[test]
++fn borrowed_cache_collision_zero_replacement_and_fresh_bypass_match_serial() {
++    let root = position(START);
++    assert_eq!(position(FIRST).pawn, position(COLLISION).pawn);
++    assert_eq!(position(GROUP_ZERO).pawn % 128, 0);
++    let mut serial = evaluator::<true>(&root, 1, false);
++    let mut borrowed = evaluator::<true>(&root, 3, true);
++    for reset in [false, true] {
++        if reset { serial.begin_search(&root); borrowed.begin_search(&root); }
++        for (fen, fresh) in [
++            (EMPTY, false), (GROUP_ZERO, false), (GROUP_ZERO, false), (EMPTY, false),
++            (FIRST, false), (COLLISION, false), (COLLISION, true), (FIRST, false),
++        ] {
++            let current = position(fen);
++            let map = Influence::build(&current);
++            let node = Node::root(current, &serial.root);
++            assert_eq!(observe(&mut borrowed, node, &map, false, fresh), observe(&mut serial, node, &map, false, fresh));
++            assert_eq!(borrowed.stats, serial.stats);
++        }
++        let first = position(FIRST);
++        let map = Influence::build(&first);
++        let a = borrowed.pawns.select(&first, &map);
++        let b = serial.pawns.select(&first, &map);
++        assert!(a.reused && b.reused);
++        assert_eq!(a.structure, b.structure);
++    }
++}
++
++#[test]
++fn borrowed_callback_unwind_after_epoch_allows_input_mutation_and_outer_scope_reuse() {
++    let root = position(START);
++    let mut serial = evaluator::<true>(&root, 1, false);
++    let mut borrowed = evaluator::<true>(&root, 3, true);
++    let outer = borrowed.full_worker_scope();
++    let mut map = Influence::build(&root);
++    let mut a = Node::root(root, &serial.root);
++    let mut b = a;
++    assert!(catch_unwind(AssertUnwindSafe(|| serial.full_observed(&mut a, &map, false, |_| panic!("serial callback")))).is_err());
++    assert!(catch_unwind(AssertUnwindSafe(|| borrowed.full_observed(&mut b, &map, false, |_| panic!("borrowed callback")))).is_err());
++    assert_eq!(a, b);
++    assert_eq!(borrowed.stats, serial.stats);
++    // The same address may change only after the enclosing call has returned /
++    // unwound. The outer search activation deliberately remains active here.
++    map.profiles = [[255; 64], [0; 64]];
++    a = Node::root(position(ENDING), &serial.root);
++    b = a;
++    assert_eq!(observe(&mut borrowed, b, &map, false, true), observe(&mut serial, a, &map, false, true));
++    Evaluator::<true>::finish_full_worker_scope(outer);
++    assert!(borrowed.colors_worker.as_ref().unwrap().is_parked());
++    let report = borrowed.finish_colors_report().unwrap();
++    assert!(report.contains("\"retired\":true") && report.contains("\"done\":[2,2]"));
++}
++
++fn compare_search(actual: &crate::ordinary::Outcome, expected: &crate::ordinary::Outcome) {
++    assert_eq!(actual.initial_candidates, expected.initial_candidates);
++    assert_eq!((actual.score, &actual.pv, actual.work, actual.stats, actual.evaluations),
++        (expected.score, &expected.pv, expected.work, expected.stats, expected.evaluations));
++    assert_eq!(actual.iterations.len(), expected.iterations.len());
++    for (a, b) in actual.iterations.iter().zip(&expected.iterations) {
++        assert_eq!((a.depth, &a.candidates, &a.steps, a.score, &a.pv, a.work),
++            (b.depth, &b.candidates, &b.steps, b.score, &b.pv, b.work));
++    }
++}
++
++#[test]
++fn borrowed_actual_root_and_seeded_search_depth_one_two_match_serial_and_owned() {
++    for fen in [START, ENDING] {
++        for depth in [1, 2] {
++            let root = position(fen);
++            let mut serial = Search::<true>::new(&root);
++            serial.evaluator.parameters = asymmetric();
++            let mut raw = Vec::new();
++            let expected = serial.run_seeded_iterations(root, &mut SearchHistory::new(&root), depth,
++                Limits::default(), 0x1234_5678, 19, |score| raw.push(score)).unwrap();
++            for borrowed in [false, true] {
++                let mut search = Search::<true>::new(&root);
++                search.evaluator = evaluator(&root, 3, borrowed);
++                search.evaluator.parameters = asymmetric();
++                let mut actual_raw = Vec::new();
++                let actual = search.run_seeded_iterations(root, &mut SearchHistory::new(&root), depth,
++                    Limits::default(), 0x1234_5678, 19, |score| actual_raw.push(score)).unwrap();
++                compare_search(&actual, &expected);
++                assert_eq!(actual_raw, raw);
++                assert_eq!(search.work(), serial.work());
++                assert!(search.evaluator.colors_worker.as_ref().unwrap().is_parked());
++            }
++        }
++    }
++}
++
++#[test]
++fn borrowed_configuration_flag_preserves_budget_fallback_and_applies_to_later_color_worker() {
++    let root = position(START);
++    for borrowed in [false, true] {
++        for (requested, available, configured) in [(1, 1, 1), (2, 1, 1), (2, 3, 2), (3, 1, 1), (3, 2, 2), (3, 3, 3)] {
++            let mut evaluator = Evaluator::<true>::new(&root);
++            evaluator.set_borrowed_inputs(borrowed).unwrap();
++            evaluator.set_threads_with_affinity(requested, || Ok(available)).unwrap();
++            assert_eq!((evaluator.requested_threads(), evaluator.configured_threads()), (requested, configured));
++            let mut node = Node::root(root, &evaluator.root);
++            evaluator.full(&mut node, &Influence::build(&root), false);
++            let report = evaluator.finish_colors_report().unwrap();
++            if configured == 3 {
++                let mode = if borrowed { "\"mode\":\"borrowed\"" } else { "\"mode\":\"owned\"" };
++                assert!(report.contains(mode) && report.contains("\"request\":1") && report.contains("\"done\":[1,1]"));
++                assert!(report.contains("\"retired\":true"));
++            } else { assert!(report.contains("\"scopedInput\":{\"enabled\":false}")); }
++        }
++    }
++    let mut evaluator = evaluator::<true>(&root, 2, true);
++    evaluator.set_threads_with_affinity(3, || Ok(3)).unwrap();
++    evaluator.set_borrowed_inputs(false).unwrap();
++    evaluator.set_borrowed_inputs(true).unwrap();
++    let mut node = Node::root(root, &evaluator.root);
++    evaluator.full(&mut node, &Influence::build(&root), false);
++    assert!(evaluator.finish_colors_report().unwrap().contains("\"mode\":\"borrowed\""));
++}
