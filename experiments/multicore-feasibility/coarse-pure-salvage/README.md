@@ -55,6 +55,8 @@ with reversible receipts. No exclusive-isolation claim. The final shared-state
 audit can miss a transient erroneous write later overwritten. Fixed completion/
 NoHost/timing absent/rnd0; no live-stop or performance qualification.
 
-Status: source/tool preparation. Isolated source:
+Status: closed; [results and recommendation](report.md), [bound identities](closure.json).
+One successful census follows two preserved failed attempts and a same-cap
+serialization-accounting repair. No parallel consumer is selected. Isolated source:
 `/home/legolas/rook2-experiments/workspaces/coarse-pure-salvage-20261026-01`.
-No census workload has run yet. Canonical66/8f/profile and main remain preserved.
+Canonical66/8f/profile and main remain preserved.
