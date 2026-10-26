@@ -7,10 +7,11 @@ retaining the opt-in two-thread FULL split: 6.79% lower elapsed time in the
 behavioral checks pass; scaling beyond 2 and external qualification of the new
 image remain open. The accepted serial release described below is unchanged.
 
-Research resumed on 2026-10-25 under the
-[expanded mission](docs/deterministic-multicore-mission.md#continuation-scaling-beyond-two-threads):
-queued branch work and useful scaling beyond two threads. The earlier outcome
-is a checkpoint, not closure of that broader investigation.
+Research continues under the [multicore mission](docs/deterministic-multicore-mission.md).
+On 2026-10-26 the owner restored an open architectural agenda: seek useful scaling
+across increasing thread counts, with branch queues as one hypothesis rather than
+the primary approach. The two-thread outcome is a preserved checkpoint, not closure
+of the investigation. See [current research status](STATUS.md).
 
 An independent Rust implementation of the released KingRE ordinary-play specification. The [mission](../imp-perf-mission.md) and [KingRE v2.5.0 contracts](../king-spec/README.md) guide behavior and qualification.
 

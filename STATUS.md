@@ -1,9 +1,24 @@
 # Current implementation status
 
-**Active research, 2026-10-25:** resume queued-branch and broader scaling
-investigation under the [mission continuation](docs/deterministic-multicore-mission.md#continuation-scaling-beyond-two-threads).
-The two-thread result below is preserved as a baseline. No further adoption,
-release or external gate has been selected.
+**Active research, 2026-10-26:** pursue useful deterministic multicore acceleration
+under the restored [mission](docs/deterministic-multicore-mission.md), without making
+branch queues primary. The owner authorized a new open-ended goal after clearing
+the earlier goal. The two-thread result below remains the successful baseline.
+No further adoption, release or external gate has been selected.
+
+The latest [wide internal-branch trial](experiments/multicore-feasibility/wide-internal/report.md)
+exercised actual 1/2/4/8-thread configurations on a hindsight-selected substantial
+branch group; effectful replay lost despite useful descendant reuse. The
+[pure-result census](experiments/multicore-feasibility/coarse-pure-salvage/report.md)
+found limited new kernel work under an all-results-ready assumption; current
+catalog construction costs exceeded that opportunity. Neither result establishes
+a general limit on multicore designs. Their exact scopes and failures remain
+in the reports.
+
+A source-only architectural reassessment is underway before selecting another
+prototype. Candidates include wider same-node evaluation/data preparation with
+shared publication and independently assessed frontier batching. These are
+unmeasured hypotheses, not selected implementations or speed claims.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
