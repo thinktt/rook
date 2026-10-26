@@ -1,11 +1,16 @@
 # Rook2
 
-**This worktree is the deterministic multicore research branch.** The
-[research outcome](docs/research/deterministic-multicore-outcome.md) recommends
-retaining the opt-in two-thread FULL split: 6.79% lower elapsed time in the
-54-case survey, with 1.863x CPU and 1.12% one-thread overhead. Selected local
-behavioral checks pass; scaling beyond 2 and external qualification of the new
-image remain open. The accepted serial release described below is unchanged.
+**This worktree is the deterministic multicore research branch.** The latest
+[isolated three-thread candidate](experiments/multicore-feasibility/epoch-own-pgo/report.md)
+completed the descriptive 54-case survey in 60.764s: 5.19% below preserved two-thread
+Rook and 10.61% below accepted serial, using 1.422x the two-thread CPU. Its one-thread
+mode was 0.15% above serial in the same window. All selected replays passed;
+broader exact-image behavioral qualification and adoption remain open.
+
+The three-thread source/image are retained with that experiment; canonical branch
+source still preserves the [two-thread checkpoint](docs/research/deterministic-multicore-outcome.md)
+and its selected local behavioral evidence. Accepted serial release bytes below
+are unchanged. Historical KingWCR timings are not a matched comparison.
 
 Research continues under the [multicore mission](docs/deterministic-multicore-mission.md).
 On 2026-10-26 the owner restored an open architectural agenda: seek useful scaling

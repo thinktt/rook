@@ -3,6 +3,11 @@
 2026-10-24. Assessment by imp2-lead under the
 [research mission](../deterministic-multicore-mission.md).
 
+This is the historical two-thread checkpoint. The later
+[three-thread own-PGO result](../../experiments/multicore-feasibility/epoch-own-pgo/report.md)
+demonstrates further acceleration; its broader behavioral qualification remains
+separate. The assessment and tables below retain their 2026-10-24 scope.
+
 **Retain the practical, opt-in two-thread FULL evaluation split.** It reduced
 search elapsed time by 6.79% against the accepted serial engine across the
 54-case survey, consuming 1.863 times the total CPU. Its one-thread mode cost

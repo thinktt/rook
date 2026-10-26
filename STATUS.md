@@ -3,7 +3,7 @@
 **Active research, 2026-10-26:** pursue useful deterministic multicore acceleration
 under the restored [mission](docs/deterministic-multicore-mission.md), without making
 branch queues primary. The owner authorized a new open-ended goal after clearing
-the earlier goal. The two-thread result below remains the successful baseline.
+the earlier goal. The two-thread result below remains a preserved baseline.
 No further adoption, release or external gate has been selected.
 
 The latest [wide internal-branch trial](experiments/multicore-feasibility/wide-internal/report.md)
@@ -27,16 +27,32 @@ current2 whole-process CPU. All 48 replay lives and 32 focused checks passed;
 35/43 timing ranges separated, while 08 overlapped. This is generic, finite
 evidence, not qualification or a full54 prediction.
 
-One exact-source joint-mode PGO build and descriptive full54 comparison are now
-selected: train each original case once per mode1/2/3, then compare accepted
-serial5cf, preserved practical2 8f and all three new modes. No PGO result exists
-yet; no transport tuning, adoption or extra qualification is selected.
+The [own-PGO/full54 comparison](experiments/multicore-feasibility/epoch-own-pgo/report.md)
+is closed at `fb243a4c`: 162 joint-mode training lives and 270 comparison lives pass,
+with one merge/use build and no failure or retry. Direct search-wall sums:
 
-The [next-work comparison](docs/research/after-colors-dataflow-choice.md) identifies
-whole-FULL plus ordinary inventory as the leading separate reserve; fresh-Influence
-pipeline fusion and frontier batching also remain unselected. The current trial
-tests the broader performance of the fixed transport/arithmetic partition, not
-those larger work graphs.
+| Configuration | Seconds | Whole-process CPU seconds |
+|---|---:|---:|
+| Accepted serial (`5cf`) | 67.973988 | 68.059510 |
+| Preserved practical two-thread (`8f`) | 64.092876 | 128.229345 |
+| New inline, one thread | 68.076222 | 68.161880 |
+| New current split, two threads | 64.147690 | 128.339177 |
+| New epoch split, three threads | 60.763786 | 182.297940 |
+
+Epoch3 improves 48/54 cases versus practical2, with a 5.19% total elapsed gain at
+1.422x CPU; it improves 45/54 versus serial, with a 10.61% total gain. Case43 still
+loses 4.56% versus serial. These are single observations per case/configuration,
+not medians or qualification. New inline1 costs a descriptive 0.15% versus serial.
+The exact `67d01108` image/profile/source are retained in the experiment; canonical
+branch source and accepted release bytes are unchanged. Broad exact-image
+qualification/adoption are not yet selected.
+
+The next selected work is SOURCE-ONLY assessment of a fourth worker: retain the
+positive epoch color consumers and add ordinary inventory as a conditional third
+input reader. Reuse the [scratch/dataflow assessment](docs/research/after-colors-dataflow-choice.md)
+while proving skipped-epoch ownership and pricing the actual overlap window.
+No fourth-worker implementation/run is selected. Whole-FULL transport
+generalization, fresh-Influence fusion and frontier batching remain reserves.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
