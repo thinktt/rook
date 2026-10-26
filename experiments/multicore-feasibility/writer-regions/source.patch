@@ -1,0 +1,414 @@
+diff --git a/src/bin/rook2.rs b/src/bin/rook2.rs
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -74,0 +75 @@
++    let mut inspect_color_layout = false;
+@@ -90,0 +92 @@
++            "--inspect-color-layout" => inspect_color_layout = true,
+@@ -113,0 +116,4 @@
++    if inspect_color_layout {
++        println!("{}", session.colors_layout_projection().map_err(Failure::Message)?);
++        return Ok(());
++    }
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -94,0 +95,18 @@
++// Fixed 64-byte separation hypothesis; no inference from guest cache inventory.
++#[repr(C, align(64))]
++struct RequestRegion {
++    request: AtomicU64,
++}
++
++#[repr(C, align(64))]
++struct PacketRegion {
++    value: UnsafeCell<Packet>,
++}
++
++#[repr(C, align(64))]
++struct SideRegion {
++    output: UnsafeCell<SideOutput>,
++    done: AtomicU64,
++}
++
++#[repr(C)]
+@@ -96,3 +114,2 @@
+-    input: UnsafeCell<Packet>,
+-    white_output: UnsafeCell<SideOutput>,
+-    black_output: UnsafeCell<SideOutput>,
++    input: PacketRegion,
++    sides: [SideRegion; 2],
+@@ -101,0 +119,3 @@
++// Input and each output+done live in separate aligned concrete regions; the
++// atomics stay outside UnsafeCell. No whole-region mutable reference or copy is
++// formed while readers can poll done. Only the three payload cells are written.
+@@ -121,4 +141,5 @@
+-        if side == 0 { &self.white_output } else { &self.black_output }
+-    }
+-}
+-
++        if side == 0 { &self.sides[0].output } else { &self.sides[1].output }
++    }
++}
++
++#[repr(C)]
+@@ -127 +147,0 @@
+-    done: AtomicU64,
+@@ -134 +154 @@
+-            state: AtomicU8::new(STARTING), done: AtomicU64::new(0),
++            state: AtomicU8::new(STARTING),
+@@ -170,3 +190,2 @@
+-struct Shared {
+-    cells: Cells,
+-    request: AtomicU64,
++#[repr(C, align(64))]
++struct LifecycleRegion {
+@@ -176 +195,9 @@
+-    control: Mutex<Control>,
++}
++
++#[repr(C, align(64))]
++struct LatchRegion {
++    waiting: AtomicBool,
++}
++
++#[repr(C, align(64))]
++struct WaitRegion {
+@@ -181 +208,15 @@
+-    waiting: AtomicBool,
++}
++
++#[repr(C, align(64))]
++struct ControlRegion {
++    value: Mutex<Control>,
++}
++
++#[repr(C)]
++struct Shared {
++    publication: RequestRegion,
++    cells: Cells,
++    lifecycle: LifecycleRegion,
++    latch: LatchRegion,
++    waits: WaitRegion,
++    owner: ControlRegion,
+@@ -244,0 +286 @@
++            publication: RequestRegion { request: AtomicU64::new(0) },
+@@ -246,3 +288,7 @@
+-                input: UnsafeCell::new(Packet { generation: 0, position, influence, published: None }),
+-                white_output: UnsafeCell::new(SideOutput::initial()),
+-                black_output: UnsafeCell::new(SideOutput::initial()),
++                input: PacketRegion {
++                    value: UnsafeCell::new(Packet { generation: 0, position, influence, published: None }),
++                },
++                sides: [
++                    SideRegion { output: UnsafeCell::new(SideOutput::initial()), done: AtomicU64::new(0) },
++                    SideRegion { output: UnsafeCell::new(SideOutput::initial()), done: AtomicU64::new(0) },
++                ],
+@@ -250,9 +296,10 @@
+-            request: AtomicU64::new(0),
+-            readers: [Reader::new(), Reader::new()],
+-            stop: AtomicBool::new(false),
+-            active_scopes: AtomicUsize::new(0),
+-            control: Mutex::new(Control::default()),
+-            wake: Condvar::new(),
+-            sleep: Mutex::new(()),
+-            completed: Condvar::new(),
+-            waiting: AtomicBool::new(false),
++            lifecycle: LifecycleRegion {
++                readers: [Reader::new(), Reader::new()],
++                stop: AtomicBool::new(false),
++                active_scopes: AtomicUsize::new(0),
++            },
++            latch: LatchRegion { waiting: AtomicBool::new(false) },
++            waits: WaitRegion {
++                wake: Condvar::new(), sleep: Mutex::new(()), completed: Condvar::new(),
++            },
++            owner: ControlRegion { value: Mutex::new(Control::default()) },
+@@ -332 +379 @@
+-        self.shared.active_scopes.store(control.scopes, Ordering::Release);
++        self.shared.lifecycle.active_scopes.store(control.scopes, Ordering::Release);
+@@ -334 +381 @@
+-            self.shared.wake.notify_all();
++            self.shared.waits.wake.notify_all();
+@@ -340 +387 @@
+-                self.shared.active_scopes.store(control.scopes, Ordering::Release);
++                self.shared.lifecycle.active_scopes.store(control.scopes, Ordering::Release);
+@@ -349 +396 @@
+-        if self.shared.active_scopes.load(Ordering::Acquire) != 0 {
++        if self.shared.lifecycle.active_scopes.load(Ordering::Acquire) != 0 {
+@@ -379 +426 @@
+-            self.shared.stop.store(true, Ordering::Release);
++            self.shared.lifecycle.stop.store(true, Ordering::Release);
+@@ -381 +428 @@
+-            self.shared.wake.notify_all();
++            self.shared.waits.wake.notify_all();
+@@ -393 +440 @@
+-            self.shared.cells.input.get().write(Packet {
++            self.shared.cells.input.value.get().write(Packet {
+@@ -409 +456 @@
+-            std::ptr::addr_of_mut!((*self.shared.cells.input.get()).published).write(published);
++            std::ptr::addr_of_mut!((*self.shared.cells.input.value.get()).published).write(published);
+@@ -416 +463 @@
+-        self.shared.request.store(generation, Ordering::Release);
++        self.shared.publication.request.store(generation, Ordering::Release);
+@@ -487,2 +534,2 @@
+-                self.shared.cells.white_output.get().read(),
+-                self.shared.cells.black_output.get().read(),
++                self.shared.cells.sides[0].output.get().read(),
++                self.shared.cells.sides[1].output.get().read(),
+@@ -518,0 +566,48 @@
++    /// Cold opt-in startup projection of this actual production allocation.
++    /// No search/counter path calls this. TestHooks make cfg(test) Shared larger;
++    /// the external admission requires testBuild=false from the measured image.
++    pub(crate) fn layout_projection(&self) -> Result<String, String> {
++        use std::mem::{align_of, offset_of, size_of};
++        let control = control_lock(&self.shared);
++        if self.generation != 0 || control.scopes != 0 || control.closing
++            || !matches!(control.flight, Flight::None)
++            || terminal(&self.shared) || !all_state(&self.shared, PARKED)
++        {
++            return Err("colors layout projection requires initial parked helpers".into());
++        }
++        let cells = offset_of!(Shared, cells);
++        let input = cells + offset_of!(Cells, input);
++        let sides = cells + offset_of!(Cells, sides);
++        let regions = [
++            ("request", offset_of!(Shared, publication), size_of::<RequestRegion>(), align_of::<RequestRegion>()),
++            ("packet", input, size_of::<PacketRegion>(), align_of::<PacketRegion>()),
++            ("white", sides, size_of::<SideRegion>(), align_of::<SideRegion>()),
++            ("black", sides + size_of::<SideRegion>(), size_of::<SideRegion>(), align_of::<SideRegion>()),
++            ("lifecycle", offset_of!(Shared, lifecycle), size_of::<LifecycleRegion>(), align_of::<LifecycleRegion>()),
++            ("latch", offset_of!(Shared, latch), size_of::<LatchRegion>(), align_of::<LatchRegion>()),
++            ("wait", offset_of!(Shared, waits), size_of::<WaitRegion>(), align_of::<WaitRegion>()),
++            ("control", offset_of!(Shared, owner), size_of::<ControlRegion>(), align_of::<ControlRegion>()),
++        ];
++        let mut out = String::new();
++        write!(out, "{{\"schema\":\"rook2-writer-regions-layout-v1\",\"layoutDesign\":\"eight64\",\"testBuild\":{},\"parked\":true,\"shared\":{{\"size\":{},\"align\":{},\"addressMod64\":{}}},\"regions\":[",
++            cfg!(test), size_of::<Shared>(), align_of::<Shared>(),
++            (Arc::as_ptr(&self.shared) as usize) % 64).unwrap();
++        for (i, (name, offset, size, align)) in regions.iter().enumerate() {
++            if i != 0 { out.push(','); }
++            write!(out, "{{\"name\":\"{name}\",\"offset\":{offset},\"size\":{size},\"align\":{align}}}").unwrap();
++        }
++        out.push_str("],\"slots\":[");
++        for (i, name) in ["white", "black"].iter().enumerate() {
++            if i != 0 { out.push(','); }
++            let offset = sides + i * size_of::<SideRegion>();
++            write!(out, "{{\"name\":\"{name}\",\"offset\":{offset},\"size\":{},\"align\":{},\"outputOffset\":{},\"outputBytes\":{},\"doneOffset\":{},\"doneBytes\":{}}}",
++                size_of::<SideRegion>(), align_of::<SideRegion>(),
++                offset + offset_of!(SideRegion, output), size_of::<SideOutput>(),
++                offset + offset_of!(SideRegion, done), size_of::<AtomicU64>()).unwrap();
++        }
++        write!(out, "],\"types\":{{\"packetBytes\":{},\"sideOutputBytes\":{},\"controlMutexBytes\":{},\"lifecycleBytes\":{},\"waitBytes\":{},\"cellsBytes\":{}}}}}",
++            size_of::<Packet>(), size_of::<SideOutput>(), size_of::<Mutex<Control>>(),
++            size_of::<LifecycleRegion>(), size_of::<WaitRegion>(), size_of::<Cells>()).unwrap();
++        Ok(out)
++    }
++
+@@ -530,3 +625,3 @@
+-            self.shared.active_scopes.store(0, Ordering::Release);
+-            self.shared.stop.store(true, Ordering::Release);
+-            self.shared.wake.notify_all();
++            self.shared.lifecycle.active_scopes.store(0, Ordering::Release);
++            self.shared.lifecycle.stop.store(true, Ordering::Release);
++            self.shared.waits.wake.notify_all();
+@@ -552 +647 @@
+-        self.shared.wake.notify_all();
++        self.shared.waits.wake.notify_all();
+@@ -593 +688 @@
+-    let reader = &shared.readers[side];
++    let reader = &shared.cells.sides[side];
+@@ -596 +691 @@
+-        let generation = shared.request.load(Ordering::Acquire);
++        let generation = shared.publication.request.load(Ordering::Acquire);
+@@ -627 +722 @@
+-        if shared.active_scopes.load(Ordering::Acquire) == 0 {
++        if shared.lifecycle.active_scopes.load(Ordering::Acquire) == 0 {
+@@ -643 +738 @@
+-        let packet = unsafe { &*shared.cells.input.get() };
++        let packet = unsafe { &*shared.cells.input.value.get() };
+@@ -671 +766 @@
+-    shared.readers.iter().all(|reader| reader.state.load(Ordering::Acquire) == state)
++    shared.lifecycle.readers.iter().all(|reader| reader.state.load(Ordering::Acquire) == state)
+@@ -675 +770 @@
+-    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), PARKED | FAILED | STOPPED))
++    shared.lifecycle.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), PARKED | FAILED | STOPPED))
+@@ -679,4 +774,4 @@
+-    shared.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
+-}
+-
+-fn terminal(shared: &Shared) -> bool { shared.stop.load(Ordering::Acquire) }
++    shared.lifecycle.readers.iter().all(|reader| matches!(reader.state.load(Ordering::Acquire), FAILED | STOPPED))
++}
++
++fn terminal(shared: &Shared) -> bool { shared.lifecycle.stop.load(Ordering::Acquire) }
+@@ -685 +780 @@
+-    shared.readers.iter().all(|reader| reader.done.load(Ordering::Acquire) == generation)
++    shared.cells.sides.iter().all(|reader| reader.done.load(Ordering::Acquire) == generation)
+@@ -698 +793 @@
+-    shared.control.lock().unwrap_or_else(|error| error.into_inner())
++    shared.owner.value.lock().unwrap_or_else(|error| error.into_inner())
+@@ -705,3 +800,3 @@
+-    if shared.waiting.swap(false, Ordering::SeqCst) {
+-        let _sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
+-        shared.completed.notify_all();
++    if shared.latch.waiting.swap(false, Ordering::SeqCst) {
++        let _sleep = shared.waits.sleep.lock().unwrap_or_else(|error| error.into_inner());
++        shared.waits.completed.notify_all();
+@@ -717 +812 @@
+-    let mut sleep = shared.sleep.lock().unwrap_or_else(|error| error.into_inner());
++    let mut sleep = shared.waits.sleep.lock().unwrap_or_else(|error| error.into_inner());
+@@ -724 +819 @@
+-        shared.waiting.swap(true, Ordering::SeqCst);
++        shared.latch.waiting.swap(true, Ordering::SeqCst);
+@@ -733 +828 @@
+-            shared.waiting.swap(false, Ordering::SeqCst);
++            shared.latch.waiting.swap(false, Ordering::SeqCst);
+@@ -737 +832 @@
+-        sleep = shared.completed.wait(sleep).unwrap_or_else(|error| error.into_inner());
++        sleep = shared.waits.completed.wait(sleep).unwrap_or_else(|error| error.into_inner());
+@@ -745 +840 @@
+-        let reader = &shared.readers[side];
++        let reader = &shared.lifecycle.readers[side];
+@@ -748 +843 @@
+-            reader.failed_generation.store(shared.request.load(Ordering::Acquire), Ordering::Relaxed);
++            reader.failed_generation.store(shared.publication.request.load(Ordering::Acquire), Ordering::Relaxed);
+@@ -755,2 +850,2 @@
+-        shared.stop.store(true, Ordering::Release);
+-        shared.wake.notify_all();
++        shared.lifecycle.stop.store(true, Ordering::Release);
++        shared.waits.wake.notify_all();
+@@ -789 +884 @@
+-    shared.active_scopes.store(control.scopes, Ordering::Release);
++    shared.lifecycle.active_scopes.store(control.scopes, Ordering::Release);
+@@ -798 +893 @@
+-    shared.wake.notify_all();
++    shared.waits.wake.notify_all();
+@@ -806 +901 @@
+-    if terminal(shared) || shared.request.load(Ordering::Acquire) != seen { return; }
++    if terminal(shared) || shared.publication.request.load(Ordering::Acquire) != seen { return; }
+@@ -808,2 +903,2 @@
+-    shared.readers[side].state.store(PARKED, Ordering::Release);
+-    shared.wake.notify_all();
++    shared.lifecycle.readers[side].state.store(PARKED, Ordering::Release);
++    shared.waits.wake.notify_all();
+@@ -814,2 +909,2 @@
+-        shared.readers[side].state.store(IDLE, Ordering::Release);
+-        shared.wake.notify_all();
++        shared.lifecycle.readers[side].state.store(IDLE, Ordering::Release);
++        shared.waits.wake.notify_all();
+@@ -820 +915 @@
+-    shared.wake.wait(control).unwrap_or_else(|error| error.into_inner())
++    shared.waits.wake.wait(control).unwrap_or_else(|error| error.into_inner())
+@@ -1064 +1159 @@
+-        while shared.readers[side].done.load(Ordering::Acquire) != generation { thread::yield_now(); }
++        while shared.cells.sides[side].done.load(Ordering::Acquire) != generation { thread::yield_now(); }
+@@ -1068 +1163 @@
+-        while shared.readers[side].state.load(Ordering::Acquire) != state { thread::yield_now(); }
++        while shared.lifecycle.readers[side].state.load(Ordering::Acquire) != state { thread::yield_now(); }
+@@ -1080,0 +1176,26 @@
++    }
++
++    #[test]
++    fn colors_writer_regions_are_aligned_and_projection_requires_parked_startup() {
++        use std::mem::{align_of, offset_of, size_of};
++        assert_eq!(size_of::<SideRegion>(), 64);
++        assert_eq!(align_of::<SideRegion>(), 64);
++        assert_eq!(offset_of!(SideRegion, output), 0);
++        assert_eq!(offset_of!(SideRegion, done), 56);
++        assert_eq!(size_of::<LifecycleRegion>(), 64);
++        assert_eq!(size_of::<WaitRegion>(), 64);
++        for offset in [offset_of!(Shared, publication), offset_of!(Shared, cells),
++            offset_of!(Shared, lifecycle), offset_of!(Shared, latch),
++            offset_of!(Shared, waits), offset_of!(Shared, owner)] {
++            assert_eq!(offset % 64, 0);
++        }
++        let mut worker = ColorsWorker::start().unwrap();
++        let projection = worker.layout_projection().unwrap();
++        assert!(projection.contains("\"testBuild\":true"));
++        assert!(projection.contains("\"addressMod64\":0"));
++        let scope = worker.start_active_scope().unwrap();
++        assert!(worker.layout_projection().is_err());
++        scope.finish().unwrap();
++        assert!(worker.layout_projection().is_ok());
++        worker.shutdown().unwrap();
++        assert!(worker.layout_projection().is_err());
+@@ -1094 +1215 @@
+-        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.cells.sides[0].done.load(Ordering::Acquire), 0);
+@@ -1110 +1231 @@
+-        assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++        assert_eq!(shared.cells.sides[0].done.load(Ordering::Acquire), 0);
+@@ -1180,2 +1301,2 @@
+-        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
+-        assert_eq!(worker.shared.readers[1].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.cells.sides[0].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.cells.sides[1].done.load(Ordering::Acquire), 0);
+@@ -1236 +1357 @@
+-            assert_eq!(worker.shared.readers[delayed].done.load(Ordering::Acquire), 0);
++            assert_eq!(worker.shared.cells.sides[delayed].done.load(Ordering::Acquire), 0);
+@@ -1290 +1411 @@
+-            assert_eq!(worker.shared.readers[failing].failed_generation.load(Ordering::Acquire), token.generation);
++            assert_eq!(worker.shared.lifecycle.readers[failing].failed_generation.load(Ordering::Acquire), token.generation);
+@@ -1323 +1444 @@
+-        while !shared.stop.load(Ordering::Acquire) { thread::yield_now(); }
++        while !shared.lifecycle.stop.load(Ordering::Acquire) { thread::yield_now(); }
+@@ -1354,2 +1475,2 @@
+-        assert_eq!(worker.shared.readers[0].state.load(Ordering::Acquire), STOPPED);
+-        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.lifecycle.readers[0].state.load(Ordering::Acquire), STOPPED);
++        assert_eq!(worker.shared.cells.sides[0].done.load(Ordering::Acquire), 0);
+@@ -1466 +1587 @@
+-        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.publication.request.load(Ordering::Acquire), 0);
+@@ -1485 +1606 @@
+-        assert_eq!(worker.shared.request.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.publication.request.load(Ordering::Acquire), 0);
+@@ -1504 +1625 @@
+-            assert_eq!(worker.shared.readers[delayed].done.load(Ordering::Acquire), 0);
++            assert_eq!(worker.shared.cells.sides[delayed].done.load(Ordering::Acquire), 0);
+@@ -1543 +1664 @@
+-        assert_eq!(worker.shared.readers[1].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.cells.sides[1].done.load(Ordering::Acquire), 0);
+@@ -1602 +1723 @@
+-        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), first.generation);
++        assert_eq!(worker.shared.cells.sides[0].done.load(Ordering::Acquire), first.generation);
+@@ -1624 +1745 @@
+-        assert!(!worker.shared.waiting.load(Ordering::SeqCst));
++        assert!(!worker.shared.latch.waiting.load(Ordering::SeqCst));
+@@ -1642,2 +1763,2 @@
+-            let _sleep = worker.shared.sleep.lock().unwrap();
+-            worker.shared.completed.notify_all();
++            let _sleep = worker.shared.waits.sleep.lock().unwrap();
++            worker.shared.waits.completed.notify_all();
+@@ -1685 +1806 @@
+-        assert_eq!(worker.shared.readers[1].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.cells.sides[1].done.load(Ordering::Acquire), 0);
+@@ -1712 +1833 @@
+-            assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++            assert_eq!(shared.cells.sides[0].done.load(Ordering::Acquire), 0);
+@@ -1730 +1851 @@
+-        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert_eq!(worker.shared.publication.request.load(Ordering::Acquire), u64::MAX);
+@@ -1735 +1856 @@
+-        assert_eq!(worker.shared.request.load(Ordering::Acquire), u64::MAX);
++        assert_eq!(worker.shared.publication.request.load(Ordering::Acquire), u64::MAX);
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -502,0 +503,7 @@
++    }
++
++    /// Opt-in cold projection of an actual parked colors3 worker instance.
++    pub fn colors_layout_projection(&self) -> Result<String, String> {
++        self.colors_worker.as_ref()
++            .ok_or_else(|| "color layout inspection requires configured threads=3".to_string())?
++            .layout_projection()
+diff --git a/src/session.rs b/src/session.rs
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -162,0 +163,4 @@
++    }
++
++    pub fn colors_layout_projection(&self) -> Result<String, String> {
++        self.search.as_ref().ok_or("search is currently active")?.evaluator.colors_layout_projection()

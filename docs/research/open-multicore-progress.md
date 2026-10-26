@@ -232,13 +232,22 @@ the cold registration has its required fence; production declarations are exact,
 but compiled type sizes/alignment were unavailable. Park unchanged without PGO,
 weaker ordering or causal cache claims. Retain the proof as a useful result.
 
-Next review one source-only writer-ownership layout for the retained Q transport
-with its original successful protocol. The earlier fixed-layout counterfactual
-established representation sensitivity, not the cause or benefit of separating
-actual writers. Choose a concrete grouping before data and price added lines,
-padding, polling and transfer; do not assume that more alignment is better.
-No implementation or native lane is selected yet. This may reduce transport cost
-but creates no new independent work. Frontier batching remains a separate reserve.
+The [writer-region design](writer-owned-transport-layout.md), committed82a2dae,
+supports one selected counterfactual on retained Q source68 with the original
+successful protocol. Existing saved generic assembly shows request already
+separate from packet filling; that is not new saved work. The fixed eight regions
+keep each output with its own done, while separating request, packet, packed
+lifecycle, the multiwriter latch, cold waits and Control. All observations,
+arithmetic, owned input, atomic operations and both owner-local hooks stay exact.
+
+Explicit64-byte alignment is a chosen layout hypothesis. Two polled done lines,
+polling during output publication and roughly256 additional allocation bytes may
+erase any benefit. A cold actual-production type/instance projection will admit
+the concrete geometry before one preserved/new inline1/mode3 generic48+4 lane.
+Retain narrow Cells Sync; never mutate a whole completion slot containing a live
+atomic. No padding sweep, protocol combination or automatic PGO is selected.
+This may reduce transport cost but creates no new independent work. Frontier
+batching remains a separate reserve.
 
 The latest three-thread image is `f8b829a79e43a90a0396c3baacb8f44f23476f6d9e7a9661626f5c1e8b467c62`,
 with profile `bbb858b01018cea09311ac5fe3b5fb5bc18c3b716e2f6a7bb5df83c794527ed4`;

@@ -184,11 +184,14 @@ notification benefit from common build drift. Park unchanged; f8 remains leader.
 Production declarations match, but attributable compiled sizes/alignment were
 unavailable; the result makes no cache attribution or identical-layout claim.
 
-Next is a source-only review of a concrete transport layout organized by writer
-ownership, using retained Q source68 and its original completion protocol.
-Separate publication, helper outputs/completion and cold control where justified,
-while pricing footprint and polling costs. No implementation, padding sweep,
-new native lane or PGO is selected by this review.
+The [writer-region source review](docs/research/writer-owned-transport-layout.md)
+at82a2dae supports one selected fixed layout discriminator on retained Q source68
+with its original completion protocol. Eight concrete aligned regions keep each
+helper's output and done together, isolate lifecycle/latch/control and retain one
+allocation. The old image already separates request from packet filling. Extra
+polling lines, output contention and estimated256-byte footprint growth are costs,
+not predicted gains. Verify actual production geometry, then compare preserved/
+new inline1/mode3 in one fixed48+4 lane. No sweep, PGO or adoption is selected.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
