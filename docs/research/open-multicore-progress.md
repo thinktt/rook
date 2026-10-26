@@ -176,12 +176,24 @@ this observation. Ten losses to retained3 sum0.069517s, with worst relative loss
 in the comparison; no isolated cause or confidence interval follows from one
 observation per cell. Post-run metadata-closer repair does not repeat native work.
 
-Retain the exact new image/profile as the strongest research result. Next is a
-bounded source-only assessment of tactical generation during actual unchecked-Q
-FULL, covering sparse and FAST-refresh selection, eager totality, discarded work,
-original demand/order/charges and public/observer exclusions. The Q branch census
-does not measure this overlap opportunity. No new implementation/run or tuning
-is selected; frontier batching and writer-region layout remain other reserves.
+Retain the exact new image/profile as the strongest research result; full closure
+is committed116dbb35. The [Q source assessment](q-owner-local-tactical-overlap.md)
+at578e679a covers both actual sparse and FAST-refresh FULL seams, original
+demand/order/charges and public/observer exclusions. Root challenged eager
+totality because tactical generation lacks ordinary's bounded push protocol;
+independent producer review confirms the loose417<512 bound on validated coherent
+ancestry. No runtime admission probe is needed. Read-only old census joins show
+generation demand among Q FULLs57.85/73.45/63.59% on35/08/43, substantially below
+ordinary demand, with neither current readiness-admitted costs nor remaining
+helper time established.
+
+Select one finite generic Q extension: preserve ordinary-on in all configurations,
+compare its exact4b40 generic image against matching new Q-off/Q-on on the original
+35/08/43 fixed36+3 schedule after affected checks. Keep actual FULL selection,
+private row flags, original accounting and owned transport unchanged; no hot
+census, tuning or automatic PGO. This tests a kernel-overlap opportunity, not
+Q branch parallelism. No Q result exists yet. Frontier batching and writer-region
+layout remain other unselected reserves.
 
 The latest three-thread image is `3d914cddf415cfb109bdabaf6eaf5b2384c3ca537a37a2f37a691c28ac5e91cc`,
 with profile `bf909cd4b9a489f3de23e1b0b2d5bb45c0069f690354d76510636c8fed54cd1f`;

@@ -158,8 +158,13 @@ versus retained3, and inline1 costs0.82% versus accepted serial, so the common
 build/source/profile effects remain visible. These are single observations.
 A post-run metadata-closer API repair preserves the completed native evidence.
 Retain the exact image/profile as the research leader, without qualification or
-adoption. Next is a source-only assessment of analogous tactical generation at
-actual unchecked-Q FULL; no implementation or run is selected.
+adoption. The [Q source assessment](docs/research/q-owner-local-tactical-overlap.md)
+at578e679a finds a safe private extension at both actual unchecked-Q FULL seams.
+Its independent capacity bound is417<512 on coherent ancestry; old Q FULL demand
+is only57.85/73.45/63.59% on35/08/43, not a current timing or readiness estimate.
+Select one preserved ordinary-on/matching Q-off/Q-on generic36+3 discriminator
+after affected controls, keeping the ordinary win and all retained artifacts.
+No Q result, PGO or qualification is claimed yet.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

@@ -1,0 +1,745 @@
+diff --git a/src/bin/rook2.rs b/src/bin/rook2.rs
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -75,0 +76 @@
++    let mut q_owner_local_inventory = false;
+@@ -90,0 +92 @@
++            "--q-owner-local-inventory" => q_owner_local_inventory = true,
+@@ -103,0 +106,2 @@
++        .map_err(|message| Failure::Message(format!("rook2: {message}\n")))?;
++    session.set_q_owner_local_inventory(q_owner_local_inventory)
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -287,0 +288 @@
++    q_owner_local_inventory: bool,
+@@ -312,0 +314 @@
++            q_owner_local_inventory: self.q_owner_local_inventory,
+@@ -347,0 +350 @@
++            q_owner_local_inventory: false,
+@@ -429,0 +433,5 @@
++    pub fn set_q_owner_local_inventory(&mut self, enabled: bool) -> Result<(), String> {
++        self.q_owner_local_inventory = enabled;
++        Ok(())
++    }
++
+@@ -643,0 +652,16 @@
++        self.full_impl_prepare::<FRESH, HOOK, _, _, _>(
++            node, influence, in_check, observer, details, self.owner_local_inventory, coherent, inventory,
++        )
++    }
++
++    fn full_impl_prepare<const FRESH: bool, const HOOK: bool, F: FnOnce(Components), D: FnOnce(FullDetails), H: FnOnce(&Position)>(
++        &mut self,
++        node: &mut Node,
++        influence: &Influence,
++        in_check: bool,
++        observer: F,
++        details: D,
++        prepare_enabled: bool,
++        coherent: bool,
++        inventory: H,
++    ) -> Evaluation {
+@@ -729 +753 @@
+-            if HOOK && self.owner_local_inventory && coherent
++            if HOOK && prepare_enabled && coherent
+@@ -895,0 +920,25 @@
++    /// Private unchecked, non-observed Q selection. The caller excludes reused
++    /// replies and owns a disjoint row; actual FULL selection remains unchanged.
++    pub(crate) fn select_noncheck_q_inventory(
++        &mut self,
++        node: &mut Node,
++        lower: i32,
++        upper: i32,
++        capture_exception: bool,
++        scratch: &mut Option<Influence>,
++        coherent: bool,
++        allow_preparation: bool,
++        list: &mut crate::movegen::MoveList,
++    ) -> (Selection, bool) {
++        let enabled = self.q_owner_local_inventory && allow_preparation;
++        let mut prepared = false;
++        let selection = self.select_noncheck_hook::<false, false, true, _, _, _, _>(
++            node, lower, upper, capture_exception, scratch, coherent,
++            |_| {}, |_| {}, |_| {}, enabled, |position| {
++                crate::tactical::generate_for_search(position, list, coherent);
++                prepared = true;
++            },
++        );
++        (selection, prepared)
++    }
++
+@@ -964,3 +1013,3 @@
+-        mut full_observer: F,
+-        mut fast_observer: G,
+-        mut stage_observer: S,
++        full_observer: F,
++        fast_observer: G,
++        stage_observer: S,
+@@ -971,0 +1021,26 @@
++    {
++        self.select_noncheck_hook::<OBSERVE, STAGES, false, _, _, _, _>(
++            node, lower, upper, capture_exception, scratch, coherent_geometry,
++            full_observer, fast_observer, stage_observer, false, |_| {},
++        )
++    }
++
++    fn select_noncheck_hook<const OBSERVE: bool, const STAGES: bool, const QHOOK: bool, F, G, S, H>(
++        &mut self,
++        node: &mut Node,
++        lower: i32,
++        upper: i32,
++        capture_exception: bool,
++        scratch: &mut Option<Influence>,
++        coherent_geometry: bool,
++        mut full_observer: F,
++        mut fast_observer: G,
++        mut stage_observer: S,
++        prepare_enabled: bool,
++        inventory: H,
++    ) -> Selection
++    where
++        F: FnMut(FullDetails),
++        G: FnMut(FastDetails),
++        S: FnMut(EvaluationStage),
++        H: FnOnce(&Position),
+@@ -988,0 +1064,4 @@
++                } else if QHOOK {
++                    self.full_impl_prepare::<false, true, _, _, _>(
++                        node, influence, false, |_| {}, |_| {}, prepare_enabled, coherent_geometry, inventory,
++                    )
+@@ -1010,0 +1090,4 @@
++            } else if QHOOK {
++                self.full_impl_prepare::<false, true, _, _, _>(
++                    node, influence, false, |_| {}, |_| {}, prepare_enabled, coherent_geometry, inventory,
++                )
+@@ -1357,0 +1441,4 @@
++
++#[cfg(test)]
++#[path = "evaluator/q_inventory_tests.rs"]
++mod q_inventory_tests;
+diff --git a/src/quiescence.rs b/src/quiescence.rs
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -19,0 +20,4 @@
++
++#[cfg(test)]
++#[path = "quiescence/q_inventory_tests.rs"]
++mod q_inventory_tests;
+@@ -288,0 +293,3 @@
++            // This activation alone owns any early tactical row. A prior node,
++            // reused reply list or discarded preparation grants no later lease.
++            let mut q_inventory_prepared = false;
+@@ -293 +300 @@
+-                let value = if O::ENABLED {
++                let selected = if O::ENABLED {
+@@ -299 +306 @@
+-                    self.evaluator.select_noncheck_for_search(
++                    let (selected, prepared) = self.evaluator.select_noncheck_q_inventory(
+@@ -301,3 +308,9 @@
+-                        coherent_geometry,
+-                    )
+-                }.evaluation;
++                        coherent_geometry, !replies_available, &mut self.candidates[ply],
++                    );
++                    q_inventory_prepared = prepared;
++                    selected
++                };
++                #[cfg(test)]
++                q_inventory_tests::record_selection(ply, q_inventory_prepared,
++                    &self.candidates[ply], selected.initially_full, selected.refreshed);
++                let value = selected.evaluation;
+@@ -324 +337 @@
+-            } else {
++            } else if !q_inventory_prepared {
+@@ -325,0 +339,5 @@
++            }
++            #[cfg(test)]
++            if !checked {
++                q_inventory_tests::record_demand(ply, q_inventory_prepared,
++                    &self.candidates[ply], self.stats.generated);
+diff --git a/src/session.rs b/src/session.rs
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -146,0 +147,4 @@
++    }
++
++    pub fn set_q_owner_local_inventory(&mut self, enabled: bool) -> Result<(), String> {
++        self.search.as_mut().ok_or("search is currently active")?.evaluator.set_q_owner_local_inventory(enabled)
+diff --git a/src/evaluator/q_inventory_tests.rs b/src/evaluator/q_inventory_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/q_inventory_tests.rs
+@@ -0,0 +1,273 @@
++//! Private Q selector/producer controls. Checked fixtures below test only the
++//! conditional producer domain, never admission through unchecked-Q selection.
++use super::*;
++use crate::colors_worker::{readiness_probe_count, with_forced_readiness};
++use crate::movegen::{self, MoveList};
++use crate::tactical;
++use std::cell::{Cell, RefCell};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const MIDDLE: &str = "r3k2r/ppp2ppp/2npbn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2Q1RK1 b kq - 0 10";
++const ENDING: &str = "6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40";
++const PROMOTION: &str = "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1";
++const JOINED_EP: &str = "7k/8/8/3rP3/8/8/8/K7 w - d6 0 1";
++const EMPTY: &str = "7k/8/8/8/8/8/8/K7 w - - 0 1";
++
++fn position(fen: &str) -> Position { Position::from_fen(fen).unwrap() }
++
++fn configured<const D: bool>(root: &Position, budget: usize, enabled: bool) -> Evaluator<D> {
++    let mut evaluator = Evaluator::new(root);
++    evaluator.set_q_owner_local_inventory(enabled).unwrap();
++    evaluator.set_threads_with_affinity(budget, || Ok(3)).unwrap();
++    evaluator
++}
++
++fn asymmetric() -> Parameters {
++    Parameters {
++        own: [133, 73, 151, 87, 200, 121, 19, 313, 207, 251, 49],
++        opponent: [91, 128, 67, 142, 80, 57, 183, 47, 333, 107, 229],
++        average_depth: 13, draw: -173, opponent_selectivity: 31,
++    }
++}
++
++fn sentinel() -> MoveList {
++    let mut list = MoveList::new();
++    list.push(Move::NONE);
++    list
++}
++
++#[test]
++fn sparse_q_full_prepares_exact_tactical_inventory_and_preserves_native_state() {
++    fn verify<const D: bool>() {
++        for root in [position(START), position(MIDDLE)] {
++            let mut serial = configured::<D>(&root, 1, false);
++            let mut worker = configured::<D>(&root, 3, true);
++            serial.parameters = asymmetric(); worker.parameters = asymmetric();
++            serial.begin_search(&root); worker.begin_search(&root);
++            for fen in [ENDING, PROMOTION, JOINED_EP, EMPTY] {
++                let current = position(fen);
++                assert!(!movegen::in_check(&current, current.side));
++                let mut expected_list = MoveList::new();
++                tactical::generate_for_search(&current, &mut expected_list, true);
++                for supplied in [None, Some(Influence { profiles: [[255; 64], [0; 64]] })] {
++                    let mut a = Node::root(current, &serial.root);
++                    a.retained.positional = 731; a.retained.pawn_progress = -193; a.retained.age = 17;
++                    let mut b = a;
++                    let (mut am, mut bm) = (supplied, supplied);
++                    let expected = serial.select_noncheck_for_search(&mut a, -10000, 10000, false, &mut am, true);
++                    let before = worker.stats;
++                    let probes = readiness_probe_count();
++                    let mut list = sentinel();
++                    let (actual, prepared) = with_forced_readiness(false, || worker.select_noncheck_q_inventory(
++                        &mut b, -10000, 10000, false, &mut bm, true, true, &mut list,
++                    ));
++                    assert_eq!(readiness_probe_count(), probes + 1);
++                    assert!(prepared && actual.initially_full && !actual.refreshed);
++                    assert_eq!(actual.fast_score, None);
++                    assert_eq!(worker.stats.full - before.full, u64::from(D));
++                    assert_eq!(worker.stats.fast, before.fast);
++                    assert_eq!((actual, b, bm, worker.stats), (expected, a, am, serial.stats));
++                    assert_eq!(list.as_slice(), expected_list.as_slice(), "{fen}");
++                    if let Some(map) = supplied { assert_eq!(bm, Some(map)); }
++                }
++            }
++        }
++    }
++    verify::<true>(); verify::<false>();
++}
++
++#[test]
++fn q_refresh_runs_fast_then_one_full_with_supplied_map_root_weights_and_exact_r() {
++    fn verify<const D: bool>() {
++        for root in [position(START), position(MIDDLE)] {
++            let current = position(START);
++            let mut serial = configured::<D>(&root, 1, false);
++            let mut worker = configured::<D>(&root, 3, true);
++            serial.parameters = asymmetric(); worker.parameters = asymmetric();
++            serial.begin_search(&root); worker.begin_search(&root);
++            for map in [Influence::build(&current), Influence { profiles: [[255; 64], [0; 64]] }] {
++                let mut a = Node::root(current, &serial.root);
++                a.retained.positional = -731; a.retained.pawn_progress = 193; a.retained.age = 17;
++                let mut b = a;
++                let (mut am, mut bm) = (Some(map), Some(map));
++                let stages = RefCell::new(Vec::new());
++                let full = Cell::new(None);
++                let fast = Cell::new(None);
++                let expected = serial.select_noncheck_detailed_observed(
++                    &mut a, -10000, 10000, false, &mut am,
++                    |value| { stages.borrow_mut().push("full"); full.set(Some(value)); },
++                    |value| { stages.borrow_mut().push("fast"); fast.set(Some(value)); },
++                );
++                let before = worker.stats;
++                let probes = readiness_probe_count();
++                let mut list = sentinel();
++                let (actual, prepared) = with_forced_readiness(false, || worker.select_noncheck_q_inventory(
++                    &mut b, -10000, 10000, false, &mut bm, true, true, &mut list,
++                ));
++                assert_eq!(readiness_probe_count(), probes + 1);
++                assert!(prepared && !actual.initially_full && actual.refreshed);
++                assert_eq!(*stages.borrow(), vec!["fast", "full"]);
++                assert_eq!(actual.fast_score, Some(fast.get().unwrap().finished.score));
++                assert_eq!(actual.evaluation.score, full.get().unwrap().finished.score);
++                assert_eq!(worker.stats.full - before.full, u64::from(D));
++                assert_eq!(worker.stats.fast - before.fast, u64::from(D));
++                assert_eq!(worker.stats.influence_builds, before.influence_builds);
++                assert_eq!(worker.stats.relation_queries - before.relation_queries, actual.evaluation.relation_queries);
++                assert_eq!((actual, b, bm, worker.stats), (expected, a, am, serial.stats));
++                assert_eq!(bm, Some(map));
++                let mut expected_list = MoveList::new();
++                tactical::generate_for_search(&current, &mut expected_list, true);
++                assert_eq!(list.as_slice(), expected_list.as_slice());
++            }
++        }
++    }
++    verify::<true>(); verify::<false>();
++}
++
++#[test]
++fn q_strict_fast_only_edges_are_lazy_and_capture_exception_keeps_original_refresh() {
++    let current = position(START);
++    for (alpha, beta, exception, refresh) in [(250,251,false,false),(-251,-250,false,false),(250,251,true,true)] {
++        let mut serial = configured::<true>(&current, 1, false);
++        let mut worker = configured::<true>(&current, 3, true);
++        let mut a = Node::root(current, &serial.root);
++        let mut b = a;
++        let score = serial.fast(&a, false).score;
++        assert_eq!(worker.fast(&b, false).score, score);
++        let before = worker.stats;
++        let retained = b.retained;
++        let (mut am, mut bm) = (None, None);
++        let expected = serial.select_noncheck_for_search(&mut a, score+alpha, score+beta, exception, &mut am, true);
++        let probes = readiness_probe_count();
++        let mut list = sentinel();
++        let (actual, prepared) = with_forced_readiness(false, || worker.select_noncheck_q_inventory(
++            &mut b, score+alpha, score+beta, exception, &mut bm, true, true, &mut list,
++        ));
++        assert_eq!(readiness_probe_count(), probes + usize::from(refresh));
++        assert_eq!(prepared, refresh);
++        assert_eq!(actual.refreshed, refresh);
++        assert_eq!((actual, b, bm, worker.stats), (expected, a, am, serial.stats));
++        if !refresh {
++            assert!(bm.is_none());
++            assert_eq!(list.as_slice(), &[Move::NONE]);
++            assert_eq!(b.retained, retained);
++            assert_eq!(worker.stats.influence_builds, before.influence_builds);
++            assert_eq!(worker.stats.relation_queries, before.relation_queries);
++            assert_eq!(actual.evaluation.relation_queries, 0);
++            assert_eq!(worker.stats.full, before.full);
++        }
++    }
++}
++
++#[test]
++fn q_ready_and_excluded_flag_allow_coherence_or_mode_paths_leave_row_untouched() {
++    let current = position(ENDING);
++    let map = Influence { profiles: [[255; 64], [0; 64]] };
++    for (budget, enabled, coherent, allow, ready, queries) in [
++        (3,true,true,true,true,1), (1,true,true,true,false,0), (2,true,true,true,false,0),
++        (3,false,true,true,false,0), (3,true,false,true,false,0), (3,true,true,false,false,0),
++    ] {
++        let mut serial = configured::<true>(&current, 1, false);
++        let mut worker = configured::<true>(&current, budget, enabled);
++        worker.set_owner_local_inventory(true).unwrap(); // Ordinary-on must not enable Q.
++        let mut a = Node::root(current, &serial.root);
++        let mut b = a;
++        let (mut am, mut bm) = (Some(map), Some(map));
++        let expected = serial.select_noncheck(&mut a, -10000, 10000, false, &mut am);
++        let mut list = sentinel();
++        let probes = readiness_probe_count();
++        let (actual, prepared) = with_forced_readiness(ready, || worker.select_noncheck_q_inventory(
++            &mut b, -10000, 10000, false, &mut bm, coherent, allow, &mut list,
++        ));
++        assert_eq!(readiness_probe_count(), probes + queries);
++        assert!(!prepared);
++        assert_eq!(list.as_slice(), &[Move::NONE]);
++        assert_eq!((actual, b, bm, worker.stats), (expected, a, am, serial.stats));
++    }
++}
++
++#[test]
++fn public_selection_stage_observers_and_fresh_full_have_no_q_readiness_queries() {
++    let current = position(START);
++    let mut serial = configured::<true>(&current, 1, false);
++    let mut worker = configured::<true>(&current, 3, true);
++    worker.set_owner_local_inventory(true).unwrap();
++    let probes = readiness_probe_count();
++    with_forced_readiness(false, || {
++        for kind in 0..4 {
++            let mut a = Node::root(current, &serial.root);
++            let mut b = a;
++            let (mut am, mut bm) = (None, None);
++            let (mut av, mut bv) = (Vec::new(), Vec::new());
++            let expected = match kind {
++                0 => serial.select_noncheck(&mut a, -10000, 10000, false, &mut am),
++                1 => serial.select_noncheck_for_search(&mut a, -10000, 10000, false, &mut am, true),
++                2 => serial.select_noncheck_stages_observed(&mut a, -10000, 10000, false, &mut am, |stage| av.push(stage)),
++                _ => serial.select_noncheck_detailed_observed(&mut a, -10000, 10000, false, &mut am, |_| {}, |_| {}),
++            };
++            let actual = match kind {
++                0 => worker.select_noncheck(&mut b, -10000, 10000, false, &mut bm),
++                1 => worker.select_noncheck_for_search(&mut b, -10000, 10000, false, &mut bm, true),
++                2 => worker.select_noncheck_stages_observed(&mut b, -10000, 10000, false, &mut bm, |stage| bv.push(stage)),
++                _ => worker.select_noncheck_detailed_observed(&mut b, -10000, 10000, false, &mut bm, |_| {}, |_| {}),
++            };
++            assert_eq!((actual, b, bm, bv, worker.stats), (expected, a, am, av, serial.stats));
++        }
++        let map = Influence { profiles: [[255; 64], [0; 64]] };
++        for fresh in [false, true] {
++            let mut a = Node::root(current, &serial.root);
++            let mut b = a;
++            let (mut ad, mut bd) = (None, None);
++            let expected = if fresh { serial.fresh_detailed_observed(&mut a, &map, false, |value| ad=Some(value)) }
++                else { serial.full_detailed_observed(&mut a, &map, false, |value| ad=Some(value)) };
++            let actual = if fresh { worker.fresh_detailed_observed(&mut b, &map, false, |value| bd=Some(value)) }
++                else { worker.full_detailed_observed(&mut b, &map, false, |value| bd=Some(value)) };
++            assert_eq!((actual,b,bd,worker.stats),(expected,a,ad,serial.stats));
++        }
++    });
++    assert_eq!(readiness_probe_count(), probes);
++}
++
++#[test]
++fn q_static_returns_discard_prepared_rows_and_checked_joined_fixture_is_producer_only() {
++    for fen in [EMPTY, PROMOTION, JOINED_EP] {
++        let current = position(fen);
++        assert!(!movegen::in_check(&current, current.side));
++        let mut serial = configured::<true>(&current, 1, false);
++        let mut worker = configured::<true>(&current, 3, true);
++        let mut a = Node::root(current, &serial.root);
++        let mut b = a;
++        let (mut am, mut bm) = (None,None);
++        let expected = serial.select_noncheck_for_search(&mut a,-10000,-9999,false,&mut am,true);
++        let mut list = sentinel();
++        let (actual,prepared) = with_forced_readiness(false, || worker.select_noncheck_q_inventory(
++            &mut b,-10000,-9999,false,&mut bm,true,true,&mut list,
++        ));
++        assert!(prepared && actual.initially_full);
++        let value=actual.evaluation;
++        assert!(crate::quiescence_policy::evaluation_return(value.lower,value.upper,value.score,-10000,-9999).is_some());
++        assert_eq!((actual,b,bm,worker.stats),(expected,a,am,serial.stats));
++        if fen==EMPTY { assert_eq!(list.len,0); }
++    }
++    // This direct conditional FULL tests producer totality/order for joined EP
++    // under double check. The actual Q caller must exclude checked positions.
++    let current=position("1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1");
++    assert!(movegen::in_check(&current,current.side));
++    let map=Influence::build(&current);
++    let mut serial=configured::<true>(&current,1,false);
++    let mut worker=configured::<true>(&current,3,true);
++    let mut a=Node::root(current,&serial.root);let mut b=a;
++    let expected=serial.full(&mut a,&map,true);
++    let mut list=sentinel();let mut prepared=false;
++    let actual=with_forced_readiness(false, || worker.full_impl_prepare::<false,true,_,_,_>(
++        &mut b,&map,true,|_|{},|_|{},true,true,|position| {
++            tactical::generate_for_search(position,&mut list,true);prepared=true;
++        },
++    ));
++    let mut expected_list=MoveList::new();
++    tactical::generate_for_search(&current,&mut expected_list,true);
++    assert!(prepared);
++    assert_eq!(list.as_slice(),expected_list.as_slice());
++    assert_eq!(list.moves[0].to_string(),"c5d6");
++    assert_eq!((actual,b,worker.stats),(expected,a,serial.stats));
++}
+diff --git a/src/quiescence/q_inventory_tests.rs b/src/quiescence/q_inventory_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/quiescence/q_inventory_tests.rs
+@@ -0,0 +1,294 @@
++//! Actual Q caller controls; all snapshots/probes are absent from production.
++use super::*;
++use crate::colors_worker::{readiness_probe_count, with_forced_readiness};
++use std::cell::RefCell;
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const PROMOTION: &str = "1r5k/P7/8/8/8/8/8/7K w - - 0 1";
++const JOINED_EP: &str = "7k/8/8/3Pr3/8/8/8/K7 w - e6 0 1";
++const MATE: &str = "7k/6Q1/5K2/8/8/8/8/8 b - - 0 1";
++
++#[derive(Clone, Debug)]
++struct Event {
++    demand: bool,
++    prepared: bool,
++    moves: Vec<Move>,
++    initially_full: bool,
++    refreshed: bool,
++    generated_before: u64,
++}
++thread_local! {
++    static TRACE: RefCell<Option<Vec<Event>>> = const { RefCell::new(None) };
++}
++
++pub(super) fn record_selection(ply: usize, prepared: bool, list: &MoveList,
++    initially_full: bool, refreshed: bool)
++{
++    if ply != 1 { return; }
++    TRACE.with(|cell| {
++        if let Some(events) = cell.borrow_mut().as_mut() {
++            events.push(Event { demand: false, prepared,
++                moves: if prepared { list.as_slice().to_vec() } else { Vec::new() },
++                initially_full, refreshed, generated_before: 0 });
++        }
++    });
++}
++
++pub(super) fn record_demand(ply: usize, prepared: bool, list: &MoveList,
++    generated_before: u64)
++{
++    if ply != 1 { return; }
++    TRACE.with(|cell| {
++        if let Some(events) = cell.borrow_mut().as_mut() {
++            events.push(Event { demand: true, prepared, moves: list.as_slice().to_vec(),
++                initially_full: false, refreshed: false, generated_before });
++        }
++    });
++}
++
++fn trace<R>(f: impl FnOnce() -> R) -> (R, Vec<Event>) {
++    struct Clear;
++    impl Drop for Clear {
++        fn drop(&mut self) { TRACE.with(|cell| { cell.borrow_mut().take(); }); }
++    }
++    TRACE.with(|cell| {
++        assert!(cell.borrow().is_none());
++        *cell.borrow_mut() = Some(Vec::new());
++    });
++    let _clear = Clear;
++    let value = f();
++    let events = TRACE.with(|cell| cell.borrow_mut().take().unwrap());
++    (value, events)
++}
++
++fn input(fen: &str, enabled: bool, budget: usize)
++    -> (Quiescence<true>, Node, SearchHistory)
++{
++    let position = Position::from_fen(fen).unwrap();
++    position.validate().unwrap();
++    let previous = position.null_child();
++    let mut search = Quiescence::<true>::new(&position);
++    search.config.tts_bytes = 65536;
++    search.evaluator.set_threads(budget).unwrap();
++    assert_eq!(search.evaluator.configured_threads(), budget);
++    search.evaluator.set_owner_local_inventory(true).unwrap();
++    search.evaluator.set_q_owner_local_inventory(enabled).unwrap();
++    search.bind_geometry_permission(&position);
++    let (node, _) = search.prepare_root_with_influence(position);
++    let mut history = SearchHistory::new(&previous);
++    history.push(&position, None);
++    (search, node, history)
++}
++
++fn entry() -> Entry {
++    Entry { ply: 1, target: 1, iteration_depth: 1, lower: -10000, upper: 10000,
++        analysis: 0, capture_exception: false }
++}
++
++fn call(search: &mut Quiescence<true>, node: &mut Node, history: &mut SearchHistory,
++    entry: Entry, limit: Option<u64>, checked: Option<bool>, replies: bool, ready: bool)
++    -> (Result<i32, Stopped>, Vec<Event>, usize)
++{
++    search.begin_owned_sequence(Limits { nodes: limit });
++    let scope = search.evaluator.full_worker_scope();
++    let before = readiness_probe_count();
++    let (value, events) = trace(|| with_forced_readiness(ready, ||
++        search.visit_q(node, history, entry, checked, replies)));
++    let probes = readiness_probe_count() - before;
++    assert_eq!(history.search_ply(), entry.ply);
++    Evaluator::<true>::finish_full_worker_scope(scope);
++    (value, events, probes)
++}
++
++fn equal_owner(a: &Quiescence<true>, b: &Quiescence<true>, na: &Node, nb: &Node) {
++    assert_eq!(na, nb);
++    assert_eq!(a.work(), b.work());
++    assert_eq!(a.stats, b.stats);
++    assert_eq!(a.evaluator.stats, b.evaluator.stats);
++    assert_eq!(a.learning.history, b.learning.history);
++    assert_eq!(a.learning.killers, b.learning.killers);
++    assert_eq!(a.learning.total, b.learning.total);
++    assert_eq!(&a.pv[1][..a.pv_len[1]], &b.pv[1][..b.pv_len[1]]);
++}
++
++fn direct(position: &Position) -> MoveList {
++    let mut list = MoveList::new();
++    tactical::generate_for_search(position, &mut list, true);
++    list
++}
++
++#[test]
++fn q_inventory_actual_sparse_refresh_and_special_rows_match_original_unsorted_demand() {
++    for (fen, sparse) in [(PROMOTION, true), (JOINED_EP, true), (START, false)] {
++        let (mut off, mut a, mut ah) = input(fen, false, 3);
++        let (mut on, mut b, mut bh) = input(fen, true, 3);
++        assert!(!movegen::in_check(&a.position, a.position.side));
++        let native = direct(&a.position);
++        let (expected, off_events, off_queries) = call(&mut off, &mut a, &mut ah,
++            entry(), Some(1), Some(false), false, false);
++        let (actual, events, queries) = call(&mut on, &mut b, &mut bh,
++            entry(), Some(1), Some(false), false, false);
++        assert_eq!(actual, expected);
++        equal_owner(&on, &off, &b, &a);
++        assert_eq!(on.candidates[1].as_slice(), off.candidates[1].as_slice());
++        assert_eq!((off_queries, queries), (0, 1));
++        assert_eq!((events.len(), off_events.len()), (2, 2));
++        assert!(!events[0].demand && events[0].prepared);
++        assert_eq!((events[0].initially_full, events[0].refreshed), (sparse, !sparse));
++        assert!(events[1].demand && events[1].prepared);
++        assert_eq!(events[0].moves, native.as_slice());
++        assert_eq!(events[1].moves, native.as_slice());
++        assert_eq!(events[1].moves, off_events[1].moves);
++        assert_eq!(events[1].generated_before, 0);
++        assert_eq!(on.stats.generated, native.len as u64);
++        if fen == PROMOTION {
++            assert!(native.as_slice().iter().all(|m| matches!(m.kind(), MoveKind::Promotion(_))));
++        } else if fen == JOINED_EP {
++            assert_eq!(native.len, 1);
++            assert_eq!(native.moves[0].kind(), MoveKind::EnPassant);
++        } else {
++            assert_eq!(native.len, 0);
++        }
++    }
++}
++
++#[test]
++fn q_inventory_static_return_discards_actual_preparation_without_generation_charge() {
++    let (mut off, mut a, mut ah) = input(PROMOTION, false, 3);
++    let (mut on, mut b, mut bh) = input(PROMOTION, true, 3);
++    let narrow = Entry { upper: -9999, ..entry() };
++    let (expected, _, _) = call(&mut off, &mut a, &mut ah, narrow, None, Some(false), false, false);
++    let (actual, events, queries) = call(&mut on, &mut b, &mut bh, narrow, None, Some(false), false, false);
++    assert!(actual.is_ok());
++    assert_eq!(actual, expected);
++    equal_owner(&on, &off, &b, &a);
++    assert_eq!((on.stats.nodes, on.stats.generated, on.stats.children), (1, 0, 0));
++    assert_eq!(queries, 1);
++    assert_eq!(events.len(), 1);
++    assert!(!events[0].demand && events[0].prepared && !events[0].moves.is_empty());
++}
++
++#[test]
++fn q_inventory_fast_only_and_lower_budgets_never_query_or_prepare() {
++    let (mut off, mut a, mut ah) = input(START, false, 3);
++    let (mut on, mut b, mut bh) = input(START, true, 3);
++    let score = off.evaluator.fast(&a, false).score;
++    let fast_only = Entry { lower: score + 250, upper: score + 251, ..entry() };
++    let (expected, _, _) = call(&mut off, &mut a, &mut ah, fast_only, Some(1), Some(false), false, false);
++    let (actual, events, queries) = call(&mut on, &mut b, &mut bh, fast_only, Some(1), Some(false), false, false);
++    assert_eq!(actual, expected);
++    equal_owner(&on, &off, &b, &a);
++    assert_eq!((queries, on.evaluator.stats.full, on.evaluator.stats.influence_builds), (0, 0, 0));
++    assert!(!events[0].initially_full && !events[0].refreshed);
++    assert!(events.iter().all(|event| !event.prepared));
++    for budget in [1, 2] {
++        let (mut search, mut node, mut history) = input(PROMOTION, true, budget);
++        let (_, events, queries) = call(&mut search, &mut node, &mut history,
++            entry(), Some(1), Some(false), false, false);
++        assert_eq!((queries, search.evaluator.stats.full), (0, 1));
++        assert!(events.iter().all(|event| !event.prepared));
++    }
++}
++
++#[test]
++fn q_inventory_checked_reused_and_terminal_ply_keep_original_exclusions() {
++    for replies in [false, true] {
++        let (mut search, mut node, mut history) = input(MATE, true, 3);
++        if replies { movegen::generate_legal(&node.position, &mut search.candidates[1]); }
++        let (value, events, queries) = call(&mut search, &mut node, &mut history,
++            entry(), Some(1), Some(true), replies, false);
++        assert_eq!(value, Ok(-9999));
++        assert_eq!((queries, search.evaluator.stats.full, search.evaluator.stats.fast), (0, 0, 0));
++        assert_eq!(search.stats.reused_reply_lists, u64::from(replies));
++        assert!(events.is_empty());
++    }
++    // Even an unchecked entry carrying reused-list admission cannot prepare.
++    let (mut search, mut node, mut history) = input(PROMOTION, true, 3);
++    let (_, events, queries) = call(&mut search, &mut node, &mut history,
++        entry(), Some(1), Some(false), true, false);
++    assert_eq!((queries, search.evaluator.stats.full), (0, 1));
++    assert!(events.iter().all(|event| !event.prepared));
++    let (mut search, mut node, _) = input(START, true, 3);
++    let mut history = SearchHistory::new(&node.position);
++    // Halfmove0 boundaries isolate terminal-ply dispatch from repetition return.
++    for _ in 0..63 { history.push(&node.position, None); }
++    let (_, events, queries) = call(&mut search, &mut node, &mut history,
++        Entry { ply: 63, target: 63, ..entry() }, Some(1), Some(false), false, false);
++    assert_eq!((queries, search.evaluator.stats.full, search.evaluator.stats.fast), (0, 0, 1));
++    assert!(events.is_empty());
++}
++
++#[derive(Default)]
++struct Stages { full: usize }
++impl Observer for Stages {
++    const ENABLED: bool = true;
++    type Parent = ();
++    type Frame = ();
++    fn parent(_: &Retained) {}
++    fn enter(&mut self, _: &Position, _: Entry, _: Option<Move>, _: (), _: Retained,
++        _: bool, _: Work) {}
++    fn stage(&mut self, stage: EvaluationStage) {
++        self.full += usize::from(stage.kind == crate::evaluator::StageKind::Full);
++    }
++    fn ordered(&mut self) {}
++    fn leave(&mut self, _: (), _: Retained, _: i32, _: &[Move], _: Work) {}
++}
++
++#[test]
++fn q_inventory_public_root_subtree_and_observed_routes_never_query_or_prepare() {
++    let (mut search, mut node, mut history) = input(PROMOTION, true, 3);
++    let before = readiness_probe_count();
++    let (value, events) = trace(|| with_forced_readiness(false, || search.search_subtree(
++        &mut node, &mut history, entry(), Limits { nodes: Some(1) })));
++    assert_eq!(value.err(), Some(Stopped::NodeLimit(1)));
++    assert_eq!(readiness_probe_count(), before);
++    assert!(events.iter().all(|event| !event.prepared));
++    let before = readiness_probe_count();
++    search.prepare_root(Position::from_fen(PROMOTION).unwrap());
++    assert_eq!(readiness_probe_count(), before);
++    let (mut search, mut node, mut history) = input(PROMOTION, true, 3);
++    search.begin_owned_sequence(Limits { nodes: Some(1) });
++    let scope = search.evaluator.full_worker_scope();
++    let before = readiness_probe_count();
++    let mut observer = Stages::default();
++    let (result, events) = trace(|| with_forced_readiness(false, || search.visit_q_impl(
++        &mut node, &mut history, entry(), Some(false), false, (), &mut observer)));
++    assert_eq!(result, Err(Stopped::NodeLimit(1)));
++    assert_eq!(observer.full, 1);
++    assert_eq!(readiness_probe_count(), before);
++    assert!(events.iter().all(|event| !event.prepared));
++    assert_eq!(history.search_ply(), 1);
++    Evaluator::<true>::finish_full_worker_scope(scope);
++}
++
++#[test]
++fn q_inventory_ready_arm_and_fresh_activation_preserve_stop_order_state_and_work() {
++    let (mut off, mut a, mut ah) = input(PROMOTION, false, 3);
++    let (mut on, mut b, mut bh) = input(PROMOTION, true, 3);
++    let (expected, _, _) = call(&mut off, &mut a, &mut ah,
++        entry(), Some(1), Some(false), false, false);
++    let (actual, events, queries) = call(&mut on, &mut b, &mut bh,
++        entry(), Some(1), Some(false), false, false);
++    assert_eq!(actual, Err(Stopped::NodeLimit(1)));
++    assert_eq!(actual, expected);
++    equal_owner(&on, &off, &b, &a);
++    assert_eq!(on.candidates[1].as_slice(), off.candidates[1].as_slice());
++    assert_eq!((queries, on.stats.nodes, on.stats.children), (1, 1, 1));
++    assert!(events[0].prepared && events[1].prepared);
++    let unsorted = direct(&b.position);
++    assert_eq!(unsorted.as_slice().iter().map(ToString::to_string).collect::<Vec<_>>(),
++        vec!["a7a8q".to_string(), "a7b8q".to_string()]);
++    assert_eq!(on.candidates[1].moves[0].to_string(), "a7b8q");
++    // Reuse the actual owner/node/history. This activation must start false;
++    // a ready hint cannot inherit the previous activation's prepared row.
++    let (expected, _, _) = call(&mut off, &mut a, &mut ah,
++        entry(), Some(1), Some(false), false, true);
++    let (actual, events, queries) = call(&mut on, &mut b, &mut bh,
++        entry(), Some(1), Some(false), false, true);
++    assert_eq!(actual, expected);
++    equal_owner(&on, &off, &b, &a);
++    assert_eq!(on.candidates[1].as_slice(), off.candidates[1].as_slice());
++    assert_eq!(queries, 1);
++    assert!(events.iter().all(|event| !event.prepared));
++    assert_eq!(events[1].moves, unsorted.as_slice());
++}
