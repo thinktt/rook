@@ -20,3 +20,5 @@ The former sampled installed-receipt control is now observer_free_receipt_and_re
 The retained8 selectors under evaluator::colors_tests are budgets_match_detailed_full_and_fresh_across_weights_and_root_rebinding; budgets_preserve_supplied_contrary_influence_and_lazy_selection; budgets_preserve_zero_group_replacement_order_and_reset; budgets_preserve_full_identity_collision_and_fresh_cache_bypass; persistent_worker_crosses_repeated_search_stop_retry_and_budget_changes; positive_total_requests_saturate_without_changing_cache_or_evaluation; search_and_session_expose_requested_and_configured_budgets; affinity_cap_queries_before_mutation_and_preserves_active_cache_on_failure.
 
 focused.json selects29 worker +8 ordinary-owner +3 scope controls,40 total. No build, test, engine/native execution or Git operation was performed during this source task.
+
+Initial native preparation found an adapted test confusing a sparse epoch with a request count. The test-only repair and failed source/input/receipt preservation are recorded in [preparation-repair.md](preparation-repair.md). Production source is unchanged; the original clock and completed worker29 receipt are retained.

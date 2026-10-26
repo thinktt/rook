@@ -836,15 +836,20 @@ diff --git a/src/evaluator/inventory_four_tests.rs b/src/evaluator/inventory_fou
 -    assert_eq!(inventory_counter(&worker.evaluator,"discarded"),1);
 @@ -138 +144,0 @@
 -    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
-@@ -156,3 +162,2 @@
+@@ -147,0 +154,2 @@
++    let before=inventory_state(&search.evaluator);
++    assert_eq!(before.inventory_request,0,"public root preparation requested inventory");
+@@ -156,3 +164,4 @@
 -    assert_eq!(inventory_counter(&search.evaluator,"requested"),1);
 -    assert_eq!(inventory_counter(&search.evaluator,"discarded"),1);
 -    assert_eq!(inventory_counter(&search.evaluator,"pendingReceipts"),0);
-+    assert_eq!(inventory_state(&search.evaluator).inventory_request,1);
++    let after=inventory_state(&search.evaluator);
++    assert_eq!(after.inventory_request,before.generation+1);
++    assert_eq!(after.request,after.inventory_request);
 +    assert_settled(&search.evaluator);
-@@ -166,0 +172 @@
+@@ -166,0 +176 @@
 +    let before=inventory_state(&worker.evaluator).inventory_request;
-@@ -172 +178 @@
+@@ -172 +182 @@
 -    assert_eq!(inventory_counter(&worker.evaluator,"requested"),0);
 +    assert_eq!(inventory_state(&worker.evaluator).inventory_request,before);
 diff --git a/src/ordinary.rs b/src/ordinary.rs

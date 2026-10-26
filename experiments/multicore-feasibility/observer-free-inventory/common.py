@@ -96,7 +96,7 @@ def baseline():
 
 
 def code_paths():
-    paths=[HERE/name for name in ['common.py','prepare.py','collect.py','reconcile.py','placement_gate.mjs']]
+    paths=[HERE/name for name in ['common.py','prepare.py','repair_prepare.py','collect.py','reconcile.py','placement_gate.mjs']]
     return sorted(set(paths+inventory.code_paths()))
 
 
@@ -351,6 +351,49 @@ def colors_report(path,budget,idle=False,preserved=False,disabled=False):
     return inventory.colors_report(path,budget,idle,preserved)
 
 
+def reused_worker_record(original,frozen,prepared):
+    """Read-only binding of completed worker29 and the preserved owner-test failure."""
+    original,frozen=Path(original),Path(frozen)
+    failed=read(original/'pipeline.json')
+    old=read(frozen/'preparation.json');saved=read(frozen/'snapshot.json')
+    assert failed==read(frozen/'pipeline.json') and old==failed['sourcePreparation']
+    assert sha(frozen/'preparation.json')==failed['preparationSha256']
+    assert not failed['complete'] and not failed['prepared'] and not failed['collected']
+    assert failed['failure']=="AssertionError(('tests-01-ordinary-inventory-owners', 101))"
+    assert not (original/'pilot').exists(), 'no completed benchmark lives may be replayed'
+    assert len(failed['stages'])==2 and [row['exit'] for row in failed['stages']]==[0,101]
+    assert sha(original/'housekeeping-prepare.json')==sha(frozen/'housekeeping-prepare.json')
+    worker=failed['stages'][0]
+    assert worker['stage']=='tests-00-lean-worker-ownership' and len(worker['passedTests'])==29
+    assert old['focused']==prepared['focused'] and prepared['focused'][0]['expectedPassed']==29
+    before,after=old['candidateSource'],prepared['candidateSource']
+    assert set(before)==set(after) and len(before)==65
+    changed=[name for name in before if before[name]!=after[name]]
+    assert changed==['src/evaluator/inventory_four_tests.rs'], changed
+    assert saved['source']==before==snapshot(frozen/'source-before')
+    assert saved['stages']==failed['stages'] and saved['failure']==failed['failure']
+    assert saved['pipelineStartMonotonicNs']==failed['pipelineStartMonotonicNs']
+    assert saved['pipelineDeadlineMonotonicNs']==failed['pipelineDeadlineMonotonicNs']==failed['pipelineStartMonotonicNs']+3600*10**9
+    assert set(saved['inputs'])==set(old['inputSha256'])
+    paths=[original/'pipeline.json',original/'housekeeping-prepare.json',frozen/'snapshot.json',frozen/'preparation.json',
+        frozen/'pipeline.json',frozen/'housekeeping-prepare.json']
+    for path,entry in saved['inputs'].items():
+        assert entry['sha256']==old['inputSha256'][path]==sha(entry['snapshot'])
+        paths.append(Path(entry['snapshot']))
+    paths += [frozen/'source-before'/name for name in before]
+    for row in failed['stages']:
+        for suffix in ['stdout','stderr']:
+            path=original/(row['stage']+'.'+suffix)
+            assert sha(path)==row[suffix+'Sha256']
+            paths.append(path)
+    return dict(original=str(original),snapshot=str(frozen),workerStage=worker,
+        sourceChanges=changed,successfulReusedControls=29,repeatedWorkerControls=0,
+        completedBenchmarkLives=0,pipelineStartMonotonicNs=failed['pipelineStartMonotonicNs'],
+        pipelineDeadlineMonotonicNs=failed['pipelineDeadlineMonotonicNs'],
+        inputSha256={str(path):sha(path) for path in sorted(set(paths))},
+        explanation='Original worker29 accepted once before a test-assumption failure; only owner test changed; original failed records and source/input copies retained; no native timing life repeated or clock reset')
+
+
 def prepared_run(path,prepared_path,prepared):
     value=read(path);directory=path.parent
     assert value['schema']=='rook2-observer-free-inventory-prepared-run-v1' and value['complete']
@@ -363,20 +406,29 @@ def prepared_run(path,prepared_path,prepared):
     assert value['evidenceReuse']==prepared['evidenceReuse']
     for file,digest in value['inputSha256'].items(): assert sha(file)==digest,file
     stages=value['stages']
+    reused=value.get('reusedWorkerRecord')
+    if reused is not None:
+        assert reused==reused_worker_record(reused['original'],reused['snapshot'],prepared)
+        assert stages[0]==reused['workerStage']
+        assert value['pipelineStartMonotonicNs']==reused['pipelineStartMonotonicNs']
+        assert value['pipelineDeadlineMonotonicNs']==reused['pipelineDeadlineMonotonicNs']
+        assert all(value['inputSha256'][path]==digest for path,digest in reused['inputSha256'].items())
     assert [row['stage'] for row in stages]==[f'tests-{i:02d}-{row["name"]}' for i,row in enumerate(prepared['focused'])]+['candidate-build','cli-affinity']
-    for row in stages:
+    for index,row in enumerate(stages):
+        stage_directory=Path(reused['original']) if reused is not None and index==0 else directory
         assert row['exit']==0
         for suffix in ['stdout','stderr']:
-            file=directory/(row['stage']+'.'+suffix)
+            file=stage_directory/(row['stage']+'.'+suffix)
             assert value['inputSha256'][str(file)]==sha(file)==row[suffix+'Sha256']
-    for row,tests in zip(stages,prepared['focused']):
-        text=(directory/(row['stage']+'.stdout')).read_text()
+    for index,(row,tests) in enumerate(zip(stages,prepared['focused'])):
+        stage_directory=Path(reused['original']) if reused is not None and index==0 else directory
+        text=(stage_directory/(row['stage']+'.stdout')).read_text()
         passed=re.findall(r'^test (\S+) \.\.\. ok$',text,re.M)
         summaries=re.findall(r'^test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;',text,re.M)
         assert passed==row['passedTests'] and len(passed)==len(set(passed))==tests['expectedPassed']
         assert summaries==[(str(len(passed)),'0','0')]
         argv=['/usr/bin/cargo','test','--offline','--locked',*tests['target'],'--target','x86_64-unknown-linux-gnu',
-            '--jobs','4','--target-dir',str(directory/'test-target'),tests['selector'],'--','--test-threads=1']
+            '--jobs','4','--target-dir',str(stage_directory/'test-target'),tests['selector'],'--','--test-threads=1']
         if tests.get('exact',False): argv.append('--exact')
         if tests.get('ignored',False): argv.append('--ignored')
         assert row['argv']==argv and row['cwd']==str(DEFAULT_CRATE)
