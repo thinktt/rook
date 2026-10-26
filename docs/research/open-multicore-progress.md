@@ -251,18 +251,33 @@ operations after field relocation; no whole-slot mutation or broad Sync was adde
 New3 records7.449741s versus old3 7.499557s, a0.664% lower sum with0.993354x CPU.
 All three medians improve, but all ranges overlap. Inline rises0.440%; subtracting
 that drift cannot isolate a layout benefit. This is tentative evidence, with no
-cache-cause claim. Select one unchanged own-PGO/full54 comparison:216 training
-lives matching the retained Q mixture, actual independent remerge, one use build,
-then270+5 comparing serial and both old/new inline1/mode3. The broader production
-comparison is a distinct decision, not a generic rerun or tuning opportunity.
-Preserve f8 until interpretation; no qualification or adoption follows automatically.
-This changes transport cost, not independent work width. Frontier batching remains
-a separate reserve.
+cache-cause claim. The separately selected [own-PGO/full54 comparison](../../experiments/multicore-feasibility/writer-regions-own-pgo/report.md)
+passes216 training lives matching the retained Q mixture, actual independent
+byte-identical remerge/use build and270+5 comparing serial and old/new inline1/
+mode3. Source and topology remain unchanged; actual production geometry passes.
 
-The latest three-thread image is `f8b829a79e43a90a0396c3baacb8f44f23476f6d9e7a9661626f5c1e8b467c62`,
-with profile `bbb858b01018cea09311ac5fe3b5fb5bc18c3b716e2f6a7bb5df83c794527ed4`;
+New3 totals59.317384s versus f8 59.909994s, a0.989% improvement with0.990131x CPU.
+There are48/54 faster cases and six losses totaling0.024323s. Worst relative loss
+is1.75% on12; largest absolute loss9.392ms on13. All54 observations beat serial
+68.279043s, with13.125% lower total wall at2.603426x whole CPU. Newinline69.115223s
+improves0.507% over f8 inline69.467164s, and remains1.225% above serial. This common
+build/profile change cannot be subtracted to isolate a layout cause. Five idle
+probes observe0 ticks/250ms; per-process peak RSS and the actual type projection
+do not measure cache traffic. Single observations establish no confidence interval.
+Retain a4ecf096/profile6cb9dcaa as the research leader, preserving all predecessors.
+
+Next is a source-only assessment of preparing score-independent late-endgame
+geometry before the FULL join. Actual score/sign choices, rounding and finishing
+publication must remain canonical. Geometry could be demanded more reliably than
+eager move generation, but expensive material shapes may be rare and both ideas
+compete for the same owner wait. No additional worker, census, implementation or
+native lane is selected. Frontier batching remains a separate reserve. Current
+transport and owner-overlap gains create no new parallel work width.
+
+The latest three-thread image is `a4ecf096d2144a79608b0ff4f3dc827bc8e5119730f2c43b29f46d1f7ffe62b5`,
+with profile `6cb9dcaab015c8b4c13f37040bb34cda9e4d7bc11b77ef8c4c99bd56987eae3b`;
 the winning mode enables ordinary and Q owner-local inventory. Predecessors
-3d914c and67d01108, with their profiles, remain preserved. These sources/artifacts
+f8b829,3d914c and67d01108, with their profiles, remain preserved. These sources/artifacts
 are isolated experiment products; canonical research source
 still preserves the practical two-thread checkpoint, and accepted main/release
 bytes are unchanged. The source proof, focused controls and exact-image replay

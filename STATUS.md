@@ -9,12 +9,14 @@ No further adoption, release or external gate has been selected.
 The [lead synthesis](docs/research/open-multicore-progress.md) connects the current
 results, architectural lessons and next decision.
 
-**Latest research performance leader:** exact `f8b829a7` with ordinary and Q
-owner-local inventory enabled and three threads. The [Q own-PGO/full54 comparison](experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
-records59.918858s versus retained3d3 60.327621s and accepted serial68.811008s:
-0.68% and12.92% lower, respectively. Whole CPU is179.768092s, or2.609x serial.
-All270 comparison lives/3120 posts pass; there are single observations per cell,
-not confidence intervals. New inline1 costs1.07% versus accepted serial. Prior
+**Latest research performance leader:** exact `a4ecf096` with ordinary and Q
+owner-local inventory enabled, three threads and writer-separated transport.
+The [writer-region own-PGO/full54 comparison](experiments/multicore-feasibility/writer-regions-own-pgo/report.md)
+records59.317384s versus retainedf8 59.909994s and accepted serial68.279043s:
+0.99% and13.13% lower, respectively. Whole CPU is177.967157s, or2.603x serial.
+All270 comparison lives/3120 posts pass;48/54 cases improve over f8 and54/54 over
+serial. Single observations per cell are not confidence intervals. New inline1
+costs1.22% versus accepted serial, while improving0.51% over f8 inline. Prior
 artifacts, canonical source and accepted release remain unchanged; no adoption.
 
 The latest [wide internal-branch trial](experiments/multicore-feasibility/wide-internal/report.md)
@@ -192,10 +194,16 @@ and48 replay lives/560 posts plus four idle probes pass first attempt. Shared is
 allocation extent remains estimated. New3 totals7.449741s versus old3 7.499557s
 (0.664% lower), with lower CPU and all three medians lower; every mode3 range
 overlaps. Inline costs0.440%. This is tentative evidence, with no cache attribution.
-Select one unchanged own-PGO/full54 lane:216 joint training, one merge/independent
-remerge/use build and270+5 comparing accepted serial plus old/new inline and
-mode3. Reuse applicable checks. No layout tuning, qualification or adoption;
-f8 remains the research leader pending the result.
+The unchanged own-PGO/full54 lane passes216 joint training, actual independent
+byte-identical remerge/use build and270+5 comparing serial plus old/new inline
+and mode3. New3 improves0.989% over f8,48/54 cases, with six losses totaling
+0.024323s; worst relative loss1.75% on12, largest absolute loss9.392ms on13.
+Newinline69.115223s improves0.507% over f8 inline69.467164s; this common change
+cannot be subtracted to isolate a layout cause. Retain a4ecf096/profile6cb9dcaa
+as research leader, preserving f8 and all predecessors. No tuning, qualification
+or adoption. Next selected work is source-only assessment of score-independent
+endgame geometry during the existing FULL wait, including its competition with
+inventory overlap; no additional native lane is selected.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
