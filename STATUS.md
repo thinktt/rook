@@ -15,11 +15,19 @@ catalog construction costs exceeded that opportunity. Neither result establishes
 a general limit on multicore designs. Their exact scopes and failures remain
 in the reports.
 
-The [source reassessment](docs/research/open-architecture-reassessment.md) led to
-one selected three-thread FULL prototype: two helpers compute side-owned Activity
-and opposite-side Shelter, while the coordinator retains pawn state and final
-composition. It has no measured result yet. Combined inventory, fresh-Influence
-pipeline fusion and frontier batching remain unselected hypotheses.
+The [three-thread color split](experiments/multicore-feasibility/colors-three/report.md)
+lost 4.58% in summed search-wall medians against its sibling two-thread mode on
+35/08/43, with all 48 replay lives passing. The coordinator usually reached the
+join before the helpers; this does not establish a coordinator saturation limit.
+One transport discriminator is now selected: keep the same side arithmetic while
+replacing serialized packet copies and result publication with an immutable epoch
+input and independently owned outputs. Ownership, scope-close and cold-wakeup
+proofs precede implementation. No new transport timing exists yet.
+
+The [next-work comparison](docs/research/after-colors-dataflow-choice.md) identifies
+whole-FULL plus ordinary inventory as the leading separate reserve; fresh-Influence
+pipeline fusion and frontier batching also remain unselected. The current trial
+tests transport at a fixed arithmetic partition, not those larger work graphs.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local
