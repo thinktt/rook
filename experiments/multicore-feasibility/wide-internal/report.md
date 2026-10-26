@@ -29,6 +29,13 @@ all requests were full-window, no retry/best change occurred. The seven future
 children total25340N/81617R. This exercises genuine coarse supply, unlike the
 prior first-large-child predictions. Overlapping parents are not summed as work.
 
+The split interval continues through the parent's **later native suffix**, beyond
+these eight children, until its guard cancels/drains/joins. It is not an isolated
+eight-child timer. The seven queued children's summed canonical intervals have
+medians30.864/74.976/75.394/72.931ms at1/2/4/8; recorded local oracle hooks at8
+add12.054ms *inside* that interval. These nested timers are not extra totals or
+an established benefit from removing audits.
+
 | Threads | Split wall median [range], ms | All-thread split CPU, ms | Raw enclosing search, ms |
 |---|---:|---:|---:|
 |1 |105.271 [104.875,105.383] |105.264 |4753.570 |
