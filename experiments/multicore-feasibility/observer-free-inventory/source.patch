@@ -1,0 +1,863 @@
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -7 +7,2 @@
+-//! The 4096-spin/512-sample policies and inherited affinity remain unchanged.
++//! The 4096-spin policy and inherited affinity remain unchanged. Research
++//! observation traffic is absent from both color and inventory paths.
+@@ -18 +18,0 @@
+-use std::fmt::Write;
+@@ -23 +22,0 @@
+-use std::time::Instant;
+@@ -31 +29,0 @@
+-const SAMPLE_STRIDE: u64 = 512;
+@@ -36 +33,0 @@
+-    sampled: bool,
+@@ -44,2 +41,3 @@
+-/// Installed activation-local work. This owns no transport lease and is neither
+-/// Copy nor Clone. Demand/discard consumes it once, even after descendant epochs.
++/// Zero-sized activation-local evidence that the used slice and length were
++/// installed. It owns no transport lease, epoch key, timer, count, or destructor.
++/// The private field restricts construction to successful settlement here.
+@@ -47,8 +45,11 @@
+-    generation: u64,
+-    moves: usize,
+-    sample: Option<InventorySample>,
+-}
+-
+-struct InventorySample {
+-    published: Instant,
+-    installed_ns: u64,
++    _installed: (),
++}
++
++#[cfg(test)]
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) struct ProtocolSnapshot {
++    pub generation: u64,
++    pub request: u64,
++    pub inventory_request: u64,
++    pub inventory_done: u64,
++    pub flight: Option<u64>,
+@@ -62 +62,0 @@
+-    published: Option<Instant>,
+@@ -70,3 +69,0 @@
+-    ready_ns: u64,
+-    kernel_ns: u64,
+-    copy_ns: u64,
+@@ -79 +75,0 @@
+-            ready_ns: 0, kernel_ns: 0, copy_ns: 0,
+@@ -88,2 +83,0 @@
+-    ready_ns: u64,
+-    generation_ns: u64,
+@@ -96 +89,0 @@
+-            ready_ns: 0, generation_ns: 0,
+@@ -115 +108 @@
+-// Each Packet reference (including sampled timing) and each producer output
++// Each Packet reference and each producer output
+@@ -158,2 +150,0 @@
+-    published: Option<Instant>,
+-    owner_ready_ns: Option<u64>,
+@@ -161 +151,0 @@
+-    colors_completed: bool,
+@@ -181,2 +170,0 @@
+-    readiness: Readiness,
+-    inventory: InventoryStats,
+@@ -191 +178,0 @@
+-    production: InventoryProduction,
+@@ -275 +262 @@
+-                input: UnsafeCell::new(Packet { generation: 0, position, influence, published: None }),
++                input: UnsafeCell::new(Packet { generation: 0, position, influence }),
+@@ -284 +270,0 @@
+-            production: InventoryProduction::new(),
+@@ -435 +420,0 @@
+-        let sampled = generation % SAMPLE_STRIDE == 0;
+@@ -442 +427 @@
+-                generation, position: *position, influence: *influence, published: None,
++                generation, position: *position, influence: *influence,
+@@ -451,12 +435,0 @@
+-        control.readiness.dispatches += 1;
+-        if sampled { control.readiness.sampled_dispatches += 1; }
+-        if inventory {
+-            control.inventory.requested += 1;
+-            if sampled { control.inventory.sampled_requested += 1; }
+-        }
+-        let published = if sampled { Some(Instant::now()) } else { None };
+-        // SAFETY: Still unpublished and exclusively coordinator-owned. Timing
+-        // is installed immediately before publication, after the packet copy.
+-        unsafe {
+-            std::ptr::addr_of_mut!((*self.shared.cells.input.get()).published).write(published);
+-        }
+@@ -465 +438 @@
+-            published, owner_ready_ns: None, inventory, colors_completed: false,
++            inventory,
+@@ -473,19 +446 @@
+-        Ok(DispatchToken { generation, sampled, inventory })
+-    }
+-
+-    pub(crate) fn owner_ready(&self, token: DispatchToken) -> Result<(), String> {
+-        if !token.sampled { return Ok(()); }
+-        let ready = Instant::now();
+-        let mut control = control_lock(&self.shared);
+-        let Flight::Published(ref mut metadata) = control.flight else {
+-            return Err("colors owner-ready has no published flight".into());
+-        };
+-        if metadata.generation != token.generation {
+-            return Err("colors owner-ready generation mismatch".into());
+-        }
+-        if metadata.owner_ready_ns.is_some() {
+-            return Err("colors owner-ready recorded twice".into());
+-        }
+-        let published = metadata.published.ok_or("colors sampled flight lacks publication time")?;
+-        metadata.owner_ready_ns = Some(elapsed_ns(published, ready));
+-        Ok(())
++        Ok(DispatchToken { generation, inventory })
+@@ -497 +451,0 @@
+-        let join_started = if generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
+@@ -503 +457 @@
+-        let mut metadata = match control.flight {
++        let metadata = match control.flight {
+@@ -528,5 +481,0 @@
+-        if metadata.published.is_some() {
+-            let join_ns = join_started.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
+-            control.readiness.record_complete(white, black, metadata.owner_ready_ns, join_ns);
+-        }
+-        metadata.colors_completed = true;
+@@ -554 +502,0 @@
+-        let numerical_complete = if token.sampled { Some(Instant::now()) } else { None };
+@@ -557 +505 @@
+-        let metadata = match control.flight {
++        match control.flight {
+@@ -559 +507 @@
+-                && metadata.inventory && !control.closing && !terminal(&self.shared) => metadata,
++                && metadata.inventory && !control.closing && !terminal(&self.shared) => (),
+@@ -567 +514,0 @@
+-        let acquired = metadata.published.map(|_| Instant::now());
+@@ -573 +520 @@
+-        let (available, moves, ready_ns, generation_ns) = {
++        let available = {
+@@ -583 +530 @@
+-            (output.available, output.list.len, output.ready_ns, output.generation_ns)
++            output.available
+@@ -585,15 +531,0 @@
+-        let installed = if available { metadata.published.map(|_| Instant::now()) } else { None };
+-        control.inventory.settled += 1;
+-        if available { control.inventory.installed += 1; }
+-        else { control.inventory.settled_unavailable += 1; }
+-        let sample = if let Some(published) = metadata.published {
+-            let full_ns = elapsed_ns(published, numerical_complete.expect("sampled FULL boundary"));
+-            let acquired_ns = elapsed_ns(published, acquired.expect("sampled acquisition"));
+-            control.inventory.record_settle(available, ready_ns, generation_ns, full_ns, acquired_ns);
+-            installed.map(|end| {
+-                let installed_ns = elapsed_ns(published, end);
+-                control.inventory.install.record(installed_ns);
+-                control.inventory.install_duration.record(installed_ns.saturating_sub(acquired_ns));
+-                InventorySample { published, installed_ns }
+-            })
+-        } else { None };
+@@ -602,28 +534 @@
+-        Ok(if available { Some(InventoryReceipt { generation: token.generation, moves, sample }) } else { None })
+-    }
+-
+-    /// Accounting only: the installed row belongs to its ordinary activation,
+-    /// so descendant FULL epochs never revoke this receipt or its prepared list.
+-    pub(crate) fn inventory_demand(&self, receipt: InventoryReceipt) {
+-        let resolved = receipt.sample.as_ref().map(|sample| duration_ns(sample.published.elapsed()));
+-        let mut control = control_lock(&self.shared);
+-        control.inventory.demanded += 1;
+-        control.inventory.demanded_moves += receipt.moves as u64;
+-        if self.generation > receipt.generation { control.inventory.interposed_demanded += 1; }
+-        if let (Some(sample), Some(ns)) = (receipt.sample, resolved) {
+-            control.inventory.sampled_demanded += 1;
+-            control.inventory.demand.record(ns);
+-            control.inventory.demand_after_install.record(ns.saturating_sub(sample.installed_ns));
+-        }
+-    }
+-
+-    pub(crate) fn inventory_discard(&self, receipt: InventoryReceipt) {
+-        let resolved = receipt.sample.as_ref().map(|sample| duration_ns(sample.published.elapsed()));
+-        let mut control = control_lock(&self.shared);
+-        control.inventory.discarded += 1;
+-        if self.generation > receipt.generation { control.inventory.interposed_discarded += 1; }
+-        if let (Some(sample), Some(ns)) = (receipt.sample, resolved) {
+-            control.inventory.sampled_discarded += 1;
+-            control.inventory.discard.record(ns);
+-            control.inventory.discard_after_install.record(ns.saturating_sub(sample.installed_ns));
+-        }
++        Ok(if available { Some(InventoryReceipt { _installed: () }) } else { None })
+@@ -637,0 +543 @@
++    /// Preserve the private harness interface without reading hot search state.
+@@ -639,9 +545 @@
+-        let control = control_lock(&self.shared);
+-        let mut report = control.readiness.json();
+-        report.pop();
+-        report.push_str(",\"inventory\":");
+-        if self.inventory_enabled() {
+-            report.push_str(&control.inventory.json(&self.shared.production, control.readiness.dispatches));
+-        } else { report.push_str("{\"enabled\":false}"); }
+-        report.push('}');
+-        report
++        "{\"enabled\":false}".into()
+@@ -687,0 +586,16 @@
++    pub(crate) fn protocol_snapshot_for_test(&self) -> ProtocolSnapshot {
++        let control = control_lock(&self.shared);
++        ProtocolSnapshot {
++            generation: self.generation,
++            request: self.shared.request.load(Ordering::Acquire),
++            inventory_request: self.shared.inventory_request.load(Ordering::Acquire),
++            inventory_done: self.shared.readers[2].done.load(Ordering::Acquire),
++            flight: match control.flight {
++                Flight::None => None,
++                Flight::Published(metadata) | Flight::Joined(metadata) | Flight::Discarding(metadata)
++                    => Some(metadata.generation),
++            },
++        }
++    }
++
++    #[cfg(test)]
+@@ -738 +651,0 @@
+-            let access_started = if side < 2 && generation % SAMPLE_STRIDE == 0 { Some(Instant::now()) } else { None };
+@@ -749 +662 @@
+-                let production = unsafe { compute_inventory(shared, generation)? };
++                unsafe { compute_inventory(shared, generation)? };
+@@ -752 +664,0 @@
+-                shared.production.record(production);
+@@ -760 +672 @@
+-            let output = unsafe { compute_input(shared, side, generation, access_started)? };
++            let output = unsafe { compute_input(shared, side, generation)? };
+@@ -762 +674 @@
+-            // including published Instant accesses, have ended before this write.
++            // including all kernel accesses, have ended before this write.
+@@ -789 +701 @@
+-    shared: &Shared, side: usize, generation: u64, access_started: Option<Instant>,
++    shared: &Shared, side: usize, generation: u64,
+@@ -796,7 +708,2 @@
+-        let kernel_started = packet.published.map(|_| Instant::now());
+-        // Existing field name/timer positions remain: this now observes input
+-        // access setup, with no packet memcpy or input mutex. Actual direct
+-        // packet cache traffic occurs inside the following kernel interval.
+-        let copy_ns = match (access_started, kernel_started) {
+-            (Some(start), Some(end)) => elapsed_ns(start, end), _ => 0,
+-        };
++        #[cfg(test)]
++        test_reader_gate(shared, &shared.tests.in_input[side], side)?;
+@@ -808,7 +715 @@
+-        #[cfg(test)]
+-        test_reader_gate(shared, &shared.tests.in_input[side], side)?;
+-        let kernel_ns = kernel_started.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
+-        // Last Packet access, sampled or otherwise. There is no output mutex;
+-        // the same ready clock sits immediately before output publication.
+-        let ready_ns = packet.published.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
+-        SideOutput { generation, activity, opposite_shelter, ready_ns, kernel_ns, copy_ns }
++        SideOutput { generation, activity, opposite_shelter }
+@@ -837,6 +737,0 @@
+-struct ProductionRecord {
+-    available: bool,
+-    moves: usize,
+-    sampled: bool,
+-}
+-
+@@ -845,2 +740,2 @@
+-unsafe fn compute_inventory(shared: &Shared, generation: u64) -> Result<ProductionRecord, String> {
+-    let result = {
++unsafe fn compute_inventory(shared: &Shared, generation: u64) -> Result<(), String> {
++    {
+@@ -848,0 +744,2 @@
++        #[cfg(test)]
++        test_reader_gate(shared, &shared.tests.in_input[2], 2)?;
+@@ -855 +751,0 @@
+-        let started = packet.published.map(|_| Instant::now());
+@@ -863,13 +759,3 @@
+-        #[cfg(test)]
+-        test_reader_gate(shared, &shared.tests.in_input[2], 2)?;
+-        output.generation_ns = started.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
+-        let sampled = packet.published.is_some();
+-        // Final Packet/timing access. Both this Packet ref and the mutable
+-        // output reference end before the caller publishes inventory done.
+-        output.ready_ns = packet.published.map(|start| duration_ns(start.elapsed())).unwrap_or(0);
+-        ProductionRecord {
+-            available: output.available, moves: output.list.len,
+-            sampled,
+-        }
+-    };
+-    Ok(result)
++        // Both Packet and mutable output references end before inventory done.
++    }
++    Ok(())
+@@ -1002,17 +888,2 @@
+-    let metadata = match control.flight {
+-        Flight::None => return,
+-        Flight::Published(metadata) | Flight::Joined(metadata) | Flight::Discarding(metadata) => metadata,
+-    };
+-    if metadata.published.is_some() && !metadata.colors_completed {
+-        if has_failure(control) { control.readiness.failed_samples += 1; }
+-        else { control.readiness.discarded_samples += 1; }
+-    }
+-    if metadata.inventory {
+-        if has_failure(control) {
+-            control.inventory.failed += 1;
+-            if metadata.published.is_some() { control.inventory.sampled_failed += 1; }
+-        } else {
+-            control.inventory.unsettled_discarded += 1;
+-            if metadata.published.is_some() { control.inventory.sampled_unsettled_discarded += 1; }
+-        }
+-    }
++    // Retirement authority is the existing caller's done/quiet ownership check;
++    // no observational counts or cell access is needed to discard metadata.
+@@ -1064,229 +934,0 @@
+-}
+-
+-fn duration_ns(duration: std::time::Duration) -> u64 {
+-    duration.as_nanos().min(u64::MAX as u128) as u64
+-}
+-
+-fn elapsed_ns(start: Instant, end: Instant) -> u64 { duration_ns(end.duration_since(start)) }
+-
+-/// Fixed-size sparse observations. Each bucket is zero for duration 0, or the
+-/// positive duration's bit length capped at 63 (1ns -> 1, 2..3ns -> 2, ...).
+-struct Metric {
+-    count: u64,
+-    sum_ns: u128,
+-    min_ns: u64,
+-    max_ns: u64,
+-    log2_ns: [u64; 64],
+-}
+-
+-impl Default for Metric {
+-    fn default() -> Self {
+-        Self { count: 0, sum_ns: 0, min_ns: 0, max_ns: 0, log2_ns: [0; 64] }
+-    }
+-}
+-
+-impl Metric {
+-    fn record(&mut self, ns: u64) {
+-        if self.count == 0 { self.min_ns = ns; } else { self.min_ns = self.min_ns.min(ns); }
+-        self.max_ns = self.max_ns.max(ns);
+-        self.count += 1;
+-        self.sum_ns += ns as u128;
+-        let bucket = if ns == 0 { 0 } else { (64 - ns.leading_zeros() as usize).min(63) };
+-        self.log2_ns[bucket] += 1;
+-    }
+-
+-    fn write_json(&self, output: &mut String) {
+-        write!(output, "{{\"count\":{},\"sum_ns\":{},\"min_ns\":{},\"max_ns\":{},\"log2_ns\":[",
+-            self.count, self.sum_ns, self.min_ns, self.max_ns).unwrap();
+-        for (index, count) in self.log2_ns.iter().enumerate() {
+-            if index != 0 { output.push(','); }
+-            write!(output, "{count}").unwrap();
+-        }
+-        output.push_str("]}");
+-    }
+-}
+-
+-#[derive(Default)]
+-struct Readiness {
+-    dispatches: u64,
+-    sampled_dispatches: u64,
+-    completed_samples: u64,
+-    discarded_samples: u64,
+-    failed_samples: u64,
+-    owner_missing_samples: u64,
+-    paired_samples: u64,
+-    owner_ready_at_or_after_both: u64,
+-    sides_after_owner: u64,
+-    white_last: u64,
+-    black_last: u64,
+-    sides_tied: u64,
+-    white_ready: Metric,
+-    black_ready: Metric,
+-    owner_ready: Metric,
+-    white_kernel: Metric,
+-    black_kernel: Metric,
+-    white_copy: Metric,
+-    black_copy: Metric,
+-    join_wait: Metric,
+-    owner_after_sides: Metric,
+-    reader_imbalance: Metric,
+-    join_elapsed: Metric,
+-}
+-
+-impl Readiness {
+-    fn record_complete(&mut self, white: SideOutput, black: SideOutput, owner: Option<u64>, join_ns: u64) {
+-        self.completed_samples += 1;
+-        self.white_ready.record(white.ready_ns);
+-        self.black_ready.record(black.ready_ns);
+-        self.white_kernel.record(white.kernel_ns);
+-        self.black_kernel.record(black.kernel_ns);
+-        self.white_copy.record(white.copy_ns);
+-        self.black_copy.record(black.copy_ns);
+-        self.reader_imbalance.record(white.ready_ns.abs_diff(black.ready_ns));
+-        self.join_elapsed.record(join_ns);
+-        if let Some(owner) = owner {
+-            self.paired_samples += 1;
+-            self.owner_ready.record(owner);
+-            let latest = white.ready_ns.max(black.ready_ns);
+-            if owner >= latest { self.owner_ready_at_or_after_both += 1; } else { self.sides_after_owner += 1; }
+-            if white.ready_ns > black.ready_ns { self.white_last += 1; }
+-            else if black.ready_ns > white.ready_ns { self.black_last += 1; }
+-            else { self.sides_tied += 1; }
+-            self.join_wait.record(latest.saturating_sub(owner));
+-            self.owner_after_sides.record(owner.saturating_sub(latest));
+-        } else { self.owner_missing_samples += 1; }
+-    }
+-
+-    fn json(&self) -> String {
+-        let mut output = String::new();
+-        write!(output, "{{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":true,\"sample_stride\":{SAMPLE_STRIDE},\"storage\":\"fixed_log2_histograms\",\"histogram_bucket_rule\":\"zero_else_bit_length_capped_63\",\"samples_capped\":0,\"dispatches\":{},\"sampled_dispatches\":{},\"completed_samples\":{},\"discarded_samples\":{},\"failed_samples\":{},\"owner_missing_samples\":{},\"paired_samples\":{},\"owner_ready_at_or_after_both\":{},\"sides_after_owner\":{},\"white_last\":{},\"black_last\":{},\"sides_tied\":{},\"metrics\":{{",
+-            self.dispatches, self.sampled_dispatches, self.completed_samples, self.discarded_samples,
+-            self.failed_samples, self.owner_missing_samples, self.paired_samples,
+-            self.owner_ready_at_or_after_both, self.sides_after_owner, self.white_last,
+-            self.black_last, self.sides_tied).unwrap();
+-        let metrics = [
+-            ("white_ready", &self.white_ready), ("black_ready", &self.black_ready),
+-            ("owner_ready", &self.owner_ready), ("white_kernel", &self.white_kernel),
+-            ("black_kernel", &self.black_kernel), ("white_copy", &self.white_copy),
+-            ("black_copy", &self.black_copy), ("join_wait", &self.join_wait),
+-            ("owner_after_sides", &self.owner_after_sides), ("reader_imbalance", &self.reader_imbalance),
+-            ("join_elapsed", &self.join_elapsed),
+-        ];
+-        for (index, (name, metric)) in metrics.iter().enumerate() {
+-            if index != 0 { output.push(','); }
+-            write!(output, "\"{name}\":").unwrap();
+-            metric.write_json(&mut output);
+-        }
+-        output.push_str("}}");
+-        output
+-    }
+-}
+-
+-/// One actual inventory producer writes these bounded observations. Atomics
+-/// permit a report snapshot; they grant no packet or output ownership.
+-struct InventoryProduction {
+-    completed: AtomicU64,
+-    generated: AtomicU64,
+-    domain_unavailable: AtomicU64,
+-    generated_moves: AtomicU64,
+-    sampled_completed: AtomicU64,
+-}
+-
+-impl InventoryProduction {
+-    fn new() -> Self {
+-        Self {
+-            completed: AtomicU64::new(0), generated: AtomicU64::new(0),
+-            domain_unavailable: AtomicU64::new(0), generated_moves: AtomicU64::new(0),
+-            sampled_completed: AtomicU64::new(0),
+-        }
+-    }
+-
+-    fn record(&self, record: ProductionRecord) {
+-        self.completed.fetch_add(1, Ordering::Relaxed);
+-        if record.available {
+-            self.generated.fetch_add(1, Ordering::Relaxed);
+-            self.generated_moves.fetch_add(record.moves as u64, Ordering::Relaxed);
+-        } else { self.domain_unavailable.fetch_add(1, Ordering::Relaxed); }
+-        if record.sampled { self.sampled_completed.fetch_add(1, Ordering::Relaxed); }
+-    }
+-}
+-
+-#[derive(Default)]
+-struct InventoryStats {
+-    requested: u64,
+-    settled: u64,
+-    installed: u64,
+-    settled_unavailable: u64,
+-    demanded: u64,
+-    demanded_moves: u64,
+-    discarded: u64,
+-    interposed_demanded: u64,
+-    interposed_discarded: u64,
+-    unsettled_discarded: u64,
+-    failed: u64,
+-    sampled_requested: u64,
+-    sampled_settled: u64,
+-    sampled_installed: u64,
+-    sampled_unavailable: u64,
+-    sampled_demanded: u64,
+-    sampled_discarded: u64,
+-    sampled_unsettled_discarded: u64,
+-    sampled_failed: u64,
+-    ready: Metric,
+-    generation: Metric,
+-    numerical_full_complete: Metric,
+-    acquire: Metric,
+-    acquire_wait: Metric,
+-    ready_after_full: Metric,
+-    full_after_ready: Metric,
+-    install: Metric,
+-    install_duration: Metric,
+-    demand: Metric,
+-    demand_after_install: Metric,
+-    discard: Metric,
+-    discard_after_install: Metric,
+-}
+-
+-impl InventoryStats {
+-    fn record_settle(&mut self, available: bool, ready: u64, generation: u64, full: u64, acquire: u64) {
+-        self.sampled_settled += 1;
+-        if available { self.sampled_installed += 1; } else { self.sampled_unavailable += 1; }
+-        self.ready.record(ready);
+-        self.generation.record(generation);
+-        self.numerical_full_complete.record(full);
+-        self.acquire.record(acquire);
+-        self.acquire_wait.record(acquire.saturating_sub(full));
+-        self.ready_after_full.record(ready.saturating_sub(full));
+-        self.full_after_ready.record(full.saturating_sub(ready));
+-    }
+-
+-    fn json(&self, production: &InventoryProduction, dispatches: u64) -> String {
+-        let mut output = String::new();
+-        let pending = self.installed-self.demanded-self.discarded;
+-        let sampled_pending = self.sampled_installed-self.sampled_demanded-self.sampled_discarded;
+-        write!(output, "{{\"schema\":\"rook2-conditional-inventory-v1\",\"enabled\":true,\"sample_stride\":{SAMPLE_STRIDE},\"sampling\":\"color_epoch_mod_512\",\"requested\":{},\"nonparticipants\":{},\"completed\":{},\"generated\":{},\"domainUnavailable\":{},\"generatedMoves\":{},\"settled\":{},\"installed\":{},\"settledUnavailable\":{},\"demanded\":{},\"discarded\":{},\"unsettledDiscarded\":{},\"failed\":{},\"pendingReceipts\":{},\"demandedMoves\":{},\"interposedDemanded\":{},\"interposedDiscarded\":{},\"sampledRequested\":{},\"sampledCompleted\":{},\"sampledSettled\":{},\"sampledInstalled\":{},\"sampledUnavailable\":{},\"sampledDemanded\":{},\"sampledDiscarded\":{},\"sampledUnsettledDiscarded\":{},\"sampledFailed\":{},\"sampledPendingReceipts\":{},\"metrics\":{{",
+-            self.requested, dispatches-self.requested, production.completed.load(Ordering::Relaxed),
+-            production.generated.load(Ordering::Relaxed), production.domain_unavailable.load(Ordering::Relaxed),
+-            production.generated_moves.load(Ordering::Relaxed), self.settled, self.installed,
+-            self.settled_unavailable, self.demanded, self.discarded, self.unsettled_discarded,
+-            self.failed, pending, self.demanded_moves, self.interposed_demanded, self.interposed_discarded,
+-            self.sampled_requested, production.sampled_completed.load(Ordering::Relaxed),
+-            self.sampled_settled, self.sampled_installed, self.sampled_unavailable, self.sampled_demanded,
+-            self.sampled_discarded, self.sampled_unsettled_discarded, self.sampled_failed, sampled_pending).unwrap();
+-        let metrics = [
+-            ("ready", &self.ready), ("generation", &self.generation),
+-            ("numerical_full_complete", &self.numerical_full_complete), ("acquire", &self.acquire),
+-            ("acquire_wait", &self.acquire_wait), ("ready_after_full", &self.ready_after_full),
+-            ("full_after_ready", &self.full_after_ready), ("install", &self.install),
+-            ("install_duration", &self.install_duration), ("demand", &self.demand),
+-            ("demand_after_install", &self.demand_after_install), ("discard", &self.discard),
+-            ("discard_after_install", &self.discard_after_install),
+-        ];
+-        for (index, (name, metric)) in metrics.iter().enumerate() {
+-            if index != 0 { output.push(','); }
+-            write!(output, "\"{name}\":").unwrap();
+-            metric.write_json(&mut output);
+-        }
+-        output.push_str("}}");
+-        output
+-    }
+@@ -1452,2 +1094 @@
+-            let token = dispatch(&mut worker, &packet);
+-            worker.owner_ready(token).unwrap();
++            dispatch(&mut worker, &packet);
+@@ -1645,53 +1286,3 @@
+-    #[test]
+-    fn colors_sparse_counts_partition_completed_discarded_and_failed_samples() {
+-        let mut worker = ColorsWorker::start().unwrap();
+-        let packet = packet();
+-        let scope = worker.start_active_scope().unwrap();
+-        for generation in 1..=SAMPLE_STRIDE {
+-            let token = dispatch(&mut worker, &packet);
+-            assert_eq!(token.sampled, generation == SAMPLE_STRIDE);
+-            worker.owner_ready(token).unwrap();
+-            assert_output(worker.complete().unwrap(), &packet);
+-        }
+-        scope.finish().unwrap();
+-        assert!(worker.is_parked());
+-        worker.generation = 2 * SAMPLE_STRIDE - 1;
+-        let scope = worker.start_active_scope().unwrap();
+-        dispatch(&mut worker, &packet);
+-        scope.finish().unwrap();
+-        assert!(worker.is_parked());
+-        worker.generation = 3 * SAMPLE_STRIDE - 1;
+-        let scope = worker.start_active_scope().unwrap();
+-        block(&worker.shared, 0);
+-        dispatch(&mut worker, &packet);
+-        entered(&worker.shared, 0);
+-        release(&worker.shared, 0, true);
+-        assert!(worker.complete().is_err());
+-        assert!(scope.finish().is_err());
+-        assert!(worker.shutdown().is_err());
+-        let control = control_lock(&worker.shared);
+-        let stats = &control.readiness;
+-        assert_eq!(stats.dispatches, SAMPLE_STRIDE + 2);
+-        assert_eq!(stats.sampled_dispatches, 3);
+-        assert_eq!(stats.completed_samples, 1);
+-        assert_eq!(stats.discarded_samples, 1);
+-        assert_eq!(stats.failed_samples, 1);
+-        assert_eq!(stats.paired_samples, 1);
+-        assert_eq!(stats.owner_missing_samples, 0);
+-        assert_eq!(stats.white_ready.log2_ns.iter().sum::<u64>(), 1);
+-        assert_eq!(stats.join_elapsed.count, 1);
+-    }
+-
+-    #[test]
+-    fn colors_histogram_zero_and_positive_bucket_boundaries() {
+-        let mut metric = Metric::default();
+-        for ns in [0, 1, 2, 3, 4, u64::MAX] { metric.record(ns); }
+-        assert_eq!(metric.count, 6);
+-        assert_eq!(metric.min_ns, 0);
+-        assert_eq!(metric.max_ns, u64::MAX);
+-        assert_eq!(metric.log2_ns[0], 1);
+-        assert_eq!(metric.log2_ns[1], 1);
+-        assert_eq!(metric.log2_ns[2], 2);
+-        assert_eq!(metric.log2_ns[3], 1);
+-        assert_eq!(metric.log2_ns[63], 1);
+-    }
++
++
++
+@@ -1736 +1327,3 @@
+-        assert_eq!(control_lock(&worker.shared).readiness.dispatches, 0);
++        let unpublished = worker.protocol_snapshot_for_test();
++        assert_eq!(unpublished.request, 0);
++        assert!(unpublished.flight.is_none());
+@@ -1774 +1367 @@
+-    fn colors_packet_borrow_including_sampled_timing_blocks_discard_and_reuse() {
++    fn colors_packet_borrow_blocks_discard_and_reuse() {
+@@ -1776,2 +1368,0 @@
+-        assert!(worker.is_parked());
+-        worker.generation = SAMPLE_STRIDE - 1;
+@@ -1782 +1372,0 @@
+-        assert!(token.sampled);
+@@ -1787 +1376,0 @@
+-        assert!(worker.owner_ready(token).is_err());
+@@ -1794 +1383,2 @@
+-        assert!(matches!(control_lock(&worker.shared).flight, Flight::Discarding(_)));
++        assert!(matches!(control_lock(&worker.shared).flight,
++            Flight::Discarding(metadata) if metadata.generation == token.generation));
+@@ -1799 +1388,0 @@
+-        assert_eq!(control_lock(&worker.shared).readiness.discarded_samples, 1);
+@@ -2032 +1621 @@
+-        worker.inventory_demand(first_receipt); // Never compare against latest for admission.
++        drop(first_receipt); // Never compare against latest for admission.
+@@ -2035 +1624 @@
+-        worker.inventory_discard(second_receipt);
++        drop(second_receipt);
+@@ -2038,8 +1627 @@
+-        let control = control_lock(&worker.shared);
+-        assert_eq!(control.inventory.requested, 2);
+-        assert_eq!(control.inventory.installed, 2);
+-        assert_eq!(control.inventory.demanded, 1);
+-        assert_eq!(control.inventory.discarded, 1);
+-        assert_eq!(control.inventory.interposed_demanded, 1);
+-        assert_eq!(control.inventory.interposed_discarded, 1);
+-        assert_eq!(worker.shared.production.completed.load(Ordering::Relaxed), 2);
++        no_flight(&worker.shared);
+@@ -2070 +1652 @@
+-            worker.inventory_demand(receipt);
++            drop(receipt);
+@@ -2074 +1655,0 @@
+-        assert_eq!(control_lock(&worker.shared).inventory.demanded, 5);
+@@ -2103 +1684 @@
+-        worker.inventory_demand(receipt);
++        drop(receipt);
+@@ -2113,2 +1694,2 @@
+-        assert_eq!(worker.shared.production.domain_unavailable.load(Ordering::Relaxed), 1);
+-        assert_eq!(control_lock(&worker.shared).inventory.settled_unavailable, 1);
++        assert_eq!(worker.shared.readers[2].done.load(Ordering::Acquire), token.generation);
++        no_flight(&worker.shared);
+@@ -2147 +1728 @@
+-        worker.inventory_demand(receipt);
++        drop(receipt);
+@@ -2153 +1734 @@
+-    fn inventory_published_and_joined_close_wait_all_helpers_without_double_color_sample() {
++    fn inventory_published_and_joined_close_wait_all_helpers_before_reuse() {
+@@ -2156,2 +1736,0 @@
+-            assert!(worker.is_parked());
+-            worker.generation = SAMPLE_STRIDE-1;
+@@ -2161 +1740 @@
+-            inventory_dispatch(&mut worker, &packet);
++            let token = inventory_dispatch(&mut worker, &packet);
+@@ -2163 +1742,6 @@
+-            if joined { worker.complete().unwrap(); }
++            if joined {
++                worker.complete().unwrap();
++                assert!(matches!(control_lock(&worker.shared).flight, Flight::Joined(_)));
++            } else {
++                assert!(matches!(control_lock(&worker.shared).flight, Flight::Published(_)));
++            }
+@@ -2169 +1753 @@
+-                Flight::Discarding(metadata) if metadata.colors_completed == joined));
++                Flight::Discarding(metadata) if metadata.inventory && metadata.generation == token.generation));
+@@ -2174,8 +1758 @@
+-            {
+-                let control = control_lock(&worker.shared);
+-                assert_eq!(control.readiness.sampled_dispatches, 1);
+-                assert_eq!(control.readiness.completed_samples, u64::from(joined));
+-                assert_eq!(control.readiness.discarded_samples, u64::from(!joined));
+-                assert_eq!(control.inventory.sampled_unsettled_discarded, 1);
+-                assert_eq!(control.inventory.installed, 0);
+-            }
++            no_flight(&worker.shared);
+@@ -2187 +1764 @@
+-            worker.inventory_discard(receipt);
++            drop(receipt);
+@@ -2211 +1787,0 @@
+-        assert_eq!(control_lock(&worker.shared).inventory.failed, 1);
+@@ -2236 +1812 @@
+-        worker.inventory_discard(receipt);
++        drop(receipt);
+@@ -2275,2 +1851,2 @@
+-        worker.inventory_demand(receipt);
+-        worker.inventory_discard(next_receipt);
++        drop(receipt);
++        drop(next_receipt);
+@@ -2300 +1876 @@
+-        worker.inventory_discard(receipt);
++        drop(receipt);
+@@ -2313 +1889,3 @@
+-    fn inventory_sampled_installed_receipts_pair_full_ready_install_and_late_demand() {
++    fn observer_free_receipt_and_report_need_no_accounting_lock() {
++        assert_eq!(std::mem::size_of::<InventoryReceipt>(), 0);
++        assert!(!std::mem::needs_drop::<InventoryReceipt>());
+@@ -2315,2 +1892,0 @@
+-        assert!(worker.is_parked());
+-        worker.generation = SAMPLE_STRIDE-1;
+@@ -2320 +1895,0 @@
+-        worker.owner_ready(token).unwrap();
+@@ -2323,0 +1899 @@
++        let installed = worker.protocol_snapshot_for_test();
+@@ -2328 +1904,11 @@
+-        worker.inventory_demand(receipt);
++        let later = worker.protocol_snapshot_for_test();
++        assert!(later.generation > installed.generation);
++        assert_eq!(later.inventory_request, installed.inventory_request);
++        assert!(later.flight.is_none());
++        // This would deadlock if receipt disposal or disabled reporting took
++        // the old accounting Control lock. Neither touches transport state.
++        let control = control_lock(&worker.shared);
++        drop(receipt);
++        assert_eq!(worker.readiness_report(), "{\"enabled\":false}");
++        drop(control);
++        inventory_expected(&row, &packet.position);
+@@ -2331,17 +1917,10 @@
+-        let control = control_lock(&worker.shared);
+-        let inventory = &control.inventory;
+-        assert_eq!(inventory.sampled_requested, 1);
+-        assert_eq!(inventory.sampled_settled, 1);
+-        assert_eq!(inventory.sampled_installed, 1);
+-        assert_eq!(inventory.sampled_demanded, 1);
+-        assert_eq!(inventory.interposed_demanded, 1);
+-        assert_eq!(inventory.ready.count, 1);
+-        assert_eq!(inventory.numerical_full_complete.count, 1);
+-        assert_eq!(inventory.install.count, 1);
+-        assert_eq!(inventory.demand_after_install.count, 1);
+-        assert_eq!(inventory.ready_after_full.sum_ns as i128-inventory.full_after_ready.sum_ns as i128,
+-            inventory.ready.sum_ns as i128-inventory.numerical_full_complete.sum_ns as i128);
+-        assert_eq!(control.readiness.completed_samples, 1);
+-    }
+-
+-}
++        let mut colors = ColorsWorker::start().unwrap();
++        let scope = colors.start_active_scope().unwrap();
++        dispatch(&mut colors, &packet);
++        assert_output(colors.complete().unwrap(), &packet);
++        assert_eq!(colors.readiness_report(), "{\"enabled\":false}");
++        scope.finish().unwrap();
++        colors.shutdown().unwrap();
++    }
++
++}
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -510 +510 @@
+-            Ok("{\"schema\":\"rook2-colors-readiness-v1\",\"enabled\":false,\"inventory\":{\"enabled\":false}}".into())
++            Ok("{\"enabled\":false}".into())
+@@ -632,14 +631,0 @@
+-    pub(crate) fn inventory_demand(&self, receipt: Option<crate::colors_worker::InventoryReceipt>) {
+-        if let Some(receipt) = receipt {
+-            self.colors_worker.as_ref().expect("inventory receipt lacks its owner")
+-                .inventory_demand(receipt);
+-        }
+-    }
+-
+-    pub(crate) fn inventory_discard(&self, receipt: Option<crate::colors_worker::InventoryReceipt>) {
+-        if let Some(receipt) = receipt {
+-            self.colors_worker.as_ref().expect("inventory receipt lacks its owner")
+-                .inventory_discard(receipt);
+-        }
+-    }
+-
+@@ -741,2 +726,0 @@
+-            worker.owner_ready(colors_token.unwrap())
+-                .unwrap_or_else(|error|panic!("colors owner-ready failed: {error}"));
+diff --git a/src/evaluator/inventory_four_tests.rs b/src/evaluator/inventory_four_tests.rs
+--- a/src/evaluator/inventory_four_tests.rs
++++ b/src/evaluator/inventory_four_tests.rs
+@@ -8,5 +8,8 @@
+-fn inventory_counter<const D: bool>(evaluator: &Evaluator<D>, key: &str) -> u64 {
+-    let report=evaluator.colors_worker.as_ref().unwrap().readiness_report();
+-    let inventory=report.split("\"inventory\":").nth(1).unwrap();
+-    let rest=inventory.split(&format!("\"{key}\":")).nth(1).unwrap();
+-    rest.chars().take_while(|c|c.is_ascii_digit()).collect::<String>().parse().unwrap()
++fn inventory_state<const D: bool>(evaluator: &Evaluator<D>) -> crate::colors_worker::ProtocolSnapshot {
++    evaluator.colors_worker.as_ref().unwrap().protocol_snapshot_for_test()
++}
++
++fn assert_settled<const D: bool>(evaluator: &Evaluator<D>) {
++    let state=inventory_state(evaluator);
++    assert!(state.flight.is_none());
++    assert_eq!(state.inventory_request,state.inventory_done);
+@@ -43 +46 @@
+-        assert!(actual.1.is_some());worker.inventory_demand(actual.1);
++        assert!(actual.1.is_some());drop(actual.1);
+@@ -47,3 +50,2 @@
+-    assert_eq!(inventory_counter(&worker,"requested"),5);
+-    assert_eq!(inventory_counter(&worker,"demanded"),5);
+-    assert_eq!(inventory_counter(&worker,"pendingReceipts"),0);
++    assert_eq!(inventory_state(&worker).inventory_request,5);
++    assert_settled(&worker);
+@@ -58,0 +61 @@
++    let installed=inventory_state(&worker);assert_settled(&worker);
+@@ -60 +63,4 @@
+-    assert_eq!(row.as_slice(),expected);worker.inventory_demand(receipt);
++    let later=inventory_state(&worker);
++    assert_eq!(later.generation,installed.generation+33);
++    assert_eq!(later.inventory_request,installed.inventory_request);
++    assert_eq!(row.as_slice(),expected);drop(receipt);
+@@ -62,3 +67,0 @@
+-    assert_eq!(inventory_counter(&worker,"requested"),1);
+-    assert_eq!(inventory_counter(&worker,"interposedDemanded"),1);
+-    assert_eq!(inventory_counter(&worker,"pendingReceipts"),0);
+@@ -81,0 +85 @@
++    let epoch_before=inventory.then(||inventory_state(&search.evaluator).generation);
+@@ -85,0 +90,9 @@
++    if let Some(before)=epoch_before {
++        let after=inventory_state(&search.evaluator);
++        assert!(after.inventory_request>before,"ordinary owner did not publish inventory");
++        assert_eq!(after.request,after.generation);
++        assert_settled(&search.evaluator);
++        if node_limit>1 {
++            assert!(after.generation>before+1,"null/descendant FULL did not interpose after the parent epoch");
++        }
++    }
+@@ -105,2 +118 @@
+-    assert!(inventory_counter(&worker.evaluator,"interposedDemanded")>0);
+-    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
++    assert_settled(&worker.evaluator);
+@@ -118,4 +130 @@
+-    assert_eq!(inventory_counter(&worker.evaluator,"demanded"),0);
+-    assert!(inventory_counter(&worker.evaluator,"discarded")>0);
+-    assert!(inventory_counter(&worker.evaluator,"interposedDiscarded")>0);
+-    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
++    assert_settled(&worker.evaluator);
+@@ -131,2 +139,0 @@
+-    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
+-    assert_eq!(inventory_counter(&worker.evaluator,"discarded"),1);
+@@ -138 +144,0 @@
+-    assert_eq!(inventory_counter(&worker.evaluator,"pendingReceipts"),0);
+@@ -156,3 +162,2 @@
+-    assert_eq!(inventory_counter(&search.evaluator,"requested"),1);
+-    assert_eq!(inventory_counter(&search.evaluator,"discarded"),1);
+-    assert_eq!(inventory_counter(&search.evaluator,"pendingReceipts"),0);
++    assert_eq!(inventory_state(&search.evaluator).inventory_request,1);
++    assert_settled(&search.evaluator);
+@@ -166,0 +172 @@
++    let before=inventory_state(&worker.evaluator).inventory_request;
+@@ -172 +178 @@
+-    assert_eq!(inventory_counter(&worker.evaluator,"requested"),0);
++    assert_eq!(inventory_state(&worker.evaluator).inventory_request,before);
+diff --git a/src/ordinary.rs b/src/ordinary.rs
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -823 +822,0 @@
+-            self.evaluator.inventory_discard(inventory_receipt.take());
+@@ -862 +860,0 @@
+-                        self.evaluator.inventory_discard(inventory_receipt.take());
+@@ -871 +868,0 @@
+-                self.evaluator.inventory_discard(inventory_receipt.take());
+@@ -879,3 +876 @@
+-        if inventory_receipt.is_some() {
+-            self.evaluator.inventory_demand(inventory_receipt.take());
+-        } else {
++        if inventory_receipt.take().is_none() {
