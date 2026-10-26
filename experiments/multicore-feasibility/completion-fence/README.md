@@ -1,21 +1,13 @@
-# Two-fence completion notification
+# Two-fence completion: parked
 
-One selected generic discriminator; no result yet.
-[Plan](plan.md), [ownership proof](ownership-proof.md),
-[independent challenge](independent-challenge.md), [source patch](source.patch).
+New3 summed search-wall medians 7.470674s vs preserved 7.490874s (−0.2697%).
+New inline1 improves 0.3729%, exceeding the mode3 change; all mode3 ranges overlap.
+No notification-specific benefit established; preserve f8/bbb research leader.
 
-The publisher-only variant is unsound. This candidate includes both the publisher
-SC fence and an explicit cold-waiter SC fence after every registration.
+25 worker controls, 14 CLI/two fallbacks, one lowering check and 48 replay/560 posts
+plus four idle probes pass first attempt. The selected protocol includes BOTH
+SC fences; publisher-only is unsound. No tuning, PGO or adoption; native work stopped.
 
-Source: `/home/legolas/rook2-experiments/workspaces/completion-fence-20261026-01`.
-Raw output: `/home/legolas/rook2-experiments/completion-fence-20261026-01`.
-
-Run the existing supervised stages once, after the quiet-window announcement:
-
-```sh
-taskset -c 0-3,8-13 python3 experiments/multicore-feasibility/completion-fence/native.py prepare
-taskset -c 0-3,8-13 python3 experiments/multicore-feasibility/completion-fence/native.py collect
-```
-
-Both stages use the same persisted deadline. The launcher restores selected
-user-owned housekeeping affinities; it changes no host/global settings.
+[Report](report.md), [ranges](case-ranges.csv), [results](results.json),
+[closure](closure.json), [proof](ownership-proof.md), [plan](plan.md).
+Raw artifacts: `/home/legolas/rook2-experiments/completion-fence-20261026-01`.

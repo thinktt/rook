@@ -175,12 +175,20 @@ improves0.88% versus matching Q-off60.450227s (46/54 cases),0.68% versus retaine
 is+0.20%; new inline1 is69.548826s (+1.07%). Retain exactf8/profilebbb858 as the
 latest research artifact; broader qualification and adoption remain unselected.
 
-Next selected is one completion-notification discriminator with both required
-SC fences, replacing publisher latch RMWs with fence/load/conditional notification.
-The publisher-only version is unsound; the independent proof requires an explicit
-cold-side fence after every registration. Preserve layout/math/ownership and both
-owner-local hooks; compare preserved/new generic inline1/mode3 in one fixed48+4
-lane after affected controls. No result, tuning or PGO is claimed yet.
+The [completion-notification trial](experiments/multicore-feasibility/completion-fence/README.md)
+passes25 worker controls,14 CLI/two fallback checks, lowering admission and48
+replay lives/560 posts plus four idle probes, first attempt. With both required
+SC fences, new3 totals7.470674s versus preserved3 7.490874s (0.27% lower), while
+new inline1 improves0.37% over preserved inline1. This does not distinguish a
+notification benefit from common build drift. Park unchanged; f8 remains leader.
+Production declarations match, but attributable compiled sizes/alignment were
+unavailable; the result makes no cache attribution or identical-layout claim.
+
+Next is a source-only review of a concrete transport layout organized by writer
+ownership, using retained Q source68 and its original completion protocol.
+Separate publication, helper outputs/completion and cold control where justified,
+while pricing footprint and polling costs. No implementation, padding sweep,
+new native lane or PGO is selected by this review.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

@@ -216,17 +216,29 @@ costs1.07% over accepted serial; Q-off drift is0.20%.43 supplies9.63% of matchin
 net gain, so the full54 gain is broader than the generic three-case screen.
 Retain f8/profilebbb858 as latest research leader, with3d/67d/serial preserved.
 
-Next select one fixed completion-notification trial. An independent bounded Astra
-review found a portable lost-wake execution for publisher fence+load alone.
-Adding an explicit SC fence after every cold registration yields the required
-ordering proof: each missed publication must either be visible to the recheck
-or lead to a Sleep-coordinated notification. Publishers stop clearing the latch;
-the sole coordinator retains registration/clear ownership. Real done/Control/
-reader retirement and output reverse edges stay unchanged. Compare preserved/new
-generic inline1/mode3, both owner hooks on, in one48+4 lane after affected controls.
-No layout, arithmetic, spin/sampling, weaker ordering or PGO change is selected.
-Less shared latch ownership traffic is a hypothesis, not a measured cache cause.
-Frontier batching and writer-region layout remain separate reserves.
+The [completion-notification trial](../../experiments/multicore-feasibility/completion-fence/README.md)
+is now measured. An independent bounded Astra review found a portable lost-wake
+execution for publisher fence+load alone. An explicit SC fence after every cold
+registration supplies the missing ordering condition. The tested change retains
+actual done, Control, reader retirement and output reverse edges; publishers
+stop clearing the latch and the sole coordinator owns registration/clear.
+
+All25 worker controls,14 CLI/two fallback checks, lowering admission and48 replay
+lives/560 posts plus four idle probes pass first attempt. New3 totals7.470674s
+against preserved3 7.490874s, a0.27% improvement; matching inline1 improves0.37%.
+Case35 loses0.17%,08 gains1.18% and43 gains0.67%. This does not establish a net
+notification advantage. The actual publisher lowers from xchg to mfence/load and
+the cold registration has its required fence; production declarations are exact,
+but compiled type sizes/alignment were unavailable. Park unchanged without PGO,
+weaker ordering or causal cache claims. Retain the proof as a useful result.
+
+Next review one source-only writer-ownership layout for the retained Q transport
+with its original successful protocol. The earlier fixed-layout counterfactual
+established representation sensitivity, not the cause or benefit of separating
+actual writers. Choose a concrete grouping before data and price added lines,
+padding, polling and transfer; do not assume that more alignment is better.
+No implementation or native lane is selected yet. This may reduce transport cost
+but creates no new independent work. Frontier batching remains a separate reserve.
 
 The latest three-thread image is `f8b829a79e43a90a0396c3baacb8f44f23476f6d9e7a9661626f5c1e8b467c62`,
 with profile `bbb858b01018cea09311ac5fe3b5fb5bc18c3b716e2f6a7bb5df83c794527ed4`;
