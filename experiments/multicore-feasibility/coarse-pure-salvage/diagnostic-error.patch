@@ -1,0 +1,30 @@
+--- a/src/coarse_pure_salvage.rs
++++ b/src/coarse_pure_salvage.rs
+@@ -100,7 +100,10 @@
+     }
+ }
+ fn peak_rss()->usize {std::fs::read_to_string("/proc/self/status").ok().and_then(|s|s.lines().find(|l|l.starts_with("VmHWM:")).and_then(|l|l.split_whitespace().nth(1)).and_then(|v|v.parse().ok())).unwrap_or(0)}
+-fn root_error(context:&Context,error:String)->String {format!("{error}; dispatcher={:?}",context.0.borrow().error)}
++fn root_error(context:&Context,error:String)->String {
++    let state=context.0.borrow();let observer=state.observer.as_ref().and_then(pure::Context::fatal);
++    format!("{error}; dispatcher={:?}; observer={observer:?}",state.error)
++}
+ pub fn run(position:Position,history:SearchHistory,parameters:Parameters,config:Config,fixture:Fixture)->Result<Report,String> {
+     if history.search_ply()!=0{return Err("coarse census requires root history boundary".into());}
+     let context=Context::new(fixture.clone(),Pass::Demand,None);let mut first=Search::<true>::new(&position);first.config=config;first.evaluator.parameters=parameters.clone();first.coarse_pure=Some(context.clone());first.wide_capture=Some(crate::wide_capture::Context::counter());let mut first_history=history.clone();
+@@ -144,4 +147,15 @@
+         let mut actual=Search::<true>::new(&position);actual.config=config;actual.evaluator.begin_search(&position);actual.evaluator.research_attach_pure_observer(Some(observer.clone())).unwrap();let mut b=SearchHistory::new(&position);
+         let returned=internal_split::native_root(&mut actual,position,&mut b,8).unwrap();actual.evaluator.research_attach_pure_observer(None).unwrap();assert_eq!(returned,expected);assert!(actual.research_eq(&reference));assert_eq!(a,b);assert_eq!(a.search_ply(),0);assert!(!observer.finish_prefix().unwrap().failed());
+     }
++    #[test]
++    fn dispatcher_root_error_surfaces_observer_cap_or_key_failure() {
++        for (caps,reason) in [(Caps{max_calls:0,..PRODUCER_CAPS},"pure-observer-call-cap"),(Caps{max_keys:0,..PRODUCER_CAPS},"pure-observer-key-cap")] {
++            let position=Position::from_fen(START).unwrap();let mut search=Search::<true>::new(&position);let observer=pure::Context::producer(search.evaluator.research_pure_epoch(),caps,0).unwrap();
++            search.evaluator.research_attach_pure_observer(Some(observer.clone())).unwrap();let mut scratch=None;search.evaluator.ensure_influence(&position,&mut scratch);assert_eq!(observer.fatal(),Some(reason));
++            let stop=search.charge_node(&SearchHistory::new(&position)).unwrap_err();assert_eq!(stop,Stopped::WorkPoll);
++            let context=Context::new(frozen("diagnostic-only"),Pass::Demand,None);context.0.borrow_mut().observer=Some(observer);
++            let message=root_error(&context,format!("native root stopped: {stop:?}"));assert!(message.contains("dispatcher=None"));assert!(message.contains(&format!("observer=Some(\"{reason}\")")));
++        }
++    }
++
+ }
