@@ -177,7 +177,7 @@ def native_receipt(path, image, budget, options, hashes):
     if budget == 3:
         names = observed['task_names']
         helpers = sorted((int(tid), name) for tid, name in names.items() if tid != str(native['native_pid']))
-        assert [name for _, name in helpers] == ['rook2-eval-white', 'rook2-eval-black']
+        assert [name for _, name in helpers] == ['rook2-eval-whit', 'rook2-eval-blac']
         assert [observed['task_affinities'][str(tid)] for tid, _ in helpers] == [[6], [4]]
     assert native['wall_ns'] == native['reaped_monotonic_ns']-native['start_monotonic_ns'] > 0
     assert native['total_cpu_s'] == native['user_cpu_s']+native['system_cpu_s'] > 0

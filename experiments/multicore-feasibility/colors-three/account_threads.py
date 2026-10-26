@@ -118,7 +118,7 @@ def run():
                 tasks=tasks, task_affinities=affinities,
                 task_names={tid: Path(f'/proc/{pid}/task/{tid}/comm').read_text().strip() for tid in tasks})
             if args.thread_budget == 3:
-                assert [observed['task_names'][tid] for tid in helper_tasks] == ['rook2-eval-white', 'rook2-eval-black']
+                assert [observed['task_names'][tid] for tid in helper_tasks] == ['rook2-eval-whit', 'rook2-eval-blac']
             assert observed['path'] == str(engine) and observed['pgid'] == os.getpgrp()
             break
         if not observed:
