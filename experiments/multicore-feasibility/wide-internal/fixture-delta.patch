@@ -1,0 +1,874 @@
+--- a/src/bin/rook2-internal-split.rs
++++ b/src/bin/rook2-internal-split.rs
+@@ -1,5 +1,5 @@
+ //! Isolated fixed-completion hierarchical recovery pilot; not a wire engine.
+-use rook2::{internal_split, engine::Config,
++use rook2::{internal_split,wide_capture, engine::Config,
+     evaluator::Parameters, history::SearchHistory,
+     movegen::{self,MoveList}, position::Position};
+ 
+@@ -7,24 +7,31 @@
+     let mut args=std::env::args().skip(1);
+     let mut input=None;
+     let mut threads=1usize;
+-    let mut max_depth=6u8;
++    let mut max_depth=8u8;
++    let mut capture=false;let mut fixture_path=None;
+     while let Some(key)=args.next() {
++        if key=="--capture" {if capture{return Err("duplicate capture mode".into());}capture=true;continue;}
+         let value=args.next().ok_or("missing option value")?;
+         match key.as_str() {
+             "--input"=>input=Some(value),
++            "--fixture"=>fixture_path=Some(value),
+             "--threads"=>threads=value.parse().map_err(|_|"bad total thread budget")?,
+             "--max-depth"=>max_depth=value.parse().map_err(|_|"bad root maximum depth")?,
+             _=>return Err(format!("unknown option {key}")),
+         }
+     }
++    if capture==fixture_path.is_some(){return Err("choose exactly one of --capture and --fixture".into());}
++    if max_depth!=8{return Err("wide internal research requires --max-depth8".into());}
++    if capture&&threads!=1{return Err("capture requires --threads1".into());}
++    let fixture=fixture_path.map(|path|std::fs::read_to_string(path).map_err(|e|e.to_string()).and_then(|text|internal_split::Fixture::parse(&text))).transpose()?;
+     let text=std::fs::read_to_string(input.ok_or("--input required")?).map_err(|e|e.to_string())?;
+-    let mut fen=None;let mut moves=None;let mut own=None;let mut opponent=None;
++    let mut case=None;let mut fen=None;let mut moves=None;let mut own=None;let mut opponent=None;
+     let mut evaluation=None;let mut search=None;let mut randomness=None;
+     for line in text.lines() {
+         if line.is_empty() || line.starts_with('#') {continue;}
+         let (key,value)=line.split_once('=').ok_or("bad input assignment")?;
+         match key {
+-            "case"=>{},
++            "case"=>case=Some(value.to_string()),
+             "fen"=>fen=Some(value.to_string()),
+             "moves"=>moves=Some(value.to_string()),
+             "own"=>own=Some(value.to_string()),
+@@ -60,9 +67,9 @@
+         history.push(&position,Some(movement));
+     }
+     history.mark_root();
+-    let report=internal_split::run_with_max_depth(position,history,parameters,config,threads,max_depth)?;
+-    println!("{}",report.json());
+-    if report.failed() {return Err("semantic acceptance disagrees with canonical execution".into());}
++    if capture {let report=wide_capture::run(position,history,parameters,config)?;println!("{}",report.json());if report.failed(){return Err("wide capture failed its finite controls".into());}}
++    else {let fixture=fixture.unwrap();if case.as_deref()!=Some(fixture.case()){return Err("fixture case differs from input case".into());}
++        let report=internal_split::run_fixture(position,history,parameters,config,threads,fixture)?;println!("{}",report.json());if report.failed(){return Err("semantic acceptance disagrees with canonical execution".into());}}
+     Ok(())
+ }
+ 
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -32,6 +32,8 @@
+ }
+ 
+ pub struct Search<const DIAGNOSTICS: bool = true, H: Host = NoHost> {
++    #[cfg(feature = "internal-split")]
++    pub(crate) wide_capture: Option<crate::wide_capture::Context>,
+     #[cfg(feature = "internal-split")]
+     pub(crate) internal_split: Option<crate::internal_split::Context>,
+     #[cfg(feature = "internal-split")]
+@@ -94,7 +96,7 @@
+ #[cfg(feature = "internal-split")]
+ impl Search<true> {
+     pub(crate) fn research_from_snapshot(snapshot:&SearchSnapshot)->Self {
+-        Self {internal_split:None,internal_worker:None,hierarchical:None,
++        Self {wide_capture:None,internal_split:None,internal_worker:None,hierarchical:None,
+             evaluator:Evaluator::research_from_snapshot(snapshot.evaluator.clone()),config:snapshot.config,
+             candidates:snapshot.candidates.clone(),extension_flags:snapshot.extension_flags.clone(),ordering:OrderingScratch::new(),
+             learning:Learning::research_from_snapshot(snapshot.learning.clone()),
+@@ -109,6 +111,8 @@
+     pub(crate) fn research_clone(&self) -> Self {
+         assert!(self.timing.is_none() && self.limits.nodes.is_none() && self.control.is_none());
+         Self {
++            #[cfg(feature = "internal-split")]
++            wide_capture: None,
+             #[cfg(feature = "internal-split")]
+             internal_split: None,
+             #[cfg(feature = "internal-split")]
+@@ -179,6 +183,8 @@
+     pub fn new(root: &Position) -> Self {
+         Self {
+             #[cfg(feature = "internal-split")]
++            wide_capture: None,
++            #[cfg(feature = "internal-split")]
+             internal_split: None,
+             #[cfg(feature = "internal-split")]
+             internal_worker: None,
+@@ -217,6 +223,8 @@
+     /// Transfer reusable storage; changing a host neither clones nor allocates search buffers.
+     pub fn map_host<N: Host>(self, host: N) -> (Search<DIAGNOSTICS, N>, H) {
+         let Self {
++            #[cfg(feature = "internal-split")]
++            wide_capture,
+             #[cfg(feature = "internal-split")]
+             internal_split,
+             #[cfg(feature = "internal-split")]
+@@ -242,6 +250,8 @@
+         } = self;
+         (
+             Search {
++                #[cfg(feature = "internal-split")]
++                wide_capture,
+                 #[cfg(feature = "internal-split")]
+                 internal_split,
+                 #[cfg(feature = "internal-split")]
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -352,6 +352,19 @@
+             child_preparation: None,
+             stats: self.stats,
+         }
++    }
++
++    /// Explicit immutable/native values for the bounded external fixture aid.
++    /// Debug formatting names fields and values; no padding or worker ownership
++    /// enters this descriptor and no TT groups are inspected here.
++    #[cfg(feature = "internal-split")]
++    pub(crate) fn research_boundary_binding(&self) -> String {
++        let root = &self.root;
++        format!("root={:?}/{:?}/{:?}/{:?}/{:?}/{:?};parameters={:?};draw={};variation={};weights={:?}/{:?}/{:?}/{:?}/{:?};pawns={:?};stats={:?}",
++            root.side, root.phase, root.counts, root.values, root.squares, root.average_depth,
++            self.parameters, self.draw_preference, self.variation_range,
++            self.weights.structure, self.weights.progress, self.weights.central,
++            self.weights.mobility, self.weights.shelter, self.pawns.research_snapshot(), self.stats)
+     }
+ 
+     #[cfg(feature = "branch-transactions")]
+--- a/src/internal_split.rs
++++ b/src/internal_split.rs
+@@ -1,4 +1,4 @@
+-//! One prospectively selected native internal parent, with seven fixed forecasts.
++//! One externally frozen native internal benchmark parent, with seven fixed forecasts.
+ //! The whole-root oracle runs before the executor interval. Worker Search/Sink
+ //! owners are constructed in their destination thread from explicit owned DTOs.
+ use std::{cell::RefCell,collections::VecDeque,fmt::Write,rc::Rc,sync::{Arc,Mutex,mpsc,atomic::{AtomicBool,Ordering}},thread,time::{Duration,Instant}};
+@@ -12,7 +12,7 @@
+ 
+ #[repr(C)] struct Timespec {sec:i64,nsec:i64}
+ unsafe extern "C" {fn clock_gettime(clock:i32,time:*mut Timespec)->i32;fn sched_getcpu()->i32;fn sched_getaffinity(pid:i32,len:usize,mask:*mut usize)->i32;fn sched_setaffinity(pid:i32,len:usize,mask:*const usize)->i32;}
+-fn process_cpu()->u128 {let mut time=Timespec{sec:0,nsec:0};assert_eq!(unsafe{clock_gettime(2,&mut time)},0,"process CPU clock unavailable");time.sec as u128*1_000_000_000+time.nsec as u128}
++pub(crate) fn process_cpu()->u128 {let mut time=Timespec{sec:0,nsec:0};assert_eq!(unsafe{clock_gettime(2,&mut time)},0,"process CPU clock unavailable");time.sec as u128*1_000_000_000+time.nsec as u128}
+ fn cpu()->i32 {unsafe{sched_getcpu()}}
+ fn bind_cpu(target:usize)->bool {let mut mask=[0usize;16];mask[target/64]|=1usize<<(target%64);let set=unsafe{sched_setaffinity(0,std::mem::size_of_val(&mask),mask.as_ptr())==0};let mut actual=[0usize;16];let get=unsafe{sched_getaffinity(0,std::mem::size_of_val(&actual),actual.as_mut_ptr())==0};set&&get&&actual==mask&&cpu()==target as i32}
+ 
+@@ -24,10 +24,45 @@
+     }
+ }
+ 
++/// Frozen benchmark identity only. Future child work, answers and effects are
++/// deliberately absent; runtime reuse is still authorized only by native replay.
+ #[derive(Clone,Debug,PartialEq,Eq)]
+-struct Selector {ply:usize,depth:i32,iteration:i32,lower:i32,upper:i32,best:i32,remaining:usize,child0_nodes:u64,entry_nodes:u64,primary:u32,secondary:u32,input_fingerprint:u64,movements:[Move;7],forecasts:[Request;7]}
++pub struct Fixture {case:String,horizon:u8,parent_ordinal:u64,binding:String}
++impl Fixture {
++    pub fn parse(text:&str)->Result<Self,String> {
++        if text.len()>4*1024*1024{return Err("fixture descriptor exceeds4MiB".into());}
++        let mut fields=std::collections::BTreeMap::new();
++        for line in text.lines().filter(|line|!line.is_empty()) {
++            let (key,value)=line.split_once('=').ok_or("invalid fixture assignment")?;
++            if !["schema","case","horizon","parent_ordinal","binding_hex"].contains(&key){return Err(format!("unknown fixture field {key}"));}
++            if fields.insert(key,value).is_some(){return Err(format!("duplicate fixture field {key}"));}
++        }
++        if fields.len()!=5{return Err("fixture requires exactly five fields".into());}
++        if fields["schema"]!="rook2-wide-fixture-v1"{return Err("unsupported fixture schema".into());}
++        if fields["horizon"]!="8"{return Err("wide fixture requires horizon8".into());}
++        let case=fields["case"];
++        if case.is_empty()||case.len()>64||!case.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-'||b==b'_'){return Err("invalid fixture case".into());}
++        let parent_ordinal=fields["parent_ordinal"].parse::<u64>().map_err(|_|"invalid fixture ordinal")?;
++        if parent_ordinal==0{return Err("fixture ordinal must be positive".into());}
++        let binding=decode_hex(fields["binding_hex"])?;
++        if binding.is_empty(){return Err("fixture binding must be nonempty".into());}
++        Ok(Self{case:case.into(),horizon:8,parent_ordinal,binding})
++    }
++    pub fn case(&self)->&str {&self.case}
++    fn json(&self)->String {format!("{{\"schema\":\"rook2-wide-fixture-v1\",\"case\":\"{}\",\"horizon\":{},\"parent_ordinal\":{},\"binding_hex\":\"{}\"}}",self.case,self.horizon,self.parent_ordinal,encode_hex(self.binding.as_bytes()))}
++}
++fn encode_hex(bytes:&[u8])->String {const HEX:&[u8;16]=b"0123456789abcdef";let mut text=String::with_capacity(bytes.len()*2);for &byte in bytes {text.push(HEX[(byte>>4) as usize] as char);text.push(HEX[(byte&15) as usize] as char);}text}
++fn decode_hex(text:&str)->Result<String,String> {
++    if text.len()%2!=0{return Err("fixture binding hex has odd length".into());}
++    fn digit(b:u8)->Result<u8,String>{match b {b'0'..=b'9'=>Ok(b-b'0'),b'a'..=b'f'=>Ok(b-b'a'+10),_=>Err("fixture binding requires lowercase hex".into())}}
++    let bytes=text.as_bytes().chunks_exact(2).map(|pair|Ok(digit(pair[0])?*16+digit(pair[1])?)).collect::<Result<Vec<u8>,String>>()?;
++    String::from_utf8(bytes).map_err(|_|"fixture binding is not UTF8".into())
++}
++
++#[derive(Clone,Debug,PartialEq,Eq)]
++struct Selector {parent_ordinal:u64,ply:usize,depth:i32,iteration:i32,lower:i32,upper:i32,best:i32,remaining:usize,child0_nodes:u64,entry_nodes:u64,primary:u32,secondary:u32,input_fingerprint:u64,movements:[Move;7],forecasts:[Request;7]}
+ impl Selector {
+-    fn json(&self)->String {format!("{{\"ply\":{},\"depth\":{},\"iteration\":{},\"window\":[{},{}],\"best\":{},\"remaining\":{},\"child0_nodes\":{},\"entry_nodes\":{},\"primary\":{},\"secondary\":{},\"input_fingerprint\":\"{:016x}\",\"task_ids\":{:?},\"movements\":[{}],\"forecast_windows\":{:?}}}",self.ply,self.depth,self.iteration,self.lower,self.upper,self.best,self.remaining,self.child0_nodes,self.entry_nodes,self.primary,self.secondary,self.input_fingerprint,self.movements.map(|m|m.0),self.movements.iter().map(|m|format!("\"{m}\"")).collect::<Vec<_>>().join(","),self.forecasts.map(|r|[r.lower,r.upper]))}
++    fn json(&self)->String {format!("{{\"parent_ordinal\":{},\"ply\":{},\"depth\":{},\"iteration\":{},\"window\":[{},{}],\"best\":{},\"remaining\":{},\"child0_nodes\":{},\"entry_nodes\":{},\"primary\":{},\"secondary\":{},\"input_fingerprint\":\"{:016x}\",\"task_ids\":{:?},\"movements\":[{}],\"forecast_windows\":{:?}}}",self.parent_ordinal,self.ply,self.depth,self.iteration,self.lower,self.upper,self.best,self.remaining,self.child0_nodes,self.entry_nodes,self.primary,self.secondary,self.input_fingerprint,self.movements.map(|m|m.0),self.movements.iter().map(|m|format!("\"{m}\"")).collect::<Vec<_>>().join(","),self.forecasts.map(|r|[r.lower,r.upper]))}
+ }
+ /// Cumulative diagnostic counts at the existing post-child0/tail-IIO hook.
+ /// These values never participate in selecting or constructing a task.
+@@ -49,9 +84,19 @@
+ fn funnel_json(funnel:&[Funnel;8],max_depth:u8)->String {funnel[..max_depth as usize].iter().enumerate().map(|(i,row)|row.json(i+1)).collect::<Vec<_>>().join(",")}
+ struct Audit {selector:Option<Selector>,forests:[Option<Forest>;7]}
+ #[derive(Clone)] pub(crate) struct Context(Rc<RefCell<State>>);
+-struct State {oracle:bool,threads:usize,selected:bool,selector:Option<Selector>,audit:Audit,batch:Option<Batch>,tasks:Vec<TaskReport>,split_wall:u128,split_cpu:u128,setup_ns:u128,snapshot_ns:u128,wait_ns:u128,join_ns:u128,tt_base_copy_bytes:usize,tt_base_bytes:usize,snapshot_bytes:usize,batch_estimated_bytes:usize,peak_forest_bytes:usize,fatal:Option<&'static str>,coordinator_cpu:i32,queue_cancelled:usize,worker_panics:usize,worker_placements:Vec<Placement>,oracle_summaries:[ForestSummary;7],funnel:[Funnel;8]}
++struct State {oracle:bool,threads:usize,selected:bool,selector:Option<Selector>,audit:Audit,batch:Option<Batch>,tasks:Vec<TaskReport>,split_wall:u128,split_cpu:u128,setup_ns:u128,snapshot_ns:u128,wait_ns:u128,join_ns:u128,tt_base_copy_bytes:usize,tt_base_bytes:usize,snapshot_bytes:usize,batch_estimated_bytes:usize,peak_forest_bytes:usize,fatal:Option<&'static str>,coordinator_cpu:i32,queue_cancelled:usize,worker_panics:usize,worker_placements:Vec<Placement>,oracle_summaries:[ForestSummary;7],funnel:[Funnel;8],fixture:Option<Fixture>,binding_tt_digest:Option<u64>,reference_tt_digest:Option<u64>,binding_wall_ns:u128,binding_process_cpu_ns:u128}
+ impl Context {
+-    fn new(oracle:bool,threads:usize,audit:Audit)->Self {let oracle_summaries=std::array::from_fn(|id|audit.forests[id].as_ref().map_or_else(ForestSummary::default,Forest::summary));Self(Rc::new(RefCell::new(State{oracle,threads,selected:false,selector:None,audit,batch:None,tasks:Vec::new(),split_wall:0,split_cpu:0,setup_ns:0,snapshot_ns:0,wait_ns:0,join_ns:0,tt_base_copy_bytes:0,tt_base_bytes:0,snapshot_bytes:0,batch_estimated_bytes:0,peak_forest_bytes:0,fatal:None,coordinator_cpu:cpu(),queue_cancelled:0,worker_panics:0,worker_placements:Vec::new(),oracle_summaries,funnel:[Funnel::default();8]})))}
++    fn new(oracle:bool,threads:usize,audit:Audit)->Self {let oracle_summaries=std::array::from_fn(|id|audit.forests[id].as_ref().map_or_else(ForestSummary::default,Forest::summary));Self(Rc::new(RefCell::new(State{oracle,threads,selected:false,selector:None,audit,batch:None,tasks:Vec::new(),split_wall:0,split_cpu:0,setup_ns:0,snapshot_ns:0,wait_ns:0,join_ns:0,tt_base_copy_bytes:0,tt_base_bytes:0,snapshot_bytes:0,batch_estimated_bytes:0,peak_forest_bytes:0,fatal:None,coordinator_cpu:cpu(),queue_cancelled:0,worker_panics:0,worker_placements:Vec::new(),oracle_summaries,funnel:[Funnel::default();8],fixture:None,binding_tt_digest:None,reference_tt_digest:None,binding_wall_ns:0,binding_process_cpu_ns:0})))}
++    fn for_fixture(oracle:bool,threads:usize,audit:Audit,fixture:Fixture,reference_tt_digest:Option<u64>)->Self {
++        let context=Self::new(oracle,threads,audit);{let mut state=context.0.borrow_mut();state.fixture=Some(fixture);state.reference_tt_digest=reference_tt_digest;}context
++    }
++    fn bind(&self,actual:&str,tt_digest:u64)->Result<(),Stopped> {
++        let mut state=self.0.borrow_mut();state.binding_tt_digest=Some(tt_digest);
++        let reason=if state.fixture.as_ref().is_none_or(|fixture|fixture.binding!=actual){Some("fixture-known-input-mismatch")}
++            else if !state.oracle&&state.reference_tt_digest.is_none(){Some("fixture-tt-reference-missing")}
++            else if state.reference_tt_digest.is_some_and(|reference|reference!=tt_digest){Some("fixture-tt-binding-mismatch")}else{None};
++        if let Some(reason)=reason {state.fatal=Some(reason);Err(Stopped::HierarchicalAudit)}else{Ok(())}
++    }
+     fn audit_funnel(&self,oracle:&Self)->bool {
+         let agrees=self.0.borrow().funnel==oracle.0.borrow().funnel;
+         if !agrees {self.0.borrow_mut().fatal.get_or_insert("selector-funnel-oracle-mismatch");}
+@@ -119,20 +164,30 @@
+ }
+ fn fingerprint(bytes:&[u8],mut digest:u64)->u64 {for &byte in bytes {digest^=byte as u64;digest=digest.wrapping_mul(1099511628211);}digest}
+ 
+-pub(crate) fn select<const A:bool,const D:bool,H:Host>(search:&mut Search<D,H>,node:&Node,history:&SearchHistory,request:Request,current:Predecessor<'_>,best:i32,index:usize,child0_nodes:u64,extensions:&Extensions)->Result<Option<Parent>,Stopped> {
++pub(crate) fn select<const A:bool,const D:bool,H:Host>(search:&mut Search<D,H>,node:&Node,history:&SearchHistory,request:Request,current:Predecessor<'_>,best:i32,index:usize,child0_nodes:u64,extensions:&Extensions,parent_ordinal:u64,previous:Predecessor<'_>)->Result<Option<Parent>,Stopped> {
+     let Some(context)=search.internal_split.clone() else{return Ok(None)};
+     if context.0.borrow().selected||index!=1{return Ok(None);}
+-    context.0.borrow_mut().observe_selector(request,search.candidates[request.ply].len-index,child0_nodes,best);
+-    // Preserve the prospective selector; observation above cannot select work.
+-    if request.lower<=-10000||request.upper>=10000||request.lower>=request.upper||request.depth<3||search.candidates[request.ply].len-index<8||child0_nodes<2048||best>request.lower{return Ok(None);}
++    if context.0.borrow().fixture.as_ref().map(|fixture|fixture.parent_ordinal)!=Some(parent_ordinal){return Ok(None);}
++    if request.lower<=-10000||request.upper>=10000||request.lower>=request.upper||request.depth<3||search.candidates[request.ply].len-index<8 {
++        context.0.borrow_mut().fatal=Some("fixture-boundary-ineligible");return Err(Stopped::HierarchicalAudit);
++    }
+     assert!(D&&!H::ACTIVE&&search.timing.is_none()&&search.limits.nodes.is_none()&&search.control.is_none());
++    // Diagnostic binding is outside split wall/process CPU and before workers.
++    // The frozen known inputs plus deterministic prefix identify the invocation;
++    // this same-run TT digest is an audit aid, never reuse authorization.
++    let binding_started=Instant::now();let binding_cpu=process_cpu();
++    let binding=crate::wide_capture::boundary_binding::<A,D,H>(search,node,history,request,previous,current,best,index,extensions,parent_ordinal);
++    let tt_digest=search.remembered.as_ref().unwrap().research_digest();let bound=context.bind(&binding.descriptor,tt_digest);
++    let digest=fingerprint(binding.descriptor.as_bytes(),tt_digest);
++    {let mut state=context.0.borrow_mut();state.binding_wall_ns=binding_started.elapsed().as_nanos();state.binding_process_cpu_ns=process_cpu()-binding_cpu;}
++    bound?;
++    // The ordinal identifies this one boundary only. Drop its diagnostic owner
++    // before the split interval so native fallback and reused work pay equally.
++    search.wide_capture=None;
+     let started=Instant::now();let cpu_started=process_cpu();let p=request.ply;
+     let movements=std::array::from_fn(|id|search.candidates[p].moves[index+1+id]);
+     let forecasts=std::array::from_fn(|id|{let movement=movements[id];let fresh=extensions.for_move(&node.position,movement);Request{ply:p+1,depth:request.depth-1+fresh as i32,previous_extension:search.extension_flags[p][index+1+id]|fresh,lower:-request.upper,upper:-best.max(request.lower),checked:None,..request}});
+-    let mut digest=search.remembered.as_ref().unwrap().research_digest();
+-    // This diagnostic fingerprint uses explicit owned/native values, never padding.
+-    digest=fingerprint(format!("{:?}{:?}{:?}{:?}{:?}{:?}{:?}",node,history,request,search.stats,search.learning.research_snapshot(),search.evaluator.research_pawns().research_snapshot(),search.evaluator.parameters).as_bytes(),digest);
+-    let selector=Selector{ply:p,depth:request.depth,iteration:request.iteration,lower:request.lower,upper:request.upper,best,remaining:search.candidates[p].len-index,child0_nodes,entry_nodes:search.stats.nodes,primary:node.position.primary,secondary:node.position.secondary,input_fingerprint:digest,movements,forecasts};
++    let selector=Selector{parent_ordinal,ply:p,depth:request.depth,iteration:request.iteration,lower:request.lower,upper:request.upper,best,remaining:search.candidates[p].len-index,child0_nodes,entry_nodes:search.stats.nodes,primary:node.position.primary,secondary:node.position.secondary,input_fingerprint:digest,movements,forecasts};
+     let mut state=context.0.borrow_mut();state.selected=true;state.selector=Some(selector.clone());
+     if !state.oracle&&state.audit.selector.as_ref()!=Some(&selector){state.fatal=Some("split-selector-oracle-mismatch");return Err(Stopped::HierarchicalAudit);}
+     if !state.oracle&&state.threads>1 {
+@@ -197,8 +252,12 @@
+ fn optional(value:Option<&str>)->String {value.map_or("null".into(),|v|format!("\"{v}\""))}
+ 
+ #[derive(Debug,PartialEq,Eq)] struct RootPass {depth:u8,attempt:Attempt,score:i32,child:Node,pv:Vec<Move>,work:Work}
+-#[derive(Debug,PartialEq,Eq)] struct RootOutput {passes:Vec<RootPass>,ranked:Vec<Row>,best:i32,completed_depth:u8}
+-fn native_root(search:&mut Search<true>,position:Position,history:&mut SearchHistory,max_depth:u8)->Result<RootOutput,String> {
++#[derive(Debug,PartialEq,Eq)] pub(crate) struct RootOutput {passes:Vec<RootPass>,ranked:Vec<Row>,best:i32,completed_depth:u8}
++impl RootOutput {
++    pub(crate) fn completed_depth(&self)->u8 {self.completed_depth}
++    pub(crate) fn pass_count(&self)->usize {self.passes.len()}
++}
++pub(crate) fn native_root(search:&mut Search<true>,position:Position,history:&mut SearchHistory,max_depth:u8)->Result<RootOutput,String> {
+     search.ensure_table()?;search.bind_geometry_permission(&position);let (root,map)=search.prepare_root_with_influence(position);let checked=movegen::in_check(&position,position.side);
+     let mut moves=MoveList::new();movegen::generate_legal(&position,&mut moves);if moves.len<2{return Err("internal split requires at least two legal root moves".into());}
+     search.begin_owned_sequence(Limits::default());let mut rows=moves.as_slice().iter().enumerate().map(|(id,_)|Row{id:id as u16,score:0,work:0}).collect();let mut previous=0;let mut passes=Vec::new();
+@@ -214,15 +273,17 @@
+     Ok(RootOutput{passes,ranked:rows,best:previous,completed_depth:max_depth})
+ }
+ 
+-pub struct Report {threads:usize,horizon:u8,oracle_funnel:[Funnel;8],context:Context,search_wall_ns:u128,search_cpu_ns:u128,oracle_wall_ns:u128,oracle_cpu_ns:u128,compare_ns:u128,oracle_match:bool,completed_depth:u8,canonical_nodes:u64,canonical_relations:u64,oracle_nodes:u64,oracle_relations:u64,root_passes:usize,startup_ns:u128,peak_rss_kib:usize,error:Option<String>}
++pub struct Report {threads:usize,horizon:u8,oracle_funnel:[Funnel;8],oracle_binding_wall_ns:u128,oracle_binding_process_cpu_ns:u128,oracle_binding_tt_digest:Option<u64>,context:Context,search_wall_ns:u128,search_cpu_ns:u128,oracle_wall_ns:u128,oracle_cpu_ns:u128,compare_ns:u128,oracle_match:bool,completed_depth:u8,canonical_nodes:u64,canonical_relations:u64,oracle_nodes:u64,oracle_relations:u64,root_passes:usize,startup_ns:u128,peak_rss_kib:usize,error:Option<String>}
+ impl Report {
+     pub fn failed(&self)->bool {!self.oracle_match||self.context.0.borrow().fatal.is_some()||self.error.is_some()}
+     pub fn json(&self)->String {let state=self.context.0.borrow();let tasks=state.tasks.iter().map(TaskReport::json).collect::<Vec<_>>().join(",");let committed=state.tasks.iter().map(|t|t.recovery.committed_nodes).sum::<u64>();let speculative=state.tasks.iter().map(|t|t.speculative_nodes).sum::<u64>();let relations=state.tasks.iter().map(|t|t.recovery.committed_relations).sum::<u64>();let trace=state.tasks.iter().map(|t|t.forest.bytes).sum::<usize>();
+-        let mut out=format!("{{\"schema\":\"rook2-internal-split-v1\",\"processId\":{},\"threads\":{},\"worker_count\":{},\"worker_cpu_plan\":{:?},\"coordinator_cpu\":{},\"caps\":{{\"max_depth\":{},\"task_nodes\":262144,\"log_events\":524288,\"segments\":131072,\"forest_bytes\":{},\"batch_estimated_bytes\":{},\"process_bytes\":8589934592,\"lifetime_seconds\":180}},\"fixed_completion\":true,\"no_host\":true,\"zero_randomness\":true,\"complete_order_certificate\":true,\"selector_miss\":{},\"selector\":{},\"oracle_match\":{},\"unsafe_validation\":{},\"fatal_reason\":{},\"error\":{},\"completed_depth\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"oracle_nodes\":{},\"oracle_relations\":{},\"root_passes\":{},\"speculative_nodes\":{},\"committed_nodes\":{},\"committed_relations\":{},\"wasted_nodes\":{},\"queue_cancelled\":{},\"worker_panics\":{},\"tt_base_copy_bytes\":{},\"tt_base_bytes\":{},\"snapshot_bytes\":{},\"batch_estimated_bytes\":{},\"forest_bytes_total\":{},\"peak_forest_bytes\":{},\"peak_rss_kib\":{},\"timings\":{{\"search_wall_ns\":{},\"search_process_cpu_ns\":{},\"split_wall_ns\":{},\"split_process_cpu_ns\":{},\"setup_ns\":{},\"snapshot_ns\":{},\"wait_ns\":{},\"join_ns\":{},\"oracle_wall_ns\":{},\"oracle_process_cpu_ns\":{},\"oracle_compare_ns\":{},\"startup_ns\":{}}},\"tasks\":[{}]",std::process::id(),self.threads,self.threads-1,&WORKER_CPUS[..self.threads-1],state.coordinator_cpu,self.horizon,FOREST_BYTES,BATCH_BYTES,!state.selected,state.selector.as_ref().map_or("null".into(),Selector::json),self.oracle_match,self.failed(),optional(state.fatal),self.error.as_ref().map_or("null".into(),|v|format!("\"{}\"",v.replace('"',"'"))),self.completed_depth,self.canonical_nodes,self.canonical_relations,self.oracle_nodes,self.oracle_relations,self.root_passes,speculative,committed,relations,speculative.saturating_sub(committed),state.queue_cancelled,state.worker_panics,state.tt_base_copy_bytes,state.tt_base_bytes,state.snapshot_bytes,state.batch_estimated_bytes,trace,state.peak_forest_bytes,self.peak_rss_kib,self.search_wall_ns,self.search_cpu_ns,state.split_wall,state.split_cpu,state.setup_ns,state.snapshot_ns,state.wait_ns,state.join_ns,self.oracle_wall_ns,self.oracle_cpu_ns,self.compare_ns,self.startup_ns,tasks);
++        let schema=if state.fixture.is_some(){"rook2-wide-internal-v1"}else{"rook2-internal-split-v1"};
++        let mut out=format!("{{\"schema\":\"{}\",\"processId\":{},\"threads\":{},\"worker_count\":{},\"worker_cpu_plan\":{:?},\"coordinator_cpu\":{},\"caps\":{{\"max_depth\":{},\"task_nodes\":262144,\"log_events\":524288,\"segments\":131072,\"forest_bytes\":{},\"batch_estimated_bytes\":{},\"process_bytes\":8589934592,\"lifetime_seconds\":180}},\"fixed_completion\":true,\"no_host\":true,\"zero_randomness\":true,\"complete_order_certificate\":true,\"selector_miss\":{},\"selector\":{},\"oracle_match\":{},\"unsafe_validation\":{},\"fatal_reason\":{},\"error\":{},\"completed_depth\":{},\"canonical_nodes\":{},\"canonical_relations\":{},\"oracle_nodes\":{},\"oracle_relations\":{},\"root_passes\":{},\"speculative_nodes\":{},\"committed_nodes\":{},\"committed_relations\":{},\"wasted_nodes\":{},\"queue_cancelled\":{},\"worker_panics\":{},\"tt_base_copy_bytes\":{},\"tt_base_bytes\":{},\"snapshot_bytes\":{},\"batch_estimated_bytes\":{},\"forest_bytes_total\":{},\"peak_forest_bytes\":{},\"peak_rss_kib\":{},\"timings\":{{\"search_wall_ns\":{},\"search_process_cpu_ns\":{},\"split_wall_ns\":{},\"split_process_cpu_ns\":{},\"setup_ns\":{},\"snapshot_ns\":{},\"wait_ns\":{},\"join_ns\":{},\"oracle_wall_ns\":{},\"oracle_process_cpu_ns\":{},\"oracle_compare_ns\":{},\"startup_ns\":{},\"binding_wall_ns\":{},\"binding_process_cpu_ns\":{},\"oracle_binding_wall_ns\":{},\"oracle_binding_process_cpu_ns\":{}}},\"tasks\":[{}]",schema,std::process::id(),self.threads,self.threads-1,&WORKER_CPUS[..self.threads-1],state.coordinator_cpu,self.horizon,FOREST_BYTES,BATCH_BYTES,!state.selected,state.selector.as_ref().map_or("null".into(),Selector::json),self.oracle_match,self.failed(),optional(state.fatal),self.error.as_ref().map_or("null".into(),|v|format!("\"{}\"",v.replace('"',"'"))),self.completed_depth,self.canonical_nodes,self.canonical_relations,self.oracle_nodes,self.oracle_relations,self.root_passes,speculative,committed,relations,speculative.saturating_sub(committed),state.queue_cancelled,state.worker_panics,state.tt_base_copy_bytes,state.tt_base_bytes,state.snapshot_bytes,state.batch_estimated_bytes,trace,state.peak_forest_bytes,self.peak_rss_kib,self.search_wall_ns,self.search_cpu_ns,state.split_wall,state.split_cpu,state.setup_ns,state.snapshot_ns,state.wait_ns,state.join_ns,self.oracle_wall_ns,self.oracle_cpu_ns,self.compare_ns,self.startup_ns,state.binding_wall_ns,state.binding_process_cpu_ns,self.oracle_binding_wall_ns,self.oracle_binding_process_cpu_ns,tasks);
+         let placements=state.worker_placements.iter().map(|p|format!("{{\"worker\":{},\"target_cpu\":{},\"actual_cpu\":{},\"singleton_affinity_ok\":{},\"startup_ns\":{},\"exit_ns\":{}}}",p.worker,p.target,p.actual,p.ok,p.startup_ns,p.exit_ns)).collect::<Vec<_>>().join(",");
+         write!(out,",\"worker_placements\":[{}],\"oracle_forest_bytes\":{}",placements,state.oracle_summaries.iter().map(|s|s.bytes).sum::<usize>()).unwrap();
+         write!(out,",\"horizon\":{},\"selector_funnel\":[{}],\"oracle_selector_funnel\":[{}]",self.horizon,funnel_json(&state.funnel,self.horizon),funnel_json(&self.oracle_funnel,self.horizon)).unwrap();
+-        out.push_str(",\"scope\":\"Selector funnel rows count cumulative post-child0/tail-IIO hook opportunities at index1 before the first global hit, including that hit; max_child0_nodes_other_conditions ignores the N threshold but requires all other predicates. Funnel counters do not affect selection. Single prospective post-child0/tail-IIO parent; coordinator next child and seven unchanged-best forecasts. Same fixed task inventory across budgets; budget1 has no speculative execution. All-thread process CPU includes worker setup, recording, validation, demand waits, cancellation and joins; oracle prepass and final compare lie outside executor intervals. In-interval local oracle lookup/output audit costs are reported by recovery and remain charged; concurrent process CPU is never corrected by subtracting wall hook time. Reuse ranges are disjoint within each private task forest; forests correspond to distinct parent children. Native fallback credit is canonical N/R minus committed N/R. Accepted oracle gross and descendant hook nanoseconds are observational native-cost proxies, not CPU saved. Complete-order, exact-window, exact-history, exact-pawn and native TT predicates apply. The independent audit checks local outputs/work and whole-root final shared state; transient incorrect shared writes later overwritten can escape that independent audit. peak_forest_bytes is a conservative sum bound over produced forests, not a sampled simultaneous allocation peak. Process peak RSS includes oracle retained state; housekeeping may share guest SMT siblings. No FULL helper or nested batch.\"}");out
++        write!(out,",\"mode\":\"{}\",\"fixture\":{},\"fixture_bound\":{},\"binding_tt_digest\":{},\"oracle_binding_tt_digest\":{}",if state.fixture.is_some(){"frozen-fixture"}else{"canonical-audit"},state.fixture.as_ref().map_or("null".into(),Fixture::json),state.selected,state.binding_tt_digest.map_or("null".into(),|v|format!("\"{v:016x}\"")),self.oracle_binding_tt_digest.map_or("null".into(),|v|format!("\"{v:016x}\""))).unwrap();
++        out.push_str(",\"scope\":\"A frozen external benchmark descriptor identifies one naturally reached non-Q ordinary-entry ordinal and exact known post-child0/tail-IIO inputs. Favorable future work chooses that descriptor only offline; no expected output, effect or work authorizes runtime reuse. The deterministic canonical prefix and exact known-input bytes bind the external fixture; the whole-TT fingerprint is only a same-run oracle/executor audit aid, not an externally frozen full-TT identity or semantic certificate. Diagnostic binding wall and process CPU precede split setup and workers; raw enclosing search still includes binding. Legacy prospective-selector funnel rows are inactive in this lane. Single frozen post-child0/tail-IIO parent; coordinator next child and seven unchanged-best forecasts. Same fixed task inventory across budgets; budget1 has no speculative execution. All-thread process CPU includes worker setup, recording, validation, demand waits, cancellation and joins; oracle prepass and final compare lie outside executor intervals. In-interval local oracle lookup/output audit costs are reported by recovery and remain charged; concurrent process CPU is never corrected by subtracting wall hook time. Reuse ranges are disjoint within each private task forest; forests correspond to distinct parent children. Native fallback credit is canonical N/R minus committed N/R. Accepted oracle gross and descendant hook nanoseconds are observational native-cost proxies, not CPU saved. Complete-order, exact-window, exact-history, exact-pawn and native TT predicates apply. The independent audit checks local outputs/work and whole-root final shared state; transient incorrect shared writes later overwritten can escape that independent audit. peak_forest_bytes is a conservative sum bound over produced forests, not a sampled simultaneous allocation peak. Process peak RSS includes oracle retained state; housekeeping may share guest SMT siblings. No FULL helper or nested batch.\"}");out
+     }
+ }
+ fn peak_rss()->usize {std::fs::read_to_string("/proc/self/status").ok().and_then(|s|s.lines().find(|l|l.starts_with("VmHWM:")).and_then(|l|l.split_whitespace().nth(1)).and_then(|v|v.parse().ok())).unwrap_or(0)}
+@@ -232,16 +293,24 @@
+ }
+ /// Only the prospectively selected finite research horizons are admitted.
+ pub fn run_with_max_depth(position:Position,history:SearchHistory,parameters:Parameters,config:Config,threads:usize,max_depth:u8)->Result<Report,String> {
++    run_mode(position,history,parameters,config,threads,max_depth,None)
++}
++pub fn run_fixture(position:Position,history:SearchHistory,parameters:Parameters,config:Config,threads:usize,fixture:Fixture)->Result<Report,String> {
++    run_mode(position,history,parameters,config,threads,fixture.horizon,Some(fixture))
++}
++fn run_mode(position:Position,history:SearchHistory,parameters:Parameters,config:Config,threads:usize,max_depth:u8,fixture:Option<Fixture>)->Result<Report,String> {
+     if ![6,8].contains(&max_depth){return Err("root maximum depth must be6/8".into());}
+     if ![1,2,4,8].contains(&threads){return Err("total threads must be1/2/4/8".into());}if history.search_ply()!=0{return Err("root history boundary required".into());}
+-    let startup=Instant::now();let mut oracle=Search::<true>::new(&position);oracle.config=config;oracle.evaluator.parameters=parameters.clone();let oracle_context=Context::new(true,1,Audit{selector:None,forests:std::array::from_fn(|_|None)});oracle.internal_split=Some(oracle_context.clone());let mut oracle_history=history.clone();
++    let startup=Instant::now();let mut oracle=Search::<true>::new(&position);oracle.config=config;oracle.evaluator.parameters=parameters.clone();let oracle_audit=Audit{selector:None,forests:std::array::from_fn(|_|None)};let oracle_context=if let Some(fixture)=&fixture{Context::for_fixture(true,1,oracle_audit,fixture.clone(),None)}else{Context::new(true,1,oracle_audit)};oracle.internal_split=Some(oracle_context.clone());oracle.wide_capture=fixture.as_ref().map(|_|crate::wide_capture::Context::counter());let mut oracle_history=history.clone();
+     let oracle_started=Instant::now();let oracle_cpu=process_cpu();let expected=native_root(&mut oracle,position,&mut oracle_history,max_depth)?;let oracle_cpu_ns=process_cpu()-oracle_cpu;let oracle_wall_ns=oracle_started.elapsed().as_nanos();oracle.internal_split=None;
+-    let audit=oracle_context.take_audit();let context=Context::new(false,threads,audit);let mut canonical=Search::<true>::new(&position);canonical.config=config;canonical.evaluator.parameters=parameters;canonical.internal_split=Some(context.clone());let mut actual_history=history.clone();let startup_ns=startup.elapsed().as_nanos().saturating_sub(oracle_wall_ns);
++    if fixture.is_some()&&!oracle_context.0.borrow().selected{return Err("frozen fixture not reached by canonical prepass".into());}
++    let audit=oracle_context.take_audit();let oracle_binding_tt_digest=oracle_context.0.borrow().binding_tt_digest;let context=if let Some(fixture)=fixture{Context::for_fixture(false,threads,audit,fixture,oracle_binding_tt_digest)}else{Context::new(false,threads,audit)};let mut canonical=Search::<true>::new(&position);canonical.config=config;canonical.evaluator.parameters=parameters;canonical.internal_split=Some(context.clone());canonical.wide_capture=context.0.borrow().fixture.as_ref().map(|_|crate::wide_capture::Context::counter());let mut actual_history=history.clone();let startup_ns=startup.elapsed().as_nanos().saturating_sub(oracle_wall_ns);
+     let started=Instant::now();let cpu_started=process_cpu();let actual=native_root(&mut canonical,position,&mut actual_history,max_depth);let search_cpu_ns=process_cpu()-cpu_started;let search_wall_ns=started.elapsed().as_nanos();canonical.internal_split=None;
++    if context.0.borrow().fixture.is_some()&&!context.0.borrow().selected{context.0.borrow_mut().fatal.get_or_insert("fixture-not-reached");}
+     let compare=Instant::now();let funnel_match=context.audit_funnel(&oracle_context);let oracle_match=actual.as_ref().is_ok_and(|out|out==&expected)&&canonical.research_eq(&oracle)&&actual_history==oracle_history&&actual_history==history&&context.0.borrow().selector==oracle_context.0.borrow().selector&&funnel_match;let compare_ns=compare.elapsed().as_nanos();if !oracle_match {context.0.borrow_mut().fatal.get_or_insert("whole-root-oracle-mismatch");}
+     let completed_depth=actual.as_ref().map_or(0,|v|v.completed_depth);let root_passes=actual.as_ref().map_or(0,|v|v.passes.len());let error=actual.err();
+-    let oracle_funnel=oracle_context.0.borrow().funnel;
+-    Ok(Report{threads,horizon:max_depth,oracle_funnel,context,search_wall_ns,search_cpu_ns,oracle_wall_ns,oracle_cpu_ns,compare_ns,oracle_match,completed_depth,canonical_nodes:canonical.stats.nodes,canonical_relations:canonical.evaluator.stats.relation_queries,oracle_nodes:oracle.stats.nodes,oracle_relations:oracle.evaluator.stats.relation_queries,root_passes,startup_ns,peak_rss_kib:peak_rss(),error})
++    let oracle_funnel=oracle_context.0.borrow().funnel;let oracle_binding_wall_ns=oracle_context.0.borrow().binding_wall_ns;let oracle_binding_process_cpu_ns=oracle_context.0.borrow().binding_process_cpu_ns;
++    Ok(Report{threads,horizon:max_depth,oracle_funnel,oracle_binding_wall_ns,oracle_binding_process_cpu_ns,oracle_binding_tt_digest,context,search_wall_ns,search_cpu_ns,oracle_wall_ns,oracle_cpu_ns,compare_ns,oracle_match,completed_depth,canonical_nodes:canonical.stats.nodes,canonical_relations:canonical.evaluator.stats.relation_queries,oracle_nodes:oracle.stats.nodes,oracle_relations:oracle.evaluator.stats.relation_queries,root_passes,startup_ns,peak_rss_kib:peak_rss(),error})
+ }
+ 
+ #[cfg(test)]
+@@ -260,7 +329,7 @@
+         history.pop();assert_eq!(history,input.history);(node,returned)
+     }
+     fn selector(inputs:&[TaskInput])->Selector {
+-        Selector{ply:0,depth:2,iteration:2,lower:-500,upper:500,best:-500,remaining:8,child0_nodes:2048,entry_nodes:0,primary:inputs[0].position.primary,secondary:inputs[0].position.secondary,input_fingerprint:0,movements:std::array::from_fn(|id|inputs[id+1].movement),forecasts:std::array::from_fn(|id|inputs[id+1].request)}
++        Selector{parent_ordinal:0,ply:0,depth:2,iteration:2,lower:-500,upper:500,best:-500,remaining:8,child0_nodes:2048,entry_nodes:0,primary:inputs[0].position.primary,secondary:inputs[0].position.secondary,input_fingerprint:0,movements:std::array::from_fn(|id|inputs[id+1].movement),forecasts:std::array::from_fn(|id|inputs[id+1].request)}
+     }
+     fn launch(base:&Search<true>,inputs:&[TaskInput],context:&Context,finished:Arc<AtomicBool>)->Parent {
+         let started=Instant::now();let cpu_started=process_cpu();let snapshot=Arc::new(base.research_snapshot());let queue=Arc::new(Mutex::new(inputs[1..].iter().cloned().collect()));let cancel=Arc::new(AtomicBool::new(false));let placements=Arc::new(Mutex::new(Vec::new()));let (sender,receiver)=mpsc::channel();
+@@ -341,4 +410,37 @@
+         }
+     }
+ 
+-}
++    #[test]
++    fn wide_fixture_parser_accepts_only_five_identity_fields() {
++        let text="schema=rook2-wide-fixture-v1\ncase=profile-35\nhorizon=8\nparent_ordinal=17\nbinding_hex=6578616374\n";
++        let parsed=Fixture::parse(text).unwrap();assert_eq!(parsed.case(),"profile-35");assert_eq!(parsed.parent_ordinal,17);assert_eq!(parsed.binding,"exact");assert_eq!(parsed.horizon,8);
++        assert!(parsed.json().contains("\"binding_hex\":\"6578616374\""));
++        for bad in [text.replace("horizon=8","horizon=6"),text.replace("parent_ordinal=17","parent_ordinal=0"),text.replace("6578616374","657861637A"),text.replace("6578616374","ff"),text.replace("case=profile-35\n",""),format!("{text}case=profile-08\n"),format!("{text}future_nodes=8192\n")] {assert!(Fixture::parse(&bad).is_err());}
++    }
++    #[test]
++    fn wide_fixture_binding_rejects_changed_known_inputs_or_tt_audit() {
++        let fixture=Fixture{case:"profile-35".into(),horizon:8,parent_ordinal:17,binding:"exact-owned-inputs".into()};
++        for (actual,digest,reason) in [("changed-owned-inputs",123,"fixture-known-input-mismatch"),("exact-owned-inputs",124,"fixture-tt-binding-mismatch")] {
++            let context=Context::for_fixture(false,1,Audit{selector:None,forests:std::array::from_fn(|_|None)},fixture.clone(),Some(123));
++            assert_eq!(context.bind(actual,digest),Err(Stopped::HierarchicalAudit));let state=context.0.borrow();assert_eq!(state.fatal,Some(reason));assert!(!state.selected);assert!(state.batch.is_none());
++        }
++        let context=Context::for_fixture(false,1,Audit{selector:None,forests:std::array::from_fn(|_|None)},fixture,Some(123));assert_eq!(context.bind("exact-owned-inputs",123),Ok(()));
++    }
++    #[test]
++    fn wide_fixture_actual_best_forecast_and_binding_precedes_split() {
++        // Synthetic known boundary: no native fixture or hindsight work is run.
++        // It exercises the removed fail-low/child0-size restrictions explicitly.
++        let (mut search,inputs)=fixture();let position=inputs[0].position;let map=inputs[0].map;let node=Node::root(position,&search.evaluator.root);let history=SearchHistory::new(&position);
++        movegen::generate_legal(&position,&mut search.candidates[0]);let request=Request{ply:0,depth:3,lower:-500,upper:500,previous_extension:0,iteration:3,checked:Some(false)};
++        let previous=Predecessor{position:&position,influence:&map,checked:false,movement:None};let extensions=Extensions::new(&position,search.candidates[0].as_slice(),&position,None,0,false);let best=100;
++        let binding=crate::wide_capture::boundary_binding::<true,true,crate::host::NoHost>(&mut search,&node,&history,request,previous,previous,best,1,&extensions,17);
++        let frozen=Fixture{case:"profile-35".into(),horizon:8,parent_ordinal:17,binding:binding.descriptor};let context=Context::for_fixture(true,1,Audit{selector:None,forests:std::array::from_fn(|_|None)},frozen,None);search.internal_split=Some(context.clone());search.wide_capture=Some(crate::wide_capture::Context::counter());
++        assert!(select::<true,true,crate::host::NoHost>(&mut search,&node,&history,request,previous,best,1,0,&extensions,16,previous).unwrap().is_none());assert_eq!(context.0.borrow().binding_wall_ns,0);assert!(search.wide_capture.is_some());
++        let raw_started=Instant::now();let raw_cpu=process_cpu();let parent=select::<true,true,crate::host::NoHost>(&mut search,&node,&history,request,previous,best,1,0,&extensions,17,previous).unwrap().unwrap();
++        assert!(search.wide_capture.is_none(),"ordinal counter must be detached before the parent split starts");
++        {let state=context.0.borrow();assert!(state.selected);let selected=state.selector.as_ref().unwrap();assert_eq!(selected.parent_ordinal,17);assert_eq!(selected.child0_nodes,0);assert!(selected.best>selected.lower);assert!(selected.forecasts.iter().all(|r|[r.lower,r.upper]==[-500,-100]));
++            assert!(state.binding_wall_ns>0);assert!(state.binding_wall_ns<=parent.started.duration_since(raw_started).as_nanos());assert!(state.binding_process_cpu_ns<=process_cpu()-raw_cpu);assert!(state.binding_tt_digest.is_some());assert_eq!(state.tt_base_copy_bytes,0);assert!(state.batch.is_none());}
++        drop(parent);
++    }
++
++}
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -60,3 +60,5 @@
+ 
+ #[cfg(feature = "internal-split")]
+ pub mod internal_split;
++#[cfg(feature = "internal-split")]
++pub mod wide_capture;
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -739,6 +739,8 @@
+                 false,
+             );
+         }
++        #[cfg(feature = "internal-split")]
++        let parent_ordinal = crate::wide_capture::enter(&self.wide_capture)?;
+         #[cfg(feature = "hierarchical-recovery")]
+         let recovery_token = match crate::hierarchical_recovery::enter_ordinary::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,previous) {
+             crate::hierarchical_recovery::Decision::Run(token)=>token,
+@@ -1004,7 +1006,11 @@
+         let child0_start = self.stats.nodes;
+         #[cfg(feature = "internal-split")]
+         let mut split_parent = None;
++        #[cfg(feature = "internal-split")]
++        let mut capture_parent = None;
+         while index < count {
++            #[cfg(feature = "internal-split")]
++            let mut capture_child = crate::wide_capture::begin_child(self,capture_parent.as_ref(),index,best);
+             let movement = self.candidates[p].moves[index];
+             if DIAGNOSTICS {
+                 self.stats.examined += 1;
+@@ -1076,6 +1082,8 @@
+                     self.stats.children += 1;
+                 }
+                 #[cfg(feature = "internal-split")]
++                crate::wide_capture::child_request(&mut capture_child,child_request);
++                #[cfg(feature = "internal-split")]
+                 let split_child = match crate::internal_split::begin_child(self,split_parent.as_ref(),index,child_request) {
+                     Ok(child)=>child,Err(stop)=>{history.pop();return Err(stop);}
+                 };
+@@ -1098,17 +1106,16 @@
+                                 self.stats.refreshed_scout_retries += 1;
+                             }
+                         }
++                        let retry_request = Request { lower: -request.upper, upper: -best, ..child_request };
++                        #[cfg(feature = "internal-split")]
++                        crate::wide_capture::child_request(&mut capture_child,retry_request);
+                         let retried = {
+                         #[cfg(feature = "hierarchical-recovery")]
+                         let _site = crate::hierarchical_recovery::site(&self.hierarchical,crate::hierarchical_recovery::Site::Main{scout:false,retry:true});
+                         self.visit_ordinary_impl::<ALLOW_IIO>(
+                             &mut child,
+                             history,
+-                            Request {
+-                                lower: -request.upper,
+-                                upper: -best,
+-                                ..child_request
+-                            },
++                            retry_request,
+                             predecessor,
+                         )
+                         .map(|s| -s)
+@@ -1125,6 +1132,8 @@
+                 split_audit?;
+                 returned?
+             };
++            #[cfg(feature = "internal-split")]
++            crate::wide_capture::end_child(self,capture_parent.as_ref(),capture_child,movement,score);
+             if score > best {
+                 best = score;
+                 if score > lower {
+@@ -1157,9 +1166,12 @@
+             }
+             #[cfg(feature = "internal-split")]
+             if index == 1 {
+-                split_parent = crate::internal_split::select::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,current,best,index,child0_nodes,&main_extensions)?;
+-            }
+-        }
++                capture_parent = crate::wide_capture::boundary::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,previous,current,best,index,child0_nodes,&main_extensions,parent_ordinal)?;
++                split_parent = crate::internal_split::select::<ALLOW_IIO,DIAGNOSTICS,H>(self,node,history,request,current,best,index,child0_nodes,&main_extensions,parent_ordinal,previous)?;
++            }
++        }
++        #[cfg(feature = "internal-split")]
++        drop(capture_parent);
+         #[cfg(feature = "internal-split")]
+         drop(split_parent);
+         best = best.min(effective_upper);
+--- /dev/null
++++ b/src/wide_capture.rs
+@@ -0,0 +1,410 @@
++//! Bounded serial capture for an explicitly hindsight-selected coarse fixture.
++//! Captured scores/work describe a benchmark; they never authorize replay.
++//! Ordinals count non-Q ordinary invocations, including IIO/null/retry calls,
++//! after the Q handoff gate and before hierarchy lookup or ordinary charging.
++use std::{cell::RefCell, collections::HashMap, fmt::Write, rc::Rc, time::Instant};
++use crate::{engine::{Config, Search}, evaluator::{EvalStats, Node, Parameters}, history::SearchHistory,
++    host::Host, ordinary::{Predecessor, Request}, ordinary_policy::Extensions,
++    position::Position, quiescence::{Stats, Stopped}, types::Move};
++
++#[derive(Clone, Copy, Debug)]
++pub struct Caps { pub candidate_parents: usize, pub retained_bytes: usize, pub output_bytes: usize, pub lifetime_seconds: u64 }
++impl Default for Caps {
++    fn default() -> Self { Self { candidate_parents: 131072, retained_bytes: 64*1024*1024,
++        output_bytes: 256*1024*1024, lifetime_seconds: 180 } }
++}
++
++/// A lossless owned descriptor, independent of expected child scores/work.
++/// External fixtures carry its bytes as hex. There is no whole-TT scan here;
++/// the selected-boundary TT audit belongs to the runtime driver's pre-interval.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(crate) struct BoundaryBinding { pub(crate) descriptor: String }
++
++/// Token interning is injective: new tokens carry a decimal byte length and
++/// literal bytes, references carry their first-occurrence index. HashMap is
++/// lookup-only; iteration order cannot affect the representation.
++fn compact(text: &str) -> String {
++    let mut tokens = HashMap::<&str, usize>::new();
++    let mut result = String::new();
++    for token in text.split_inclusive(',') {
++        if let Some(index) = tokens.get(token) { write!(result, "R{index};").unwrap(); }
++        else { let index = tokens.len(); tokens.insert(token, index);
++            write!(result, "N{}:{token}", token.len()).unwrap(); }
++    }
++    result
++}
++fn hex(bytes: &[u8]) -> String {
++    const DIGITS: &[u8; 16] = b"0123456789abcdef";
++    let mut out = String::with_capacity(bytes.len()*2);
++    for &byte in bytes { out.push(DIGITS[(byte>>4) as usize] as char); out.push(DIGITS[(byte&15) as usize] as char); }
++    out
++}
++
++pub(crate) fn boundary_binding<const A:bool,const D:bool,H:Host>(
++    search:&mut Search<D,H>, node:&Node, history:&SearchHistory, request:Request,
++    previous:Predecessor<'_>, current:Predecessor<'_>, best:i32, index:usize,
++    extensions:&Extensions, ordinal:u64,
++) -> BoundaryBinding {
++    let p=request.ply;
++    let order = search.candidates[p].as_slice();
++    assert!(index+8<=order.len());
++    let next: [(Move,u8,u8);8] = std::array::from_fn(|offset| {
++        let i=index+offset; let movement=order[i];
++        (movement,search.extension_flags[p][i],extensions.for_move(&node.position,movement))
++    });
++    let text=format!("wide-boundary-v1;ordinal={ordinal};allow_iio={A};node={node:?};history={history:?};request={request:?};previous={:?}/{:?}/{:?}/{:?};current={:?}/{:?}/{:?}/{:?};best={best};index={index};count={};order={order:?};flags={:?};next8={next:?};config={:?};geometry={};stats={:?};learning={:?};evaluator={};groups={}",
++        previous.position,previous.influence,previous.checked,previous.movement,
++        current.position,current.influence,current.checked,current.movement,
++        order.len(),&search.extension_flags[p][..order.len()],search.config,search.geometry_permission(),
++        search.stats,search.learning.research_snapshot(),search.evaluator.research_boundary_binding(),
++        search.remembered.as_ref().map_or(0,|table|table.group_count()));
++    BoundaryBinding { descriptor:compact(&text) }
++}
++
++#[derive(Clone, Debug)]
++struct ChildSummary {
++    index:usize, movement:Move, complete:bool, nodes:u64, relations:u64, full:u64, fast:u64, maps:u64,
++    requests:[Option<Request>;2], request_count:usize, best_before:i32, best_after:i32, score:i32,
++}
++impl ChildSummary {
++    fn json(&self)->String {
++        let requests=self.requests.iter().flatten().map(|r| format!("{{\"ply\":{},\"depth\":{},\"lower\":{},\"upper\":{},\"previous_extension\":{},\"iteration\":{},\"checked\":{}}}",
++            r.ply,r.depth,r.lower,r.upper,r.previous_extension,r.iteration,r.checked.map_or("null".into(),|v|v.to_string()))).collect::<Vec<_>>().join(",");
++        format!("{{\"index\":{},\"movement\":{},\"complete\":{},\"nodes\":{},\"relations\":{},\"full\":{},\"fast\":{},\"maps\":{},\"requests\":[{}],\"retries\":{},\"best_before\":{},\"best_after\":{},\"best_changed\":{},\"score\":{}}}",
++            self.index,self.movement.0,self.complete,self.nodes,self.relations,self.full,self.fast,self.maps,
++            requests,self.request_count.saturating_sub(1),self.best_before,self.best_after,self.best_after!=self.best_before,self.score)
++    }
++}
++struct Candidate {
++    ordinal:u64, request:Request, remaining:usize, best:i32, child0_nodes:u64,
++    binding:Option<BoundaryBinding>, children:[Option<ChildSummary>;8],
++}
++impl Candidate {
++    fn qualifies(&self)->bool {
++        self.children.iter().all(|child|child.as_ref().is_some_and(|c|c.complete&&c.nodes>=512))
++            && self.children.iter().flatten().map(|child|child.nodes).sum::<u64>()>=8192
++    }
++    fn binding_bytes(&self)->usize { self.binding.as_ref().map_or(0,|b|b.descriptor.capacity()) }
++    fn json(&self)->String {
++        let children=self.children.iter().flatten().map(ChildSummary::json).collect::<Vec<_>>().join(",");
++        let binding=self.binding.as_ref().map_or("null".into(),|b|format!("\"{}\"",hex(b.descriptor.as_bytes())));
++        format!("{{\"entry_ordinal\":{},\"ply\":{},\"iteration\":{},\"depth\":{},\"window\":[{},{}],\"remaining\":{},\"best\":{},\"child0_nodes\":{},\"binding_hex\":{},\"children\":[{}],\"qualifies\":{}}}",
++            self.ordinal,self.request.ply,self.request.iteration,self.request.depth,self.request.lower,self.request.upper,self.remaining,self.best,self.child0_nodes,binding,children,self.qualifies())
++    }
++}
++
++#[derive(Clone, Copy, Debug, Default)]
++struct Coverage {
++    post_child0:u64, finite_window:u64, depth_ge3:u64, width_ge8:u64, completed8:u64, qualified:u64,
++    max_remaining:usize, max_completed:usize, max_child_nodes:u64, max_sum8:u64,
++    completed_hist:[u64;9], minimum_child_nodes_hist:[u64;8], sum8_hist:[u64;8],
++}
++fn bin(work:u64)->usize { match work {0=>0,1..=127=>1,128..=511=>2,512..=1023=>3,1024..=2047=>4,2048..=4095=>5,4096..=8191=>6,_=>7} }
++impl Coverage {
++    fn json(&self)->String { format!("{{\"post_child0\":{},\"finite_window\":{},\"depth_ge3\":{},\"width_ge8\":{},\"completed8\":{},\"qualified\":{},\"max_remaining\":{},\"max_completed\":{},\"max_child_nodes\":{},\"max_sum8\":{},\"completed_hist\":{:?},\"minimum_child_nodes_hist\":{:?},\"sum8_hist\":{:?},\"work_bins\":[\"0\",\"1..127\",\"128..511\",\"512..1023\",\"1024..2047\",\"2048..4095\",\"4096..8191\",\"8192+\"]}}",
++        self.post_child0,self.finite_window,self.depth_ge3,self.width_ge8,self.completed8,self.qualified,
++        self.max_remaining,self.max_completed,self.max_child_nodes,self.max_sum8,self.completed_hist,self.minimum_child_nodes_hist,self.sum8_hist) }
++    fn boundary(&mut self,request:Request,remaining:usize)->bool {
++        self.post_child0+=1;
++        if !finite(request) {return false;} self.finite_window+=1;
++        if request.depth<3 {return false;} self.depth_ge3+=1;
++        self.max_remaining=self.max_remaining.max(remaining);
++        if remaining<8 {return false;} self.width_ge8+=1; true
++    }
++    fn close(&mut self,candidate:&Candidate) {
++        let completed=candidate.children.iter().flatten().filter(|child|child.complete).count();
++        self.completed_hist[completed]+=1;self.max_completed=self.max_completed.max(completed);
++        self.max_child_nodes=self.max_child_nodes.max(candidate.children.iter().flatten().map(|c|c.nodes).max().unwrap_or(0));
++        if completed==8 {
++            self.completed8+=1;
++            let minimum=candidate.children.iter().flatten().map(|c|c.nodes).min().unwrap();
++            let sum=candidate.children.iter().flatten().map(|c|c.nodes).sum();
++            self.minimum_child_nodes_hist[bin(minimum)]+=1;self.sum8_hist[bin(sum)]+=1;self.max_sum8=self.max_sum8.max(sum);
++        }
++        if candidate.qualifies(){self.qualified+=1;}
++    }
++}
++fn finite(request:Request)->bool { request.lower > -10000 && request.upper < 10000 && request.lower<request.upper }
++
++// Maximum decimal widths on the admitted64-bit target: usize/u64=20,
++// u16=5, u8=3, i32=11 and bool=5. A Request is at most153 JSON bytes.
++// One child including its two actual requests is at most635 bytes. Eight
++// children plus all parent scalar fields and an empty quoted binding use5368;
++// a null binding adds2, and the inter-row comma adds1. Round5371 up to5376.
++// A nonempty binding adds exactly2 hex bytes per descriptor byte, conservatively
++// charged from retained String capacity. Header allowance4096 covers fixed
++// schema/scope/coverage/cap fields, numeric maxima and native fixed error text.
++const PARENT_JSON_BYTES:usize=5376;
++const HEADER_JSON_BYTES:usize=4096;
++
++struct State {
++    capture:bool, caps:Caps, started:Instant, ordinal:u64, parents:Vec<Candidate>, binding_bytes:usize,
++    peak_bytes:usize, censored:Option<&'static str>, coverage:Coverage,
++}
++impl State {
++    fn bytes(&self)->usize {std::mem::size_of::<Self>()+self.parents.capacity()*std::mem::size_of::<Candidate>()+self.binding_bytes}
++    // Bound stdout before retaining a parent, including all eight request/work
++    // summaries even when the candidate is still in flight. Binding hex costs2x.
++    fn output_bound(&self,parents:usize,bindings:usize)->usize {HEADER_JSON_BYTES.saturating_add(parents.saturating_mul(PARENT_JSON_BYTES)).saturating_add(bindings.saturating_mul(2))}
++    fn censor(&mut self,reason:&'static str)->Stopped { self.censored.get_or_insert(reason);Stopped::HierarchicalAudit }
++}
++#[derive(Clone)]
++pub(crate) struct Context(Rc<RefCell<State>>);
++impl Context {
++    pub(crate) fn capture(caps:Caps)->Self { Self::new(true,caps) }
++    pub(crate) fn counter()->Self {Self::new(false,Caps::default())}
++    fn new(capture:bool,caps:Caps)->Self {Self(Rc::new(RefCell::new(State { capture,caps,started:Instant::now(),ordinal:0,parents:Vec::new(),binding_bytes:0,peak_bytes:std::mem::size_of::<State>(),censored:None,coverage:Coverage::default() })))}
++}
++pub(crate) fn enter(context:&Option<Context>)->Result<u64,Stopped> {
++    let Some(context)=context else{return Ok(0)};
++    let mut state=context.0.borrow_mut();
++    if state.censored.is_some(){return Err(Stopped::HierarchicalAudit);}
++    if state.capture && state.started.elapsed().as_secs()>=state.caps.lifetime_seconds {
++        return Err(state.censor("capture-lifetime-cap"));
++    }
++    state.ordinal=state.ordinal.checked_add(1).expect("ordinary entry ordinal overflow");Ok(state.ordinal)
++}
++
++pub(crate) struct Parent {context:Context,id:usize,start:usize}
++impl Drop for Parent {
++    fn drop(&mut self) {
++        let mut state=self.context.0.borrow_mut();
++        let mut coverage=state.coverage;coverage.close(&state.parents[self.id]);state.coverage=coverage;
++        if !state.parents[self.id].qualifies() {
++            let released=state.parents[self.id].binding_bytes();state.binding_bytes-=released;state.parents[self.id].binding=None;
++        }
++    }
++}
++pub(crate) fn boundary<const A:bool,const D:bool,H:Host>(
++    search:&mut Search<D,H>,node:&Node,history:&SearchHistory,request:Request,previous:Predecessor<'_>,
++    current:Predecessor<'_>,best:i32,index:usize,child0_nodes:u64,extensions:&Extensions,ordinal:u64,
++)->Result<Option<Parent>,Stopped> {
++    let Some(context)=search.wide_capture.clone() else{return Ok(None)};
++    let remaining=search.candidates[request.ply].len-index;
++    {let mut state=context.0.borrow_mut();if !state.capture{return Ok(None);}
++        if !state.coverage.boundary(request,remaining){return Ok(None);}
++        if state.parents.len()>=state.caps.candidate_parents {return Err(state.censor("capture-parent-cap"));}
++    }
++    assert!(D&&!H::ACTIVE&&search.timing.is_none()&&search.limits.nodes.is_none()&&search.control.is_none());
++    let binding=boundary_binding::<A,D,H>(search,node,history,request,previous,current,best,index,extensions,ordinal);
++    let mut state=context.0.borrow_mut();
++    let bytes=state.binding_bytes.saturating_add(binding.descriptor.capacity());
++    let len=state.parents.len()+1;
++    let capacity=state.parents.capacity().max(len);
++    if std::mem::size_of::<State>().saturating_add(capacity.saturating_mul(std::mem::size_of::<Candidate>())).saturating_add(bytes)>state.caps.retained_bytes {
++        return Err(state.censor("capture-summary-byte-cap"));
++    }
++    if state.output_bound(len,bytes)>state.caps.output_bytes {return Err(state.censor("capture-output-byte-cap"));}
++    let id=state.parents.len();
++    if id==state.parents.capacity(){state.parents.reserve_exact(1);}
++    state.parents.push(Candidate {ordinal,request,remaining,best,child0_nodes,binding:Some(binding),children:std::array::from_fn(|_|None)});
++    state.binding_bytes=bytes;state.peak_bytes=state.peak_bytes.max(state.bytes());
++    Ok(Some(Parent {context:context.clone(),id,start:index}))
++}
++
++pub(crate) struct Child {id:usize,offset:usize,index:usize,stats:Stats,evaluations:EvalStats,best:i32,requests:[Option<Request>;2],request_count:usize}
++pub(crate) fn begin_child<const D:bool,H:Host>(search:&Search<D,H>,parent:Option<&Parent>,index:usize,best:i32)->Option<Child> {
++    let parent=parent?;if index<parent.start||index>=parent.start+8{return None;}
++    Some(Child {id:parent.id,offset:index-parent.start,index,stats:search.stats,evaluations:search.evaluator.stats,best,requests:[None;2],request_count:0})
++}
++pub(crate) fn child_request(child:&mut Option<Child>,request:Request) {
++    if let Some(child)=child {assert!(child.request_count<2,"native main child has more than one retry");child.requests[child.request_count]=Some(request);child.request_count+=1;}
++}
++pub(crate) fn end_child<const D:bool,H:Host>(search:&Search<D,H>,parent:Option<&Parent>,child:Option<Child>,movement:Move,score:i32) {
++    let (Some(parent),Some(child))=(parent,child) else{return;};
++    let summary=ChildSummary {index:child.index,movement,complete:true,nodes:search.stats.nodes-child.stats.nodes,
++        relations:search.evaluator.stats.relation_queries-child.evaluations.relation_queries,
++        full:search.evaluator.stats.full-child.evaluations.full,fast:search.evaluator.stats.fast-child.evaluations.fast,
++        maps:search.evaluator.stats.influence_builds-child.evaluations.influence_builds,requests:child.requests,request_count:child.request_count,
++        best_before:child.best,best_after:child.best.max(score),score};
++    let mut state=parent.context.0.borrow_mut();assert!(state.parents[child.id].children[child.offset].is_none());
++    state.parents[child.id].children[child.offset]=Some(summary);
++    // A failed minimum cannot recover later. Keep summaries for coverage but
++    // release this exact binding promptly; no candidate summary is pruned.
++    let failed=state.parents[child.id].children.iter().flatten().any(|c|c.nodes<512)
++        || (child.offset==7&&!state.parents[child.id].qualifies());
++    if failed {let released=state.parents[child.id].binding_bytes();state.binding_bytes-=released;state.parents[child.id].binding=None;}
++}
++
++pub struct Report {context:Context,complete:bool,canonical_nodes:u64,canonical_relations:u64,completed_depth:u8,passes:usize,wall_ns:u128,cpu_ns:u128,error:Option<String>}
++impl Report {
++    pub fn failed(&self)->bool {!self.complete||self.context.0.borrow().censored.is_some()||self.error.is_some()}
++    pub fn json(&self)->String {
++        let state=self.context.0.borrow();let mut parents=state.parents.iter().collect::<Vec<_>>();parents.sort_by_key(|p|p.ordinal);
++        let rows=parents.iter().map(|p|p.json()).collect::<Vec<_>>().join(",");
++        let error=self.error.as_ref().map_or("null".into(),|e|format!("\"{}\"",e.replace('"',"'").replace('\n'," ")));
++        let reason=state.censored.map_or("null".into(),|r|format!("\"{r}\""));
++        let out=format!("{{\"schema\":\"rook2-wide-capture-v1\",\"processId\":{},\"horizon\":8,\"complete\":{},\"censored\":{},\"censor_reason\":{},\"error\":{},\"fixed_completion\":true,\"no_host\":true,\"zero_randomness\":true,\"canonical_nodes\":{},\"canonical_relations\":{},\"ordinary_entries\":{},\"completed_depth\":{},\"root_passes\":{},\"retained_bytes\":{},\"peak_retained_bytes\":{},\"caps\":{{\"candidate_parents\":{},\"retained_bytes\":{},\"output_bytes\":{},\"lifetime_seconds\":{}}},\"wall_ns\":{},\"process_cpu_ns\":{},\"coverage\":{},\"parents\":[{}],\"scope\":\"One serial depth8 capture. Ordinals are1-based non-Q ordinary invocation entry after handoff and before hierarchy lookup/ordinary charge, including IIO/null/retry calls. Separate mate-kernel and Q entries are excluded. Inclusive next8 main sibling work uses fresh local counter deltas including native retries; sibling work is disjoint, overlapping parent opportunities are not additive. Binding is lossless exact known native input text, excluding whole-TT digest; failed candidates release binding but retain compact summaries. Hindsight fixture selection is external and never reuse permission. Capture performs no independent oracle and records no full search forest.\"}}",
++            std::process::id(),self.complete,state.censored.is_some(),reason,error,self.canonical_nodes,self.canonical_relations,state.ordinal,
++            self.completed_depth,self.passes,state.bytes(),state.peak_bytes,state.caps.candidate_parents,state.caps.retained_bytes,state.caps.output_bytes,state.caps.lifetime_seconds,
++            self.wall_ns,self.cpu_ns,state.coverage.json(),rows);
++        assert!(out.len()<=state.caps.output_bytes,"prospective output bound was insufficient");out
++    }
++}
++pub fn run(position:Position,history:SearchHistory,parameters:Parameters,config:Config)->Result<Report,String> {
++    if history.search_ply()!=0{return Err("capture requires root history boundary".into());}
++    let mut search=Search::<true>::new(&position);search.config=config;search.evaluator.parameters=parameters;
++    let context=Context::capture(Caps::default());search.wide_capture=Some(context.clone());let mut actual_history=history;
++    let started=Instant::now();let cpu=crate::internal_split::process_cpu();
++    let result=crate::internal_split::native_root(&mut search,position,&mut actual_history,8);
++    let cpu_ns=crate::internal_split::process_cpu()-cpu;let wall_ns=started.elapsed().as_nanos();search.wide_capture=None;
++    let complete=result.is_ok()&&actual_history.search_ply()==0;
++    let (completed_depth,passes,error)=match result {Ok(output)=>(output.completed_depth(),output.pass_count(),None),Err(error)=>(0,0,Some(error))};
++    Ok(Report {context,complete,canonical_nodes:search.stats.nodes,canonical_relations:search.evaluator.stats.relation_queries,
++        completed_depth,passes,wall_ns,cpu_ns,error})
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{movegen, quiescence::Limits};
++    const START:&str="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++    fn fixture(caps:Caps)->(Search<true>,Node,SearchHistory,crate::influence::Influence,Context,Request) {
++        let position=Position::from_fen(START).unwrap();let mut search=Search::<true>::new(&position);
++        let (node,map)=search.prepare_root_with_influence(position);movegen::generate_legal(&position,&mut search.candidates[0]);
++        let context=Context::capture(caps);search.wide_capture=Some(context.clone());
++        let request=Request{ply:0,depth:3,lower:-50,upper:50,previous_extension:0,iteration:8,checked:Some(false)};
++        (search,node,SearchHistory::new(&position),map,context,request)
++    }
++    fn parent(search:&mut Search<true>,node:&Node,history:&SearchHistory,map:&crate::influence::Influence,request:Request,ordinal:u64)->Result<Option<Parent>,Stopped> {
++        let previous=Predecessor{position:&node.position,influence:map,checked:false,movement:None};
++        let extensions=Extensions::new(&node.position,search.candidates[0].as_slice(),&node.position,None,0,false);
++        boundary::<true,true,crate::host::NoHost>(search,node,history,request,previous,previous,0,1,0,&extensions,ordinal)
++    }
++    fn eight(search:&mut Search<true>,parent:&Parent,request:Request,nodes:[u64;8]) {
++        for (offset,nodes) in nodes.into_iter().enumerate() {
++            let index=offset+1;let movement=search.candidates[0].moves[index];
++            let mut child=begin_child(search,Some(parent),index,offset as i32);
++            child_request(&mut child,Request{ply:1,depth:2,lower:-50,upper:-(offset as i32),..request});
++            if offset==2 {child_request(&mut child,Request{ply:1,depth:2,lower:-50,upper:-3,..request});}
++            search.stats.nodes+=nodes;search.evaluator.stats.relation_queries+=nodes*7;
++            search.evaluator.stats.full+=nodes/4;search.evaluator.stats.fast+=nodes/2;search.evaluator.stats.influence_builds+=nodes/8;
++            end_child(search,Some(parent),child,movement,offset as i32+1);
++        }
++    }
++    #[test]
++    fn eligibility_has_no_child0_size_or_fail_low_requirement() {
++        let (_,_,_,_,_,request)=fixture(Caps::default());
++        let mut coverage=Coverage::default();
++        assert!(!coverage.boundary(Request{lower:-10000,..request},8));
++        assert!(!coverage.boundary(Request{upper:10000,..request},8));
++        assert!(!coverage.boundary(Request{lower:50,upper:50,..request},8));
++        assert!(!coverage.boundary(Request{depth:2,..request},8));
++        assert!(!coverage.boundary(request,7));
++        assert!(coverage.boundary(request,8));
++        let (mut search,node,history,map,_,request)=fixture(Caps::default());
++        let selected=parent(&mut search,&node,&history,&map,request,1).unwrap().unwrap();
++        // best0 exceeds incoming lower-50 and child0 cost0: both permitted.
++        assert_eq!((selected.context.0.borrow().parents[0].best,selected.context.0.borrow().parents[0].child0_nodes),(0,0));
++    }
++    #[test]
++    fn ordinal_is_entry_order_and_counter_has_no_capture_records() {
++        let context=Some(Context::counter());
++        assert_eq!(enter(&None),Ok(0));
++        assert_eq!(enter(&context),Ok(1));assert_eq!(enter(&context),Ok(2));
++        assert_eq!(enter(&context),Ok(3));assert!(context.unwrap().0.borrow().parents.is_empty());
++    }
++    #[test]
++    fn inclusive_next8_counts_native_retry_and_hindsight_requires_each_and_sum() {
++        let (mut search,node,history,map,context,request)=fixture(Caps::default());
++        let selected=parent(&mut search,&node,&history,&map,request,1).unwrap().unwrap();
++        eight(&mut search,&selected,request,[1024;8]);drop(selected);
++        let state=context.0.borrow();let candidate=&state.parents[0];
++        assert!(candidate.qualifies());assert!(candidate.binding.is_some());
++        assert_eq!(state.coverage.qualified,1);assert_eq!(state.coverage.completed_hist[8],1);
++        let third=candidate.children[2].as_ref().unwrap();assert_eq!(third.request_count,2);
++        assert_eq!((third.nodes,third.relations,third.full,third.fast,third.maps),(1024,7168,256,512,128));
++        assert_eq!((third.best_before,third.best_after),(2,3));
++        drop(state);
++        let selected=parent(&mut search,&node,&history,&map,request,2).unwrap().unwrap();
++        eight(&mut search,&selected,request,[511,2048,2048,2048,2048,2048,2048,2048]);drop(selected);
++        let state=context.0.borrow();assert!(!state.parents[1].qualifies());assert!(state.parents[1].binding.is_none());
++        drop(state);
++        let selected=parent(&mut search,&node,&history,&map,request,3).unwrap().unwrap();
++        eight(&mut search,&selected,request,[512;8]);drop(selected);
++        let state=context.0.borrow();assert!(!state.parents[2].qualifies());assert!(state.parents[2].binding.is_none());
++    }
++    #[test]
++    fn parent_order_uses_entry_ordinal_even_when_descendant_completes_first() {
++        let (mut search,node,history,map,context,request)=fixture(Caps::default());
++        let ancestor=parent(&mut search,&node,&history,&map,request,1).unwrap().unwrap();
++        let descendant=parent(&mut search,&node,&history,&map,request,2).unwrap().unwrap();
++        eight(&mut search,&descendant,request,[1024;8]);drop(descendant);
++        eight(&mut search,&ancestor,request,[1024;8]);drop(ancestor);
++        let state=context.0.borrow();assert_eq!(state.parents.iter().filter(|p|p.qualifies()).map(|p|p.ordinal).min(),Some(1));
++    }
++    #[test]
++    fn maximum_value_serialization_fits_declared_prospective_output_bound() {
++        let request=Request {ply:usize::MAX,depth:i32::MIN,lower:i32::MIN,upper:i32::MIN,
++            previous_extension:u8::MAX,iteration:i32::MIN,checked:Some(false)};
++        let child=ChildSummary {index:usize::MAX,movement:Move(u16::MAX),complete:false,
++            nodes:u64::MAX,relations:u64::MAX,full:u64::MAX,fast:u64::MAX,maps:u64::MAX,
++            requests:[Some(request);2],request_count:2,best_before:i32::MIN,best_after:i32::MIN,score:i32::MIN};
++        assert!(child.json().len()<=635);
++        let mut candidate=Candidate {ordinal:u64::MAX,request,remaining:usize::MAX,best:i32::MIN,
++            child0_nodes:u64::MAX,binding:None,children:std::array::from_fn(|_|Some(child.clone()))};
++        // Includes the maximum null binding and the separator before a row.
++        assert!(candidate.json().len()+1<=PARENT_JSON_BYTES);
++        for descriptor in ["", "N3:a,bR0;", "literal\\text,with\"quotes"] {
++            candidate.binding=Some(BoundaryBinding {descriptor:descriptor.into()});
++            assert!(candidate.json().len()+1<=PARENT_JSON_BYTES+candidate.binding_bytes()*2);
++        }
++        let context=Context::counter();
++        {let mut state=context.0.borrow_mut();state.ordinal=u64::MAX;
++            state.coverage=Coverage {post_child0:u64::MAX,finite_window:u64::MAX,depth_ge3:u64::MAX,width_ge8:u64::MAX,
++                completed8:u64::MAX,qualified:u64::MAX,max_remaining:usize::MAX,max_completed:usize::MAX,
++                max_child_nodes:u64::MAX,max_sum8:u64::MAX,completed_hist:[u64::MAX;9],minimum_child_nodes_hist:[u64::MAX;8],sum8_hist:[u64::MAX;8]};}
++        let report=Report {context,complete:false,canonical_nodes:u64::MAX,canonical_relations:u64::MAX,
++            completed_depth:u8::MAX,passes:usize::MAX,wall_ns:u128::MAX,cpu_ns:u128::MAX,error:Some("native root stopped: HierarchicalAudit".into())};
++        assert!(report.json().len()<=HEADER_JSON_BYTES);
++        assert_eq!(Caps::default().output_bytes,256*1024*1024);
++    }
++    #[test]
++    fn boundary_caps_censor_instead_of_pruning_candidates() {
++        for (caps,reason) in [
++            (Caps{candidate_parents:0,..Caps::default()},"capture-parent-cap"),
++            (Caps{retained_bytes:0,..Caps::default()},"capture-summary-byte-cap"),
++            (Caps{output_bytes:0,..Caps::default()},"capture-output-byte-cap"),
++        ] {
++            let (mut search,node,history,map,context,request)=fixture(caps);
++            assert!(parent(&mut search,&node,&history,&map,request,1).is_err());
++            assert_eq!(context.0.borrow().censored,Some(reason));assert!(context.0.borrow().parents.is_empty());
++            assert_eq!(enter(&Some(context)),Err(Stopped::HierarchicalAudit));
++        }
++        let context=Some(Context::capture(Caps{lifetime_seconds:0,..Caps::default()}));
++        assert_eq!(enter(&context),Err(Stopped::HierarchicalAudit));
++    }
++    #[test]
++    fn exact_binding_changes_with_history_learning_flags_maps_and_best() {
++        let (mut search,node,mut history,map,_,request)=fixture(Caps::default());
++        let descriptor=|search:&mut Search<true>,history:&SearchHistory,map:&crate::influence::Influence,best| {
++            let previous=Predecessor{position:&node.position,influence:map,checked:false,movement:None};
++            let extensions=Extensions::new(&node.position,search.candidates[0].as_slice(),&node.position,None,0,false);
++            boundary_binding::<true,true,crate::host::NoHost>(search,&node,history,request,previous,previous,best,1,&extensions,1)
++        };
++        let original=descriptor(&mut search,&history,&map,0);
++        assert_eq!(original,descriptor(&mut search,&history,&map,0));
++        assert_ne!(original,descriptor(&mut search,&history,&map,1));
++        search.learning.total=1;assert_ne!(original,descriptor(&mut search,&history,&map,0));search.learning.total=0;
++        search.extension_flags[0][2]=1;assert_ne!(original,descriptor(&mut search,&history,&map,0));search.extension_flags[0][2]=0;
++        let mut changed=map;changed.profiles[0][0]^=1;assert_ne!(original,descriptor(&mut search,&history,&changed,0));
++        history.push(&node.position,None);assert_ne!(original,descriptor(&mut search,&history,&map,0));history.pop();
++        assert_eq!(original,descriptor(&mut search,&history,&map,0));
++        // Delimiters and literal token markers cannot alias references.
++        assert_ne!(compact("a,b,a,"),compact("a,a,b,"));assert_ne!(compact("N1:a,R0;"),compact("a,a,"));
++    }
++    #[test]
++    fn native_capture_instrumentation_preserves_serial_outputs_and_work() {
++        let position=Position::from_fen(START).unwrap();
++        let mut baseline=Search::<true>::new(&position);baseline.config.tts_bytes=65536;
++        let mut captured=Search::<true>::new(&position);captured.config=baseline.config;
++        let context=Context::capture(Caps::default());captured.wide_capture=Some(context.clone());
++        let mut a=SearchHistory::new(&position);let mut b=SearchHistory::new(&position);
++        let expected=baseline.run_iterations(position,&mut a,3,Limits::default()).unwrap();
++        let actual=captured.run_iterations(position,&mut b,3,Limits::default()).unwrap();
++        assert_eq!((actual.score,actual.pv,actual.work,actual.stats,actual.evaluations),
++            (expected.score,expected.pv,expected.work,expected.stats,expected.evaluations));
++        assert_eq!(a,b);assert!(baseline.research_eq(&captured));
++        assert_eq!(context.0.borrow().ordinal,captured.stats.ordinary_nodes);
++    }
++}
