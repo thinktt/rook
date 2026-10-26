@@ -135,16 +135,20 @@ joins; legacy token dispatch stays owned. Root source review found no concrete
 blocker in those paths. This finite evidence does not establish general safety
 or a causal cache explanation. Park unchanged without PGO or a rescue variant.
 
-Next assess coordinator-local ordinary inventory during existing epoch3 helper
-work. This differs from inventory4: generate directly into the unused parent
-scratch row on the coordinator, after its pawn/local work and before joining
-the two color readers. There is no third helper or list transfer, but generation
-may exceed the actual wait and may be discarded at bounds/threat/null cutoffs.
-Preserve original ordering, logical charges and all public/observer boundaries;
-prove per-ply ownership and totality before choosing an implementation. Old
-sampled join and generation costs cover different populations and cannot prove
-available slack. Only a bounded source recommendation is selected. Frontier
-batching remains a separate reserve.
+The [coordinator-local inventory assessment](owner-local-inventory-overlap.md),
+committed `510cd4e8`, supports one new discriminator. Generate directly into the
+unused parent scratch row after pawn/local work only when the matching color pair
+is not already complete. This differs from inventory4: no third helper, extra
+publication or list transfer. Generation may still exceed the actual wait and
+be discarded at bounds/threat/null cutoffs. The private coherence permission
+supports eager totality; null descendants use deeper rows, and sorting/learning/
+logical charges stay at original demand. Public/FRESH/observer/root/Q and modes1/2
+retain their original routes. A readiness hint grants no output ownership and
+must not hide terminal failure. Old sampled join and generation costs cover
+different populations and cannot prove slack. Select one original35/08/43
+preserved3/matching off3/on3 fixed36+3 generic lane after affected focused admission,
+with no tuning or automatic PGO. No result exists yet. Frontier batching and a
+prospective writer-region transport layout remain separate unselected reserves.
 
 The retained three-thread image is `67d011083f37f42904423247f5cf0ece2a1e36f0a4129da94fe7561d1f922ea7`,
 with profile `9487473e31dfc30ae515cdce18e3f15ec3a653bfd1c5bd665a8f76d235e30311`.

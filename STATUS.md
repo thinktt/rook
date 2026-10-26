@@ -131,11 +131,15 @@ without repair or repeat. The private enclosing guard drains actual readers on
 success/error/unwind; removing snapshots still changes access and layout costs.
 Park unchanged, with no causal attribution, PGO or qualification claim.
 
-Next is a source-only assessment of coordinator-local ordinary move generation
-during existing color-helper work. Direct per-ply scratch writes could avoid
-the prior fourth worker's dispatch and list transfer, but wasted generation and
-extra critical-path work remain. No implementation or native lane is selected.
-All retained artifacts and accepted release bytes remain preserved.
+The [source assessment](docs/research/owner-local-inventory-overlap.md) at
+`510cd4e8` supports a distinct coordinator-local inventory trial. Select one
+readiness-conditional policy: after pawn/local work, generate directly into the
+private parent row only if the matching color pair is not already complete.
+This avoids the prior fourth worker's dispatch/list transfer; wasted generation
+and extra critical-path work remain. One preserved3/matching off3/on3 fixed36+3
+generic lane is authorized after affected focused admission, not yet measured.
+No tuning, PGO or adoption is selected. Retained artifacts and release bytes remain
+preserved.
 
 **Research branch update, 2026-10-24:** the practical opt-in two-thread FULL
 split is retained for an adoption decision after passing the selected local

@@ -1,0 +1,659 @@
+diff --git a/src/bin/rook2.rs b/src/bin/rook2.rs
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -74,0 +75 @@
++    let mut owner_local_inventory = false;
+@@ -88,0 +90 @@
++            "--owner-local-inventory" => owner_local_inventory = true,
+@@ -100,0 +103,2 @@
++    session.set_owner_local_inventory(owner_local_inventory)
++        .map_err(|message| Failure::Message(format!("rook2: {message}\n")))?;
+diff --git a/src/colors_worker.rs b/src/colors_worker.rs
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -30,0 +31,30 @@
++
++#[cfg(test)]
++std::thread_local! {
++    static FORCED_READINESS: std::cell::Cell<Option<bool>> = const {
++        std::cell::Cell::new(None)
++    };
++    static READINESS_PROBES: std::cell::Cell<usize> = const {
++        std::cell::Cell::new(0)
++    };
++}
++
++#[cfg(test)]
++pub(crate) fn readiness_probe_count() -> usize {
++    READINESS_PROBES.with(|value| value.get())
++}
++
++/// Test coordinator only: pending is conservative; ready still requires real
++/// matching done epochs. Neither override acknowledges work or reads outputs.
++#[cfg(test)]
++pub(crate) fn with_forced_readiness<R>(ready: bool, f: impl FnOnce() -> R) -> R {
++    struct Restore(Option<bool>);
++    impl Drop for Restore {
++        fn drop(&mut self) {
++            FORCED_READINESS.with(|value| value.set(self.0));
++        }
++    }
++    let previous = FORCED_READINESS.with(|value| value.replace(Some(ready)));
++    let _restore = Restore(previous);
++    f()
++}
+@@ -408,0 +439,21 @@
++    /// Scheduling hint only. Does not claim Flight, acquire scalar outputs,
++    /// retire input, or acknowledge either reader. complete remains authority.
++    pub(crate) fn is_complete_now(&self, token: DispatchToken) -> Result<bool, String> {
++        #[cfg(test)]
++        READINESS_PROBES.with(|value| value.set(value.get() + 1));
++        if token.generation == 0 || token.generation != self.generation {
++            return Err("colors readiness token is not the current epoch".into());
++        }
++        if terminal(&self.shared) { return Err(self.failure()); }
++        #[cfg(test)]
++        if let Some(ready) = FORCED_READINESS.with(|value| value.get()) {
++            if !ready { return Ok(false); }
++            loop {
++                if terminal(&self.shared) { return Err(self.failure()); }
++                if both_done(&self.shared, token.generation) { return Ok(true); }
++                spin_loop();
++            }
++        }
++        Ok(both_done(&self.shared, token.generation))
++    }
++
+@@ -1032,0 +1084,107 @@
++    fn colors_readiness_pending_actual_reader_then_ready_and_tls_restore() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        block_at(&worker.shared.tests.in_input[0]);
++        let token = dispatch(&mut worker, &packet);
++        entered_at(&worker.shared, &worker.shared.tests.in_input[0]);
++        let probes = readiness_probe_count();
++        assert!(!worker.is_complete_now(token).unwrap());
++        assert_eq!(readiness_probe_count(), probes + 1);
++        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
++        let shared = Arc::clone(&worker.shared);
++        let (started, beginning) = mpsc::channel();
++        let (sent, received) = mpsc::channel();
++        let ready = thread::spawn(move || {
++            with_forced_readiness(true, || {
++                started.send(()).unwrap();
++                assert!(worker.is_complete_now(token).unwrap());
++                // A forced-ready hint still requires actual acknowledgments.
++                assert!(both_done(&worker.shared, token.generation));
++                sent.send(()).unwrap();
++            });
++            worker
++        });
++        beginning.recv().unwrap();
++        assert!(received.try_recv().is_err());
++        assert_eq!(shared.readers[0].done.load(Ordering::Acquire), 0);
++        release_at(&shared, &shared.tests.in_input[0], false);
++        received.recv().unwrap();
++        let mut worker = ready.join().unwrap();
++        assert!(worker.is_complete_now(token).unwrap());
++        with_forced_readiness(false, || {
++            assert!(!worker.is_complete_now(token).unwrap());
++            with_forced_readiness(true, || assert!(worker.is_complete_now(token).unwrap()));
++            assert!(!worker.is_complete_now(token).unwrap());
++            let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                with_forced_readiness(true, || panic!("test readiness override unwind"));
++            }));
++            assert!(unwind.is_err());
++            assert!(!worker.is_complete_now(token).unwrap());
++            assert_eq!(thread::spawn(|| FORCED_READINESS.with(|value| value.get()))
++                .join().unwrap(), None);
++        });
++        assert!(worker.is_complete_now(token).unwrap());
++        // The hint left Flight and outputs for the original complete authority.
++        assert!(matches!(control_lock(&worker.shared).flight,
++            Flight::Published(metadata) if metadata.generation == token.generation));
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_readiness_rejects_zero_future_and_stale_scalar_tokens() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let invalid = DispatchToken { generation: 0, sampled: false };
++        assert!(worker.is_complete_now(invalid).is_err());
++        assert!(worker.is_complete_now(DispatchToken { generation: 1, sampled: false }).is_err());
++        let scope = worker.start_active_scope().unwrap();
++        let packet = packet();
++        let prior = dispatch(&mut worker, &packet);
++        assert_output(worker.complete().unwrap(), &packet);
++        block_at(&worker.shared.tests.in_input[0]);
++        let current = dispatch(&mut worker, &packet);
++        entered_at(&worker.shared, &worker.shared.tests.in_input[0]);
++        assert!(worker.is_complete_now(prior).is_err());
++        assert!(worker.is_complete_now(invalid).is_err());
++        assert!(worker.is_complete_now(DispatchToken {
++            generation: current.generation + 1, sampled: current.sampled,
++        }).is_err());
++        assert!(!worker.is_complete_now(current).unwrap());
++        release_at(&worker.shared, &worker.shared.tests.in_input[0], false);
++        for side in 0..2 { wait_done(&worker.shared, side, current.generation); }
++        assert!(worker.is_complete_now(current).unwrap());
++        assert_output(worker.complete().unwrap(), &packet);
++        scope.finish().unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_readiness_terminal_preserves_failure_and_never_acknowledges_peer() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = worker.start_active_scope().unwrap();
++        for side in 0..2 { block_at(&worker.shared.tests.in_input[side]); }
++        let token = dispatch(&mut worker, &packet());
++        for side in 0..2 { entered_at(&worker.shared, &worker.shared.tests.in_input[side]); }
++        release_at(&worker.shared, &worker.shared.tests.in_input[0], true);
++        wait_state(&worker.shared, 0, FAILED);
++        // Taking Control waits for terminal publication to finish, including stop.
++        let failure = worker.failure();
++        assert_eq!(worker.is_complete_now(token).err().unwrap(), failure);
++        for forced in [false, true] {
++            let error = with_forced_readiness(forced, || worker.is_complete_now(token))
++                .err().unwrap();
++            assert_eq!(error, failure);
++        }
++        assert_eq!(worker.shared.readers[0].done.load(Ordering::Acquire), 0);
++        assert_eq!(worker.shared.readers[1].done.load(Ordering::Acquire), 0);
++        assert!(matches!(control_lock(&worker.shared).flight,
++            Flight::Published(metadata) if metadata.generation == token.generation));
++        release_at(&worker.shared, &worker.shared.tests.in_input[1], false);
++        assert!(scope.finish().is_err());
++        assert!(worker.shutdown().is_err());
++        no_flight(&worker.shared);
++    }
++
++    #[test]
+diff --git a/src/evaluator.rs b/src/evaluator.rs
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -286,0 +287 @@
++    owner_local_inventory: bool,
+@@ -310,0 +312 @@
++            owner_local_inventory: self.owner_local_inventory,
+@@ -344,0 +347 @@
++            owner_local_inventory: false,
+@@ -420,0 +424,6 @@
++    /// Cold research option; this starts no worker and changes no thread budget.
++    pub fn set_owner_local_inventory(&mut self, enabled: bool) -> Result<(), String> {
++        self.owner_local_inventory = enabled;
++        Ok(())
++    }
++
+@@ -601,0 +611,33 @@
++        self.full_impl_hook::<FRESH, false, _, _, _>(node, influence, in_check, observer, details, false, |_| {})
++    }
++
++    /// Only the private ordinary consumer can request early generation. The
++    /// caller's coherence permission and destination row remain caller-owned.
++    pub(crate) fn full_ordinary_inventory(
++        &mut self,
++        node: &mut Node,
++        influence: &Influence,
++        checked: bool,
++        coherent: bool,
++        list: &mut crate::movegen::MoveList,
++    ) -> (Evaluation, bool) {
++        let mut prepared = false;
++        let evaluation = self.full_impl_hook::<false, true, _, _, _>(
++            node, influence, checked, |_| {}, |_| {}, coherent, |position| {
++                crate::movegen::generate_legal(position, list);
++                prepared = true;
++            },
++        );
++        (evaluation, prepared)
++    }
++
++    fn full_impl_hook<const FRESH: bool, const HOOK: bool, F: FnOnce(Components), D: FnOnce(FullDetails), H: FnOnce(&Position)>(
++        &mut self,
++        node: &mut Node,
++        influence: &Influence,
++        in_check: bool,
++        observer: F,
++        details: D,
++        coherent: bool,
++        inventory: H,
++    ) -> Evaluation {
+@@ -686,0 +729,6 @@
++            if HOOK && self.owner_local_inventory && coherent
++                && !worker.is_complete_now(colors_token.unwrap())
++                    .unwrap_or_else(|error| panic!("colors inventory readiness failed: {error}"))
++            {
++                inventory(position);
++            }
+@@ -1305,0 +1354,4 @@
++
++#[cfg(test)]
++#[path = "evaluator/owner_inventory_tests.rs"]
++mod owner_inventory_tests;
+diff --git a/src/ordinary.rs b/src/ordinary.rs
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -814 +814,5 @@
+-        let evaluation = self.evaluator.full(node, map, checked);
++        let (evaluation, inventory_prepared) = self.evaluator.full_ordinary_inventory(
++            node, map, checked, coherent_geometry, &mut self.candidates[p],
++        );
++        #[cfg(test)]
++        owner_inventory_tests::record(p, false, inventory_prepared, &self.candidates[p], self.evaluator.stats.full);
+@@ -867 +871,5 @@
+-        movegen::generate_legal(&position, &mut self.candidates[p]);
++        if !inventory_prepared {
++            movegen::generate_legal(&position, &mut self.candidates[p]);
++        }
++        #[cfg(test)]
++        owner_inventory_tests::record(p, true, inventory_prepared, &self.candidates[p], self.evaluator.stats.full);
+@@ -1228,0 +1237,4 @@
++
++#[cfg(test)]
++#[path = "ordinary/owner_inventory_tests.rs"]
++mod owner_inventory_tests;
+diff --git a/src/session.rs b/src/session.rs
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -142,0 +143,4 @@
++    }
++
++    pub fn set_owner_local_inventory(&mut self, enabled: bool) -> Result<(), String> {
++        self.search.as_mut().ok_or("search is currently active")?.evaluator.set_owner_local_inventory(enabled)
+diff --git a/src/evaluator/owner_inventory_tests.rs b/src/evaluator/owner_inventory_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/evaluator/owner_inventory_tests.rs
+@@ -0,0 +1,218 @@
++//! Finite evaluator controls; readiness overrides are test-only scheduling hints.
++use super::*;
++use crate::colors_worker::{readiness_probe_count, with_forced_readiness};
++use crate::movegen::{self, MoveList};
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++const MIDDLE: &str = "r3k2r/ppp2ppp/2npbn2/3qp3/3PP3/2N1BN2/PPP2PPP/R2Q1RK1 b kq - 0 10";
++const ENDING: &str = "6k1/5pp1/6p1/3P4/8/2N5/5P2/6K1 w - - 0 40";
++const CASTLE: &str = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1";
++const PROMOTION: &str = "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1";
++const JOINED_EP: &str = "1b5k/8/8/2Pn4/5K2/8/8/8 w - d6 0 1";
++const CHECKED: &str = "4k3/8/8/8/8/8/8/r3K2R w K - 0 1";
++
++fn position(fen: &str) -> Position { Position::from_fen(fen).unwrap() }
++
++fn configured<const D: bool>(root: &Position, budget: usize, enabled: bool) -> Evaluator<D> {
++    let mut evaluator = Evaluator::new(root);
++    evaluator.set_owner_local_inventory(enabled).unwrap();
++    evaluator.set_threads_with_affinity(budget, || Ok(3)).unwrap();
++    evaluator
++}
++
++fn asymmetric() -> Parameters {
++    Parameters {
++        own: [133, 73, 151, 87, 200, 121, 19, 313, 207, 251, 49],
++        opponent: [91, 128, 67, 142, 80, 57, 183, 47, 333, 107, 229],
++        average_depth: 13, draw: -173, opponent_selectivity: 31,
++    }
++}
++
++fn sentinel() -> MoveList {
++    let mut list = MoveList::new();
++    list.push(Move::NONE);
++    list
++}
++
++#[test]
++fn pending_inventory_matches_ordered_special_checked_lists_and_native_full_details() {
++    fn verify<const D: bool>() {
++        let root = position(START);
++        let mut serial = configured::<D>(&root, 1, false);
++        let mut worker = configured::<D>(&root, 3, true);
++        for root in [position(START), position(MIDDLE)] {
++            for parameters in [Parameters::default(), asymmetric()] {
++                for evaluator in [&mut serial, &mut worker] {
++                    evaluator.parameters = parameters.clone();
++                    evaluator.begin_search(&root);
++                }
++                for fen in [CASTLE, PROMOTION, JOINED_EP, CHECKED, ENDING] {
++                    let current = position(fen);
++                    let checked = movegen::in_check(&current, current.side);
++                    let mut expected_list = MoveList::new();
++                    movegen::generate_legal(&current, &mut expected_list);
++                    for map in [Influence::build(&current), Influence { profiles: [[255; 64], [0; 64]] }] {
++                        let before = (current, map);
++                        let mut a = Node::root(current, &serial.root);
++                        a.retained.positional = 731;
++                        a.retained.pawn_progress = -193;
++                        a.retained.age = 17;
++                        let mut b = a;
++                        let mut expected_details = None;
++                        let expected = serial.full_detailed_observed(&mut a, &map, checked, |value| expected_details = Some(value));
++                        let mut actual_details = None;
++                        let mut list = sentinel();
++                        let mut prepared = false;
++                        let probes = readiness_probe_count();
++                        let actual = with_forced_readiness(false, || worker.full_impl_hook::<false, true, _, _, _>(
++                            &mut b, &map, checked, |_| {}, |value| actual_details = Some(value), true,
++                            |position| { movegen::generate_legal(position, &mut list); prepared = true; },
++                        ));
++                        assert_eq!(readiness_probe_count(), probes + 1);
++                        assert!(prepared);
++                        assert_eq!(list.as_slice(), expected_list.as_slice(), "{fen}");
++                        assert_eq!((actual, b, actual_details), (expected, a, expected_details));
++                        assert_eq!(worker.stats, serial.stats);
++                        assert_eq!((current, map), before);
++                    }
++                }
++            }
++        }
++    }
++    verify::<true>();
++    verify::<false>();
++}
++
++#[test]
++fn ready_inventory_keeps_destination_untouched_and_returns_native_full() {
++    let root = position(START);
++    let map = Influence::build(&root);
++    let mut serial = configured::<true>(&root, 1, false);
++    let mut worker = configured::<true>(&root, 3, true);
++    let mut a = Node::root(root, &serial.root);
++    let mut b = a;
++    let expected = serial.full(&mut a, &map, false);
++    let mut list = sentinel();
++    let probes = readiness_probe_count();
++    let (actual, prepared) = with_forced_readiness(true, || worker.full_ordinary_inventory(&mut b, &map, false, true, &mut list));
++    assert_eq!(readiness_probe_count(), probes + 1);
++    assert!(!prepared);
++    assert_eq!(list.as_slice(), &[Move::NONE]);
++    assert_eq!((actual, b, worker.stats), (expected, a, serial.stats));
++    assert!(worker.colors_worker.as_ref().unwrap().is_parked());
++}
++
++#[test]
++fn owner_inventory_admission_and_budget_fallback_do_not_query_or_generate() {
++    let root = position(START);
++    let map = Influence::build(&root);
++    for (requested, available, enabled, coherent) in [
++        (1, 3, true, true), (2, 3, true, true), (3, 1, true, true),
++        (3, 2, true, true), (3, 3, false, true), (3, 3, true, false),
++    ] {
++        let mut worker = Evaluator::<true>::new(&root);
++        worker.set_owner_local_inventory(enabled).unwrap();
++        worker.set_threads_with_affinity(requested, || Ok(available)).unwrap();
++        let mut serial = configured::<true>(&root, 1, false);
++        let mut a = Node::root(root, &serial.root);
++        let mut b = a;
++        let expected = serial.full(&mut a, &map, false);
++        let mut list = sentinel();
++        let probes = readiness_probe_count();
++        let (actual, prepared) = with_forced_readiness(false, || worker.full_ordinary_inventory(&mut b, &map, false, coherent, &mut list));
++        assert_eq!(readiness_probe_count(), probes);
++        assert!(!prepared);
++        assert_eq!(list.as_slice(), &[Move::NONE]);
++        assert_eq!((actual, b, worker.stats), (expected, a, serial.stats));
++        assert_eq!(worker.requested_threads(), requested);
++        assert_eq!(worker.configured_threads(), requested.min(available).min(3));
++    }
++}
++
++#[test]
++fn public_fresh_and_observer_full_paths_have_zero_readiness_probes() {
++    let root = position(START);
++    let map = Influence { profiles: [[255; 64], [0; 64]] };
++    let mut serial = configured::<true>(&root, 1, false);
++    let mut worker = configured::<true>(&root, 3, true);
++    let probes = readiness_probe_count();
++    with_forced_readiness(false, || {
++        for kind in 0..5 {
++            let mut a = Node::root(root, &serial.root);
++            let mut b = a;
++            let (mut ad, mut bd) = (None, None);
++            let (mut ac, mut bc) = (None, None);
++            let expected = match kind {
++                0 => serial.full(&mut a, &map, false),
++                1 => serial.full_observed(&mut a, &map, false, |value| ac = Some(value)),
++                2 => serial.full_detailed_observed(&mut a, &map, false, |value| ad = Some(value)),
++                3 => serial.fresh_observed(&mut a, &map, false, |value| ac = Some(value)),
++                _ => serial.fresh_detailed_observed(&mut a, &map, false, |value| ad = Some(value)),
++            };
++            let actual = match kind {
++                0 => worker.full(&mut b, &map, false),
++                1 => worker.full_observed(&mut b, &map, false, |value| bc = Some(value)),
++                2 => worker.full_detailed_observed(&mut b, &map, false, |value| bd = Some(value)),
++                3 => worker.fresh_observed(&mut b, &map, false, |value| bc = Some(value)),
++                _ => worker.fresh_detailed_observed(&mut b, &map, false, |value| bd = Some(value)),
++            };
++            assert_eq!((actual, b, bd, bc, worker.stats), (expected, a, ad, ac, serial.stats));
++        }
++    });
++    assert_eq!(readiness_probe_count(), probes);
++}
++
++#[test]
++fn inventory_prepared_flag_is_per_call_and_outer_activation_retains_native_reuse() {
++    let root = position(START);
++    let mut worker = configured::<true>(&root, 3, true);
++    let mut serial = configured::<true>(&root, 1, false);
++    let outer = worker.full_worker_scope();
++    let mut list = sentinel();
++    for (index, fen) in [START, START, ENDING].into_iter().enumerate() {
++        let current = position(fen);
++        let map = Influence::build(&current);
++        let mut a = Node::root(current, &serial.root);
++        let mut b = a;
++        let expected = serial.full(&mut a, &map, false);
++        let saved = list.as_slice().to_vec();
++        let ready = index == 1;
++        let (actual, prepared) = with_forced_readiness(ready, || worker.full_ordinary_inventory(&mut b, &map, false, true, &mut list));
++        assert_eq!(prepared, !ready);
++        if ready { assert_eq!(list.as_slice(), saved.as_slice()); }
++        else {
++            let mut expected_list = MoveList::new();
++            movegen::generate_legal(&current, &mut expected_list);
++            assert_eq!(list.as_slice(), expected_list.as_slice());
++        }
++        assert_eq!((actual, b, worker.stats), (expected, a, serial.stats));
++    }
++    Evaluator::<true>::finish_full_worker_scope(outer);
++    assert!(worker.colors_worker.as_ref().unwrap().is_parked());
++}
++
++#[test]
++fn coherent_inventory_admits_opposite_king_pressure_and_distinguishes_prepared_empty_lists() {
++    for fen in [
++        "7k/8/8/8/8/8/8/K6R w - - 0 1",
++        "8/8/8/8/8/2k5/1q6/K7 w - - 0 1",
++        "8/8/8/8/8/2k5/2q5/K7 w - - 0 1",
++    ] {
++        let current = position(fen);
++        let checked = movegen::in_check(&current, current.side);
++        let mut worker = configured::<true>(&current, 3, true);
++        let mut node = Node::root(current, &worker.root);
++        let mut expected = MoveList::new();
++        movegen::generate_legal(&current, &mut expected);
++        let mut actual = sentinel();
++        let (_, prepared) = with_forced_readiness(false, || worker.full_ordinary_inventory(
++            &mut node, &Influence::build(&current), checked, true, &mut actual,
++        ));
++        assert!(prepared);
++        assert_eq!(actual.as_slice(), expected.as_slice());
++        if fen.starts_with("7k") {
++            assert!(movegen::in_check(&current, current.side.opponent()));
++            assert!(!actual.as_slice().is_empty());
++        } else { assert_eq!(actual.len, 0); }
++    }
++}
+diff --git a/src/ordinary/owner_inventory_tests.rs b/src/ordinary/owner_inventory_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/ordinary/owner_inventory_tests.rs
+@@ -0,0 +1,165 @@
++//! Test-only actual-owner preparation/demand probes; absent from production.
++use super::*;
++use crate::colors_worker::{readiness_probe_count, with_forced_readiness};
++use std::cell::RefCell;
++
++const START: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
++#[derive(Debug, Clone)]
++struct Event { demand: bool, prepared: bool, moves: Vec<Move>, full: u64 }
++thread_local! { static TRACE: RefCell<Option<Vec<Event>>> = const { RefCell::new(None) }; }
++
++pub(super) fn record(ply: usize, demand: bool, prepared: bool, list: &MoveList, full: u64) {
++    if ply != 1 { return; }
++    TRACE.with(|cell| {
++        if let Some(events) = cell.borrow_mut().as_mut() {
++            events.push(Event { demand, prepared, moves: if demand || prepared {
++                list.as_slice().to_vec()
++            } else { Vec::new() }, full });
++        }
++    });
++}
++
++fn trace<R>(f: impl FnOnce() -> R) -> (R, Vec<Event>) {
++    struct Clear;
++    impl Drop for Clear { fn drop(&mut self) { TRACE.with(|c| { c.borrow_mut().take(); }); } }
++    TRACE.with(|c| { assert!(c.borrow().is_none()); *c.borrow_mut() = Some(Vec::new()); });
++    let _clear = Clear;
++    let value = f();
++    let events = TRACE.with(|c| c.borrow_mut().take().unwrap());
++    (value, events)
++}
++
++fn null_call(enabled: bool, cutoff: bool, limit: u64)
++    -> (Result<i32, Stopped>, Search<true>, Node, Vec<Event>)
++{
++    let root = Position::from_fen(START).unwrap();
++    let previous = root.null_child();
++    let position = previous.null_child();
++    let mut search = Search::<true>::new(&position);
++    search.config.tts_bytes = 65536;
++    search.evaluator.set_threads_with_affinity(3, || Ok(3)).unwrap();
++    search.evaluator.set_owner_local_inventory(enabled).unwrap();
++    let scope = search.evaluator.full_worker_scope();
++    search.ensure_table().unwrap();
++    search.bind_geometry_permission(&position);
++    let (mut node, map) = search.prepare_root_with_influence(position);
++    let score = search.evaluator.full(&mut node, &map, false).score;
++    if !cutoff { assert!(score > 0); }
++    let upper = if cutoff { -100 } else { score };
++    let mut history = SearchHistory::new(&previous);
++    history.push(&position, None);
++    search.begin_owned_sequence(Limits { nodes: Some(limit) });
++    let (result, events) = trace(|| with_forced_readiness(false, || search.visit_ordinary(
++        &mut node, &mut history,
++        Request { ply: 1, depth: 3, lower: upper - 1, upper, previous_extension: 0,
++            iteration: 4, checked: Some(false) },
++        Predecessor { position: &previous, influence: &map, checked: false, movement: None },
++    )));
++    assert!(search.stats.null_trials > 0);
++    assert_eq!(history.search_ply(), 1);
++    history.pop();
++    crate::evaluator::Evaluator::<true>::finish_full_worker_scope(scope);
++    (result, search, node, events)
++}
++
++fn equal_owner(a: &Search<true>, b: &Search<true>) {
++    assert_eq!(a.work(), b.work());
++    assert_eq!(a.stats, b.stats);
++    assert_eq!(a.evaluator.stats, b.evaluator.stats);
++    assert_eq!(a.learning.history, b.learning.history);
++    assert_eq!(a.learning.killers, b.learning.killers);
++    assert_eq!(a.learning.total, b.learning.total);
++    assert_eq!(&a.pv[1][..a.pv_len[1]], &b.pv[1][..b.pv_len[1]]);
++}
++
++#[test]
++fn owner_inventory_null_continue_keeps_exact_parent_row_across_descendant_full_and_current_order() {
++    let (expected, off, a, off_events) = null_call(false, false, 200000);
++    let (actual, on, b, events) = null_call(true, false, 200000);
++    assert!(actual.is_ok()); assert_eq!(actual, expected); assert_eq!(a, b);
++    equal_owner(&on, &off);
++    assert_eq!(on.candidates[1].as_slice(), off.candidates[1].as_slice());
++    assert_eq!(events.len(), 2); assert_eq!(off_events.len(), 2);
++    assert!(!events[0].demand && events[0].prepared);
++    assert!(events[1].demand && events[1].prepared);
++    assert!(events[1].full > events[0].full, "actual descendant FULL must interpose");
++    assert_eq!(events[0].moves, events[1].moves);
++    assert_eq!(events[1].moves, off_events[1].moves);
++    assert!(!off_events[0].prepared && !off_events[1].prepared);
++    let mut native = MoveList::new(); movegen::generate_legal(&a.position, &mut native);
++    assert_eq!(events[1].moves, native.as_slice());
++}
++
++#[test]
++fn owner_inventory_null_cutoff_discards_prepared_row_without_generated_charge() {
++    let (expected, off, a, _) = null_call(false, true, 200000);
++    let (actual, on, b, events) = null_call(true, true, 200000);
++    assert!(actual.is_ok()); assert_eq!(actual, expected); assert_eq!(a, b);
++    equal_owner(&on, &off);
++    assert_eq!(on.stats.generated, 0);
++    assert_eq!(events.len(), 1); assert!(!events[0].demand && events[0].prepared);
++    assert!(on.evaluator.stats.full > events[0].full, "cutoff must follow real descendant FULL");
++    assert!(!events[0].moves.is_empty());
++}
++
++#[test]
++fn owner_inventory_null_stop_preserves_work_and_allows_fresh_worker_reuse() {
++    let (expected, mut off, a, _) = null_call(false, true, 1);
++    let (actual, mut on, b, events) = null_call(true, true, 1);
++    assert_eq!(expected, Err(Stopped::NodeLimit(1)));
++    assert_eq!(actual, expected); assert_eq!(a, b); equal_owner(&on, &off);
++    assert_eq!(on.stats.generated, 0);
++    assert_eq!(events.len(), 1); assert!(events[0].prepared && !events[0].demand);
++    let position = Position::from_fen(START).unwrap();
++    let mut ah = SearchHistory::new(&position); let mut bh = SearchHistory::new(&position);
++    let a = off.run_iterations(position, &mut ah, 2, Limits::default()).unwrap();
++    let b = on.run_iterations(position, &mut bh, 2, Limits::default()).unwrap();
++    assert_eq!((a.score, a.pv, a.work, a.stats, a.evaluations),
++               (b.score, b.pv, b.work, b.stats, b.evaluations));
++}
++
++#[test]
++fn owner_inventory_full_bound_discards_at_actual_owner_without_consumption() {
++    fn run(enabled: bool) -> (i32, Search<true>, Node, Vec<Event>) {
++        let position = Position::from_fen(START).unwrap();
++        let previous = position.null_child();
++        let mut search = Search::<true>::new(&position); search.config.tts_bytes = 65536;
++        search.evaluator.set_threads_with_affinity(3, || Ok(3)).unwrap();
++        search.evaluator.set_owner_local_inventory(enabled).unwrap();
++        search.ensure_table().unwrap(); search.bind_geometry_permission(&position);
++        let (mut node, map) = search.prepare_root_with_influence(position);
++        let mut history = SearchHistory::new(&previous); history.push(&position, None);
++        search.begin_owned_sequence(Limits::default());
++        let scope = search.evaluator.full_worker_scope();
++        let (result, events) = trace(|| with_forced_readiness(false, || search.visit_ordinary(
++            &mut node, &mut history,
++            Request { ply: 1, depth: 1, lower: -10000, upper: -10000,
++                previous_extension: 0, iteration: 2, checked: Some(false) },
++            Predecessor { position: &previous, influence: &map, checked: false, movement: None },
++        )));
++        crate::evaluator::Evaluator::<true>::finish_full_worker_scope(scope);
++        (result.unwrap(), search, node, events)
++    }
++    let (a, off, na, _) = run(false); let (b, on, nb, events) = run(true);
++    assert_eq!((a, b), (-10000, -10000)); assert_eq!(na, nb); equal_owner(&on, &off);
++    assert_eq!(on.stats.generated, 0);
++    assert_eq!(events.len(), 1); assert!(events[0].prepared && !events[0].demand);
++}
++
++#[test]
++fn owner_inventory_actual_root_and_q_only_iteration_never_query_or_prepare() {
++    let position = Position::from_fen(START).unwrap();
++    let mut off = Search::<true>::new(&position); off.config.tts_bytes = 65536;
++    let mut on = Search::<true>::new(&position); on.config.tts_bytes = 65536;
++    on.evaluator.set_threads_with_affinity(3, || Ok(3)).unwrap();
++    on.evaluator.set_owner_local_inventory(true).unwrap();
++    let mut ah = SearchHistory::new(&position); let mut bh = SearchHistory::new(&position);
++    let expected = off.run_iterations(position, &mut ah, 1, Limits::default()).unwrap();
++    let before = readiness_probe_count();
++    let (actual, events) = trace(|| with_forced_readiness(false, ||
++        on.run_iterations(position, &mut bh, 1, Limits::default()).unwrap()));
++    assert_eq!(readiness_probe_count(), before);
++    assert!(events.is_empty()); assert_eq!(actual.stats.ordinary_nodes, 0);
++    assert_eq!((actual.score, actual.pv, actual.work, actual.stats, actual.evaluations),
++        (expected.score, expected.pv, expected.work, expected.stats, expected.evaluations));
++}
