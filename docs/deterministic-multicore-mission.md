@@ -20,6 +20,17 @@ Investigate the engine, develop ideas, try promising approaches, and let the
 evidence guide further exploration. Begin with independent calculations where
 practical; pursue more advanced approaches when justified.
 
+Major redesigns, replacement subsystems and isolated greenfield implementations
+are within scope. Preserve King's required behavior and the retained baselines;
+the current engine architecture is not a constraint. Distinguish ordering and
+state dependencies required by the specification from boundaries inherited from
+the implementation. Seek concrete sources of useful parallel work, rather than
+assuming that a rewrite or additional workers will produce acceleration.
+
+Choose experiments by their expected value, from small changes to substantially
+different execution architectures. Reuse existing numerical kernels and evidence
+where useful, without requiring a new design to fit the existing structure.
+
 Imp2-lead owns architecture, strategy and critical review. Imp2 carries out
 delegated implementation and experiments. Keep coordination lightweight and
 document what was tried, what happened and what we learned. Successful research
