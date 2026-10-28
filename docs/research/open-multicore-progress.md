@@ -284,13 +284,21 @@ finds no eligible final root:19 reach E256 but fail material,35 fail phase.
 This does not prove descendant absence; the narrow geometry hypothesis is parked
 for lack of a useful workload argument, without implementation or a census.
 
-The next assigned source question is earlier Influence construction for the
-current actual node, overlapping prescribed owner work. Ordinary post-TT paths
-appear to require the map even when FAST avoids FULL; actual demand alone does
-not establish enough lead time. Compare a separate map helper with staged reuse
-of a color helper, pricing publication, delivery, early exits and retirement.
-This differs from future-child prediction and the failed at-FULL split-row fusion.
-No new implementation, census or native lane is selected.
+The [earlier current-node Influence review](earlier-current-node-influence.md),
+committed f5aef8a8, confirms ordinary post-TT map demand even when FAST avoids
+FULL. Only short setup and optional FAST remain for overlap. Both dedicated and
+staged-helper designs are parked: no substantial unconditional owner interval or
+priced conditional one justifies their transport yet. This does not prove those
+designs impossible or transfer the claim to Q.
+
+The next source-only design questions the worker ownership contract. Current
+dispatch and completion lock Control to arbitrate with independently closing
+Send scope guards. Actual production wrappers appear to open and close scopes
+synchronously. A private enclosing activation might keep Flight and metadata
+owner-local, while retaining shared cold lifecycle/failure synchronization and
+real reader retirement. Required public behavior, Send/migration, callbacks,
+nested scopes and unwind must be established before selecting an implementation.
+No lock deletion under the old contract, new build or native lane is authorized.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
 
