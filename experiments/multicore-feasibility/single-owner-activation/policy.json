@@ -1,0 +1,174 @@
+{
+  "schema": "rook2-single-owner-activation-policy-v1",
+  "base": "c9845ea68ddda71779bb791a443a68598212556c",
+  "sourceFiles": 69,
+  "sourceChanged": [
+    "src/colors_worker.rs",
+    "src/engine.rs",
+    "src/evaluator.rs",
+    "src/evaluator/owner_inventory_tests.rs",
+    "src/first_iteration.rs",
+    "src/ordinary.rs",
+    "src/ordinary/owner_inventory_tests.rs",
+    "src/quiescence.rs",
+    "src/quiescence/q_inventory_tests.rs",
+    "src/timed.rs"
+  ],
+  "sourceAdded": [
+    "src/evaluator/activation_tests.rs"
+  ],
+  "bothHooksRequested": true,
+  "focused": [
+    {
+      "name": "colors-worker",
+      "target": [
+        "--lib"
+      ],
+      "selector": "colors_worker::lifecycle_tests",
+      "expectedPassed": 27,
+      "limitSeconds": 300
+    },
+    {
+      "name": "activation",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::activation_tests",
+      "expectedPassed": 9,
+      "limitSeconds": 300
+    },
+    {
+      "name": "colors-lifetime",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::colors_lifecycle_tests",
+      "expectedPassed": 3,
+      "limitSeconds": 300
+    },
+    {
+      "name": "colors-numerical",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::colors_tests",
+      "expectedPassed": 8,
+      "limitSeconds": 300
+    },
+    {
+      "name": "ordinary-evaluator",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::owner_inventory_tests",
+      "expectedPassed": 6,
+      "limitSeconds": 300
+    },
+    {
+      "name": "q-evaluator",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::q_inventory_tests",
+      "expectedPassed": 6,
+      "limitSeconds": 300
+    },
+    {
+      "name": "ordinary-owner",
+      "target": [
+        "--lib"
+      ],
+      "selector": "ordinary::owner_inventory_tests",
+      "expectedPassed": 5,
+      "limitSeconds": 300
+    },
+    {
+      "name": "q-owner",
+      "target": [
+        "--lib"
+      ],
+      "selector": "quiescence::q_inventory_tests",
+      "expectedPassed": 6,
+      "limitSeconds": 300
+    }
+  ],
+  "cases": [
+    "profile-35",
+    "profile-08",
+    "profile-43"
+  ],
+  "names": [
+    "preserved1",
+    "preserved3",
+    "inline1",
+    "owner3"
+  ],
+  "budgets": [
+    1,
+    3,
+    1,
+    3
+  ],
+  "warmupsPerCell": 1,
+  "measuredPerCell": 3,
+  "replayLives": 48,
+  "measuredLives": 36,
+  "idleProbes": 4,
+  "idleMs": 250,
+  "ownerCpu": 14,
+  "helperCpus": [
+    6,
+    4
+  ],
+  "housekeepingCpus": [
+    0,
+    1,
+    2,
+    3,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "unusedOwnedSiblings": [
+    15,
+    7,
+    5
+  ],
+  "pipelineSeconds": 3600,
+  "collectionSeconds": 1800,
+  "perLifeSeconds": 180,
+  "spinBudget": 4096,
+  "sampleStride": 512,
+  "mathOwnershipObservationChangeAllowed": false,
+  "tuning": false,
+  "pgo": false,
+  "scope": "one fixed single-owner generic48+4; no qualification/adoption/external action",
+  "candidateVariants": 1,
+  "comparisonConfigurations": 4,
+  "layoutSeconds": 120,
+  "regions": [
+    "request",
+    "packet",
+    "white",
+    "black",
+    "lifecycle",
+    "latch",
+    "wait",
+    "control"
+  ],
+  "alignmentHypothesis": 64,
+  "originalRmwProtocol": true,
+  "oneArcAllocation": true,
+  "layoutAdmission": "one cold actual Shared/OwnerState production projection; preserve request/packet/output relative offsets and alignment; no allocator introspection or per-life query",
+  "sourceGeometryMayChange": true,
+  "geometryContradiction": "stop and report before timing; no topology rescue or sweep",
+  "activationContractChanged": true,
+  "ownerLocalFlight": true,
+  "ownedInput": true,
+  "ownerBoxAllocation": true,
+  "oneOwnerBoxAllocation": true,
+  "terminalDominatesSavedDepth": true
+}

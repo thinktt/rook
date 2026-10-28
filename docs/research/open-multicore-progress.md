@@ -291,14 +291,21 @@ staged-helper designs are parked: no substantial unconditional owner interval or
 priced conditional one justifies their transport yet. This does not prove those
 designs impossible or transfer the claim to Q.
 
-The next source-only design questions the worker ownership contract. Current
-dispatch and completion lock Control to arbitrate with independently closing
-Send scope guards. Actual production wrappers appear to open and close scopes
-synchronously. A private enclosing activation might keep Flight and metadata
-owner-local, while retaining shared cold lifecycle/failure synchronization and
-real reader retirement. Required public behavior, Send/migration, callbacks,
-nested scopes and unwind must be established before selecting an implementation.
-No lock deletion under the old contract, new build or native lane is authorized.
+The [single-owner activation design](single-owner-activation-design.md), committed
+c9845ea6, replaces the independent Send close guard with a restricted enclosing
+operation. Flight/metadata/readiness become owner-local; shared cold failure and
+parking, actual reader retirement, owned inputs and SC-RMW completion remain.
+The proposed removal is of normal dispatch/completion lock arbitration under a
+changed contract, not deletion of locks from the old contract.
+
+An independent bounded Astra challenge found no ownership counterexample under
+the design, and required terminal/drained state to dominate saved nesting depth:
+outer cleanup after inner shutdown must be idempotent and never reactivate.
+Fixed forwarded bodies remain trusted audited code; the facade alone does not
+prove they never replace the worker. The lead selected one isolated generic
+old1/old3/new1/new3 comparison after affected lifecycle/caller checks, with all
+numeric bodies and observations retained. No PGO, adoption or speed claim follows
+from the design. Actual implementation and measured economics remain pending.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
 

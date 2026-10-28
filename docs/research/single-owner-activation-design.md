@@ -57,8 +57,11 @@ existing types are Send; safe scoped threads finish before wrapper cleanup.
 Single ownership does not require a permanently fixed coordinator thread.
 
 Record the owner-local entry nesting depth before opening. Protect opening as
-well as the body: partial activation failure must restore that entry depth and
-drain any actually awakened readers. Nested entry increments/decrements ordinary
+well as the body: partial activation failure must drain any actually awakened
+readers. Restore saved depth only while live: terminal/shutdown/drained state
+dominates it, including inner epoch exhaustion. Cleanup after real inner drain
+is idempotent and must not reactivate, underflow, recount retirement or double-panic.
+Nested entry increments/decrements ordinary
 depth; only zero-to-one wakes and one-to-zero parks. Cleanup errors on a normal
 return follow the existing error/panic policy. During existing unwind, drain
 without a second panic and resume the original panic; do not promise search-state
