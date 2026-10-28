@@ -1,0 +1,133 @@
+{
+  "schema": "rook2-single-owner-own-pgo-policy-v1",
+  "sourceCheckpoint": "19a1c1b83f6875064afc0b1677cb0c3e6d5bf303",
+  "sourceFiles": 69,
+  "sourceChangeAllowed": false,
+  "training": {
+    "modes": [
+      {
+        "variant": "inline1",
+        "budget": 1,
+        "options": [
+          "--threads=1",
+          "--owner-local-inventory",
+          "--q-owner-local-inventory"
+        ]
+      },
+      {
+        "variant": "current2",
+        "budget": 2,
+        "options": [
+          "--threads=2",
+          "--owner-local-inventory",
+          "--q-owner-local-inventory"
+        ]
+      },
+      {
+        "variant": "q-off3",
+        "budget": 3,
+        "options": [
+          "--threads=3",
+          "--owner-local-inventory"
+        ]
+      },
+      {
+        "variant": "q-on3",
+        "budget": 3,
+        "options": [
+          "--threads=3",
+          "--owner-local-inventory",
+          "--q-owner-local-inventory"
+        ]
+      }
+    ],
+    "casesPerMode": 54,
+    "lives": 216,
+    "canonicalMerges": 1,
+    "independentRemerges": 1,
+    "weighting": "equal raw input inclusion; no alternate weights",
+    "rawProfileBytes": 268435456
+  },
+  "comparison": {
+    "variants": [
+      "serial1",
+      "retained1",
+      "retained3",
+      "inline1",
+      "owner3"
+    ],
+    "cases": 54,
+    "lives": 270,
+    "observationsPerCell": 1,
+    "warmups": 0,
+    "idleProbes": 5,
+    "caseOrder": "released original order; rotate configuration order by case index modulo5; each name appears10 or11 times per slot",
+    "statistic": "direct sums/single observations; no per-case medians",
+    "semantics": "serial5cf original argv; retaineda4ec andnewsource both inline1/mode3, bothhooksrequested"
+  },
+  "coordinatorCpu": 14,
+  "helperCpus": [
+    6,
+    4
+  ],
+  "housekeepingCpus": [
+    0,
+    1,
+    2,
+    3,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "unusedOwnedSiblings": [
+    15,
+    7,
+    5
+  ],
+  "limits": {
+    "pipelineSeconds": 3600,
+    "instrumentedBuildSeconds": 300,
+    "trainingSeconds": 2400,
+    "trainingDriverSeconds": 2500,
+    "trainingAuditSeconds": 120,
+    "mergeSeconds": 60,
+    "useBuildSeconds": 300,
+    "comparisonSeconds": 1800,
+    "comparisonDriverSeconds": 1900,
+    "comparisonAuditSeconds": 120,
+    "perLifeSeconds": 180,
+    "layoutSeconds": 120
+  },
+  "recipe": {
+    "target": "x86_64-unknown-linux-gnu",
+    "cpu": "x86-64",
+    "optimization": "O3/ThinLTO/oneCGU/debug1/panic-abort",
+    "useOnlyExtTspProfiled": true
+  },
+  "spinBudget": 4096,
+  "sampleStride": 512,
+  "smallScreen": false,
+  "gainGate": false,
+  "conditionalRepeat": false,
+  "scope": "Unchanged-source single-owner own-PGO/full54 research; no retune, repeat, qualification, adoption or external action.",
+  "cliControls": 14,
+  "fallbackReplayLives": 2,
+  "fallbackRequestedBudget": 3,
+  "readinessTiming": "original owner_ready before optional generation; residual join starts after hook and excludes generation",
+  "fallbackEnabledFlags": [
+    "--owner-local-inventory",
+    "--q-owner-local-inventory"
+  ],
+  "reuseFocusedControls": {
+    "freshGeneric": 70,
+    "retainedHistorical": 35,
+    "scope": "reuse closed generic70 unique/71 actual with one retained fixture failure; no unit rerun or additive105-control claim"
+  },
+  "closerApi": "validate three-element tuple and project saved record, matching prior proven adapter before execution",
+  "coldLayoutProcesses": 1,
+  "layoutQueryInTrainingOrTiming": false,
+  "sameTrainingCompositionAsRetainedA4ec": true
+}
