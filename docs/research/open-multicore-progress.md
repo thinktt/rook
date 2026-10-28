@@ -1,6 +1,6 @@
 # Open multicore research: current assessment
 
-2026-10-26, imp2-lead. Continuing under the
+Updated 2026-10-28, imp2-lead. Continuing under the
 [mission](../deterministic-multicore-mission.md); this is a progress assessment,
 not research closure or release approval.
 
@@ -11,13 +11,19 @@ One immutable input is shared until both readers retire; each owns its output.
 The reviewed epoch protocol removed serialized reader copies and result locking.
 The numerical split alone had lost: the transport change made it useful.
 
-The latest [Q owner-local own-PGO survey](../../experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
+The latest [writer-region own-PGO survey](../../experiments/multicore-feasibility/writer-regions-own-pgo/report.md)
+records59.317384s versus retainedf8 59.909994s and accepted serial68.279043s,
+gains of0.99% and13.13%. Whole CPU is177.967157s,2.603x serial; new inline1
+costs1.22% versus accepted serial. Exact a4ecf096/profile6cb9dcaa remains the
+research leader. These are single observations per case/configuration, not
+qualification, canonical adoption or a matched Bee/KingWCR comparison.
+
+The preceding [Q owner-local own-PGO survey](../../experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
 records59.918858s versus retained3d3 60.327621s and accepted serial68.811008s,
 gains of0.68% and12.92%. The coordinator conditionally prepares ordinary and
 eligible unchecked-Q lists during helper work. Whole CPU is179.768092s,2.609x
-serial; the new inline mode costs1.07% versus accepted serial. This is the latest
-research performance leader, with single observations per case/configuration,
-not qualification or canonical adoption.
+serial; its inline mode costs1.07% versus accepted serial. This earlier leader
+remains preserved with its own measurement window and evidence.
 
 The preceding [ordinary owner-local survey](../../experiments/multicore-feasibility/owner-local-own-pgo/README.md)
 extends that design: at ordinary FULL, the coordinator conditionally generates
@@ -266,13 +272,27 @@ probes observe0 ticks/250ms; per-process peak RSS and the actual type projection
 do not measure cache traffic. Single observations establish no confidence interval.
 Retain a4ecf096/profile6cb9dcaa as the research leader, preserving all predecessors.
 
-Next is a source-only assessment of preparing score-independent late-endgame
-geometry before the FULL join. Actual score/sign choices, rounding and finishing
-publication must remain canonical. Geometry could be demanded more reliably than
-eager move generation, but expensive material shapes may be rare and both ideas
-compete for the same owner wait. No additional worker, census, implementation or
-native lane is selected. Frontier batching remains a separate reserve. Current
-transport and owner-overlap gains create no new parallel work width.
+The [source-only geometry assessment](endgame-geometry-overlap.md), committed
+d29217a2, parks universal/two-side preparation. One side-tagged rook-against-pawns
+predicate remains a hypothesis, after inventory priority and only with residual
+helper work. Actual post-blend side/arm selection and floor arithmetic remain
+authoritative. Its frequency and useful overlap are unpriced.
+
+Toby explicitly reactivated the goal on2026-10-28 after the reset hold. The
+[source-only original54 check](/home/legolas/agent-memos/imp2-to-imp2-lead-original54-rook-root-coverage-20261028.md)
+finds no eligible final root:19 reach E256 but fail material,35 fail phase.
+This does not prove descendant absence; the narrow geometry hypothesis is parked
+for lack of a useful workload argument, without implementation or a census.
+
+The next assigned source question is earlier Influence construction for the
+current actual node, overlapping prescribed owner work. Ordinary post-TT paths
+appear to require the map even when FAST avoids FULL; actual demand alone does
+not establish enough lead time. Compare a separate map helper with staged reuse
+of a color helper, pricing publication, delivery, early exits and retirement.
+This differs from future-child prediction and the failed at-FULL split-row fusion.
+No new implementation, census or native lane is selected.
+Frontier batching remains a separate reserve. Current transport and owner-overlap
+gains create no new parallel work width.
 
 The latest three-thread image is `a4ecf096d2144a79608b0ff4f3dc827bc8e5119730f2c43b29f46d1f7ffe62b5`,
 with profile `6cb9dcaab015c8b4c13f37040bb34cda9e4d7bc11b77ef8c4c99bd56987eae3b`;
