@@ -79,6 +79,19 @@ def main():
         reusedEvidenceSha256={str(p):sha(p) for p in sorted(set(reused))},
         inputSha256={str(p):sha(p) for p in sorted(set(inputs))},
         scope='one isolated single-owner generic48+4, both hooks, unchanged owned inputs/math/observations/SC-RMW; no PGO/qualification/adoption')
+    archive = Path('/home/legolas/rook2-experiments/single-owner-20261028-01/repair-01')
+    if archive.is_dir():
+        record = archive/'repair.json'
+        value['repair'] = dict(path=str(record), sha256=sha(record),
+            archiveSha256={str(p):sha(p) for p in sorted(archive.rglob('*')) if p.is_file()})
+        initial = read(archive/'pipeline-before.json')
+        raw = archive.parent
+        for row in initial['stages']:
+            for suffix in ['stdout', 'stderr']:
+                path = raw/(row['stage']+'.'+suffix)
+                value['inputSha256'][str(path)] = sha(path)
+        path = raw/'housekeeping-prepare.json'
+        value['inputSha256'][str(path)] = sha(path)
     destination = HERE/'preparation.json'
     destination.write_text(json.dumps(value, indent=2)+'\n')
     assert preparation(destination) == value

@@ -104,6 +104,68 @@ def reused_evidence_paths():
     return sorted(set(paths))
 
 
+FAILED_SELECTOR='quiescence::q_inventory_tests::q_inventory_ready_arm_and_fresh_activation_preserve_stop_order_state_and_work'
+REPAIR_TEST=dict(name='repair-01-q-owner',target=['--lib'],selector=FAILED_SELECTOR,
+    expectedPassed=1,limitSeconds=300,exact=True)
+REPAIR_STAGE='tests-repair-01-q-owner'
+
+
+def repair_admission(directory,prepared):
+    """One fixed test-only continuation; inspect the saved failed receipts only."""
+    directory=Path(directory).resolve();archive=directory/'repair-01'
+    binding=prepared['repair'];record=archive/'repair.json'
+    assert binding['path']==str(record) and binding['sha256']==sha(record)
+    files=sorted(path for path in archive.rglob('*') if path.is_file())
+    assert set(binding['archiveSha256'])=={str(path) for path in files}
+    for path in files: assert binding['archiveSha256'][str(path)]==sha(path),path
+    repair=read(record);initial=read(archive/'pipeline-before.json');proof=read(archive/'preparation.json')
+    assert repair['schema']=='rook2-single-owner-test-repair-v1'
+    assert repair['failedStage']=='tests-07-q-owner' and repair['failedSelector']==FAILED_SELECTOR
+    assert repair['initialPreparationSha256']==sha(archive/'preparation.json')==initial['preparationSha256']
+    assert initial['sourcePreparation']==proof and proof['candidateSource']==repair['initialSource']==snapshot(archive/'source-before')
+    assert len(repair['initialSource'])==len(prepared['candidateSource'])==69
+    assert repair['initialSource'].keys()==prepared['candidateSource'].keys()
+    changed=sorted(name for name in repair['initialSource'] if repair['initialSource'][name]!=prepared['candidateSource'][name])
+    assert changed==repair['sourceChanged']==['src/quiescence/q_inventory_tests.rs']
+    assert repair['productionChanged']==[] and repair['nativeRequestsRepeated']==repair['completedControlsRepeated']==0
+    assert repair['selectedLogicalControls']==70 and repair['passedBeforeRepair']==69 and repair['failedTestExecutions']==1
+    assert repair['pipelineClockReset'] is False and proof['focused']==prepared['focused']
+    assert not initial['complete'] and not initial['prepared'] and not initial['collected']
+    assert initial['active']=='tests-07-q-owner' and initial['failure']=="AssertionError(('tests-07-q-owner', 101))"
+    assert initial['protectedArtifacts']==prepared['protectedArtifacts']==baseline()
+    assert initial['pipelineDeadlineMonotonicNs']==initial['pipelineStartMonotonicNs']+3600*10**9
+    assert len(initial['stages'])==8 and sum(row['expectedPassed'] for row in proof['focused'])==70
+    assert [row['exit'] for row in initial['stages']]==[0]*7+[101]
+    for name,digest in proof['inputSha256'].items():
+        path=Path(name)
+        saved=archive/path.relative_to(HERE) if path.is_relative_to(HERE) else path
+        assert sha(saved)==digest,saved
+    for name,digest in proof['reusedEvidenceSha256'].items(): assert sha(name)==digest,name
+    for row in initial['stages']:
+        for suffix in ['stdout','stderr']:
+            path=directory/(row['stage']+'.'+suffix)
+            assert sha(path)==row[suffix+'Sha256']==prepared['inputSha256'][str(path)]
+    initial_passed,initial_failed=[],[]
+    for index,(row,tests) in enumerate(zip(initial['stages'],proof['focused'])):
+        assert row['stage']==f'tests-{index:02d}-{tests["name"]}'
+        text=(directory/(row['stage']+'.stdout')).read_text()
+        passed=re.findall(r'^test (\S+) \.\.\. ok$',text,re.M)
+        failed=re.findall(r'^test (\S+) \.\.\. FAILED$',text,re.M)
+        summaries=re.findall(r'^test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;',text,re.M)
+        if index==7:
+            assert len(passed)==5 and failed==[FAILED_SELECTOR] and summaries==[('5','1','0')]
+            assert 'passedTests' not in row
+        else:
+            assert passed==row['passedTests'] and len(passed)==tests['expectedPassed']
+            assert not failed and summaries==[(str(len(passed)),'0','0')]
+        initial_passed+=passed;initial_failed+=failed
+    assert len(initial_passed)==len(set(initial_passed))==69 and initial_failed==[FAILED_SELECTOR]
+    assert len(set(initial_passed+initial_failed))==70
+    house=directory/'housekeeping-prepare.json'
+    assert sha(house)==sha(archive/'housekeeping-before.json')==prepared['inputSha256'][str(house)]
+    return initial
+
+
 def preparation(path):
     """Source-only freeze admission. Selectors/counts are supplied before native work."""
     value=read(path)
@@ -164,6 +226,8 @@ def preparation(path):
         ROOT/'docs/research/single-owner-activation-design.md']
     for file in required: assert value['inputSha256'][str(file)]==sha(file),file
     for file,digest in value['inputSha256'].items(): assert sha(file)==digest,file
+    if 'repair' in value:
+        repair_admission(Path(value['repair']['path']).parent.parent,value)
     return value
 
 
@@ -219,31 +283,56 @@ def prepared_run(path,prepared_path,prepared):
     assert value['pipelineDeadlineMonotonicNs']==value['pipelineStartMonotonicNs']+3600*10**9
     assert value['pipelineStartMonotonicNs']<=value['preparedMonotonicNs']<value['pipelineDeadlineMonotonicNs']
     stages=value['stages']
-    assert [row['stage'] for row in stages]==[f'tests-{i:02d}-{row["name"]}' for i,row in enumerate(prepared['focused'])]+['candidate-build','cli-affinity','layout']
+    repaired='repair' in prepared
+    test_specs=list(prepared['focused'])+([REPAIR_TEST] if repaired else [])
+    test_names=[f'tests-{i:02d}-{row["name"]}' for i,row in enumerate(prepared['focused'])]+([REPAIR_STAGE] if repaired else [])
+    assert [row['stage'] for row in stages]==test_names+['candidate-build','cli-affinity','layout']
+    if repaired:
+        initial=repair_admission(directory,prepared)
+        assert stages[:8]==initial['stages'] and value['repair']==prepared['repair']
+        assert value['pipelineStartMonotonicNs']==initial['pipelineStartMonotonicNs']
+        assert value['pipelineDeadlineMonotonicNs']==initial['pipelineDeadlineMonotonicNs']
     for file,digest in value['inputSha256'].items(): assert sha(file)==digest,file
     previous_end=value['pipelineStartMonotonicNs']
-    caps=[row.get('limitSeconds',300) for row in prepared['focused']]+[300,420,120]
-    for row,cap in zip(stages,caps):
+    caps=[row.get('limitSeconds',300) for row in test_specs]+[300,420,120]
+    for index,(row,cap) in enumerate(zip(stages,caps)):
         assert previous_end<=row['startedMonotonicNs']<row['endedMonotonicNs']<=value['preparedMonotonicNs']
         assert row['elapsedNs']==row['endedMonotonicNs']-row['startedMonotonicNs']
         assert row['deadlineMonotonicNs']==min(value['pipelineDeadlineMonotonicNs'],row['startedMonotonicNs']+cap*10**9)
         assert row['endedMonotonicNs']<row['deadlineMonotonicNs']
         previous_end=row['endedMonotonicNs']
-        assert row['exit']==0
+        assert row['exit']==(101 if repaired and index==7 else 0)
         for suffix in ['stdout','stderr']:
             file=directory/(row['stage']+'.'+suffix)
             assert value['inputSha256'][str(file)]==sha(file)==row[suffix+'Sha256']
-    for row,tests in zip(stages,prepared['focused']):
+    passed_all,failed_all=[],[]
+    for index,(row,tests) in enumerate(zip(stages,test_specs)):
         text=(directory/(row['stage']+'.stdout')).read_text()
         passed=re.findall(r'^test (\S+) \.\.\. ok$',text,re.M)
-        summaries=re.findall(r'^test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;',text,re.M)
-        assert passed==row['passedTests'] and len(passed)==len(set(passed))==tests['expectedPassed']
-        assert summaries==[(str(len(passed)),'0','0')]
+        failed=re.findall(r'^test (\S+) \.\.\. FAILED$',text,re.M)
+        summaries=re.findall(r'^test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;',text,re.M)
+        assert len(passed)==len(set(passed))
+        if repaired and index==7:
+            assert len(passed)==5 and failed==[FAILED_SELECTOR] and summaries==[('5','1','0')]
+            assert 'passedTests' not in row
+        else:
+            assert passed==row['passedTests'] and len(passed)==tests['expectedPassed']
+            assert failed==[] and summaries==[(str(len(passed)),'0','0')]
+        passed_all+=passed;failed_all+=failed
         argv=['/usr/bin/cargo','test','--offline','--locked',*tests['target'],'--target','x86_64-unknown-linux-gnu',
             '--jobs','4','--target-dir',str(directory/'test-target'),tests['selector'],'--','--test-threads=1']
         if tests.get('exact',False): argv.append('--exact')
         if tests.get('ignored',False): argv.append('--ignored')
         assert row['argv']==argv and row['cwd']==str(DEFAULT_CRATE)
+    if repaired:
+        assert len(passed_all)==len(set(passed_all))==70 and failed_all==[FAILED_SELECTOR]
+        assert stages[8]['passedTests']==[FAILED_SELECTOR]
+        summary=dict(selectedLogicalControls=70,executions=71,passed=70,failed=1,
+            passedBeforeRepair=69,repairPassed=1,completedControlsRepeated=0)
+    else:
+        summary=dict(selectedLogicalControls=len(passed_all),executions=len(passed_all),
+            passed=len(passed_all),failed=0,completedControlsRepeated=0)
+    assert value['testExecutionSummary']==summary
     assert stages[-3]['argv']==['/usr/bin/python3',str(BUILD_ADAPTER),'--crate',str(DEFAULT_CRATE),
         '--mode','generic','--bin','rook2','--jobs','4','--output',str(directory/'candidate-build')]
     assert stages[-2]['argv']==['/usr/bin/python3',str(FOCUSED),'--engine',str(directory/'rook2-candidate'),

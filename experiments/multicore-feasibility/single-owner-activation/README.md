@@ -11,8 +11,13 @@ raw build/test/comparison evidence belongs outside Git at
 [ownership map](ownership-proof.md). The69-file derivative changes ten existing
 files and adds one focused test module. Seventy affected controls across eight
 filters are selected before one generic build,14 CLI/two fallback admissions and
-one cold layout query. No control has run yet. Canonical source and retained
-images/profiles are unchanged.
+one cold layout query. Initial execution retained69 passes and one test-fixture
+failure: the reused private Q fixture must renew coherent admission after its
+new enclosing wrapper clears it. Only that failed unit will run again; its five
+passing group peers and all earlier controls remain retained. Production source
+is unchanged. The original clock, failed executable/source/tools/receipts are
+preserved in raw `repair-01`; there are no benchmark results yet. Canonical source
+and retained images/profiles are unchanged.
 
 The existing writer48+4 pipeline is adapted, with no new collector. Native
 activation requires frozen source/tools and the announced quiet window. One

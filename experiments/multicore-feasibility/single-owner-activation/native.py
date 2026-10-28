@@ -7,7 +7,7 @@ spec=importlib.util.spec_from_file_location('single_owner_activation_housekeepin
 h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
 
 def main():
-    stage=sys.argv[1];assert stage in ['prepare','collect']
+    stage=sys.argv[1];assert stage in ['prepare','repair-prepare','collect']
     placement=h.Placement();record=dict(schema='rook2-single-owner-activation-housekeeping-v1',helperCpus=sorted(H),applies=[],restored=None,failure=None)
     child=None;code=None
     try:
@@ -27,7 +27,8 @@ def main():
      raise
     finally:
      record['restored']=placement.restore();record['postRestoreSelfAffinity']=sorted(os.sched_getaffinity(0))
-     if RAW.exists():(RAW/('housekeeping-'+stage+'.json')).write_text(json.dumps(record,indent=2)+'\n')
+     if RAW.exists():
+      with (RAW/('housekeeping-'+stage+'.json')).open('x') as output: output.write(json.dumps(record,indent=2)+'\n')
     print('native wrapper terminal',stage,code,flush=True)
     sys.exit(code)
 

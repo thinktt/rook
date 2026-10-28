@@ -2449,6 +2449,17 @@
  }
  
  #[test]
+@@ -281,6 +277,10 @@
+     assert_eq!(on.candidates[1].moves[0].to_string(), "a7b8q");
+     // Reuse the actual owner/node/history. This activation must start false;
+     // a ready hint cannot inherit the previous activation's prepared row.
++    // The enclosing test entry now clears its private geometry permission on
++    // exit. Renew this fixture's validated admission for the next private call.
++    off.bind_geometry_permission(&a.position);
++    on.bind_geometry_permission(&b.position);
+     let (expected, _, _) = call(&mut off, &mut a, &mut ah,
+         entry(), Some(1), Some(false), false, true);
+     let (actual, events, queries) = call(&mut on, &mut b, &mut bh,
 --- a/src/timed.rs
 +++ b/src/timed.rs
 @@ -494,16 +494,10 @@
