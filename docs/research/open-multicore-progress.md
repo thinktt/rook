@@ -304,8 +304,22 @@ outer cleanup after inner shutdown must be idempotent and never reactivate.
 Fixed forwarded bodies remain trusted audited code; the facade alone does not
 prove they never replace the worker. The lead selected one isolated generic
 old1/old3/new1/new3 comparison after affected lifecycle/caller checks, with all
-numeric bodies and observations retained. No PGO, adoption or speed claim follows
-from the design. Actual implementation and measured economics remain pending.
+numeric bodies and observations retained.
+
+That generic lane now passes70 unique controls (71 executions including one
+preserved test-fixture admission failure),48 original replay lives/560 posts and
+four idle probes. Shared is832B with a separate6368B OwnerState; the selected hot
+offsets are retained. Median sums old1/old3/new1/new3 are8.413151/7.393941/8.430323/
+7.355324s. New3 improves0.5223% with0.994826x CPU; newinline costs0.2041%. All three
+mode3 ranges overlap,08 is slightly slower and43 supplies most of the net gain.
+This is tentative evidence, not an isolated mutex-cost measurement. Production
+source was unchanged by the fixture repair; no completed request was repeated.
+
+The lead selected one separate unchanged-source own-PGO/full54 discriminator:
+216 four-mode training lives, one actual independent remerge/use build and270+5
+comparing serial plus old/new inline and three-thread images. Existing controls
+are reused; no retune or generic repeat. a4ec remains the research leader pending
+that result. Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
 
