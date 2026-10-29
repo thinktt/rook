@@ -57,3 +57,15 @@ trees, parent relationships and timestamps. Existing Codex trailers were kept;
 57 earlier commits received the required co-author/director trailers. This is
 local history rewriting; no remote push was performed. Repository-local Git
 identity is `Tobias Toland <github@thinktt.e4ward.com>` for future commits.
+
+## 2026-10-29 research closeout
+
+Eleven detached experiment worktrees under `workspaces/` were retired as Git
+worktrees. Their complete non-Git contents remain at the original paths as frozen
+evidence snapshots, including experimental changes not committed in those old
+checkouts. Main and the research checkout remain registered. Git administrative
+backups, status/patches and before/after content verification are stored under
+`/home/legolas/rook2-experiments/research-closeout-20261029-01/`.
+See the [handoff](research/multicore-handoff.md) and
+[compact cleanup receipt](../experiments/multicore-feasibility/research-closeout/cleanup.json).
+No source, binary, profile or raw receipt was moved or discarded.

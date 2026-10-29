@@ -511,3 +511,14 @@ still preserves the practical two-thread checkpoint, and accepted main/release
 bytes are unchanged. The source proof, focused controls and exact-image replay
 surveys support further research. Broad mandatory/gameplay qualification of the
 three-thread image, adoption, external transfer and release remain separate work.
+
+
+## Tabled research and successor handoff — 2026-10-29
+
+The final source recommendation is [retained-owner-critical-path.md](retained-owner-critical-path.md),
+committed d62c8fea. No profiling or redesign followed it. Toby tabled the experiment
+after the manager50% stop; the goal/team remain paused. Documentation/worktree
+cleanup is separately authorized and does not resume research.
+The [successor handoff](multicore-handoff.md) consolidates all experiment and
+source-study links, exact leader artifacts, limitations and restart obligations.
+Historical selections above retain their original chronological meaning.

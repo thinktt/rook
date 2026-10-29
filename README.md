@@ -1,5 +1,10 @@
 # Rook2
 
+**Research is tabled and paused (2026-10-29).** Start with the
+[successor handoff](docs/research/multicore-handoff.md) for the complete experiment
+index, exact retained artifacts and restart obligations. No new research or
+execution is selected; accepted main/release remains unchanged.
+
 **This worktree is the deterministic multicore research branch.** The latest
 [isolated three-thread candidate](experiments/multicore-feasibility/single-owner-own-pgo/report.md)
 completed the descriptive 54-case survey in58.692s, versus58.935s for the prior
@@ -20,7 +25,7 @@ source still preserves the [two-thread checkpoint](docs/research/deterministic-m
 and its selected local behavioral evidence. Accepted serial release bytes below
 are unchanged. Historical KingWCR timings are not a matched comparison.
 
-Research continues under the [multicore mission](docs/deterministic-multicore-mission.md).
+The paused research is governed by the [multicore mission](docs/deterministic-multicore-mission.md).
 On 2026-10-26 the owner restored an open architectural agenda: seek useful scaling
 across increasing thread counts, with branch queues as one hypothesis rather than
 the primary approach. The two-thread outcome is a preserved checkpoint, not closure
