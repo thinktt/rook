@@ -342,10 +342,21 @@ gain is not simply the generic43 effect. Worst relative loss22 is1.32%. This is
 finite descriptive evidence, not isolated lock-cost attribution or qualification.
 Retain c242f0e4/profile1a81bdac provisionally, with a4ec and predecessors preserved.
 
-Next is source-only design of two writer-separated completion registration flags
-in place of the shared helper-written latch. Retain unconditional SC RMWs, one
-coordinator waiter and actual done; challenge every wake/terminal path and added
-cold/footprint cost. No flag implementation or further native lane is selected.
+The [per-reader registration design](per-reader-completion-registration.md),
+committed72119dd5, separates the two hot completion writers while retaining
+unconditional SC RMWs, one coordinator waiter and actual done. Each flag carries
+its own acquired publication chain; both registrations precede every cold
+predicate check. Every true consumer owes an unconditional Sleep-protected wake,
+including delayed old-generation publishers. Cold owner signaling must evaluate
+both exchanges, never short-circuit. Terminal/partial-startup/join-error paths
+are explicitly mapped; flags never supply reader retirement.
+
+After independent root review, one isolated generic old/new1/3 fixed48+4 trial is
+selected. Rerun27 affected worker controls plus targeted interleavings and reuse43
+unaffected controls. Actual cold geometry must confirm Shared896 (+64), preserved
+hot prefixes and unchanged OwnerState before timing. Extra cold operations,
+footprint and shifted cold regions count. No arithmetic/observation changes,
+weaker ordering, padding sweep, PGO or performance claim is selected.
 Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.

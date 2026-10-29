@@ -1,0 +1,405 @@
+--- a/src/colors_worker.rs
++++ b/src/colors_worker.rs
+@@ -233 +233 @@
+-    latch: LatchRegion,
++    latches: [LatchRegion; 2],
+@@ -289 +289,4 @@
+-            latch: LatchRegion { waiting: AtomicBool::new(false) },
++            latches: [
++                LatchRegion { waiting: AtomicBool::new(false) },
++                LatchRegion { waiting: AtomicBool::new(false) },
++            ],
+@@ -450 +453 @@
+-            signal_completion(&self.shared);
++            signal_all(&self.shared);
+@@ -607 +610,2 @@
+-            ("latch", offset_of!(Shared, latch), size_of::<LatchRegion>(), align_of::<LatchRegion>()),
++            ("latch0", offset_of!(Shared, latches), size_of::<LatchRegion>(), align_of::<LatchRegion>()),
++            ("latch1", offset_of!(Shared, latches) + size_of::<LatchRegion>(), size_of::<LatchRegion>(), align_of::<LatchRegion>()),
+@@ -612 +616 @@
+-        write!(out, "{{\"schema\":\"rook2-single-owner-activation-layout-v1\",\"layoutDesign\":\"single-owner\",\"testBuild\":{},\"parked\":true,\"shared\":{{\"size\":{},\"align\":{},\"addressMod64\":{}}},\"ownerState\":{{\"size\":{},\"align\":{}}},\"regions\":[",
++        write!(out, "{{\"schema\":\"rook2-per-reader-completion-layout-v1\",\"layoutDesign\":\"per-reader\",\"testBuild\":{},\"parked\":true,\"shared\":{{\"size\":{},\"align\":{},\"addressMod64\":{}}},\"ownerState\":{{\"size\":{},\"align\":{}}},\"regions\":[",
+@@ -656,3 +660,3 @@
+-        // Terminal publication always participates in the SC latch chain, even
+-        // if no waiter appears registered. Control has already been released.
+-        signal_completion(&self.shared);
++        // Terminal publication participates in BOTH SC latch chains, even if
++        // neither appears registered. Control has already been released.
++        signal_all(&self.shared);
+@@ -771 +775 @@
+-            signal_completion(shared);
++            signal_reader(shared, side);
+@@ -848,5 +852,19 @@
+-/// All normal and terminal publishers participate in the SAME SC RMW chain.
+-/// If this consumes registration, Sleep makes notification follow the waiter's
+-/// predicate recheck and atomic unlock/sleep. Never called while holding Control.
+-fn signal_completion(shared: &Shared) {
+-    if shared.latch.waiting.swap(false, Ordering::SeqCst) {
++/// Each reader participates in its own SC RMW chain after done or terminal
++/// publication. A true consumer owes a wake even after a later generation has
++/// registered; it never rechecks a flag or predicate. Never held with Control.
++fn signal_reader(shared: &Shared, side: usize) {
++    if shared.latches[side].waiting.swap(false, Ordering::SeqCst) {
++        #[cfg(test)]
++        test_pause(shared, &shared.tests.before_notify[side]);
++        let _sleep = shared.waits.sleep.lock().unwrap_or_else(|error| error.into_inner());
++        shared.waits.completed.notify_all();
++    }
++}
++
++/// Cold owner signaling must evaluate BOTH exchanges before combining results.
++/// Sleep places any owed wake after the waiter's predicate check/unlock gap.
++/// The caller has already released Control; no terminal/flag recheck is allowed.
++fn signal_all(shared: &Shared) {
++    let white = shared.latches[0].waiting.swap(false, Ordering::SeqCst);
++    let black = shared.latches[1].waiting.swap(false, Ordering::SeqCst);
++    if white || black {
+@@ -868,4 +886,8 @@
+-        // A prior publisher's SC exchange precedes this one and carries its
+-        // done publication to our Acquire recheck. A later publisher either
+-        // consumes true and owes a Sleep-coordinated wake, or another does.
+-        shared.latch.waiting.swap(true, Ordering::SeqCst);
++        // Each reader has a separate SC chain. Both registrations precede
++        // either predicate: an earlier false exchange carries its publication,
++        // and a later true consumer owes a Sleep-coordinated wake. An older
++        // generation's true consumer still owes that wake unconditionally.
++        shared.latches[0].waiting.swap(true, Ordering::SeqCst);
++        #[cfg(test)]
++        test_pause(shared, &shared.tests.between_registration);
++        shared.latches[1].waiting.swap(true, Ordering::SeqCst);
+@@ -880 +902,2 @@
+-            shared.latch.waiting.swap(false, Ordering::SeqCst);
++            shared.latches[0].waiting.swap(false, Ordering::SeqCst);
++            shared.latches[1].waiting.swap(false, Ordering::SeqCst);
+@@ -905 +928 @@
+-    signal_completion(shared);
++    signal_reader(shared, side);
+@@ -1081,0 +1105,2 @@
++    // Cold true-consumer hook: after its exchange and before acquiring Sleep.
++    before_notify: [Mutex<TestGate>; 2],
+@@ -1082,0 +1108 @@
++    between_registration: Mutex<TestGate>,
+@@ -1099,0 +1126 @@
++            before_notify: [Mutex::new(TestGate::default()), Mutex::new(TestGate::default())],
+@@ -1100,0 +1128 @@
++            between_registration: Mutex::new(TestGate::default()),
+@@ -1198,0 +1227,14 @@
++    fn registration_gate(shared: &Shared, boundary: usize) -> &Mutex<TestGate> {
++        match boundary {
++            0 => &shared.tests.before_registration,
++            1 => &shared.tests.between_registration,
++            2 => &shared.tests.after_registration,
++            _ => panic!("invalid registration boundary"),
++        }
++    }
++
++    fn latch_values(shared: &Shared) -> [bool; 2] {
++        [shared.latches[0].waiting.load(Ordering::SeqCst),
++            shared.latches[1].waiting.load(Ordering::SeqCst)]
++    }
++
+@@ -1220,0 +1263,2 @@
++        assert_eq!(size_of::<LatchRegion>(), 64);
++        assert_eq!(align_of::<LatchRegion>(), 64);
+@@ -1221,0 +1266,14 @@
++        assert_eq!(size_of::<Cells>(), 448);
++        assert_eq!(size_of::<OwnerState>(), 6368);
++        assert_eq!(align_of::<OwnerState>(), 16);
++        assert_eq!(align_of::<Shared>(), 64);
++        assert_eq!(offset_of!(Shared, publication), 0);
++        assert_eq!(offset_of!(Shared, cells), 64);
++        assert_eq!(offset_of!(Shared, cells) + offset_of!(Cells, sides), 384);
++        assert_eq!(offset_of!(Shared, lifecycle), 512);
++        assert_eq!(offset_of!(Shared, latches), 576);
++        assert_eq!(offset_of!(Shared, waits), 704);
++        assert_eq!(offset_of!(Shared, owner), 768);
++        // TestHooks append to the same production prefix; actual non-test
++        // Shared size is admitted separately by the cold native projection.
++        assert_eq!(offset_of!(Shared, tests), 896);
+@@ -1223 +1281,2 @@
+-            offset_of!(Shared, lifecycle), offset_of!(Shared, latch),
++            offset_of!(Shared, lifecycle), offset_of!(Shared, latches),
++            offset_of!(Shared, latches) + size_of::<LatchRegion>(),
+@@ -1227,0 +1287 @@
++        assert_eq!(latch_values(&worker.shared), [false, false]);
+@@ -1228,0 +1289,4 @@
++        assert!(projection.contains("\"schema\":\"rook2-per-reader-completion-layout-v1\""));
++        assert!(projection.contains("\"layoutDesign\":\"per-reader\""));
++        assert!(projection.contains("\"name\":\"latch0\",\"offset\":576,\"size\":64,\"align\":64"));
++        assert!(projection.contains("\"name\":\"latch1\",\"offset\":640,\"size\":64,\"align\":64"));
+@@ -1832 +1896,3 @@
+-        assert!(!worker.shared.latch.waiting.load(Ordering::SeqCst));
++        for latch in &worker.shared.latches {
++            assert!(!latch.waiting.load(Ordering::SeqCst));
++        }
+@@ -1897,0 +1964,270 @@
++    }
++
++    #[test]
++    fn colors_each_reader_publication_before_between_after_both_registrations() {
++        for side in 0..2 {
++            for boundary in 0..3 {
++                let mut worker = ColorsWorker::start().unwrap();
++                let scope = activate(&mut worker);
++                let packet = packet();
++                for reader in 0..2 { block(&worker.shared, reader); }
++                block_at(registration_gate(&worker.shared, boundary));
++                let token = dispatch(&mut worker, &packet);
++                for reader in 0..2 { entered(&worker.shared, reader); }
++                let shared = Arc::clone(&worker.shared);
++                let (sent, received) = mpsc::channel();
++                let waiter = thread::spawn(move || {
++                    sent.send(wait_completion(&shared, token.generation)).unwrap();
++                });
++                entered_at(&worker.shared, registration_gate(&worker.shared, boundary));
++                assert_eq!(latch_values(&worker.shared), [boundary > 0, boundary > 1]);
++                // Force this reader's real done publication at each boundary.
++                // A registered reader also demonstrably consumes its own flag;
++                // Sleep prevents its owed notification from crossing this gap.
++                release(&worker.shared, side, false);
++                wait_done(&worker.shared, side, token.generation);
++                if boundary > side {
++                    entered_at(&worker.shared, &worker.shared.tests.before_notify[side]);
++                    assert!(!worker.shared.latches[side].waiting.load(Ordering::SeqCst));
++                }
++                assert_eq!(worker.shared.cells.sides[1 - side].done.load(Ordering::Acquire), 0);
++                assert!(received.try_recv().is_err());
++                release_at(&worker.shared, registration_gate(&worker.shared, boundary), false);
++                registered(&worker.shared, 1);
++                assert!(received.try_recv().is_err());
++                release(&worker.shared, 1 - side, false);
++                waiter.join().unwrap();
++                received.recv().unwrap().unwrap();
++                assert_eq!(latch_values(&worker.shared), [false, false]);
++                assert_output(worker.complete().unwrap(), &packet);
++                worker.restore_activation(scope).unwrap();
++                worker.shutdown().unwrap();
++            }
++        }
++    }
++
++    #[test]
++    fn colors_stale_true_notifier_remains_owed_across_generations() {
++        for delayed in 0..2 {
++            let mut worker = ColorsWorker::start().unwrap();
++            let scope = activate(&mut worker);
++            let packet = packet();
++            for side in 0..2 { block(&worker.shared, side); }
++            block_at(&worker.shared.tests.after_registration);
++            block_at(&worker.shared.tests.before_notify[delayed]);
++            let first = dispatch(&mut worker, &packet);
++            for side in 0..2 { entered(&worker.shared, side); }
++            let shared = Arc::clone(&worker.shared);
++            let first_waiter = thread::spawn(move || wait_completion(&shared, first.generation));
++            entered_at(&worker.shared, &worker.shared.tests.after_registration);
++            for side in 0..2 { release(&worker.shared, side, false); }
++            for side in 0..2 { wait_done(&worker.shared, side, first.generation); }
++            entered_at(&worker.shared, &worker.shared.tests.before_notify[delayed]);
++            release_at(&worker.shared, &worker.shared.tests.after_registration, false);
++            first_waiter.join().unwrap().unwrap();
++            assert_eq!(latch_values(&worker.shared), [false, false]);
++            assert_output(worker.complete().unwrap(), &packet);
++
++            // The old true consumer remains paused after its exchange while
++            // both actual done epochs let the sole owner publish a new input.
++            for side in 0..2 { block(&worker.shared, side); }
++            block_at(&worker.shared.tests.after_registration);
++            let second = dispatch(&mut worker, &packet);
++            assert_eq!(second.generation, first.generation + 1);
++            // This peer's entry also proves its old notification has finished,
++            // excluding an unrelated old wake from the assertion below.
++            entered(&worker.shared, 1 - delayed);
++            let shared = Arc::clone(&worker.shared);
++            let (sent, received) = mpsc::channel();
++            let second_waiter = thread::spawn(move || {
++                sent.send(wait_completion(&shared, second.generation)).unwrap();
++            });
++            entered_at(&worker.shared, &worker.shared.tests.after_registration);
++            assert_eq!(latch_values(&worker.shared), [true, true]);
++            release_at(&worker.shared, &worker.shared.tests.after_registration, false);
++            release_at(&worker.shared, &worker.shared.tests.before_notify[delayed], false);
++            // The delayed old true consumer must notify even though its flag
++            // has since been cleared and registered again for another epoch.
++            registered(&worker.shared, 3);
++            entered(&worker.shared, delayed);
++            assert_eq!(latch_values(&worker.shared), [true, true]);
++            assert!(received.try_recv().is_err());
++            for side in 0..2 {
++                assert_eq!(worker.shared.cells.sides[side].done.load(Ordering::Acquire), first.generation);
++                release(&worker.shared, side, false);
++            }
++            second_waiter.join().unwrap();
++            received.recv().unwrap().unwrap();
++            assert_eq!(latch_values(&worker.shared), [false, false]);
++            assert_output(worker.complete().unwrap(), &packet);
++            worker.restore_activation(scope).unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_two_true_reader_notifiers_pending_on_sleep() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = activate(&mut worker);
++        let packet = packet();
++        for side in 0..2 { block(&worker.shared, side); }
++        block_at(&worker.shared.tests.after_registration);
++        let token = dispatch(&mut worker, &packet);
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let waiter = thread::spawn(move || wait_completion(&shared, token.generation));
++        entered_at(&worker.shared, &worker.shared.tests.after_registration);
++        for side in 0..2 { release(&worker.shared, side, false); }
++        for side in 0..2 {
++            entered_at(&worker.shared, &worker.shared.tests.before_notify[side]);
++            wait_done(&worker.shared, side, token.generation);
++        }
++        // Each independently consumed true and owes Sleep/notification. The
++        // waiter still owns Sleep, so neither notification can have finished.
++        assert_eq!(latch_values(&worker.shared), [false, false]);
++        release_at(&worker.shared, &worker.shared.tests.after_registration, false);
++        waiter.join().unwrap().unwrap();
++        assert_eq!(latch_values(&worker.shared), [false, false]);
++        assert_output(worker.complete().unwrap(), &packet);
++        // Real parking also waits for both pending notifier calls to return.
++        worker.restore_activation(scope).unwrap();
++        assert!(worker.is_parked());
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_spurious_wake_reregisters_both_before_predicates() {
++        let mut worker = ColorsWorker::start().unwrap();
++        let scope = activate(&mut worker);
++        let packet = packet();
++        for side in 0..2 { block(&worker.shared, side); }
++        let token = dispatch(&mut worker, &packet);
++        for side in 0..2 { entered(&worker.shared, side); }
++        let shared = Arc::clone(&worker.shared);
++        let (sent, received) = mpsc::channel();
++        let waiter = thread::spawn(move || {
++            sent.send(wait_completion(&shared, token.generation)).unwrap();
++        });
++        registered(&worker.shared, 1);
++        assert_eq!(latch_values(&worker.shared), [true, true]);
++        // A notification with no changed completion predicate clears both
++        // registrations. The next cold loop must reinstall BOTH flags.
++        signal_all(&worker.shared);
++        registered(&worker.shared, 2);
++        assert_eq!(latch_values(&worker.shared), [true, true]);
++        {
++            let _sleep = worker.shared.waits.sleep.lock().unwrap();
++            worker.shared.waits.completed.notify_all();
++        }
++        registered(&worker.shared, 3);
++        assert_eq!(latch_values(&worker.shared), [true, true]);
++        assert!(received.try_recv().is_err());
++        for side in 0..2 {
++            assert_eq!(worker.shared.cells.sides[side].done.load(Ordering::Acquire), 0);
++            release(&worker.shared, side, false);
++        }
++        waiter.join().unwrap();
++        received.recv().unwrap().unwrap();
++        assert_eq!(latch_values(&worker.shared), [false, false]);
++        assert_output(worker.complete().unwrap(), &packet);
++        worker.restore_activation(scope).unwrap();
++        worker.shutdown().unwrap();
++    }
++
++    #[test]
++    fn colors_each_reader_terminal_before_between_after_both_registrations() {
++        for failing in 0..2 {
++            for boundary in 0..3 {
++                let mut worker = ColorsWorker::start().unwrap();
++                let scope = activate(&mut worker);
++                for side in 0..2 { block(&worker.shared, side); }
++                block_at(registration_gate(&worker.shared, boundary));
++                let token = dispatch(&mut worker, &packet());
++                for side in 0..2 { entered(&worker.shared, side); }
++                let shared = Arc::clone(&worker.shared);
++                let waiter = thread::spawn(move || wait_completion(&shared, token.generation));
++                entered_at(&worker.shared, registration_gate(&worker.shared, boundary));
++                release(&worker.shared, failing, true);
++                wait_state(&worker.shared, failing, FAILED);
++                assert!(worker.failure().contains("controlled"));
++                if boundary > failing {
++                    entered_at(&worker.shared, &worker.shared.tests.before_notify[failing]);
++                }
++                let mut expected = [boundary > 0, boundary > 1];
++                expected[failing] = false;
++                assert_eq!(latch_values(&worker.shared), expected);
++                // Reader terminal signaling consumes only its own registration.
++                // No failure observation acknowledges the blocked peer's input.
++                assert_eq!(worker.shared.cells.sides[1 - failing].done.load(Ordering::Acquire), 0);
++                release_at(&worker.shared, registration_gate(&worker.shared, boundary), false);
++                assert!(waiter.join().unwrap().is_err());
++                assert_eq!(latch_values(&worker.shared), [false, false]);
++                release(&worker.shared, 1 - failing, false);
++                assert!(worker.restore_activation(scope).is_err());
++                assert!(worker.shutdown().is_err());
++                no_flight(&worker);
++            }
++        }
++    }
++
++    #[test]
++    fn colors_owner_terminal_before_between_after_both_registrations() {
++        for boundary in 0..3 {
++            let mut worker = ColorsWorker::start().unwrap();
++            let scope = activate(&mut worker);
++            for side in 0..2 { block(&worker.shared, side); }
++            block_at(registration_gate(&worker.shared, boundary));
++            let token = dispatch(&mut worker, &packet());
++            for side in 0..2 { entered(&worker.shared, side); }
++            let shared = Arc::clone(&worker.shared);
++            let waiter_shared = Arc::clone(&shared);
++            let waiter = thread::spawn(move || wait_completion(&waiter_shared, token.generation));
++            entered_at(&shared, registration_gate(&shared, boundary));
++            let (sent, received) = mpsc::channel();
++            let shutdown = thread::spawn(move || {
++                sent.send(worker.shutdown()).unwrap();
++                worker
++            });
++            while !terminal(&shared) { thread::yield_now(); }
++            while latch_values(&shared) != [false, false] { thread::yield_now(); }
++            // Owner signaling released Control before waiting for Sleep, which
++            // this paused completion waiter still holds at every boundary.
++            assert!(control_lock(&shared).shutdown);
++            for side in 0..2 {
++                assert_eq!(shared.cells.sides[side].done.load(Ordering::Acquire), 0);
++            }
++            assert!(received.try_recv().is_err());
++            release_at(&shared, registration_gate(&shared, boundary), false);
++            assert!(waiter.join().unwrap().is_err());
++            assert_eq!(latch_values(&shared), [false, false]);
++            release(&shared, 0, false);
++            wait_state(&shared, 0, STOPPED);
++            assert!(received.try_recv().is_err());
++            assert_eq!(shared.cells.sides[1].done.load(Ordering::Acquire), 0);
++            release(&shared, 1, false);
++            let mut worker = shutdown.join().unwrap();
++            received.recv().unwrap().unwrap();
++            assert!(worker.owner.drained);
++            assert!(worker.threads.iter().all(Option::is_none));
++            no_flight(&worker);
++            worker.restore_activation(scope).unwrap();
++            worker.shutdown().unwrap();
++        }
++    }
++
++    #[test]
++    fn colors_all_reader_signal_evaluates_second_exchange_after_true_first() {
++        let mut worker = ColorsWorker::start().unwrap();
++        for values in [[true, true], [false, true], [true, false], [false, false]] {
++            worker.shared.latches[0].waiting.swap(values[0], Ordering::SeqCst);
++            worker.shared.latches[1].waiting.swap(values[1], Ordering::SeqCst);
++            signal_all(&worker.shared);
++            // In particular, true from flag0 must never short-circuit flag1's
++            // unconditional false exchange. False from flag0 must not skip it.
++            assert_eq!(latch_values(&worker.shared), [false, false]);
++        }
++        assert_eq!(worker.shared.publication.request.load(Ordering::Acquire), 0);
++        for side in 0..2 {
++            assert_eq!(worker.shared.cells.sides[side].done.load(Ordering::Acquire), 0);
++        }
++        worker.shutdown().unwrap();
