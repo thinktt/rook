@@ -378,6 +378,24 @@ single-owner69, with affected controls, actual original832-byte geometry and
 compiled publication/notification inspection before collection. Hot polling
 remains Acquire; the normal publisher's SC store and SC flag load must not be
 confused with the parked fence or split-flag protocols. No PGO is selected.
+
+The [completion-epoch result](../../experiments/multicore-feasibility/completion-epoch/report.md)
+at86bc822d passes32 affected controls plus43 reused,14 CLI/two fallback checks,
+actual unchanged832-byte layout, lowering review and48 replay lives/560 posts
+plus four idle probes, all first attempt. New3 costs0.3125% more search wall
+(7.365883 versus7.342935s) and0.3140% more whole CPU; inline improves0.1787%.
+All three mode3 medians lose, with43 ranges separated negatively. The intended
+done xchg/flag load is present, but notification also becomes inline and the
+containing frame grows16B. Park without PGO or retuning; no isolated atomic or
+cache-cost inference follows. This closes the current notification variants.
+
+The next bounded source question moves back to useful work: can helpers prepare
+map-independent Activity geometry at actual fresh FULL demand while the owner
+builds the canonical map? Scoring still needs the map. A staged map publication,
+private geometry buffers and an additional consumption pass all cost something;
+prior serial mask/borrowed-geometry failures remain relevant. Replicating a
+complete map on every lane alone does not remove its latency from each lane's
+critical path. No implementation, new native lane or census is yet selected.
 Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
