@@ -1,0 +1,305 @@
+{
+  "schema": "rook2-pre-map-geometry-policy-v1",
+  "base": "e8ef49f843f04cc4afcfab27d3f840bfa4ddf53b",
+  "sourceFiles": 70,
+  "sourceChanged": [
+    "src/activity.rs",
+    "src/bin/rook2.rs",
+    "src/colors_worker.rs",
+    "src/evaluator.rs",
+    "src/ordinary.rs",
+    "src/quiescence.rs",
+    "src/session.rs"
+  ],
+  "sourceAdded": [
+    "src/evaluator/pre_map_geometry_tests.rs"
+  ],
+  "focused": [
+    {
+      "name": "colors-worker",
+      "target": [
+        "--lib"
+      ],
+      "selector": "colors_worker::lifecycle_tests",
+      "expectedPassed": 33,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "colors_worker::lifecycle_tests::colors_completion_before_waiter_registration_uses_sc_predicate_chain",
+        "colors_worker::lifecycle_tests::colors_completion_during_waiter_registration_and_spurious_wake",
+        "colors_worker::lifecycle_tests::colors_delayed_each_reader_retains_packet_and_completion_predicate",
+        "colors_worker::lifecycle_tests::colors_discard_close_waits_for_both_readers_before_packet_reuse",
+        "colors_worker::lifecycle_tests::colors_enclosing_unwind_restores_original_owner_and_parks_both",
+        "colors_worker::lifecycle_tests::colors_fresh_done_and_output_consumption_precede_map_reuse",
+        "colors_worker::lifecycle_tests::colors_fresh_helper_failure_while_peer_waits_drains_without_map_or_done",
+        "colors_worker::lifecycle_tests::colors_fresh_map_borrow_blocks_discard_and_reverse_reuse",
+        "colors_worker::lifecycle_tests::colors_fresh_nested_unwind_reaches_saved_zero_before_healthy_reuse",
+        "colors_worker::lifecycle_tests::colors_fresh_pre_map_last_close_abandons_without_ready_or_done_then_reuses",
+        "colors_worker::lifecycle_tests::colors_fresh_supplied_gap_rejects_stale_ready_and_publication_tokens",
+        "colors_worker::lifecycle_tests::colors_histogram_zero_and_positive_bucket_boundaries",
+        "colors_worker::lifecycle_tests::colors_inner_epoch_exhaustion_drains_before_both_saved_depth_restorations",
+        "colors_worker::lifecycle_tests::colors_inner_failure_unwind_retires_sample_once_before_outer_restore",
+        "colors_worker::lifecycle_tests::colors_normal_terminal_stop_notifies_blocked_completion_and_drains_other_reader",
+        "colors_worker::lifecycle_tests::colors_output_consumption_and_close_follow_the_same_owner",
+        "colors_worker::lifecycle_tests::colors_output_write_is_not_retirement_until_done_release",
+        "colors_worker::lifecycle_tests::colors_packet_borrow_including_sampled_timing_blocks_discard_and_reuse",
+        "colors_worker::lifecycle_tests::colors_partial_opening_failure_restoration_joins_without_reopening",
+        "colors_worker::lifecycle_tests::colors_prior_epoch_latch_delay_allows_safe_output_reuse",
+        "colors_worker::lifecycle_tests::colors_reader_failure_notifies_completion_and_drains_sibling",
+        "colors_worker::lifecycle_tests::colors_reader_unwind_before_done_drains_both_without_output_consumption",
+        "colors_worker::lifecycle_tests::colors_readiness_pending_actual_reader_then_ready_and_tls_restore",
+        "colors_worker::lifecycle_tests::colors_readiness_rejects_zero_future_and_stale_scalar_tokens",
+        "colors_worker::lifecycle_tests::colors_readiness_terminal_preserves_failure_and_never_acknowledges_peer",
+        "colors_worker::lifecycle_tests::colors_shutdown_joins_both_delayed_readers_before_idempotent_restore",
+        "colors_worker::lifecycle_tests::colors_sparse_counts_partition_completed_discarded_and_failed_samples",
+        "colors_worker::lifecycle_tests::colors_startup_failure_or_early_stop_joins_both",
+        "colors_worker::lifecycle_tests::colors_startup_standalone_nested_activation_and_reuse",
+        "colors_worker::lifecycle_tests::colors_terminal_during_registration_wakes_without_fabricating_peer_done",
+        "colors_worker::lifecycle_tests::colors_unpublished_failure_rolls_back_without_advancing_or_busy_flight",
+        "colors_worker::lifecycle_tests::colors_whole_owner_migration_retains_exclusive_dispatch_and_close",
+        "colors_worker::lifecycle_tests::colors_writer_regions_are_aligned_and_projection_requires_parked_startup"
+      ]
+    },
+    {
+      "name": "activation",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::activation_tests",
+      "expectedPassed": 9,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "evaluator::activation_tests::actual_first_iteration_keeps_outer_activation_across_nested_public_entries",
+        "evaluator::activation_tests::completed_search_owner_migrates_and_reconfigures_between_calls",
+        "evaluator::activation_tests::host_unwind_restores_original_owner_and_configuration_remains_available",
+        "evaluator::activation_tests::mode2_terminal_shutdown_dominates_nested_checkpoint_depth_restoration",
+        "evaluator::activation_tests::prefix_inventory_unwind_closes_before_return_and_preserves_original_panic",
+        "evaluator::activation_tests::public_default_owner_types_preserve_send_and_sync",
+        "evaluator::activation_tests::quiescence_observer_unwind_closes_its_enclosing_search_owner",
+        "evaluator::activation_tests::standalone_full_fresh_and_stage_observers_run_after_actual_parking",
+        "evaluator::activation_tests::standalone_observer_unwind_already_sees_parked_helpers_and_allows_reuse"
+      ]
+    },
+    {
+      "name": "colors-lifecycle",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::colors_lifecycle_tests",
+      "expectedPassed": 3,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "evaluator::colors_lifecycle_tests::first_iteration_and_public_quiescence_boundaries_park_on_normal_and_stopped_returns",
+        "evaluator::colors_lifecycle_tests::full_scope_parks_after_completion_error_and_test_unwind",
+        "evaluator::colors_lifecycle_tests::full_scope_parks_after_live_finish_abort_and_host_error"
+      ]
+    },
+    {
+      "name": "colors-numerical",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::colors_tests",
+      "expectedPassed": 8,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "evaluator::colors_tests::affinity_cap_queries_before_mutation_and_preserves_active_cache_on_failure",
+        "evaluator::colors_tests::budgets_match_detailed_full_and_fresh_across_weights_and_root_rebinding",
+        "evaluator::colors_tests::budgets_preserve_full_identity_collision_and_fresh_cache_bypass",
+        "evaluator::colors_tests::budgets_preserve_supplied_contrary_influence_and_lazy_selection",
+        "evaluator::colors_tests::budgets_preserve_zero_group_replacement_order_and_reset",
+        "evaluator::colors_tests::persistent_worker_crosses_repeated_search_stop_retry_and_budget_changes",
+        "evaluator::colors_tests::positive_total_requests_saturate_without_changing_cache_or_evaluation",
+        "evaluator::colors_tests::search_and_session_expose_requested_and_configured_budgets"
+      ]
+    },
+    {
+      "name": "owner-inventory",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::owner_inventory_tests",
+      "expectedPassed": 6,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "evaluator::owner_inventory_tests::coherent_inventory_admits_opposite_king_pressure_and_distinguishes_prepared_empty_lists",
+        "evaluator::owner_inventory_tests::inventory_prepared_flag_is_per_call_and_outer_activation_retains_native_reuse",
+        "evaluator::owner_inventory_tests::owner_inventory_admission_and_budget_fallback_do_not_query_or_generate",
+        "evaluator::owner_inventory_tests::pending_inventory_matches_ordered_special_checked_lists_and_native_full_details",
+        "evaluator::owner_inventory_tests::public_fresh_and_observer_full_paths_have_zero_readiness_probes",
+        "evaluator::owner_inventory_tests::ready_inventory_keeps_destination_untouched_and_returns_native_full"
+      ]
+    },
+    {
+      "name": "q-inventory",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::q_inventory_tests",
+      "expectedPassed": 6,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "evaluator::q_inventory_tests::public_selection_stage_observers_and_fresh_full_have_no_q_readiness_queries",
+        "evaluator::q_inventory_tests::q_ready_and_excluded_flag_allow_coherence_or_mode_paths_leave_row_untouched",
+        "evaluator::q_inventory_tests::q_refresh_runs_fast_then_one_full_with_supplied_map_root_weights_and_exact_r",
+        "evaluator::q_inventory_tests::q_static_returns_discard_prepared_rows_and_checked_joined_fixture_is_producer_only",
+        "evaluator::q_inventory_tests::q_strict_fast_only_edges_are_lazy_and_capture_exception_keeps_original_refresh",
+        "evaluator::q_inventory_tests::sparse_q_full_prepares_exact_tactical_inventory_and_preserves_native_state"
+      ]
+    },
+    {
+      "name": "ordinary-owner",
+      "target": [
+        "--lib"
+      ],
+      "selector": "ordinary::owner_inventory_tests",
+      "expectedPassed": 5,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "ordinary::owner_inventory_tests::owner_inventory_actual_root_and_q_only_iteration_never_query_or_prepare",
+        "ordinary::owner_inventory_tests::owner_inventory_full_bound_discards_at_actual_owner_without_consumption",
+        "ordinary::owner_inventory_tests::owner_inventory_null_continue_keeps_exact_parent_row_across_descendant_full_and_current_order",
+        "ordinary::owner_inventory_tests::owner_inventory_null_cutoff_discards_prepared_row_without_generated_charge",
+        "ordinary::owner_inventory_tests::owner_inventory_null_stop_preserves_work_and_allows_fresh_worker_reuse"
+      ]
+    },
+    {
+      "name": "quiescence-q",
+      "target": [
+        "--lib"
+      ],
+      "selector": "quiescence::q_inventory_tests",
+      "expectedPassed": 6,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "quiescence::q_inventory_tests::q_inventory_actual_sparse_refresh_and_special_rows_match_original_unsorted_demand",
+        "quiescence::q_inventory_tests::q_inventory_checked_reused_and_terminal_ply_keep_original_exclusions",
+        "quiescence::q_inventory_tests::q_inventory_fast_only_and_lower_budgets_never_query_or_prepare",
+        "quiescence::q_inventory_tests::q_inventory_public_root_subtree_and_observed_routes_never_query_or_prepare",
+        "quiescence::q_inventory_tests::q_inventory_ready_arm_and_fresh_activation_preserve_stop_order_state_and_work",
+        "quiescence::q_inventory_tests::q_inventory_static_return_discards_actual_preparation_without_generation_charge"
+      ]
+    },
+    {
+      "name": "activity",
+      "target": [
+        "--lib"
+      ],
+      "selector": "activity::tests",
+      "expectedPassed": 15,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "activity::tests::bishop_additional_rays_charge_without_direct_categories_or_marks",
+        "activity::tests::complete_activity_is_fresh_and_color_reflects_components",
+        "activity::tests::destination_views_preserve_coordinates_and_both_rook_gate_boundaries",
+        "activity::tests::direct_capture_categories_and_queen_exception_use_final_category",
+        "activity::tests::low_mobility_exemption_uses_normalized_pawn_and_source_sums_are_uncapped",
+        "activity::tests::prepared_activity_matches_scalar_for_supplied_maps_and_fifteen_same_kind_sources",
+        "activity::tests::prepared_geometry_has_fixed_layout_and_prefix_boundaries",
+        "activity::tests::prepared_geometry_preserves_first_occupied_and_transparent_prefixes",
+        "activity::tests::prepared_knight_admission_retains_target_order_and_occupied_friendly_mask",
+        "activity::tests::pressure_marks_are_presence_bits_and_own_blockers_are_included",
+        "activity::tests::rook_forward_transparency_seventh_bonus_and_vertical_value_do_not_double_work",
+        "activity::tests::side_partitions_map_attacker_pressure_to_opposite_defender",
+        "activity::tests::side_partitions_match_original_across_weights_and_supplied_maps",
+        "activity::tests::side_partitions_preserve_group_chronology_and_fresh_call_state",
+        "activity::tests::signed_rounds_material_clamp_and_large_owned_weights"
+      ]
+    },
+    {
+      "name": "pre-map-owner",
+      "target": [
+        "--lib"
+      ],
+      "selector": "evaluator::pre_map_geometry_tests",
+      "expectedPassed": 8,
+      "limitSeconds": 300,
+      "expectedTests": [
+        "evaluator::pre_map_geometry_tests::actual_ordinary_entry_preserves_root_child_outcome_and_logical_work",
+        "evaluator::pre_map_geometry_tests::both_private_q_full_seams_preserve_selection_inventory_and_retained_work",
+        "evaluator::pre_map_geometry_tests::budgets_noncoherent_knight_only_and_fast_only_paths_keep_staging_dormant",
+        "evaluator::pre_map_geometry_tests::nested_pre_map_unwind_reaches_saved_zero_before_any_receiver_reuse",
+        "evaluator::pre_map_geometry_tests::private_fresh_root_matches_native_map_retained_cache_and_work",
+        "evaluator::pre_map_geometry_tests::root_rebinding_and_supplied_gap_preserve_map_epoch_and_native_cache_results",
+        "evaluator::pre_map_geometry_tests::standalone_pre_map_unwind_retires_real_readers_and_allows_healthy_reuse",
+        "evaluator::pre_map_geometry_tests::supplied_custom_public_fresh_and_observed_paths_keep_authority_and_parking"
+      ]
+    }
+  ],
+  "evidenceReuse": {
+    "retainedTestIdentities": [],
+    "reason": "All prior70 affected controls rerun; unaffected component/source/history evidence retained by hash, without fresh qualification"
+  },
+  "cases": [
+    "profile-35",
+    "profile-08",
+    "profile-43"
+  ],
+  "names": [
+    "preserved1",
+    "preserved3",
+    "inline1",
+    "unstaged3",
+    "staged3"
+  ],
+  "budgets": [
+    1,
+    3,
+    1,
+    3,
+    3
+  ],
+  "warmupsPerCell": 1,
+  "measuredPerCell": 3,
+  "replayLives": 60,
+  "measuredLives": 45,
+  "idleProbes": 5,
+  "idleMs": 250,
+  "ownerCpu": 14,
+  "helperCpus": [
+    6,
+    4
+  ],
+  "housekeepingCpus": [
+    0,
+    1,
+    2,
+    3,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "unusedOwnedSiblings": [
+    15,
+    7,
+    5
+  ],
+  "pipelineSeconds": 3600,
+  "collectionSeconds": 1800,
+  "perLifeSeconds": 180,
+  "bothHooksRequested": true,
+  "candidateVariants": 1,
+  "comparisonConfigurations": 5,
+  "layoutSeconds": 120,
+  "tuning": false,
+  "pgo": false,
+  "spinBudget": 4096,
+  "sampleStride": 512,
+  "ownedInput": true,
+  "normalDoneOrdering": "Release",
+  "normalSignal": "original unconditional SeqCst flag exchange and Sleep notification",
+  "expectedSharedBytes": 1024,
+  "expectedSharedAlignment": 64,
+  "expectedPacketRegionBytes": 320,
+  "expectedSideGeometryBytes": 128,
+  "expectedMapBytes": 128,
+  "expectedMapRegionBytes": 192,
+  "expectedMapPayloadOffset": 512,
+  "expectedMapReadyOffset": 640,
+  "rawPacketBytes": "actual positive <=320 rounding to320; no guessed enum padding",
+  "ownerStateGeometry": "actual bytes/Flight bytes observed; unchanged owner alignment16",
+  "geometryContradiction": "stop before data; no topology rescue",
+  "scope": "One fixed pre-map geometry generic60+5; no tune/PGO/qualification/adoption/external action"
+}

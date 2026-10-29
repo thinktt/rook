@@ -396,6 +396,35 @@ private geometry buffers and an additional consumption pass all cost something;
 prior serial mask/borrowed-geometry failures remain relevant. Replicating a
 complete map on every lane alone does not remove its latency from each lane's
 critical path. No implementation, new native lane or census is yet selected.
+
+The [source recommendation](pre-map-activity-geometry.md), committede8ef49f8,
+finds a concrete position-only split and proposes128B/color endpoint staging.
+Root review identified missing-map abandonment as an additional protocol duty:
+last-close cancellation must end borrows, acknowledge the cancelled request via
+seen and then genuinely park, without fake done/mapReady. Fixed callers resume
+unwind through saved-zero cleanup before reuse; nested restore alone is not
+retirement. Both inventory hooks remain readiness-conditional, so their prior
+gains cannot be added to the new overlap.
+
+Select one isolated integrated generic trial of this design. The fixed60+5
+compares preserved inline1/three with newinline1/unstaged3/staged3 on35/08/43,
+including serial cost alongside feature/common drift. Affected controls, actual
+geometry and cold activation evidence precede timing. No new census, alternative
+representation, PGO or tuning is selected; actual construction/replay, map copy,
+pickup, cancellation/lifetime and later inventory costs decide the result.
+
+A separate bounded Astra source challenge identifies a narrower frontier reserve:
+actual unextended effective-depth-zero estimate skips in iteration d. If that
+exact parent/edge recurs at positive effective depth, its particular estimate
+gate disappears. Root iteration number alone proves neither depth nor demand;
+TT, ancestor and sibling returns may still prevent evaluation. Earlier collection
+could provide remaining-d plus next-iteration lead time without whole-search
+producers. This differs from first-six preparation, but previous/intervening pure
+production must be excluded before calling it new work. A later observation
+would need readiness/service/lookup costs and marginal value against retained3,
+including displaced inventory overlap. No census or fourth-thread consumer is
+selected. The source memo is
+[/home/legolas/agent-memos/astra-earlier-frontier-to-imp2-lead-20261029-7d2f.md](/home/legolas/agent-memos/astra-earlier-frontier-to-imp2-lead-20261029-7d2f.md).
 Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
