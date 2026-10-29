@@ -429,6 +429,25 @@ Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
 
+The pre-map geometry trial completes99 focused controls,20 CLI/two fallback
+checks, actual layout and a staged activation witness, then60 replay lives/700
+posts and five idle probes. A test-only dependency compile failure ran zero units;
+its parser repair leaves production unchanged and all receipts on the original
+clock. Median sums retained1/retained3/new1/unstaged3/staged3 are
+8.469164/7.345385/8.536931/7.409705/7.459699s. Staging costs0.6747% more than
+matching unstaged and1.5563% more than retained3; matching whole CPU grows0.6712%.
+Case08 improves against unstaged but only matches retained3;35 and43 lose overall.
+All idle probes observe0ticks/250ms. Park unchanged without PGO or retuning;
+neither correctness nor demonstrated overlap establishes a net speed benefit.
+
+Select only a bounded source-and-existing-evidence observation design for the
+earlier frontier cohort above. It must choose one known adjacent iteration pair,
+fix supply/storage caps and publication order before new data, and distinguish
+first-new demand from prior/intervening production. Release and demand timing
+must share one observation timeline; useful value is marginal to retained3 and
+must include displaced inventory work. No census, fourth-thread executor or
+new measurement is yet selected. The c242/1a81 leader remains unchanged.
+
 The latest three-thread image is `c242f0e498ceeddb9aa2532cbace46730ffebcb6a0e756274179b3297c1b40da`,
 with profile `1a81bdacaeee3ac4b949cb495f8a99f0d68c96579cca4e7b807f83a501169910`;
 the winning mode enables ordinary and Q owner-local inventory. Predecessors

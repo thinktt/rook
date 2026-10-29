@@ -1,6 +1,9 @@
 # Pre-map Activity geometry trial
 
-Selected generic60+5 from design e8ef49f8; results pending. Exact source is an
+Parked generic60+5: staged is0.6747% slower than matching unstaged3 and1.5563%
+slower than preservedd71; no PGO or retune. [Concise report](report.md),
+[per-case timing](timing.csv), [results](results.json), [actual layout](layout.json)
+and [terminal bindings](closure.json). Exact source is an
 isolated derivative, not adopted canonical source. Preserve c242/1a81/d71 and all
 prior artifacts. [Plan](plan.md), [ownership argument](ownership-proof.md),
 [policy](policy.json), and [source freeze](preparation.json) bind the finite lane.
@@ -19,5 +22,5 @@ After the announced quiet window, the original `native.py prepare` was attempted
 Resume once with `native.py repair-prepare`, then `native.py collect`.
 Both commands use the persisted original3600s clock. `close_pipeline.py --root RAW
 --output RAW/closure-audit.json` independently binds terminal outputs. Tools watch
-caps/failures; do not repeat completed native controls or requests. No timing,
+caps/failures; do not repeat completed native controls or requests. No additional timing,
 qualification, PGO, adoption or delivery follows beyond this selected comparison.
