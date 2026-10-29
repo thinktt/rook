@@ -1,0 +1,339 @@
+{
+  "schema": "rook2-completion-epoch-concise-lowering-v1",
+  "complete": true,
+  "fullReport": {
+    "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/result.json",
+    "sha256": "733160761cf20a5501cbf32110122641fa74324e4b4abffdcb084593b931f7af",
+    "bytes": 206374
+  },
+  "images": {
+    "control": {
+      "path": "/home/legolas/rook2-experiments/single-owner-20261028-01/rook2-candidate",
+      "sha256": "d71c4f9fa662af73c81d891f16c2b56ded2d2ccfbe982ed5ae81829a14fd573d",
+      "bytes": 7932032,
+      "sections": {
+        ".text": {
+          "address": 45136,
+          "fileOffset": 45136,
+          "bytes": 576635,
+          "sha256": "a406da007d531cb8d3c49078fe63974732bd917ddc0df9de7929c158a4e7099e"
+        },
+        ".rodata": {
+          "address": 622592,
+          "fileOffset": 622592,
+          "bytes": 325044,
+          "sha256": "079b8675e1f9155633d13b95f37d5309b757f026cf8021f8e94e5dbf5eec9d76"
+        }
+      }
+    },
+    "candidate": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/rook2-candidate",
+      "sha256": "98538a3892888e99505cebe420f64269fb2fb486d6a6b92d9637d2d5ccdfbbb5",
+      "bytes": 7934496,
+      "sections": {
+        ".text": {
+          "address": 45136,
+          "fileOffset": 45136,
+          "bytes": 577051,
+          "sha256": "dad6842a58bb1243a22da4352800b1bcc928ab4bba908b20d63e6df3e75fa1f2"
+        },
+        ".rodata": {
+          "address": 622592,
+          "fileOffset": 622592,
+          "bytes": 325092,
+          "sha256": "d28c947454b2c2cab0ab82c04560575d084eb8961cb145053a774c883f74a146"
+        }
+      }
+    }
+  },
+  "mechanism": {
+    "admitted": true,
+    "sitesResolved": true,
+    "normalDone": "source-correlated memory xchg",
+    "normalFlag": "source-correlated memory mov with no RMW/explicit fence at designated site",
+    "coldTerminal": "source-correlated memory xchg in both images",
+    "manualReview": "Inspect saved addresses/registers and surrounding assembly before collection; source correlation is a bounded observation, not a compiler proof or isolated cost attribution"
+  },
+  "normalSites": {
+    "control": {
+      "normalDone": {
+        "sourceLineRange": [
+          765,
+          765
+        ],
+        "instructions": [
+          {
+            "address": "18c24",
+            "symbol": "std::sys::backtrace::__rust_begin_short_backtrace",
+            "sourceLines": [
+              319,
+              320,
+              765
+            ],
+            "text": "mov    %rbp,(%rax)"
+          }
+        ],
+        "assemblyArtifact": "control.normalDone.asm",
+        "assemblyBytes": 4975,
+        "context": "18 raw objdump lines on either side of every source-correlated instruction; full dump retained"
+      },
+      "normalFlag": {
+        "sourceLineRange": [
+          771,
+          771
+        ],
+        "instructions": [
+          {
+            "address": "18c27",
+            "symbol": "std::sys::backtrace::__rust_begin_short_backtrace",
+            "sourceLines": [
+              319,
+              320,
+              771
+            ],
+            "text": "mov    %r15,%rdi"
+          }
+        ],
+        "assemblyArtifact": "control.normalFlag.asm",
+        "assemblyBytes": 5200,
+        "context": "18 raw objdump lines on either side of every source-correlated instruction; full dump retained"
+      }
+    },
+    "candidate": {
+      "normalDone": {
+        "sourceLineRange": [
+          766,
+          766
+        ],
+        "instructions": [
+          {
+            "address": "18c9f",
+            "symbol": "std::sys::backtrace::__rust_begin_short_backtrace",
+            "sourceLines": [
+              320,
+              321,
+              766
+            ],
+            "text": "mov    %rbp,%rax"
+          },
+          {
+            "address": "18ca2",
+            "symbol": "std::sys::backtrace::__rust_begin_short_backtrace",
+            "sourceLines": [
+              320,
+              321,
+              766
+            ],
+            "text": "mov    0x130(%rsp),%rcx"
+          },
+          {
+            "address": "18caa",
+            "symbol": "std::sys::backtrace::__rust_begin_short_backtrace",
+            "sourceLines": [
+              320,
+              321,
+              766
+            ],
+            "text": "xchg   %rax,(%rcx)"
+          }
+        ],
+        "assemblyArtifact": "candidate.normalDone.asm",
+        "assemblyBytes": 8046,
+        "context": "18 raw objdump lines on either side of every source-correlated instruction; full dump retained"
+      },
+      "normalFlag": {
+        "sourceLineRange": [
+          772,
+          772
+        ],
+        "instructions": [
+          {
+            "address": "18cad",
+            "symbol": "std::sys::backtrace::__rust_begin_short_backtrace",
+            "sourceLines": [
+              320,
+              321,
+              772
+            ],
+            "text": "movzbl 0x280(%r14),%eax"
+          }
+        ],
+        "assemblyArtifact": "candidate.normalFlag.asm",
+        "assemblyBytes": 4915,
+        "context": "18 raw objdump lines on either side of every source-correlated instruction; full dump retained"
+      }
+    }
+  },
+  "coldTerminalExchange": {
+    "control": {
+      "address": "467ea",
+      "symbol": "rook2::colors_worker::signal_completion",
+      "sourceLines": [
+        852
+      ],
+      "text": "xchg   %al,0x240(%rdi)"
+    },
+    "candidate": {
+      "address": "4698a",
+      "symbol": "rook2::colors_worker::signal_completion",
+      "sourceLines": [
+        867
+      ],
+      "text": "xchg   %al,0x240(%rdi)"
+    }
+  },
+  "manualSurroundingObservation": {
+    "controlNormalCall": {
+      "address": "18c2a",
+      "instruction": "call 467e0 <rook2::colors_worker::signal_completion>"
+    },
+    "candidateNormalBranch": {
+      "address": "18cc1",
+      "instruction": "je 18d35 after flag test; true path retains inline Sleep/notification"
+    },
+    "normalFunctionEntry": "18420 in both images",
+    "controlStackReservation": {
+      "address": "1842a",
+      "instruction": "sub $0x138,%rsp",
+      "bytes": 312
+    },
+    "candidateStackReservation": {
+      "address": "1842a",
+      "instruction": "sub $0x148,%rsp",
+      "bytes": 328
+    },
+    "wholeTextBytes": {
+      "control": 576635,
+      "candidate": 577051
+    },
+    "interpretation": "Call/inlining/register/stack/code-footprint changes are part of the complete variant; no isolated xchg-location or cache attribution; source correlation and saved actual instructions are finite backend evidence"
+  },
+  "rawArtifacts": {
+    "candidate.objdump.stderr": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.objdump.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "control.coldTerminal.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.coldTerminal.asm",
+      "sha256": "e556d3f01a65214f5fadd3e9e6c2fd8b5ce6ffc061fd4aa01c253efd3527ab16"
+    },
+    "control.normalPublication.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.normalPublication.asm",
+      "sha256": "e23897c995d5f5a2274b6685b8443e280951d29e009de5c6191820f912d9d666"
+    },
+    "control.normalFlag.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.normalFlag.asm",
+      "sha256": "e8b429c314c9bfe5bf36ac41a643de3f7156c418f69c452f9104c7d9b2e5baeb"
+    },
+    "control.objdump.stderr": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.objdump.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "control.normalDone.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.normalDone.asm",
+      "sha256": "3d310226aa6d31267f80fa2adb5c7faf01f553bcdc4e403739b97f18cc007d42"
+    },
+    "candidate.objdump.json": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.objdump.json",
+      "sha256": "9718bc957e84b80000505a8b96d4a59b77817e01992e7167504432916036b846"
+    },
+    "candidate.normalFlag.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.normalFlag.asm",
+      "sha256": "89580517e8f7586e0a1ff06b3acbfeeea2590d07cb9227af5746e38491649305"
+    },
+    "candidate.objdump.stdout": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.objdump.stdout",
+      "sha256": "f0e2e76cfb10ff261e046244afc961fc0bc2de4f9c6097f83bb585c97765ff8b"
+    },
+    "control.objdump.stdout": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.objdump.stdout",
+      "sha256": "9bcc948f625792acd195db2cdfe0a17a2ac0428126aae39dff83b48134f4faf6"
+    },
+    "candidate.coldTerminal.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.coldTerminal.asm",
+      "sha256": "875e78b004214b417cbe6d1b2faf5a6c56459c22c349429d793c0273f9674b50"
+    },
+    "candidate.normalDone.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.normalDone.asm",
+      "sha256": "6052bb1dbbf7a64db11496d1dda7d348a9e1b86f0eb958b85930864931038616"
+    },
+    "control.objdump.json": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.objdump.json",
+      "sha256": "eff98f8ba874305b51b621059e909ed86200d666a2058ab880ec00487604c2b0"
+    },
+    "control.coldWait.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/control.coldWait.asm",
+      "sha256": "fce06832b1285554e1fd5f9d540f44c12dc1dab3851107d1fdbb20673f113ac2"
+    },
+    "candidate.coldWait.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.coldWait.asm",
+      "sha256": "520ffb8ba36c04fe92fbaa21e76e2dd327fb9b54e96264ec65fe9718435c18cf"
+    },
+    "candidate.normalPublication.asm": {
+      "path": "/home/legolas/rook2-experiments/completion-epoch-20261029-01/lowering/candidate.normalPublication.asm",
+      "sha256": "f9028e49cbfdf0275a42ee76aa492486e35c9ae61c2856765589317134e2e169"
+    }
+  },
+  "coldScPredicateInstructions": [
+    {
+      "address": "44131",
+      "symbol": "rook2::colors_worker::ColorsWorker::complete",
+      "sourceLines": [
+        532,
+        847,
+        893
+      ],
+      "text": "mov    0x1f8(%r14),%rax"
+    },
+    {
+      "address": "44138",
+      "symbol": "rook2::colors_worker::ColorsWorker::complete",
+      "sourceLines": [
+        532,
+        847,
+        893
+      ],
+      "text": "cmp    %r8,%rax"
+    },
+    {
+      "address": "4413b",
+      "symbol": "rook2::colors_worker::ColorsWorker::complete",
+      "sourceLines": [
+        532,
+        847,
+        893
+      ],
+      "text": "jne    44160 <rook2::colors_worker::ColorsWorker::complete+0x200>"
+    },
+    {
+      "address": "4413d",
+      "symbol": "rook2::colors_worker::ColorsWorker::complete",
+      "sourceLines": [
+        532,
+        847,
+        893
+      ],
+      "text": "mov    0x238(%r14),%rax"
+    },
+    {
+      "address": "44144",
+      "symbol": "rook2::colors_worker::ColorsWorker::complete",
+      "sourceLines": [
+        532,
+        847,
+        893
+      ],
+      "text": "cmp    %r8,%rax"
+    },
+    {
+      "address": "44147",
+      "symbol": "rook2::colors_worker::ColorsWorker::complete",
+      "sourceLines": [
+        532,
+        847,
+        893
+      ],
+      "text": "sete   %al"
+    }
+  ]
+}
