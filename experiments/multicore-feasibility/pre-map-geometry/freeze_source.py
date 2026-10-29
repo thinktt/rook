@@ -60,6 +60,14 @@ def main():
         reusedEvidenceSha256={str(path):sha(path) for path in reused_evidence_paths()},
         inputSha256={str(path):sha(path) for path in sorted(set(inputs))},
         scope='one pre-map geometry generic60+5; whole-feature/common-path drift, no isolated phase-savings, PGO, qualification or adoption')
+    archive=Path('/home/legolas/rook2-experiments/pre-map-geometry-20261029-01/repair-01')
+    if archive.is_dir():
+        repair=archive/'repair.json'
+        value['repair']=dict(path=str(repair),sha256=sha(repair),
+            archiveSha256={str(path):sha(path) for path in sorted(archive.rglob('*')) if path.is_file()})
+        value['inputSha256'].update(value['repair']['archiveSha256'])
+        for name in ['tests-00-colors-worker.stdout','tests-00-colors-worker.stderr','housekeeping-prepare.json']:
+            path=archive.parent/name;value['inputSha256'][str(path)]=sha(path)
     destination=HERE/'preparation.json';destination.write_text(json.dumps(value,indent=2)+'\n')
     assert preparation(destination)==value
     print(json.dumps(dict(sourceFiles=70,changed=changed,added=ADDED,focusedSelected=reuse['rerun'],retained=reuse['retained'],

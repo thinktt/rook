@@ -137,6 +137,54 @@ def retained_control_tests(record):
     return sorted(passed)
 
 
+def repair_admission(directory,prepared):
+    """One empty-stdout cfgtest compiler failure; no unit/request had executed."""
+    directory=Path(directory).resolve();archive=directory/'repair-01';record=archive/'repair.json'
+    binding=prepared['repair']
+    assert binding['path']==str(record) and binding['sha256']==sha(record)
+    files=sorted(path for path in archive.rglob('*') if path.is_file())
+    assert set(binding['archiveSha256'])=={str(path) for path in files}
+    for path in files:assert sha(path)==binding['archiveSha256'][str(path)],path
+    repair=read(record);initial=read(archive/'pipeline-before.json');proof=read(archive/'preparation.json')
+    assert repair['schema']=='rook2-pre-map-test-compile-repair-v1'
+    assert repair['failedStage']=='tests-00-colors-worker' and repair['compilerExit']==101
+    assert repair['initialPreparationSha256']==sha(archive/'preparation.json')==initial['preparationSha256']
+    assert initial['sourcePreparation']==proof and repair['initialSource']==proof['candidateSource']==snapshot(archive/'source-before')
+    assert len(proof['candidateSource'])==len(prepared['candidateSource'])==70
+    assert proof['candidateSource'].keys()==prepared['candidateSource'].keys()
+    changed=sorted(name for name in proof['candidateSource'] if proof['candidateSource'][name]!=prepared['candidateSource'][name])
+    assert changed==repair['sourceChanged']==['src/evaluator/pre_map_geometry_tests.rs']
+    assert repair['productionChanged']==[]
+    assert repair['unitExecutionsBeforeRepair']==repair['completedControlsRepeated']==repair['nativeRequestsRepeated']==0
+    assert repair['pipelineClockReset'] is False and proof['focused']==prepared['focused']
+    evaluator=(DEFAULT_CRATE/'src/evaluator.rs').read_text()
+    assert '#[cfg(test)]\n#[path = "evaluator/pre_map_geometry_tests.rs"]\nmod pre_map_geometry_tests;' in evaluator
+    assert initial['schema']=='rook2-pre-map-geometry-pipeline-v1'
+    assert not initial['complete'] and not initial['prepared'] and not initial['collected']
+    assert initial['failure']=="AssertionError(('tests-00-colors-worker', 101))" and initial['active']=='tests-00-colors-worker'
+    assert len(initial['stages'])==1
+    row=initial['stages'][0];assert row['stage']=='tests-00-colors-worker' and row['exit']==101 and 'passedTests' not in row
+    for suffix in ['stdout','stderr']:
+        path=directory/(row['stage']+'.'+suffix)
+        assert sha(path)==sha(archive/path.name)==row[suffix+'Sha256']==prepared['inputSha256'][str(path)]
+    assert (directory/(row['stage']+'.stdout')).read_bytes()==b''
+    errors=(directory/(row['stage']+'.stderr')).read_text()
+    assert errors.count('error[E0433]')==2 and 'undeclared crate or module `serde_json`' in errors
+    assert re.findall(r'^error\[(\w+)\]',errors,re.M)==['E0433','E0433']
+    assert re.findall(r'^  --> (src/[^:]+):',errors,re.M)==['src/evaluator/pre_map_geometry_tests.rs']*2
+    assert 'could not compile' in errors and 'running ' not in errors
+    for name,digest in proof['inputSha256'].items():
+        path=Path(name);saved=archive/path.relative_to(HERE) if path.is_relative_to(HERE) else path
+        assert sha(saved)==digest,saved
+    for name,digest in proof['reusedEvidenceSha256'].items():assert sha(name)==digest,name
+    house=directory/'housekeeping-prepare.json'
+    assert sha(house)==sha(archive/'housekeeping-before.json')==prepared['inputSha256'][str(house)]
+    assert initial['protectedArtifacts']==prepared['protectedArtifacts']==baseline()
+    assert initial['pipelineStartMonotonicNs']==repair['pipelineStartMonotonicNs']
+    assert initial['pipelineDeadlineMonotonicNs']==repair['pipelineDeadlineMonotonicNs']==initial['pipelineStartMonotonicNs']+3600*10**9
+    return initial
+
+
 def preparation(path):
     """Source-only freeze admission. Selectors/counts are supplied before native work."""
     value=read(path)
@@ -187,7 +235,6 @@ def preparation(path):
     assert reuse['rerun']==sum(row['expectedPassed'] for row in value['focused'])
     assert isinstance(value['readinessSemantics'],dict) and value['readinessSemantics']
     assert isinstance(value['sourceChallenge'],dict) and value['sourceChallenge']
-    assert 'repair' not in value,'no continuation in this new selected lane'
     assert isinstance(value['focused'],list) and value['focused']
     assert len({row['name'] for row in value['focused']})==len(value['focused'])
     for row in value['focused']:
@@ -213,6 +260,7 @@ def preparation(path):
         ROOT/'docs/research/pre-map-activity-geometry.md']
     for file in required: assert value['inputSha256'][str(file)]==sha(file),file
     for file,digest in value['inputSha256'].items(): assert sha(file)==digest,file
+    if 'repair' in value:repair_admission(Path(value['repair']['path']).parent.parent,value)
     return value
 
 
@@ -268,22 +316,30 @@ def prepared_run(path,prepared_path,prepared):
     assert value['candidate']==image_layout(directory/'rook2-candidate') and value['control']==image_layout(CONTROL_IMAGE)
     assert value['pipelineDeadlineMonotonicNs']==value['pipelineStartMonotonicNs']+3600*10**9
     assert value['pipelineStartMonotonicNs']<=value['preparedMonotonicNs']<value['pipelineDeadlineMonotonicNs']
-    stages=value['stages']
-    assert [row['stage'] for row in stages]==[f'tests-{i:02d}-{row["name"]}' for i,row in enumerate(prepared['focused'])]+['candidate-build','cli-affinity','layout']
+    stages=value['stages'];repaired='repair' in prepared;offset=1 if repaired else 0
+    names=[f'tests-{i:02d}-{row["name"]}' for i,row in enumerate(prepared['focused'])]
+    if repaired:
+        initial=repair_admission(directory,prepared)
+        assert stages[:1]==initial['stages'] and value['repair']==prepared['repair']
+        assert value['pipelineStartMonotonicNs']==initial['pipelineStartMonotonicNs']
+        assert value['pipelineDeadlineMonotonicNs']==initial['pipelineDeadlineMonotonicNs']
+        names=['tests-00-colors-worker']+[f'tests-repair-01-{i:02d}-{row["name"]}' for i,row in enumerate(prepared['focused'])]
+    assert [row['stage'] for row in stages]==names+['candidate-build','cli-affinity','layout']
+    assert value['initialCompileFailures']==offset
     for file,digest in value['inputSha256'].items(): assert sha(file)==digest,file
     previous_end=value['pipelineStartMonotonicNs']
-    caps=[row.get('limitSeconds',300) for row in prepared['focused']]+[300,420,120]
-    for row,cap in zip(stages,caps):
+    caps=([300] if repaired else [])+[row.get('limitSeconds',300) for row in prepared['focused']]+[300,420,120]
+    for index,(row,cap) in enumerate(zip(stages,caps)):
         assert previous_end<=row['startedMonotonicNs']<row['endedMonotonicNs']<=value['preparedMonotonicNs']
         assert row['elapsedNs']==row['endedMonotonicNs']-row['startedMonotonicNs']
         assert row['deadlineMonotonicNs']==min(value['pipelineDeadlineMonotonicNs'],row['startedMonotonicNs']+cap*10**9)
         assert row['endedMonotonicNs']<row['deadlineMonotonicNs']
         previous_end=row['endedMonotonicNs']
-        assert row['exit']==0
+        assert row['exit']==(101 if repaired and index==0 else 0)
         for suffix in ['stdout','stderr']:
             file=directory/(row['stage']+'.'+suffix)
             assert value['inputSha256'][str(file)]==sha(file)==row[suffix+'Sha256']
-    for row,tests in zip(stages,prepared['focused']):
+    for row,tests in zip(stages[offset:],prepared['focused']):
         text=(directory/(row['stage']+'.stdout')).read_text()
         passed=re.findall(r'^test (\S+) \.\.\. ok$',text,re.M)
         summaries=re.findall(r'^test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;',text,re.M)

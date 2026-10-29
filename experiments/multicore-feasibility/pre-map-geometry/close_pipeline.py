@@ -28,6 +28,12 @@ def close(root):
     assert isinstance(projected,dict)
     record=projected
     assert record==read(root/'prepared-run.json')
+    if 'repair' in prepared:
+        initial=read(root/'repair-01/pipeline-before.json')
+        assert pipeline['repair']==prepared['repair']==record['repair']
+        assert pipeline['initialFailure']==initial['failure']
+        assert pipeline['initialFailurePipelineSha256']==sha(root/'repair-01/pipeline-before.json')
+        assert pipeline['initialCompileFailures']==record['initialCompileFailures']==1
     start,deadline=pipeline['pipelineStartMonotonicNs'],pipeline['pipelineDeadlineMonotonicNs']
     assert start==record['pipelineStartMonotonicNs'] and deadline==record['pipelineDeadlineMonotonicNs']==start+3600*10**9
     stages=pipeline['stages'];prefix=record['stages']
@@ -67,7 +73,9 @@ def close(root):
         assert not Path(f'/proc/{row["nativePid"]}').exists(),'fallback PID currently live; inspect possible reuse'
     files=set(map(Path,plan['inputSha256']))|set(map(Path,record['inputSha256']))
     files.update(root/name for name in ['pipeline.json','prepared-run.json','focused/result.json','housekeeping-prepare.json','housekeeping-collect.json'])
-    for name in ['prepare','collect']:
+    outer_names=['prepare']+(['repair-prepare'] if 'repair' in prepared else [])+['collect']
+    if 'repair' in prepared:files.add(root/'housekeeping-repair-prepare.json')
+    for name in outer_names:
         outer=read(root/('housekeeping-'+name+'.json'))
         assert outer['failure'] is None and outer['restored'] is not None
         assert outer['helperCpus']==outer['postRestoreSelfAffinity']==[0,1,2,3,8,9,10,11,12,13]
@@ -91,6 +99,7 @@ def close(root):
         terminalAuditMonotonicNs=terminal,terminalAuditElapsedNs=terminal-start,
         focusedPassed=record['testExecutionSummary']['passed'],testExecutionSummary=record['testExecutionSummary'],
         evidenceReuse=prepared['evidenceReuse'],initialFailure=pipeline.get('initialFailure'),
+        initialCompileFailures=record['initialCompileFailures'],repair=prepared.get('repair'),
         stageExits={row['stage']:row['exit'] for row in stages},stagesRun=len(stages),
         terminalNativeReceipts=reconciled['terminalNativeReceipts'],rowBindingsVerified=reconciled['rowBindingsVerified'],
         rowBindings=reconciled['rowBindings'],coldLayoutProcesses=1,terminalColdLayoutProcesses=1,

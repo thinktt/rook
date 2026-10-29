@@ -10,7 +10,13 @@ Candidate source: `/home/legolas/rook2-experiments/workspaces/pre-map-geometry-2
 Restore the source patch over single-owner69 with `git apply --unidiff-zero source.patch`.
 The source patch includes focused tests, not binaries or raw data.
 
-After the announced quiet window, run `native.py prepare`, then `native.py collect`.
+The first compile failed before any unit ran: the new cfgtest helper referenced
+unavailable serde_json. Repair only its fixed report-field parser; production
+bytes are unchanged. Exact initial tools/source/pipeline/stdout/stderr are kept
+in the raw `repair-01/` archive and bound by preparation.json.
+
+After the announced quiet window, the original `native.py prepare` was attempted.
+Resume once with `native.py repair-prepare`, then `native.py collect`.
 Both commands use the persisted original3600s clock. `close_pipeline.py --root RAW
 --output RAW/closure-audit.json` independently binds terminal outputs. Tools watch
 caps/failures; do not repeat completed native controls or requests. No timing,

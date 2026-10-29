@@ -11,7 +11,7 @@ import sys
 import time
 sys.dont_write_bytecode=True
 from common import (HERE,ROOT,BUILD_ADAPTER,FOCUSED,LAYOUT,HELPERS,DEFAULT_CRATE,CONTROL_CRATE,CONTROL_BUILD,CONTROL_IMAGE,
-    admit_build,admission,baseline,image_layout,layout_admission,preparation,prepared_run,read,sha,write)
+    repair_admission,admit_build,admission,baseline,image_layout,layout_admission,preparation,prepared_run,read,sha,write)
 
 
 def main():
@@ -20,7 +20,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preparation',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--stage',choices=['prepare','collect'],default='prepare')
+    parser.add_argument('--stage',choices=['prepare','repair-prepare','collect'],default='prepare')
     args=parser.parse_args()
     prepared_path,out=args.preparation.resolve(),args.output.resolve()
     prepared=preparation(prepared_path)
@@ -31,6 +31,13 @@ def main():
             failure=None,active=None,stages=[],preparation=str(prepared_path),preparationSha256=sha(prepared_path),
             sourcePreparation=prepared,protectedArtifacts=baseline(),pipelineStartMonotonicNs=start,
             pipelineDeadlineMonotonicNs=start+3600*10**9,parentQuietAnnouncementRequired=True)
+    elif args.stage=='repair-prepare':
+        state=read(out/'pipeline.json');initial=repair_admission(out,prepared)
+        assert state==initial,'single continuation must begin at the archived empty-stdout compiler failure'
+        assert not any((out/name).exists() for name in ['candidate-build','rook2-candidate','focused','layout','pilot'])
+        state.update(initialFailure=initial['failure'],initialFailurePipelineSha256=sha(out/'repair-01/pipeline-before.json'),
+            repair=prepared['repair'],initialCompileFailures=1,preparation=str(prepared_path),
+            preparationSha256=sha(prepared_path),sourcePreparation=prepared,failure=None,currentFailure=None,active=None)
     else:
         state=read(out/'pipeline.json')
         assert state['schema']=='rook2-pre-map-geometry-pipeline-v1'
@@ -81,14 +88,14 @@ def main():
             row['passedTests']=passed;write(out/'pipeline.json',state)
         print(name+' exit '+str(code),flush=True);check()
     try:
-        if args.stage=='prepare':
+        if args.stage in ['prepare','repair-prepare']:
             admit_build(CONTROL_BUILD,CONTROL_IMAGE,CONTROL_CRATE,prepared['controlSource'])
             for index,tests in enumerate(prepared['focused']):
                 command=['/usr/bin/cargo','test','--offline','--locked',*tests['target'],'--target','x86_64-unknown-linux-gnu',
                     '--jobs','4','--target-dir',str(out/'test-target'),tests['selector'],'--','--test-threads=1']
                 if tests.get('exact',False): command.append('--exact')
                 if tests.get('ignored',False): command.append('--ignored')
-                stage(f'tests-{index:02d}-{tests["name"]}',command,tests.get('limitSeconds',300),DEFAULT_CRATE,tests)
+                stage((f'tests-{index:02d}-{tests["name"]}' if args.stage=='prepare' else f'tests-repair-01-{index:02d}-{tests["name"]}'),command,tests.get('limitSeconds',300),DEFAULT_CRATE,tests)
             stage('candidate-build',['/usr/bin/python3',BUILD_ADAPTER,'--crate',DEFAULT_CRATE,
                 '--mode','generic','--bin','rook2','--jobs','4','--output',out/'candidate-build'],300)
             receipt=read(out/'candidate-build/receipt.json');candidate=out/'rook2-candidate'
@@ -102,12 +109,13 @@ def main():
             record=dict(schema='rook2-pre-map-geometry-prepared-run-v1',complete=True,
                 sourcePreparation=str(prepared_path),sourcePreparationSha256=sha(prepared_path),source=prepared['candidateSource'],
                 candidate=image_layout(candidate),control=image_layout(CONTROL_IMAGE),stages=list(state['stages']),
-                evidenceReuse=prepared['evidenceReuse'],
+                evidenceReuse=prepared['evidenceReuse'],initialCompileFailures=1 if 'repair' in prepared else 0,
                 testExecutionSummary=dict(selectedLogicalControls=sum(row['expectedPassed'] for row in prepared['focused']),executions=sum(row['expectedPassed'] for row in prepared['focused']),passed=sum(row['expectedPassed'] for row in prepared['focused']),failed=0,completedControlsRepeated=0),
                 layout=dict(path=str(out/'layout/result.json'),sha256=sha(out/'layout/result.json'),report=projected),
                 inputSha256={str(path):sha(path) for path in sorted(set(files))},
                 pipelineStartMonotonicNs=state['pipelineStartMonotonicNs'],pipelineDeadlineMonotonicNs=state['pipelineDeadlineMonotonicNs'],
                 preparedMonotonicNs=time.monotonic_ns())
+            if 'repair' in prepared:record['repair']=prepared['repair']
             write(out/'prepared-run.json',record)
             checked=prepared_run(out/'prepared-run.json',prepared_path,prepared)
             assert isinstance(checked,dict) and checked==record
@@ -120,8 +128,8 @@ def main():
             state.update(collected=True,complete=True,active=None)
         check();state['pipelineEndedMonotonicNs']=time.monotonic_ns();write(out/'pipeline.json',state)
     except BaseException as error:
-        state.update(complete=False,failure=repr(error));write(out/'pipeline.json',state);raise
-    print('prepared; stopped before timing' if args.stage=='prepare' else 'completed60+5 and independent audit',flush=True)
+        state.update(complete=False,failure=repr(error),currentFailure=repr(error));write(out/'pipeline.json',state);raise
+    print('prepared; stopped before timing' if args.stage in ['prepare','repair-prepare'] else 'completed60+5 and independent audit',flush=True)
 
 
 if __name__=='__main__': main()

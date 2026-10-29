@@ -7,7 +7,7 @@ spec=importlib.util.spec_from_file_location('pre_map_geometry_housekeeping',ROOT
 h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
 
 def main():
-    stage=sys.argv[1];assert stage in ['prepare','collect']
+    stage=sys.argv[1];assert stage in ['prepare','repair-prepare','collect']
     placement=h.Placement();record=dict(schema='rook2-pre-map-geometry-housekeeping-v1',helperCpus=sorted(H),applies=[],restored=None,failure=None)
     child=None;code=None
     try:

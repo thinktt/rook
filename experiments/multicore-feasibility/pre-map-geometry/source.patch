@@ -1236,7 +1236,7 @@
 +mod pre_map_geometry_tests;
 --- /dev/null
 +++ b/src/evaluator/pre_map_geometry_tests.rs
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,225 @@
 +//! Focused actual-owner controls; worker gates separately cover cell retirement.
 +use super::*;
 +use crate::engine::Search;
@@ -1273,8 +1273,10 @@
 +
 +fn ready<const D: bool>(evaluator: &Evaluator<D>) -> u64 {
 +    evaluator.colors_worker.as_ref().map_or(0, |worker| {
-+        serde_json::from_str::<serde_json::Value>(&worker.readiness_report()).unwrap()
-+            ["map_ready_epoch"].as_u64().unwrap()
++        let report = worker.readiness_report();
++        let value = report.split("\"map_ready_epoch\":").nth(1)
++            .expect("missing real map-ready epoch");
++        value.split(|ch: char| !ch.is_ascii_digit()).next().unwrap().parse().unwrap()
 +    })
 +}
 +

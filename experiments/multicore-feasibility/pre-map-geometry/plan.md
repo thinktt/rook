@@ -57,3 +57,9 @@ generation later, so no min(map,geometry) saving bound or additive old hook gain
 No PGO, retune, adoption, broad qualification or external action. Release quiet
 hold and headline at terminal raw audit, close concise source/proof/cost/results,
 commit and stop at decision. Current manager51 warning continues;50 stops/pauses.
+
+Initial admission compile101 ran zero units (two E0433 errors from the new cfgtest
+helper only). Narrow repair replaces its unavailable serde_json parse without a
+dependency/production change. repair-01 preserves original source/tools/pipeline
+and diagnostics; repair-prepare retains first101 and original clock, then runs
+all99 still-unexecuted controls once. No successful native request is repeated.
