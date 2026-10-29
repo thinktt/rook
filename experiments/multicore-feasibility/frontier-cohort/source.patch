@@ -1,0 +1,1229 @@
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -70,0 +71,4 @@
++    rook2::frontier_cohort::configure_from_env().map_err(Failure::Message)?;
++    if rook2::frontier_cohort::maybe_expand_from_env().map_err(Failure::Message)? {
++        return Ok(());
++    }
+@@ -177,0 +182 @@
++    rook2::frontier_cohort::write_report().map_err(Failure::Message)?;
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -655,0 +656,11 @@
++    pub(crate) fn frontier_cohort_epoch(&self) -> crate::frontier_cohort::Epoch {
++        crate::frontier_cohort::Epoch::new(
++            &self.root, &self.parameters, self.draw_preference, self.variation_range,
++            [self.weights.structure, self.weights.progress, self.weights.central,
++                self.weights.mobility, self.weights.shelter],
++        )
++    }
++    pub(crate) fn bind_frontier_cohort_root(&self, position: &Position, coherent: bool) {
++        crate::frontier_cohort::bind_root(position, self.frontier_cohort_epoch(), coherent);
++    }
++
+@@ -680,0 +692 @@
++                let cohort_probe = crate::frontier_cohort::before_map(position, true);
+@@ -681,0 +694 @@
++                crate::frontier_cohort::after_map(cohort_probe, &map);
+@@ -817 +830,2 @@
+-        let colors_token = self.colors_worker.as_mut().map(|worker| worker.dispatch(
++        // Root's coherence argument controls inventory, not its private ancestry.
++        let mut cohort_probe = crate::frontier_cohort::before_full(
+@@ -819 +833,10 @@
+-        ).unwrap_or_else(|error|panic!("colors dispatch failed: {error}")));
++            !FRESH && ((HOOK && coherent) || crate::frontier_cohort::is_root_full()),
++        );
++        let colors_token = self.colors_worker.as_mut().map(|worker| {
++            cohort_probe.dispatch_start();
++            let token = worker.dispatch(
++                position, influence, material, self.weights.mobility, self.weights.shelter,
++            ).unwrap_or_else(|error|panic!("colors dispatch failed: {error}"));
++            cohort_probe.dispatch_end();
++            token
++        });
+@@ -822,0 +846 @@
++            cohort_probe.dispatch_start();
+@@ -831,0 +856 @@
++            cohort_probe.dispatch_end();
+@@ -888,0 +914 @@
++            cohort_probe.owner_ready();
+@@ -892,0 +919 @@
++                let inventory_clock = cohort_probe.inventory_start();
+@@ -893,0 +921 @@
++                cohort_probe.inventory_end(inventory_clock);
+@@ -902,0 +931 @@
++        crate::frontier_cohort::after_full(cohort_probe, &chain);
+--- /dev/null
++++ b/src/frontier_cohort.rs
+@@ -0,0 +1,612 @@
++//! Bounded owner-thread frontier observation. Never supplies an engine result.
++//!
++//! Selected keys come ONLY from the captured iteration-six cohort. Root binding
++//! precedes root production; lookup ends at iteration-seven completion. Every
++//! query drops its TLS borrow before entering a kernel or callback. A release is
++//! owner-local descriptor publication, not producer completion: actual readiness
++//! is unknown. Map and post-material FULL-prefix intervals are disjoint observed
++//! path costs, not removable wall time or hardware bounds.
++use crate::{activity::Activity, evaluation::RootContext, evaluator::Parameters,
++    evaluator_worker::ActivityShelter, influence::Influence, position::{Phase, Position},
++    shelter::Shelter, timed::Outcome, types::{Color, Move, MoveKind, Piece, PieceKind, Square}};
++use std::{cell::{Cell, RefCell}, mem::size_of, path::PathBuf, time::Instant};
++
++mod io;
++#[cfg(test)]
++mod tests;
++
++pub(crate) const PARENT_CAP: usize = 16_384;
++pub(crate) const JOB_CAP: usize = 262_144;
++pub(crate) const BYTE_CAP: usize = 512 * 1024 * 1024;
++const INDEX_SLOTS: usize = 524_288;
++const NONE: u32 = u32::MAX;
++const UNKNOWN: u64 = u64::MAX;
++const SAMPLE_STRIDE: u64 = 512;
++// Includes two simultaneous I/O buffers, bounded report/path strings, cold
++// key/root/Position temporaries, and 64B per allocation for allocation overhead.
++const FIXED_RESERVE: usize = 512 * 1024;
++
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(crate) struct Epoch {
++    side: Color, phase: [u16; 3], counts: [[u8; 6]; 2], values: [[i32; 5]; 2],
++    squares: [[[i16; 64]; 5]; 2], average: i32, own: [i32; 11], opponent: [i32; 11],
++    parameter_average: i32, draw: i32, opponent_selectivity: i32,
++    draw_preference: i32, variation: u32, weights: [[i32; 2]; 5],
++}
++impl Epoch {
++    pub(crate) fn new(root: &RootContext, parameters: &Parameters, draw: i32,
++        variation: u32, weights: [[i32; 2]; 5]) -> Self {
++        Self {side: root.side, phase: [root.phase.opening, root.phase.middlegame, root.phase.endgame],
++            counts: root.counts, values: root.values, squares: root.squares, average: root.average_depth,
++            own: parameters.own, opponent: parameters.opponent, parameter_average: parameters.average_depth,
++            draw: parameters.draw, opponent_selectivity: parameters.opponent_selectivity,
++            draw_preference: draw, variation, weights}
++    }
++    fn root(&self) -> RootContext {
++        RootContext {side: self.side, phase: Phase {opening: self.phase[0], middlegame: self.phase[1],
++            endgame: self.phase[2]}, counts: self.counts, values: self.values,
++            squares: self.squares, average_depth: self.average}
++    }
++    fn validate(&self, position: &Position) -> Result<(), String> {
++        if !self.own.iter().all(|v| (0..=1000).contains(v))
++            || !self.opponent.iter().enumerate().filter(|(i, _)| *i != 5).all(|(_, v)| (0..=1000).contains(v))
++            || !(-100..=100).contains(&self.parameter_average)
++            || !(-10000..=10000).contains(&self.draw) || !(0..=100).contains(&self.opponent_selectivity)
++        { return Err("cohort invalid captured parameters".into()); }
++        let percentages = if position.side == Color::White {[self.own, self.opponent]} else {[self.opponent, self.own]};
++        let root = RootContext::new(position,
++            std::array::from_fn(|c| std::array::from_fn(|k| percentages[c][k] as u16)), self.parameter_average);
++        let parameters = Parameters {own: self.own, opponent: self.opponent,
++            average_depth: self.parameter_average, draw: self.draw, opponent_selectivity: self.opponent_selectivity};
++        let weights = [10usize, 9, 6, 7, 8].map(|k| percentages.map(|p| crate::evaluator::coefficient(p[k])));
++        let expected = Self::new(&root, &parameters,
++            crate::evaluation::draw_preference(root.phase, self.draw),
++            crate::evaluation::variation_range(self.opponent_selectivity), weights);
++        if *self != expected { return Err("cohort captured root epoch disagrees with root/parameters".into()); }
++        Ok(())
++    }
++}
++
++// These are the reviewed pure_observer projections. Map source order is
++// normalized within each kind, retaining multiplicity; chain order is exact.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Placement {board: [Piece; 64], counts: [[u8; 6]; 2], sources: [[Square; 16]; 2]}
++impl Placement {
++    fn new(position: &Position, sorted: bool) -> Self {
++        let mut sources = [[Square(64); 16]; 2];
++        for color in [Color::White, Color::Black] {
++            let population = position.counts[color.index()].iter().map(|&n| n as usize).sum::<usize>();
++            assert!(population <= 16, "cohort private source population exceeds16");
++            let mut offset = 0;
++            for kind in PieceKind::ALL {
++                let active = position.piece_squares(color, kind);
++                let end = offset + active.len();
++                sources[color.index()][offset..end].copy_from_slice(active);
++                if sorted {sources[color.index()][offset..end].sort_unstable_by_key(|s| s.0);}
++                offset = end;
++            }
++        }
++        Self {board: position.board, counts: position.counts, sources}
++    }
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct MapKey {placement: Placement, planes: [u64; 4], coherent: bool}
++impl MapKey {
++    fn new(position: &Position) -> Self {Self {placement: Placement::new(position, true),
++        planes: *position.attack_planes(), coherent: true}}
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct ChainKey {placement: Placement, starting_units: u8, map: Influence,
++    material: i32, mobility: [i32; 2], shelter: [i32; 2]}
++impl ChainKey {
++    fn new(position: &Position, map: &Influence, material: i32, mobility: [i32; 2], shelter: [i32; 2]) -> Self {
++        Self {placement: Placement::new(position, false), starting_units: position.starting_units,
++            map: *map, material, mobility, shelter}
++    }
++}
++fn filter(planes: &[u64; 4]) -> u64 {
++    // Map equality includes these planes. Chain equality includes the board,
++    // which determines them on this fixed trusted-coherent caller domain.
++    // Public/stale-plane inputs are not admitted. No policy hash is consulted;
++    // a bucket hit always requires complete typed equality below.
++    let mut value = 0x9e3779b97f4a7c15u64;
++    for &plane in planes {value = (value ^ plane).rotate_left(17).wrapping_mul(0x9ddfea08eb382d69);}
++    value
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Stamp {ns: u64, ordinal: u64}
++impl Stamp {const ABSENT: Self = Self {ns: UNKNOWN, ordinal: UNKNOWN}; fn present(self) -> bool {self.ns != UNKNOWN}}
++#[derive(Clone, Copy)]
++struct History {
++    release: Stamp, first_production: Stamp, first7: Stamp, first_phase: u8, new7: bool,
++    // before6, in6 before release, in6 after release, intervening, all7.
++    calls: [u64; 5], kernel: [u64; 2], extras: [u64; 5],
++}
++impl Default for History {
++    fn default() -> Self {Self {release: Stamp::ABSENT, first_production: Stamp::ABSENT,
++        first7: Stamp::ABSENT, first_phase: 0, new7: false, calls: [0; 5],
++        kernel: [UNKNOWN; 2], extras: [UNKNOWN; 5]}}
++}
++impl History {
++    fn demand(&mut self, phase: u8, entered6: bool, stamp: Stamp) -> bool {
++        if phase == 7 {
++            self.calls[4] += 1;
++            if !self.first7.present() {self.first7 = stamp; self.new7 = !self.first_production.present();}
++            return self.calls[4] == 1 && self.new7;
++        }
++        let index = if !entered6 {0} else if phase == 6 {if self.release.present() {2} else {1}} else {3};
++        self.calls[index] += 1;
++        false
++    }
++    fn produce(&mut self, phase: u8, stamp: Stamp) {
++        if !self.first_production.present() {self.first_production = stamp; self.first_phase = phase;}
++    }
++}
++#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
++struct ChainValue {activity: Activity, shelter: Shelter}
++impl From<&ActivityShelter> for ChainValue {
++    fn from(value: &ActivityShelter) -> Self {Self {activity: value.activity, shelter: value.shelter}}
++}
++struct MapRow {key: MapKey, value: Influence, history: History, bucket: u64, next: u32}
++struct ChainRow {key: ChainKey, value: ChainValue, has_value: bool, history: History, bucket: u64, next: u32}
++
++#[derive(Clone, Copy)]
++struct Job {parent: u32, movement: Move, map: u32, chain: u32, release: Stamp}
++struct Cohort {parents: Vec<Position>, jobs: Vec<Job>}
++fn reserved<T>(count: usize) -> Result<Vec<T>, String> {
++    let mut rows = Vec::new(); rows.try_reserve_exact(count).map_err(|e| format!("cohort allocation: {e}"))?; Ok(rows)
++}
++impl Cohort {
++    fn new() -> Result<Self, String> {Ok(Self {parents: reserved(PARENT_CAP)?, jobs: reserved(JOB_CAP)?})}
++    fn bytes(&self) -> usize {self.parents.capacity() * size_of::<Position>() + self.jobs.capacity() * size_of::<Job>()}
++}
++struct Pool {root: Position, epoch: Epoch, cohort: Cohort, maps: Vec<MapRow>, chains: Vec<ChainRow>,
++    map_heads: Vec<u32>, chain_heads: Vec<u32>, captured: Footer}
++impl Pool {
++    fn new(root: Position, epoch: Epoch, cohort: Cohort, captured: Footer) -> Result<Self, String> {
++        let mut map_heads = reserved(INDEX_SLOTS)?; map_heads.resize(INDEX_SLOTS, NONE);
++        let mut chain_heads = reserved(INDEX_SLOTS)?; chain_heads.resize(INDEX_SLOTS, NONE);
++        Ok(Self {root, epoch, cohort, maps: reserved(JOB_CAP)?, chains: reserved(JOB_CAP)?, map_heads, chain_heads, captured})
++    }
++    fn bytes(&self) -> usize {self.cohort.bytes() + self.maps.capacity() * size_of::<MapRow>()
++        + self.chains.capacity() * size_of::<ChainRow>() + (self.map_heads.capacity() + self.chain_heads.capacity()) * 4}
++    fn find_map(&self, key: &MapKey, bucket: u64, comparisons: &mut u64) -> Option<u32> {
++        let mut id = self.map_heads[bucket as usize & (INDEX_SLOTS - 1)];
++        while id != NONE {let row = &self.maps[id as usize];
++            if row.bucket == bucket {*comparisons += 1; if row.key == *key {return Some(id);}}
++            id = row.next;
++        } None
++    }
++    fn find_chain(&self, key: &ChainKey, bucket: u64, comparisons: &mut u64) -> Option<u32> {
++        let mut id = self.chain_heads[bucket as usize & (INDEX_SLOTS - 1)];
++        while id != NONE {let row = &self.chains[id as usize];
++            if row.bucket == bucket {*comparisons += 1; if row.key == *key {return Some(id);}}
++            id = row.next;
++        } None
++    }
++    fn insert_map(&mut self, key: MapKey, value: Influence, bucket: u64) -> Result<u32, String> {
++        if let Some(id) = self.find_map(&key, bucket, &mut 0) {
++            if self.maps[id as usize].value != value {return Err("cohort duplicate map payload mismatch".into());} return Ok(id);
++        }
++        if self.maps.len() == JOB_CAP {return Err("cohort map cap".into());}
++        let slot = bucket as usize & (INDEX_SLOTS - 1); let id = self.maps.len() as u32;
++        self.maps.push(MapRow {key, value, history: History::default(), bucket, next: self.map_heads[slot]});
++        self.map_heads[slot] = id; Ok(id)
++    }
++    fn insert_chain(&mut self, key: ChainKey, bucket: u64) -> Result<u32, String> {
++        if let Some(id) = self.find_chain(&key, bucket, &mut 0) {return Ok(id);}
++        if self.chains.len() == JOB_CAP {return Err("cohort chain cap".into());}
++        let slot = bucket as usize & (INDEX_SLOTS - 1); let id = self.chains.len() as u32;
++        self.chains.push(ChainRow {key, value: ChainValue::default(), has_value: false,
++            history: History::default(), bucket, next: self.chain_heads[slot]});
++        self.chain_heads[slot] = id; Ok(id)
++    }
++}
++
++#[derive(Clone, Copy)]
++struct Footer {boundaries: [u64; 4], counts: [u64; 4], n: u64, r: u64, mask: u64,
++    last: u8, stop_depth: u8, selected: u8, point: u8, selected_n: u64, publications: u32, flags: u32}
++impl Default for Footer {
++    fn default() -> Self {Self {boundaries: [UNKNOWN; 4], counts: [0; 4], n: 0, r: 0, mask: 0,
++        last: 0, stop_depth: 0, selected: 0, point: 0, selected_n: 0, publications: 0, flags: 0}}
++}
++impl Footer {
++    fn pair_complete(&self) -> bool {self.flags == 0 && self.mask & 192 == 192
++        && self.boundaries.iter().all(|&n| n != UNKNOWN)
++        && self.boundaries.windows(2).all(|p| p[0] <= p[1])}
++    fn same_work(&self, other: &Self) -> bool {self.counts == other.counts && self.n == other.n && self.r == other.r
++        && self.mask == other.mask && self.last == other.last && self.stop_depth == other.stop_depth
++        && self.selected == other.selected && self.point == other.point && self.selected_n == other.selected_n
++        && self.publications == other.publications}
++}
++#[derive(Clone, Copy, Default)]
++struct Cost {queries: u64, misses: u64, hits: u64, comparisons: u64, key_bytes: u64,
++    copy_bytes: u64, samples: u64, sampled_ns: u128}
++impl Cost {
++    fn start(&mut self) -> Option<Instant> {self.queries += 1;
++        (self.queries % SAMPLE_STRIDE == 0).then(Instant::now)}
++    fn finish(&mut self, start: Option<Instant>) {if let Some(start) = start {
++        self.samples += 1; self.sampled_ns += start.elapsed().as_nanos();}}
++}
++#[derive(Clone, Copy, PartialEq, Eq)]
++enum Mode {Off, Capture, Expand, Observe}
++struct Config {mode: Mode, capture: Option<PathBuf>, pool: Option<PathBuf>, ledger: Option<PathBuf>, report: Option<PathBuf>}
++impl Default for Config {fn default() -> Self {Self {mode: Mode::Off, capture: None, pool: None, ledger: None, report: None}}}
++fn planned_memory(cohorts: usize) -> usize {
++    size_of::<State>() + FIXED_RESERVE
++        + cohorts * (PARENT_CAP * size_of::<Position>() + JOB_CAP * size_of::<Job>())
++        + JOB_CAP * (size_of::<MapRow>() + size_of::<ChainRow>()) + 2 * INDEX_SLOTS * size_of::<u32>()
++}
++fn planned_files(mode: Mode, parents: usize, jobs: usize, maps: usize, chains: usize) -> usize {
++    let capture = 1768 + 125 * parents + 6 * jobs;
++    let pool = 1768 + 125 * parents + 14 * jobs + 269 * maps + 257 * chains;
++    let ledger = 1768 + 125 * parents + 30 * jobs + 150 * maps + 191 * chains;
++    match mode {Mode::Capture => capture + 65536, Mode::Expand => capture + pool + 2 * 65536,
++        Mode::Observe => capture + pool + ledger + 3 * 65536, Mode::Off => 0}
++}
++struct State {
++    config: Config, bound: bool, active: bool, closed: bool, phase: u8, origin: Option<Instant>,
++    ordinal: u64, root: Option<Position>, epoch: Option<Epoch>, actual: Option<Cohort>, pool: Option<Pool>,
++    footer: Footer, error: Option<&'static str>, finished: bool, reported: bool,
++    costs: [Cost; 5], payload_comparisons: u64, payload_bytes: u64, peak_bytes: usize,
++}
++impl Default for State {
++    fn default() -> Self {Self {config: Config::default(), bound: false, active: false, closed: false,
++        phase: 0, origin: None, ordinal: 0, root: None, epoch: None, actual: None, pool: None,
++        footer: Footer::default(), error: None, finished: false, reported: false, costs: [Cost::default(); 5],
++        payload_comparisons: 0, payload_bytes: 0, peak_bytes: 0}}
++}
++thread_local! {
++    static STATE: RefCell<State> = RefCell::new(State::default());
++    static ROOT_SCOPE: Cell<bool> = const {Cell::new(false)};
++}
++impl State {
++    fn fail(&mut self, error: &'static str) {self.error.get_or_insert(error); self.footer.flags = 1;}
++    fn enabled(&self) -> bool {self.active && !self.closed && self.error.is_none()}
++    fn stamp_at(&mut self, now: Instant) -> Stamp {
++        self.ordinal = self.ordinal.checked_add(1).expect("cohort event ordinal exhausted");
++        let ns = now.duration_since(self.origin.expect("bound cohort origin")).as_nanos();
++        if ns >= UNKNOWN as u128 {self.fail("cohort_clock_overflow"); return Stamp::ABSENT;}
++        Stamp {ns: ns as u64, ordinal: self.ordinal}
++    }
++    fn memory_bytes(&self) -> usize {size_of::<Self>() + FIXED_RESERVE
++        + self.actual.as_ref().map_or(0, Cohort::bytes) + self.pool.as_ref().map_or(0, Pool::bytes)}
++    fn disk_bytes(&self) -> usize {
++        // Retained capture/pool/ledger records AND up to64KiB per stage's
++        // retained JSON. The observation ledger is admitted at its complete
++        // expected size before root production, including every occurrence.
++        match self.config.mode {
++            Mode::Capture => self.actual.as_ref().map_or(65536, |r| {
++                planned_files(Mode::Capture, r.parents.len(), r.jobs.len(), 0, 0)}),
++            Mode::Expand | Mode::Observe => self.pool.as_ref().map_or(0, |p| {
++                planned_files(self.config.mode, p.cohort.parents.len(), p.cohort.jobs.len(), p.maps.len(), p.chains.len())
++            }),
++            Mode::Off => 0,
++        }
++    }
++    fn bytes(&self) -> usize {self.memory_bytes() + self.disk_bytes()}
++    fn check_bytes(&mut self) -> Result<(), String> {let bytes = self.bytes(); self.peak_bytes = self.peak_bytes.max(bytes);
++        if bytes > BYTE_CAP {self.fail("cohort_storage_cap"); return Err("cohort combined RAM plus retained/planned files exceeds512MiB".into());} Ok(())}
++}
++
++pub fn configure_from_env() -> Result<(), String> {
++    fn path(suffix: &str, required: bool) -> Result<Option<PathBuf>, String> {
++        let value = std::env::var_os(format!("ROOK2_FRONTIER_COHORT_{suffix}"));
++        if required && value.is_none() {return Err(format!("missing ROOK2_FRONTIER_COHORT_{suffix}"));}
++        if value.as_ref().is_some_and(|s| s.len() > 4096) {return Err("cohort path exceeds4096bytes".into());}
++        Ok(value.map(PathBuf::from))
++    }
++    let mode = match std::env::var("ROOK2_FRONTIER_COHORT_MODE").as_deref() {
++        Err(std::env::VarError::NotPresent) | Ok("off") => Mode::Off,
++        Ok("capture") => Mode::Capture, Ok("expand") => Mode::Expand, Ok("observe") => Mode::Observe,
++        _ => return Err("ROOK2_FRONTIER_COHORT_MODE must be off/capture/expand/observe".into()),
++    };
++    // Preflight the complete simultaneous reservation BEFORE allocating it.
++    let maximum = planned_memory(2);
++    if maximum > BYTE_CAP {return Err("cohort fixed reservation exceeds512MiB".into());}
++    let config = Config {mode, capture: path("CAPTURE", mode == Mode::Capture || mode == Mode::Expand)?,
++        pool: path("POOL", mode == Mode::Expand || mode == Mode::Observe)?,
++        ledger: path("LEDGER", mode == Mode::Observe)?, report: path("REPORT", mode != Mode::Off)?};
++    STATE.with(|slot| {let mut state = slot.borrow_mut();
++        if state.bound || state.reported {return Err("cohort cannot be reconfigured after binding".into());}
++        state.config = config; Ok(())})
++}
++
++pub fn maybe_expand_from_env() -> Result<bool, String> {
++    STATE.with(|slot| {let mut state = slot.borrow_mut();
++        if state.config.mode != Mode::Expand {return Ok(false);}
++        let (root, epoch, cohort, footer) = io::read_capture(state.config.capture.as_ref().unwrap())?;
++        let context = epoch.root();
++        let mut pool = Pool::new(root, epoch, cohort, footer)?;
++        for id in 0..pool.cohort.jobs.len() {
++            let job = pool.cohort.jobs[id];
++            let parent = &pool.cohort.parents[job.parent as usize];
++            io::validate_move(parent, job.movement)?;
++            let child = parent.played_unchecked(job.movement);
++            child.validate()?;
++            let map = Influence::build_coherent(&child);
++            let bucket = filter(child.attack_planes());
++            let map_id = pool.insert_map(MapKey::new(&child), map, bucket)?;
++            let chain_id = pool.insert_chain(ChainKey::new(&child, &map, context.material(&child),
++                pool.epoch.weights[3], pool.epoch.weights[4]), bucket)?;
++            pool.cohort.jobs[id].map = map_id; pool.cohort.jobs[id].chain = chain_id;
++        }
++        state.footer = footer; state.root = Some(root); state.epoch = Some(pool.epoch.clone()); state.pool = Some(pool);
++        state.finished = true; state.check_bytes()?;
++        io::write_pool(state.config.pool.as_ref().unwrap(), state.pool.as_ref().unwrap())?;
++        io::write_summary(state.config.report.as_ref().unwrap(), &state)?;
++        state.reported = true; Ok(true)
++    })
++}
++
++fn bind_root_checked(position: &Position, epoch: Epoch, private_coherent: bool) -> Result<(), String> {
++    STATE.with(|slot| {let mut state = slot.borrow_mut();
++        if state.config.mode == Mode::Off {return Ok(());}
++        if state.bound || state.config.mode == Mode::Expand {return Err("cohort requires one bound native search".into());}
++        if !private_coherent {return Err("cohort requires private coherent root ancestry".into());}
++        position.validate()?; epoch.validate(position)?;
++        if state.config.mode == Mode::Observe {
++            let pool = io::read_pool(state.config.pool.as_ref().unwrap())?;
++            if pool.root != *position || pool.epoch != epoch {return Err("cohort observed root/epoch mismatch".into());}
++            state.pool = Some(pool);
++        }
++        let planned_actual = PARENT_CAP * size_of::<Position>() + JOB_CAP * size_of::<Job>();
++        let disk = if let Some(pool) = &state.pool {planned_files(Mode::Observe,
++            pool.cohort.parents.len(), pool.cohort.jobs.len(), pool.maps.len(), pool.chains.len())}
++            else {planned_files(Mode::Capture, PARENT_CAP, JOB_CAP, 0, 0)};
++        if state.memory_bytes() + planned_actual + disk > BYTE_CAP {
++            return Err("cohort combined cap before actual cohort reservation".into());
++        }
++        state.actual = Some(Cohort::new()?); state.root = Some(*position); state.epoch = Some(epoch);
++        state.check_bytes()?;
++        // Cold loading/binding is outside the replay timeline. This origin is
++        // before the native root map and FULL production, including iteration1.
++        state.origin = Some(Instant::now()); state.bound = true; state.active = true; Ok(())
++    })
++}
++pub(crate) fn bind_root(position: &Position, epoch: Epoch, private_coherent: bool) {
++    if let Err(error) = bind_root_checked(position, epoch, private_coherent) {
++        STATE.with(|slot| slot.borrow_mut().fail("cohort_root_bind_failed"));
++        eprintln!("frontier cohort root binding failed: {error}");
++    }
++}
++
++pub(crate) fn is_root_full() -> bool {ROOT_SCOPE.with(Cell::get)}
++pub(crate) fn with_root_full<R>(coherent: bool, f: impl FnOnce() -> R) -> R {
++    struct Restore(bool);
++    impl Drop for Restore {fn drop(&mut self) {ROOT_SCOPE.with(|cell| cell.set(self.0));}}
++    let saved = ROOT_SCOPE.with(|cell| {let saved = cell.get(); cell.set(saved || coherent); saved});
++    let _restore = Restore(saved); f()
++}
++
++pub(crate) fn begin_iteration(depth: u8, now: Option<Instant>) {
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); if !s.enabled() {return;}
++        s.phase = depth;
++        if depth == 6 || depth == 7 {
++            let index = (depth as usize - 6) * 2;
++            if s.footer.boundaries[index] != UNKNOWN {s.fail("duplicate_iteration_entry"); return;}
++            let Some(now) = now else {s.fail("missing_boundary_clock"); return;};
++            if depth == 7 && s.footer.boundaries[1] == UNKNOWN {s.fail("missing_iteration6_completion"); return;}
++            s.footer.boundaries[index] = s.stamp_at(now).ns;
++        }
++    });
++}
++pub(crate) fn complete_iteration(depth: u8, now: Option<Instant>) {
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); if !s.enabled() {return;}
++        if depth == 6 || depth == 7 {
++            let index = (depth as usize - 6) * 2;
++            if s.phase != depth || s.footer.boundaries[index] == UNKNOWN || s.footer.boundaries[index + 1] != UNKNOWN {
++                s.fail("invalid_iteration_completion"); return;
++            }
++            let Some(now) = now else {s.fail("missing_boundary_clock"); return;};
++            s.footer.boundaries[index + 1] = s.stamp_at(now).ns;
++            if depth == 7 {s.closed = true;}
++        }
++        s.phase = 0;
++    });
++}
++
++pub(crate) fn skip(cookie: &mut Option<u32>, position: &Position, movement: Move,
++    iteration: i32, depth: i32, fresh: u8, coherent: bool) {
++    STATE.with(|slot| {let mut s = slot.borrow_mut();
++        if !s.enabled() || s.phase != 6 || iteration != 6 || depth != 0 || fresh != 0
++            || movement.kind() != MoveKind::Ordinary || !coherent {return;}
++        let victim = position.board[movement.to().0 as usize];
++        if !victim.is_empty() && victim.kind() == PieceKind::King {return;}
++        let is_new = cookie.is_none();
++        let id = cookie.unwrap_or(s.actual.as_ref().unwrap().parents.len() as u32);
++        if s.actual.as_ref().unwrap().jobs.len() == JOB_CAP || (is_new && id as usize == PARENT_CAP) {
++            s.fail("cohort_parent_or_job_cap"); return;
++        }
++        let audit_sample = s.costs[3].start();
++        let job_index = s.actual.as_ref().unwrap().jobs.len();
++        let mut map = NONE; let mut chain = NONE;
++        if let Some(pool) = s.pool.as_ref() {
++            if (id as usize) >= pool.cohort.parents.len() || pool.cohort.parents[id as usize] != *position
++                || job_index >= pool.cohort.jobs.len()
++            {s.fail("cohort_parent_or_order_mismatch"); return;}
++            let expected = pool.cohort.jobs[job_index];
++            if expected.parent != id || expected.movement != movement {s.fail("cohort_move_order_mismatch"); return;}
++            map = expected.map; chain = expected.chain;
++        }
++        if !is_new && ((id as usize) >= s.actual.as_ref().unwrap().parents.len()
++            || s.actual.as_ref().unwrap().parents[id as usize] != *position)
++        {s.fail("cohort_parent_cookie_mismatch"); return;}
++        s.costs[3].comparisons += 1;
++        s.costs[3].key_bytes += (size_of::<Position>() + size_of::<Job>()) as u64;
++        s.costs[3].finish(audit_sample);
++        let publication_sample = s.costs[2].start();
++        let rows = s.actual.as_mut().unwrap();
++        if is_new {rows.parents.push(*position); *cookie = Some(id);}
++        rows.jobs.push(Job {parent: id, movement, map, chain, release: Stamp::ABSENT});
++        // Both this replay's parent copy and descriptor publication precede the
++        // timestamp. Capture timestamps are not serialized or imported here.
++        let stamp = if s.config.mode == Mode::Observe {s.stamp_at(Instant::now())} else {Stamp::ABSENT};
++        s.actual.as_mut().unwrap().jobs[job_index].release = stamp;
++        s.costs[2].copy_bytes += size_of::<Job>() as u64 + if is_new {size_of::<Position>() as u64} else {0};
++        s.costs[2].finish(publication_sample);
++        if let Some(pool) = s.pool.as_mut() {
++            for history in [&mut pool.maps[map as usize].history, &mut pool.chains[chain as usize].history] {
++                if !history.release.present() {history.release = stamp;}
++            }
++        }
++        s.footer.counts[0] += u64::from(is_new); s.footer.counts[1] += 1;
++    });
++}
++
++pub(crate) struct MapProbe {id: Option<u32>, phase: u8,
++    origin: Option<Instant>, started: Option<Instant>}
++pub(crate) struct FullProbe {id: Option<u32>, first_new: bool, phase: u8,
++    origin: Option<Instant>, started: Option<Instant>, extras: [u64; 5]}
++impl MapProbe {fn empty() -> Self {Self {id: None, phase: 0, origin: None, started: None}}}
++impl FullProbe {
++    fn empty() -> Self {Self {id: None, first_new: false, phase: 0, origin: None, started: None, extras: [UNKNOWN; 5]}}
++    fn mark(&mut self, index: usize) {if self.first_new {
++        self.extras[index] = Instant::now().duration_since(self.origin.unwrap()).as_nanos().min((UNKNOWN - 1) as u128) as u64;
++    }}
++    pub(crate) fn dispatch_start(&mut self) {self.mark(0);}
++    pub(crate) fn dispatch_end(&mut self) {self.mark(1);}
++    pub(crate) fn owner_ready(&mut self) {self.mark(2);}
++    pub(crate) fn inventory_start(&mut self) -> Option<Instant> {
++        if !self.first_new {return None;} let now = Instant::now();
++        self.extras[3] = now.duration_since(self.origin.unwrap()).as_nanos().min((UNKNOWN - 1) as u128) as u64;
++        Some(now)
++    }
++    pub(crate) fn inventory_end(&mut self, started: Option<Instant>) {if started.is_some() {self.mark(4);}}
++}
++
++pub(crate) fn before_map(position: &Position, coherent: bool) -> MapProbe {
++    STATE.with(|slot| {let mut s = slot.borrow_mut();
++        if !s.enabled() || !coherent {return MapProbe::empty();}
++        if s.phase == 7 {s.footer.counts[2] += 1;}
++        if s.config.mode != Mode::Observe {return MapProbe::empty();}
++        let cost_index = usize::from(s.phase == 7); let sampled = s.costs[cost_index].start();
++        let bucket = filter(position.attack_planes());
++        if s.pool.as_ref().unwrap().map_heads[bucket as usize & (INDEX_SLOTS - 1)] == NONE {
++            s.costs[cost_index].misses += 1; s.costs[cost_index].finish(sampled); return MapProbe::empty();
++        }
++        // Matching-demand site: after nonempty congruent-filter admission,
++        // before constructing/comparing the complete typed key.
++        let stamp = s.stamp_at(Instant::now());
++        let key = MapKey::new(position); let mut comparisons = 0;
++        let id = s.pool.as_ref().unwrap().find_map(&key, bucket, &mut comparisons);
++        s.costs[cost_index].comparisons += comparisons; s.costs[cost_index].key_bytes += size_of::<MapKey>() as u64;
++        s.costs[cost_index].copy_bytes += size_of::<MapKey>() as u64;
++        let Some(id) = id else {s.costs[cost_index].misses += 1; s.costs[cost_index].finish(sampled); return MapProbe::empty();};
++        s.costs[cost_index].hits += 1;
++        s.costs[cost_index].finish(sampled);
++        // Novelty/history mutation is audit work, outside prospective query samples.
++        let phase = s.phase; let entered6 = s.footer.boundaries[0] != UNKNOWN;
++        let first_new = s.pool.as_mut().unwrap().maps[id as usize].history.demand(phase, entered6, stamp);
++        MapProbe {id: Some(id), phase, origin: s.origin,
++            started: first_new.then(Instant::now)}
++    })
++}
++pub(crate) fn after_map(probe: MapProbe, value: &Influence) {
++    let end = probe.started.map(|_| Instant::now());
++    let Some(id) = probe.id else {return;};
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); if s.error.is_some() {return;}
++        let stamp = s.stamp_at(end.unwrap_or_else(Instant::now));
++        let audit_sample = s.costs[4].start();
++        s.payload_comparisons += 1; s.payload_bytes += size_of::<Influence>() as u64;
++        let row = &mut s.pool.as_mut().unwrap().maps[id as usize];
++        if row.value != *value {s.fail("cohort_canonical_map_payload_mismatch"); return;}
++        row.history.produce(probe.phase, stamp);
++        if let (Some(start), Some(end)) = (probe.started, end) {
++            row.history.kernel = [start.duration_since(probe.origin.unwrap()).as_nanos() as u64,
++                end.duration_since(probe.origin.unwrap()).as_nanos() as u64];
++        }
++        s.costs[4].comparisons += 1; s.costs[4].finish(audit_sample);
++    });
++}
++
++pub(crate) fn before_full(position: &Position, map: &Influence, material: i32,
++    mobility: [i32; 2], shelter: [i32; 2], native_admitted: bool) -> FullProbe {
++    STATE.with(|slot| {let mut s = slot.borrow_mut();
++        if !s.enabled() || !native_admitted {return FullProbe::empty();}
++        if s.phase == 7 {s.footer.counts[3] += 1;}
++        if s.config.mode != Mode::Observe {return FullProbe::empty();}
++        let cost_index = usize::from(s.phase == 7); let sampled = s.costs[cost_index].start();
++        let bucket = filter(position.attack_planes());
++        if s.pool.as_ref().unwrap().chain_heads[bucket as usize & (INDEX_SLOTS - 1)] == NONE {
++            s.costs[cost_index].misses += 1; s.costs[cost_index].finish(sampled); return FullProbe::empty();
++        }
++        let stamp = s.stamp_at(Instant::now());
++        let key = ChainKey::new(position, map, material, mobility, shelter); let mut comparisons = 0;
++        let id = s.pool.as_ref().unwrap().find_chain(&key, bucket, &mut comparisons);
++        s.costs[cost_index].comparisons += comparisons; s.costs[cost_index].key_bytes += size_of::<ChainKey>() as u64;
++        s.costs[cost_index].copy_bytes += size_of::<ChainKey>() as u64;
++        let Some(id) = id else {s.costs[cost_index].misses += 1; s.costs[cost_index].finish(sampled); return FullProbe::empty();};
++        s.costs[cost_index].hits += 1;
++        s.costs[cost_index].finish(sampled);
++        // Novelty/history mutation is audit work, outside prospective query samples.
++        let phase = s.phase; let entered6 = s.footer.boundaries[0] != UNKNOWN;
++        let first_new = s.pool.as_mut().unwrap().chains[id as usize].history.demand(phase, entered6, stamp);
++        FullProbe {id: Some(id), first_new, phase, origin: s.origin,
++            started: first_new.then(Instant::now), extras: [UNKNOWN; 5]}
++    })
++}
++pub(crate) fn after_full(probe: FullProbe, value: &ActivityShelter) {
++    let end = probe.started.map(|_| Instant::now());
++    let Some(id) = probe.id else {return;};
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); if s.error.is_some() {return;}
++        let stamp = s.stamp_at(end.unwrap_or_else(Instant::now)); let value = ChainValue::from(value);
++        let audit_sample = s.costs[4].start();
++        let repeated_payload = s.pool.as_ref().unwrap().chains[id as usize].has_value;
++        s.payload_comparisons += u64::from(repeated_payload); s.payload_bytes += size_of::<ChainValue>() as u64;
++        let row = &mut s.pool.as_mut().unwrap().chains[id as usize];
++        if row.has_value && row.value != value {s.fail("cohort_canonical_chain_payload_mismatch"); return;}
++        row.value = value; row.has_value = true; row.history.produce(probe.phase, stamp);
++        if let (Some(start), Some(end)) = (probe.started, end) {
++            row.history.kernel = [start.duration_since(probe.origin.unwrap()).as_nanos() as u64,
++                end.duration_since(probe.origin.unwrap()).as_nanos() as u64];
++            row.history.extras = probe.extras;
++        }
++        s.costs[4].comparisons += u64::from(repeated_payload); s.costs[4].finish(audit_sample);
++    });
++}
++
++pub(crate) fn finish_search(outcome: &Outcome) {
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); if s.config.mode == Mode::Off {return;}
++        s.active = false; s.phase = 0; s.finished = true;
++        s.footer.n = outcome.stop.work.charged_search_units; s.footer.r = outcome.stop.work.charged_relation_queries;
++        s.footer.mask = outcome.iterations.iter().filter(|i| i.complete).fold(0u64, |m, i| m | (1u64 << i.depth));
++        s.footer.last = outcome.iterations.last().map_or(0, |i| i.depth);
++        s.footer.stop_depth = outcome.stop.depth;
++        s.footer.point = match outcome.stop.point {crate::timed::Point::Root => 0, crate::timed::Point::Iteration => 1, crate::timed::Point::Poll => 2};
++        s.footer.selected = outcome.result.as_ref().map_or(0, |c| c.depth);
++        s.footer.selected_n = outcome.result.as_ref().map_or(0, |c| c.search_id);
++        s.footer.publications = outcome.publications.len() as u32;
++        if !s.footer.pair_complete() {s.fail("incomplete_iteration_pair");}
++        if let Some(pool) = s.pool.as_ref() {
++            let rows = s.actual.as_ref().unwrap();
++            if rows.parents.len() != pool.cohort.parents.len() || rows.jobs.len() != pool.cohort.jobs.len()
++                || !s.footer.same_work(&pool.captured) {s.fail("cohort_or_count_boundary_mismatch");}
++        }
++    });
++}
++
++pub fn write_report() -> Result<(), String> {
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); if s.config.mode == Mode::Off {return Ok(());}
++        if s.reported {return Err("cohort report already written".into());}
++        if !s.finished || !s.bound {s.fail("cohort_search_not_finished");}
++        if let Err(error) = s.check_bytes() {
++            // The full planned ledger has not been created; preserve the cold
++            // rejection report without claiming a complete admitted cohort.
++            io::write_summary(s.config.report.as_ref().unwrap(), &s)?; s.reported = true;
++            return Err(error);
++        }
++        if !s.bound {
++            io::write_summary(s.config.report.as_ref().unwrap(), &s)?; s.reported = true;
++            return Err(s.error.unwrap_or("cohort_root_not_bound").into());
++        }
++        match s.config.mode {
++            Mode::Capture => io::write_capture(s.config.capture.as_ref().unwrap(), &s)?,
++            Mode::Observe => io::write_ledger(s.config.ledger.as_ref().unwrap(), &s)?,
++            _ => return Err("cohort invalid report mode".into()),
++        }
++        io::write_summary(s.config.report.as_ref().unwrap(), &s)?; s.reported = true;
++        if let Some(error) = s.error {return Err(error.into());} Ok(())
++    })
++}
+--- /dev/null
++++ b/src/frontier_cohort/io.rs
+@@ -0,0 +1,316 @@
++//! Fixed little-endian streaming formats. No native padding or pointer bytes.
++use super::*;
++use std::{fs::{File, OpenOptions}, io::{BufReader, BufWriter, Read, Write}, path::Path};
++
++const CAPTURE_MAGIC: &[u8; 8] = b"R2FCOH01";
++const POOL_MAGIC: &[u8; 8] = b"R2FCPO01";
++const LEDGER_MAGIC: &[u8; 8] = b"R2FCLE01";
++pub(super) const HEADER_BYTES: u64 = 1660;
++pub(super) const FOOTER_BYTES: u64 = 108;
++pub(super) const CAPTURE_MAX: u64 = HEADER_BYTES + PARENT_CAP as u64 * 125 + JOB_CAP as u64 * 6 + FOOTER_BYTES;
++pub(super) const POOL_MAX: u64 = HEADER_BYTES + PARENT_CAP as u64 * 125
++    + JOB_CAP as u64 * (14 + 269 + 257) + FOOTER_BYTES;
++pub(super) const LEDGER_MAX: u64 = HEADER_BYTES + PARENT_CAP as u64 * 125
++    + JOB_CAP as u64 * (30 + 150 + 191) + FOOTER_BYTES;
++const BUFFER_BYTES: usize = 65536;
++
++fn error(e: std::io::Error) -> String {format!("cohort raw I/O: {e}")}
++fn bytes<const N: usize>(r: &mut impl Read) -> Result<[u8; N], String> {
++    let mut value = [0u8; N]; r.read_exact(&mut value).map_err(error)?; Ok(value)
++}
++fn u8r(r: &mut impl Read) -> Result<u8, String> {Ok(bytes::<1>(r)?[0])}
++fn u16r(r: &mut impl Read) -> Result<u16, String> {Ok(u16::from_le_bytes(bytes(r)?))}
++fn u32r(r: &mut impl Read) -> Result<u32, String> {Ok(u32::from_le_bytes(bytes(r)?))}
++fn u64r(r: &mut impl Read) -> Result<u64, String> {Ok(u64::from_le_bytes(bytes(r)?))}
++fn i16r(r: &mut impl Read) -> Result<i16, String> {Ok(i16::from_le_bytes(bytes(r)?))}
++fn i32r(r: &mut impl Read) -> Result<i32, String> {Ok(i32::from_le_bytes(bytes(r)?))}
++fn put(w: &mut impl Write, value: &[u8]) -> Result<(), String> {w.write_all(value).map_err(error)}
++fn u8w(w: &mut impl Write, value: u8) -> Result<(), String> {put(w, &[value])}
++fn u16w(w: &mut impl Write, value: u16) -> Result<(), String> {put(w, &value.to_le_bytes())}
++fn u32w(w: &mut impl Write, value: u32) -> Result<(), String> {put(w, &value.to_le_bytes())}
++fn u64w(w: &mut impl Write, value: u64) -> Result<(), String> {put(w, &value.to_le_bytes())}
++fn i16w(w: &mut impl Write, value: i16) -> Result<(), String> {put(w, &value.to_le_bytes())}
++fn i32w(w: &mut impl Write, value: i32) -> Result<(), String> {put(w, &value.to_le_bytes())}
++fn color(value: u8) -> Result<Color, String> {match value {0 => Ok(Color::White), 1 => Ok(Color::Black),
++    _ => Err("cohort invalid color".into())}}
++
++pub(super) fn write_position(w: &mut impl Write, position: &Position) -> Result<(), String> {
++    for piece in position.board {u8w(w, piece.0)?;}
++    for side in position.squares {for square in side {u8w(w, square.0)?;}}
++    for side in position.counts {put(w, &side)?;}
++    for value in [position.primary, position.secondary, position.pawn] {u32w(w, value)?;}
++    put(w, &[position.side as u8, position.rights, position.ep, position.halfmove, position.starting_units])
++}
++pub(super) fn read_position(r: &mut impl Read) -> Result<Position, String> {
++    // A valid initialized template owns private planes; restore public fields,
++    // rebuild private derived state, then reject any captured disagreement.
++    let mut position = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1")?;
++    for piece in &mut position.board {let value = u8r(r)?;
++        if value != 0 && !matches!(value, 1..=6 | 9..=14) {return Err("cohort invalid piece byte".into());}
++        *piece = Piece(value);
++    }
++    for side in &mut position.squares {for square in side {let value = u8r(r)?;
++        if value > 64 {return Err("cohort invalid square byte".into());} *square = Square(value);
++    }}
++    for side in &mut position.counts {*side = bytes(r)?;}
++    let hashes = [u32r(r)?, u32r(r)?, u32r(r)?];
++    position.side = color(u8r(r)?)?; position.rights = u8r(r)?; position.ep = u8r(r)?;
++    position.halfmove = u8r(r)?; let starting = u8r(r)?;
++    if position.counts.iter().any(|side| side.iter().map(|&n| n as usize).sum::<usize>() > 16) {
++        return Err("cohort serialized source population exceeds16".into());
++    }
++    position.recompute_derived();
++    if [position.primary, position.secondary, position.pawn] != hashes || position.starting_units != starting {
++        return Err("cohort serialized hashes/starting_units disagree".into());
++    }
++    position.validate()?; Ok(position)
++}
++fn write_epoch(w: &mut impl Write, e: &Epoch) -> Result<(), String> {
++    u8w(w, e.side as u8)?; for value in e.phase {u16w(w, value)?;}
++    for side in e.counts {put(w, &side)?;}
++    for side in e.values {for value in side {i32w(w, value)?;}}
++    for side in e.squares {for kind in side {for value in kind {i16w(w, value)?;}}}
++    i32w(w, e.average)?; for value in e.own {i32w(w, value)?;} for value in e.opponent {i32w(w, value)?;}
++    for value in [e.parameter_average, e.draw, e.opponent_selectivity, e.draw_preference] {i32w(w, value)?;}
++    u32w(w, e.variation)?; for pair in e.weights {for value in pair {i32w(w, value)?;}} Ok(())
++}
++fn read_epoch(r: &mut impl Read) -> Result<Epoch, String> {
++    let side = color(u8r(r)?)?; let phase = [u16r(r)?, u16r(r)?, u16r(r)?];
++    let mut counts = [[0; 6]; 2]; for side in &mut counts {*side = bytes(r)?;}
++    let mut values = [[0; 5]; 2]; for side in &mut values {for value in side {*value = i32r(r)?;}}
++    let mut squares = [[[0; 64]; 5]; 2]; for side in &mut squares {for kind in side {for value in kind {*value = i16r(r)?;}}}
++    let average = i32r(r)?; let mut own = [0; 11]; for value in &mut own {*value = i32r(r)?;}
++    let mut opponent = [0; 11]; for value in &mut opponent {*value = i32r(r)?;}
++    let parameter_average = i32r(r)?; let draw = i32r(r)?; let opponent_selectivity = i32r(r)?;
++    let draw_preference = i32r(r)?; let variation = u32r(r)?;
++    let mut weights = [[0; 2]; 5]; for pair in &mut weights {for value in pair {*value = i32r(r)?;}}
++    Ok(Epoch {side, phase, counts, values, squares, average, own, opponent, parameter_average,
++        draw, opponent_selectivity, draw_preference, variation, weights})
++}
++fn write_placement(w: &mut impl Write, p: &Placement) -> Result<(), String> {
++    for piece in p.board {u8w(w, piece.0)?;} for side in p.counts {put(w, &side)?;}
++    for side in p.sources {for square in side {u8w(w, square.0)?;}} Ok(())
++}
++fn read_placement(r: &mut impl Read) -> Result<Placement, String> {
++    let board = bytes::<64>(r)?.map(Piece); let mut counts = [[0; 6]; 2];
++    for side in &mut counts {*side = bytes(r)?;}
++    let mut sources = [[Square(64); 16]; 2]; for side in &mut sources {for square in side {*square = Square(u8r(r)?);}}
++    // Verify every active source and every tail without normalizing chronology.
++    let mut restored = [Piece::EMPTY; 64];
++    for c in 0..2 {
++        let population = counts[c].iter().map(|&n| n as usize).sum::<usize>();
++        if population > 16 || counts[c][5] != 1 {return Err("cohort key population".into());}
++        let mut offset = 0;
++        for (k, &count) in counts[c].iter().enumerate() {for _ in 0..count {
++            let square = sources[c][offset].0 as usize; offset += 1;
++            if square >= 64 || !restored[square].is_empty() {return Err("cohort key source square".into());}
++            restored[square] = Piece::new(if c == 0 {Color::White} else {Color::Black}, PieceKind::ALL[k]);
++        }}
++        if sources[c][population..].iter().any(|s| s.0 != 64) {return Err("cohort key source tail".into());}
++    }
++    if board != restored {return Err("cohort key mailbox/source disagreement".into());}
++    Ok(Placement {board, counts, sources})
++}
++fn write_map(w: &mut impl Write, map: &Influence) -> Result<(), String> {
++    for side in map.profiles {put(w, &side)?;} Ok(())
++}
++fn read_map(r: &mut impl Read) -> Result<Influence, String> {Ok(Influence {profiles: [bytes(r)?, bytes(r)?]})}
++fn write_map_key(w: &mut impl Write, key: &MapKey) -> Result<(), String> {
++    write_placement(w, &key.placement)?; for plane in key.planes {u64w(w, plane)?;} u8w(w, u8::from(key.coherent))
++}
++fn read_map_key(r: &mut impl Read) -> Result<MapKey, String> {
++    let placement = read_placement(r)?; let planes = [u64r(r)?, u64r(r)?, u64r(r)?, u64r(r)?];
++    if u8r(r)? != 1 || planes != *crate::attacks::AttackBits::from_board(&placement.board).planes() {
++        return Err("cohort coherent map route/planes".into());
++    }
++    let mut offset;
++    for c in 0..2 {offset = 0; for &count in &placement.counts[c] {
++        let end = offset + count as usize;
++        if placement.sources[c][offset..end].windows(2).any(|p| p[0].0 > p[1].0) {return Err("cohort map sources not normalized".into());}
++        offset = end;
++    }}
++    Ok(MapKey {placement, planes, coherent: true})
++}
++fn write_chain_key(w: &mut impl Write, key: &ChainKey) -> Result<(), String> {
++    write_placement(w, &key.placement)?; u8w(w, key.starting_units)?; write_map(w, &key.map)?;
++    i32w(w, key.material)?; for value in key.mobility {i32w(w, value)?;} for value in key.shelter {i32w(w, value)?;} Ok(())
++}
++fn read_chain_key(r: &mut impl Read) -> Result<ChainKey, String> {
++    let placement = read_placement(r)?; let starting_units = u8r(r)?; let map = read_map(r)?;
++    let material = i32r(r)?; let mobility = [i32r(r)?, i32r(r)?]; let shelter = [i32r(r)?, i32r(r)?];
++    Ok(ChainKey {placement, starting_units, map, material, mobility, shelter})
++}
++fn write_chain_value(w: &mut impl Write, value: ChainValue) -> Result<(), String> {
++    for v in value.activity.pieces {i32w(w, v)?;} for v in value.activity.pressure {i32w(w, v)?;}
++    i32w(w, value.activity.weighted)?; u64w(w, value.activity.relation_queries)?;
++    for v in value.shelter.terms {i32w(w, v)?;} i32w(w, value.shelter.weighted)
++}
++fn write_stamp(w: &mut impl Write, stamp: Stamp) -> Result<(), String> {u64w(w, stamp.ns)?; u64w(w, stamp.ordinal)}
++pub(super) fn write_history(w: &mut impl Write, id: u32, h: &History) -> Result<(), String> {
++    u32w(w, id)?; write_stamp(w, h.release)?; write_stamp(w, h.first_production)?; write_stamp(w, h.first7)?;
++    u8w(w, h.first_phase)?; u8w(w, u8::from(h.new7))?;
++    for calls in h.calls {u64w(w, calls)?;} for time in h.kernel {u64w(w, time)?;}
++    for time in h.extras {u64w(w, time)?;} Ok(())
++}
++pub(super) fn write_footer(w: &mut impl Write, f: Footer) -> Result<(), String> {
++    for value in f.boundaries {u64w(w, value)?;} for value in f.counts {u64w(w, value)?;}
++    for value in [f.n, f.r, f.mask] {u64w(w, value)?;}
++    put(w, &[f.last, f.stop_depth, f.selected, f.point])?; u64w(w, f.selected_n)?;
++    u32w(w, f.publications)?; u32w(w, f.flags)
++}
++pub(super) fn read_footer(r: &mut impl Read) -> Result<Footer, String> {
++    let mut f = Footer::default(); for value in &mut f.boundaries {*value = u64r(r)?;}
++    for value in &mut f.counts {*value = u64r(r)?;}
++    f.n = u64r(r)?; f.r = u64r(r)?; f.mask = u64r(r)?; f.last = u8r(r)?;
++    f.stop_depth = u8r(r)?; f.selected = u8r(r)?; f.point = u8r(r)?;
++    f.selected_n = u64r(r)?; f.publications = u32r(r)?; f.flags = u32r(r)?;
++    let mut extra = [0]; if r.read(&mut extra).map_err(error)? != 0 {return Err("cohort raw trailing bytes".into());}
++    if !f.pair_complete() {return Err("cohort raw incomplete pair".into());} Ok(f)
++}
++fn writer(path: &Path) -> Result<BufWriter<File>, String> {
++    Ok(BufWriter::with_capacity(BUFFER_BYTES,
++        OpenOptions::new().create_new(true).write(true).open(path).map_err(error)?))
++}
++fn reader(path: &Path, maximum: u64) -> Result<BufReader<File>, String> {
++    let file = File::open(path).map_err(error)?; let length = file.metadata().map_err(error)?.len();
++    if !(HEADER_BYTES + FOOTER_BYTES..=maximum).contains(&length) {return Err("cohort raw file length outside fixed bounds".into());}
++    Ok(BufReader::with_capacity(BUFFER_BYTES, file))
++}
++pub(super) fn header(w: &mut impl Write, magic: &[u8; 8], root: &Position, epoch: &Epoch,
++    parents: usize, jobs: usize, maps: usize, chains: usize) -> Result<(), String> {
++    put(w, magic)?; for value in [1, PARENT_CAP as u32, JOB_CAP as u32] {u32w(w, value)?;}
++    u64w(w, BYTE_CAP as u64)?; for value in [parents, jobs, maps, chains] {u32w(w, value as u32)?;}
++    write_position(w, root)?; write_epoch(w, epoch)
++}
++pub(super) fn read_header(r: &mut impl Read, magic: &[u8; 8]) -> Result<(Position, Epoch, [usize; 4]), String> {
++    if &bytes::<8>(r)? != magic || u32r(r)? != 1 || u32r(r)? != PARENT_CAP as u32
++        || u32r(r)? != JOB_CAP as u32 || u64r(r)? != BYTE_CAP as u64 {return Err("cohort raw header/version/caps".into());}
++    let counts = [u32r(r)? as usize, u32r(r)? as usize, u32r(r)? as usize, u32r(r)? as usize];
++    if counts[0] > PARENT_CAP || counts[1..].iter().any(|&n| n > JOB_CAP) {return Err("cohort raw row cap".into());}
++    let root = read_position(r)?; let epoch = read_epoch(r)?; epoch.validate(&root)?;
++    Ok((root, epoch, counts))
++}
++pub(super) fn validate_move(position: &Position, movement: Move) -> Result<(), String> {
++    if movement.0 >> 12 != 0 || movement.from() == movement.to() {return Err("cohort nonordinary descriptor".into());}
++    let from = position.board[movement.from().0 as usize]; let to = position.board[movement.to().0 as usize];
++    if from.is_empty() || from.color() != position.side || (!to.is_empty()
++        && (to.color() == position.side || to.kind() == PieceKind::King)) {return Err("cohort invalid native move descriptor".into());}
++    if from.kind() == PieceKind::Pawn && matches!(movement.to().rank(), 0 | 7) {return Err("cohort ordinary promotion descriptor".into());}
++    Ok(())
++}
++fn read_cohort(r: &mut impl Read, counts: [usize; 4], with_ids: bool) -> Result<Cohort, String> {
++    let mut cohort = Cohort::new()?;
++    for _ in 0..counts[0] {cohort.parents.push(read_position(r)?);}
++    // First use of each cookie must follow parent creation order. Duplicates
++    // within or across invocations remain distinct descriptors.
++    let mut created = 0u32;
++    for _ in 0..counts[1] {
++        let parent = u32r(r)?; let movement = Move(u16r(r)?);
++        if parent as usize >= counts[0] || parent > created {return Err("cohort parent occurrence order".into());}
++        if parent == created {created += 1;}
++        validate_move(&cohort.parents[parent as usize], movement)?;
++        let (map, chain) = if with_ids {(u32r(r)?, u32r(r)?)} else {(NONE, NONE)};
++        if with_ids && (map as usize >= counts[2] || chain as usize >= counts[3]) {return Err("cohort occurrence key ID".into());}
++        cohort.jobs.push(Job {parent, movement, map, chain, release: Stamp::ABSENT});
++    }
++    if created as usize != counts[0] {return Err("cohort unused parent row".into());} Ok(cohort)
++}
++fn write_cohort(w: &mut impl Write, cohort: &Cohort, with_ids: bool, with_release: bool) -> Result<(), String> {
++    for position in &cohort.parents {write_position(w, position)?;}
++    for job in &cohort.jobs {u32w(w, job.parent)?; u16w(w, job.movement.0)?;
++        if with_ids {u32w(w, job.map)?; u32w(w, job.chain)?;}
++        if with_release {write_stamp(w, job.release)?;}
++    } Ok(())
++}
++pub(super) fn write_capture(path: &Path, state: &State) -> Result<(), String> {
++    let rows = state.actual.as_ref().ok_or("cohort missing captured rows")?; let mut w = writer(path)?;
++    header(&mut w, CAPTURE_MAGIC, state.root.as_ref().unwrap(), state.epoch.as_ref().unwrap(), rows.parents.len(), rows.jobs.len(), 0, 0)?;
++    write_cohort(&mut w, rows, false, false)?; write_footer(&mut w, state.footer)?; w.flush().map_err(error)
++}
++pub(super) fn read_capture(path: &Path) -> Result<(Position, Epoch, Cohort, Footer), String> {
++    let mut r = reader(path, CAPTURE_MAX)?; let (root, epoch, counts) = read_header(&mut r, CAPTURE_MAGIC)?;
++    if counts[2] != 0 || counts[3] != 0 {return Err("cohort capture contains key rows".into());}
++    if planned_memory(1) + planned_files(Mode::Expand, counts[0], counts[1], counts[1], counts[1]) > BYTE_CAP {
++        return Err("cohort combined cap before expansion reservation".into());
++    }
++    let rows = read_cohort(&mut r, counts, false)?; let footer = read_footer(&mut r)?;
++    if footer.counts[..2] != [rows.parents.len() as u64, rows.jobs.len() as u64] {return Err("cohort capture count disagreement".into());}
++    Ok((root, epoch, rows, footer))
++}
++pub(super) fn write_pool(path: &Path, pool: &Pool) -> Result<(), String> {
++    let mut w = writer(path)?;
++    header(&mut w, POOL_MAGIC, &pool.root, &pool.epoch, pool.cohort.parents.len(), pool.cohort.jobs.len(), pool.maps.len(), pool.chains.len())?;
++    write_cohort(&mut w, &pool.cohort, true, false)?;
++    for row in &pool.maps {write_map_key(&mut w, &row.key)?; write_map(&mut w, &row.value)?;}
++    for row in &pool.chains {write_chain_key(&mut w, &row.key)?;}
++    write_footer(&mut w, pool.captured)?; w.flush().map_err(error)
++}
++pub(super) fn read_pool(path: &Path) -> Result<Pool, String> {
++    let mut r = reader(path, POOL_MAX)?; let (root, epoch, counts) = read_header(&mut r, POOL_MAGIC)?;
++    if counts[2] > counts[1] || counts[3] > counts[1] {
++        return Err("cohort selected key count exceeds occurrences".into());
++    }
++    if planned_memory(2) + planned_files(Mode::Observe, counts[0], counts[1], counts[2], counts[3]) > BYTE_CAP {
++        return Err("cohort combined cap before observation reservation".into());
++    }
++    let rows = read_cohort(&mut r, counts, true)?; let mut pool = Pool::new(root, epoch, rows, Footer::default())?;
++    for expected in 0..counts[2] {let key = read_map_key(&mut r)?; let value = read_map(&mut r)?;
++        let bucket = filter(&key.planes); let id = pool.insert_map(key, value, bucket)?;
++        if id as usize != expected {return Err("cohort duplicate serialized map key".into());}
++    }
++    for expected in 0..counts[3] {let key = read_chain_key(&mut r)?;
++        let bucket = filter(crate::attacks::AttackBits::from_board(&key.placement.board).planes());
++        let id = pool.insert_chain(key, bucket)?;
++        if id as usize != expected {return Err("cohort duplicate serialized chain key".into());}
++    }
++    pool.captured = read_footer(&mut r)?;
++    if pool.captured.counts[..2] != [counts[0] as u64, counts[1] as u64] {return Err("cohort pool count disagreement".into());}
++    Ok(pool)
++}
++pub(super) fn write_ledger(path: &Path, state: &State) -> Result<(), String> {
++    let pool = state.pool.as_ref().ok_or("cohort missing observed pool")?;
++    let rows = state.actual.as_ref().ok_or("cohort missing actual rows")?; let mut w = writer(path)?;
++    header(&mut w, LEDGER_MAGIC, &pool.root, &pool.epoch, rows.parents.len(), rows.jobs.len(), pool.maps.len(), pool.chains.len())?;
++    write_cohort(&mut w, rows, true, true)?;
++    for (id, row) in pool.maps.iter().enumerate() {write_history(&mut w, id as u32, &row.history)?;}
++    for (id, row) in pool.chains.iter().enumerate() {write_history(&mut w, id as u32, &row.history)?;
++        write_chain_value(&mut w, row.value)?; u8w(&mut w, u8::from(row.has_value))?;
++    }
++    write_footer(&mut w, state.footer)?; w.flush().map_err(error)
++}
++
++fn history_summary<'a>(histories: impl Iterator<Item = &'a History>) -> String {
++    let mut counts = [0u64; 9]; let mut sum_kernel = 0u128; let mut sum_lead = 0u128;
++    for h in histories {
++        counts[0] += 1; counts[1] += u64::from(h.first_production.present());
++        counts[2] += u64::from(h.first7.present()); counts[3] += u64::from(h.new7);
++        counts[4] += h.calls[4].saturating_sub(1); counts[5] += u64::from(!h.first7.present());
++        if h.first7.present() && h.release.present()
++            && (h.release.ns, h.release.ordinal) < (h.first7.ns, h.first7.ordinal) {
++            counts[6] += 1; sum_lead += (h.first7.ns - h.release.ns) as u128;
++        }
++        if h.new7 && h.kernel[0] != UNKNOWN && h.kernel[1] != UNKNOWN {
++            counts[7] += 1; sum_kernel += (h.kernel[1] - h.kernel[0]) as u128;
++        }
++        counts[8] += h.calls[4];
++    }
++    format!("{{\"unique\":{},\"canonicalProduced\":{},\"demanded7\":{},\"new7\":{},\"repeat7\":{},\"no7\":{},\"releaseBeforeFirst7\":{},\"measuredFirstNew7\":{},\"calls7\":{},\"availableLeadNs\":{},\"firstNewKernelNs\":{}}}",
++        counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], counts[7], counts[8], sum_lead, sum_kernel)
++}
++pub(super) fn write_summary(path: &Path, s: &State) -> Result<(), String> {
++    let mode = match s.config.mode {Mode::Off => "off", Mode::Capture => "capture", Mode::Expand => "expand", Mode::Observe => "observe"};
++    let (parents, jobs) = s.actual.as_ref().map(|r| (r.parents.len(), r.jobs.len())).or_else(|| s.pool.as_ref()
++        .map(|p| (p.cohort.parents.len(), p.cohort.jobs.len()))).unwrap_or((0, 0));
++    let (maps, chains) = if let Some(pool) = &s.pool {(history_summary(pool.maps.iter().map(|r| &r.history)),
++        history_summary(pool.chains.iter().map(|r| &r.history)))} else {(String::from("null"), String::from("null"))};
++    let costs = s.costs.iter().enumerate().map(|(id, c)| format!("{{\"kind\":{},\"queries\":{},\"misses\":{},\"hits\":{},\"comparisons\":{},\"keyBytes\":{},\"copyBytes\":{},\"samples\":{},\"sampledNs\":{}}}",
++        id, c.queries, c.misses, c.hits, c.comparisons, c.key_bytes, c.copy_bytes, c.samples, c.sampled_ns)).collect::<Vec<_>>().join(",");
++    let error_json = s.error.map_or_else(|| "null".into(), |e| format!("{e:?}"));
++    let text = format!("{{\"schema\":\"rook2-frontier-cohort-v1\",\"mode\":\"{mode}\",\"error\":{error_json},\"pairComplete\":{},\"cohortVerified\":{},\"parents\":{parents},\"jobs\":{jobs},\"caps\":{{\"parents\":{PARENT_CAP},\"jobs\":{JOB_CAP},\"observerBytes\":{BYTE_CAP}}},\"accountedBytes\":{},\"peakAccountedBytes\":{},\"accountedMemoryBytes\":{},\"retainedAndPlannedFileBytes\":{},\"fixedReserveBytes\":{FIXED_RESERVE},\"captureMaxBytes\":{CAPTURE_MAX},\"poolMaxBytes\":{POOL_MAX},\"ledgerMaxBytes\":{LEDGER_MAX},\"E6\":{},\"S6\":{},\"M7\":{},\"F7\":{},\"N\":{},\"R\":{},\"completedIterationsMask\":{},\"publications\":{},\"boundariesNs\":{:?},\"map\":{maps},\"chain\":{chains},\"costs\":[{costs}],\"payloadAuditComparisons\":{},\"payloadAuditBytes\":{},\"memoryLayout\":{{\"stateBytes\":{},\"positionBytes\":{},\"jobBytes\":{},\"mapRowBytes\":{},\"chainRowBytes\":{},\"indexSlotsPerComponent\":{INDEX_SLOTS}}},\"sampleStride\":{SAMPLE_STRIDE},\"clockBasis\":\"this-replay-root-bind-after-cold-load\",\"demandSite\":\"nonempty-four-plane-filter-before-typed-key\",\"releaseSite\":\"after-this-replay-parent-copy-and-descriptor-publication\",\"mapInterval\":\"native-coherent-build-only-after-key-lookup\",\"fullInterval\":\"post-material-post-key-lookup-through-native-join-before-audit-retained-suffix\",\"costKinds\":[\"audit-prefix-lookup\",\"prospective7-lookup\",\"prospective6-copy-publication\",\"audit-cohort-verification\",\"audit-payload-comparison\"],\"selectedIds\":\"cold-audit-knowledge-not-runtime-free-lookup\",\"actualReady\":\"unknown-no-producer\",\"ceiling\":\"disjoint-first-new7-map-plus-full-prefix-observed-path-costs-not-wall-saving\",\"costLimits\":\"fixed-stride512-aliasing-and-extrapolation; clocks included in samples; TLS borrow entry/exit excluded; key/copy byte counts are typed storage spans, not hardware traffic; allocator costs covered by fixed reserve; combined RAM plus retained capture/pool/planned ledger and3bounded summaries; no all-demand catalogue\"}}",
++        s.footer.pair_complete(), s.config.mode == Mode::Observe && s.error.is_none() && s.finished,
++        s.bytes(), s.peak_bytes, s.memory_bytes(), s.disk_bytes(), s.footer.counts[0], s.footer.counts[1], s.footer.counts[2], s.footer.counts[3],
++        s.footer.n, s.footer.r, s.footer.mask, s.footer.publications, s.footer.boundaries,
++        s.payload_comparisons, s.payload_bytes, size_of::<State>(), size_of::<Position>(), size_of::<Job>(), size_of::<MapRow>(), size_of::<ChainRow>());
++    if text.len() >= 65536 {return Err("cohort summary including newline exceeds64KiB".into());}
++    let mut w = writer(path)?; put(&mut w, text.as_bytes())?; put(&mut w, b"\n")?; w.flush().map_err(error)
++}
+--- /dev/null
++++ b/src/frontier_cohort/tests.rs
+@@ -0,0 +1,205 @@
++use super::*;
++use crate::evaluator::{Evaluator, Node};
++use std::time::Duration;
++
++fn position() -> Position {
++    Position::from_fen("4k3/8/8/8/8/1N3N2/PP6/4K3 w - - 0 1").unwrap()
++}
++fn epoch(position: &Position) -> Epoch {
++    let parameters = Parameters::default(); let root = RootContext::neutral(position);
++    Epoch::new(&root, &parameters, crate::evaluation::draw_preference(root.phase, parameters.draw),
++        crate::evaluation::variation_range(parameters.opponent_selectivity), [[1024; 2]; 5])
++}
++struct Reset;
++impl Drop for Reset {
++    fn drop(&mut self) {STATE.with(|s| *s.borrow_mut() = State::default()); ROOT_SCOPE.with(|s| s.set(false));}
++}
++fn capture() -> Reset {
++    let p = position();
++    STATE.with(|slot| {let mut s = State::default(); s.config.mode = Mode::Capture;
++        s.root = Some(p); s.epoch = Some(epoch(&p)); s.bound = true; s.active = true;
++        s.phase = 6; s.origin = Some(Instant::now()); s.footer.boundaries[0] = 0;
++        s.actual = Some(Cohort::new().unwrap()); *slot.borrow_mut() = s;
++    }); Reset
++}
++fn observed(p: &Position, e: Epoch) -> Reset {
++    let map = Influence::build_coherent(p); let context = e.root();
++    let mut pool = Pool::new(*p, e.clone(), Cohort::new().unwrap(), Footer::default()).unwrap();
++    let bucket = filter(p.attack_planes());
++    pool.insert_map(MapKey::new(p), map, bucket).unwrap();
++    pool.insert_chain(ChainKey::new(p, &map, context.material(p), e.weights[3], e.weights[4]), bucket).unwrap();
++    STATE.with(|slot| {let mut s = State::default(); s.config.mode = Mode::Observe;
++        s.bound = true; s.active = true; s.origin = Some(Instant::now()); s.root = Some(*p);
++        s.epoch = Some(e); s.pool = Some(pool); s.actual = Some(Cohort::new().unwrap());
++        s.check_bytes().unwrap(); *slot.borrow_mut() = s;
++    }); Reset
++}
++
++#[test]
++fn exact_keys_keep_chronology_actual_map_epoch_and_congruent_plane_filter() {
++    let a = position(); let mut b = a;
++    b.primary ^= 73; b.secondary ^= 991; b.pawn ^= 17;
++    b.side = Color::Black; b.rights = 15; b.ep = 22; b.halfmove = 41;
++    // P,P,N,N,K: map order normalizes only this kind; chain does not.
++    b.squares[0].swap(2, 3);
++    assert_eq!(filter(a.attack_planes()), filter(b.attack_planes()));
++    assert_eq!(MapKey::new(&a), MapKey::new(&b));
++    let map = Influence::build_coherent(&a);
++    let key = ChainKey::new(&a, &map, 7, [1024; 2], [1024; 2]);
++    assert_ne!(key, ChainKey::new(&b, &map, 7, [1024; 2], [1024; 2]));
++    let mut custom = map; custom.profiles[0][0] ^= 1;
++    assert_ne!(key, ChainKey::new(&a, &custom, 7, [1024; 2], [1024; 2]));
++    assert_ne!(key, ChainKey::new(&a, &map, 8, [1024; 2], [1024; 2]));
++    assert_ne!(key, ChainKey::new(&a, &map, 7, [1023, 1024], [1024; 2]));
++    let mut changed_phase = a; changed_phase.starting_units ^= 1;
++    assert_ne!(key, ChainKey::new(&changed_phase, &map, 7, [1024; 2], [1024; 2]));
++    let mut projected = MapKey::new(&a); projected.planes[0] ^= 1;
++    assert_ne!(MapKey::new(&a), projected);
++    let mut changed_epoch = epoch(&a); changed_epoch.weights[3][0] += 1;
++    assert_ne!(epoch(&a), changed_epoch); assert!(changed_epoch.validate(&a).is_err());
++}
++
++#[test]
++fn position_root_binary_roundtrip_preserves_chronology_and_rejects_derived_disagreement() {
++    let mut p = position(); p.squares[0].swap(2, 3); p.validate().unwrap();
++    let mut raw = Vec::new(); io::write_position(&mut raw, &p).unwrap(); assert_eq!(raw.len(), 125);
++    assert_eq!(io::read_position(&mut raw.as_slice()).unwrap(), p);
++    raw[108] ^= 1; assert!(io::read_position(&mut raw.as_slice()).is_err());
++    let e = epoch(&p); let mut header = Vec::new();
++    io::header(&mut header, b"R2FCOH01", &p, &e, 3, 5, 0, 0).unwrap();
++    assert_eq!(header.len() as u64, io::HEADER_BYTES);
++    let (restored, rebound, counts) = io::read_header(&mut header.as_slice(), b"R2FCOH01").unwrap();
++    assert_eq!(restored, p); assert_eq!(rebound, e); assert_eq!(counts, [3, 5, 0, 0]);
++    // Bound headers and records are serialized field-by-field, not size_of.
++    let mut history = Vec::new(); io::write_history(&mut history, 0, &History::default()).unwrap();
++    assert_eq!(history.len(), 150);
++    let f = Footer {boundaries: [0, 1, 2, 3], mask: 192, ..Footer::default()};
++    let mut footer = Vec::new(); io::write_footer(&mut footer, f).unwrap();
++    assert_eq!(footer.len() as u64, io::FOOTER_BYTES);
++    assert!(io::read_footer(&mut footer.as_slice()).unwrap().pair_complete());
++    footer.push(0); assert!(io::read_footer(&mut footer.as_slice()).is_err());
++}
++
++#[test]
++fn duplicate_parent_occurrences_native_order_and_explicit_caps_are_not_samples() {
++    let _reset = capture(); let p = position();
++    let movement = Move::new(Square(17), Square(32), MoveKind::Ordinary);
++    let (mut first, mut second) = (None, None);
++    skip(&mut first, &p, movement, 6, 0, 0, true);
++    skip(&mut first, &p, movement, 6, 0, 0, true);
++    skip(&mut second, &p, movement, 6, 0, 0, true);
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); let rows = s.actual.as_mut().unwrap();
++        assert_eq!((rows.parents.len(), rows.jobs.len()), (2, 3));
++        assert_eq!(rows.jobs.iter().map(|j| j.parent).collect::<Vec<_>>(), [0, 0, 1]);
++        assert_eq!(s.footer.counts[..2], [2, 3]);
++        let job = s.actual.as_ref().unwrap().jobs[0];
++        s.actual.as_mut().unwrap().jobs.resize(JOB_CAP, job);
++    });
++    let mut rejected = None; skip(&mut rejected, &p, movement, 6, 0, 0, true);
++    assert!(rejected.is_none());
++    STATE.with(|slot| {let s = slot.borrow(); assert_eq!(s.error, Some("cohort_parent_or_job_cap"));
++        assert_eq!(s.footer.counts[..2], [2, 3]); assert!(s.bytes() <= BYTE_CAP);
++    });
++    drop(_reset);
++    let _reset = capture();
++    STATE.with(|slot| slot.borrow_mut().actual.as_mut().unwrap().parents.resize(PARENT_CAP, p));
++    skip(&mut rejected, &p, movement, 6, 0, 0, true);
++    STATE.with(|slot| assert_eq!(slot.borrow().error, Some("cohort_parent_or_job_cap")));
++}
++
++#[test]
++fn cohort_skip_domain_repeats_exact_private_ordinary_depth_zero_admission() {
++    let _reset = capture(); let p = position();
++    let movement = Move::new(Square(17), Square(32), MoveKind::Ordinary);
++    let mut cookie = None;
++    for (iteration, depth, fresh, coherent, kind) in [
++        (5, 0, 0, true, MoveKind::Ordinary), (6, -1, 0, true, MoveKind::Ordinary),
++        (6, 1, 0, true, MoveKind::Ordinary), (6, 0, 1, true, MoveKind::Ordinary),
++        (6, 0, 0, false, MoveKind::Ordinary), (6, 0, 0, true, MoveKind::EnPassant),
++        (6, 0, 0, true, MoveKind::Castle), (6, 0, 0, true, MoveKind::Promotion(PieceKind::Queen)),
++    ] {skip(&mut cookie, &p, Move::new(movement.from(), movement.to(), kind), iteration, depth, fresh, coherent);}
++    let mut king_victim = p; king_victim.board[32] = Piece::new(Color::Black, PieceKind::King);
++    skip(&mut cookie, &king_victim, movement, 6, 0, 0, true);
++    STATE.with(|slot| {let s = slot.borrow(); assert_eq!(s.footer.counts[..2], [0, 0]);
++        assert!(s.actual.as_ref().unwrap().jobs.is_empty()); assert!(cookie.is_none());});
++    skip(&mut cookie, &p, movement, 6, 0, 0, true);
++    STATE.with(|slot| assert_eq!(slot.borrow().footer.counts[..2], [1, 1]));
++}
++
++#[test]
++fn component_histories_distinguish_prior_first_repeat_no_demand_and_disjoint_intervals() {
++    let stamp = |n| Stamp {ns: n, ordinal: n};
++    let mut map = History::default(); let mut chain = History::default();
++    assert!(!map.demand(0, false, stamp(1))); map.produce(0, stamp(2));
++    map.release = stamp(4); chain.release = stamp(4);
++    assert!(!map.demand(6, true, stamp(5))); map.produce(6, stamp(6));
++    assert!(!map.demand(7, true, stamp(8))); assert!(chain.demand(7, true, stamp(8)));
++    chain.produce(7, stamp(10)); chain.kernel = [8, 10];
++    assert!(!chain.demand(7, true, stamp(11))); chain.produce(7, stamp(12));
++    assert_eq!(map.calls, [1, 0, 1, 0, 1]); assert!(!map.new7);
++    assert_eq!(chain.calls[4], 2); assert!(chain.new7); assert_eq!(chain.first_production, stamp(10));
++    assert_eq!(chain.first7, stamp(8)); assert_eq!(chain.calls[4] - 1, 1);
++    assert!(!History::default().first7.present());
++    let p = position(); let _reset = observed(&p, epoch(&p));
++    STATE.with(|slot| {let mut s = slot.borrow_mut(); s.phase = 7; s.footer.boundaries[0] = 0;});
++    let probe = before_map(&p, true); let map = Influence::build_coherent(&p); after_map(probe, &map);
++    let context = epoch(&p).root();
++    let mut probe = before_full(&p, &map, context.material(&p), [1024; 2], [1024; 2], true);
++    probe.dispatch_start(); probe.dispatch_end(); probe.owner_ready();
++    let inventory = probe.inventory_start(); probe.inventory_end(inventory);
++    let value = crate::evaluator_worker::compute(&p, &map, context.material(&p), [1024; 2], [1024; 2]);
++    after_full(probe, &value);
++    STATE.with(|slot| {let s = slot.borrow(); let pool = s.pool.as_ref().unwrap();
++        let m = &pool.maps[0].history; let c = &pool.chains[0].history;
++        assert!(m.new7 && c.new7); assert!(m.kernel[0] <= m.kernel[1]);
++        assert!(m.kernel[1] <= c.kernel[0] && c.kernel[0] <= c.kernel[1]);
++        assert!(c.extras.windows(2).all(|p| p[0] <= p[1]));
++        assert_eq!(s.footer.counts[2..], [1, 1]);
++    });
++}
++
++#[test]
++fn root_before_prefix_and_actual_private_demand_hooks_keep_supplied_map_authority() {
++    let p = position(); let mut evaluator = Evaluator::<true>::new(&p);
++    let e = evaluator.frontier_cohort_epoch(); let context = e.root(); let _reset = observed(&p, e);
++    let mut node = Node::root(p, &context); let map = Influence::build_coherent(&p);
++    evaluator.full(&mut node, &map, false);
++    evaluator.full_observed(&mut node, &map, false, |_| {});
++    evaluator.fresh_observed(&mut node, &map, false, |_| {});
++    STATE.with(|slot| assert!(!slot.borrow().pool.as_ref().unwrap().chains[0].history.first_production.present()));
++    let mut scratch = None; evaluator.ensure_influence_for_search(&p, &mut scratch, true);
++    with_root_full(true, || evaluator.full(&mut node, &map, false));
++    STATE.with(|slot| {let s = slot.borrow(); let pool = s.pool.as_ref().unwrap();
++        assert!(pool.maps[0].history.first_production.present());
++        assert!(pool.chains[0].history.first_production.present());
++        assert_eq!(pool.chains[0].history.first_phase, 0);
++    });
++    let t = Instant::now(); begin_iteration(6, Some(t)); complete_iteration(6, Some(t + Duration::from_nanos(1)));
++    begin_iteration(7, Some(Instant::now()));
++    let mut custom = Some(Influence {profiles: [[0; 64]; 2]});
++    evaluator.ensure_influence_for_search(&p, &mut custom, true);
++    with_root_full(true, || evaluator.full(&mut node, custom.as_ref().unwrap(), false));
++    STATE.with(|slot| {let s = slot.borrow(); assert_eq!(s.footer.counts[2..], [0, 1]);
++        assert_eq!(s.pool.as_ref().unwrap().chains[0].history.calls[4], 0);
++    });
++    // Exercise both real private caller seams through the common native prefix.
++    let mut list = crate::movegen::MoveList::new();
++    evaluator.full_ordinary_inventory(&mut node, &map, false, true, &mut list);
++    evaluator.full_ordinary_inventory(&mut node, &map, false, false, &mut list);
++    let mut supplied = Some(map);
++    let (selection, _) = evaluator.select_noncheck_q_inventory(
++        &mut node, -1, 1, true, &mut supplied, true, false, &mut list,
++    );
++    assert!(selection.refreshed); assert_eq!(supplied, Some(map));
++    let custom_map = *custom.as_ref().unwrap();
++    evaluator.select_noncheck_q_inventory(&mut node, -1, 1, true, &mut custom, true, false, &mut list);
++    assert_eq!(custom, Some(custom_map));
++    STATE.with(|slot| {let s = slot.borrow(); assert_eq!(s.footer.counts[2..], [0, 4]);
++        let history = &s.pool.as_ref().unwrap().chains[0].history;
++        assert_eq!(history.calls[4], 2); assert!(!history.new7);
++        assert_eq!(s.costs[1].hits, 2);
++    });
++    assert!(!is_root_full());
++    let panic = std::panic::catch_unwind(|| with_root_full(true, || panic!("root scope unwind")));
++    assert!(panic.is_err()); assert!(!is_root_full());
++}
+--- a/src/frontier_scale.rs
++++ b/src/frontier_scale.rs
+@@ -147,0 +148 @@
++    crate::frontier_cohort::begin_iteration(depth, now);
+@@ -151,0 +153 @@
++    crate::frontier_cohort::complete_iteration(depth, now);
+@@ -172,0 +175 @@
++    crate::frontier_cohort::finish_search(outcome);
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -19,0 +20,2 @@
++/// Isolated bounded frontier capture/novelty observation, never a consumer.
++pub mod frontier_cohort;
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -989,0 +990 @@
++        let mut frontier_cohort_parent = None;
+@@ -1029,0 +1031,4 @@
++                );
++                crate::frontier_cohort::skip(
++                    &mut frontier_cohort_parent, &position, movement,
++                    request.iteration, depth, fresh, coherent_geometry,
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -157,0 +158 @@
++        self.evaluator.bind_frontier_cohort_root(&position, coherent_geometry);
+@@ -162 +163 @@
+-        self.evaluator.full(
++        crate::frontier_cohort::with_root_full(coherent_geometry, || self.evaluator.full(
+@@ -166 +167 @@
+-        );
++        ));
