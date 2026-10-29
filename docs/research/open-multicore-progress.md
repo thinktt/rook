@@ -466,6 +466,23 @@ snapshots, keys, payloads, per-node clocks, service model or executor is selecte
 The result establishes occurrence scale only; novelty, readiness and profitable
 width remain separate questions. No automatic follow-on is authorized.
 
+The single count pass completes six focused checks, one generic build and one
+original35 replay with13 exact posts/final move, all first attempt. E6=7963,
+S6=227806, M7=319911 and F7=244603;6/7 both complete without censoring. Instrumented
+iteration durations are143.598493 and575.152186ms. State is336B; counts are
+source/control-backed observations, not an offline reconstruction of every node.
+The scale warrants a distinctness/novelty observation, not a speed claim.
+
+Select two original35 passes to capture and observe the full measured cohort,
+with fixed16384-parent/262144-job/512MiB limits and no truncated admission sample.
+Selected-key prefix joins begin before root preparation; map and chain first-new
+demands remain separate from earlier production and repetition. Same-replay
+release/demand records establish lead time only. Measure a generous disjoint
+map-plus-FULL-prefix ceiling against canonical mode3 and separate runtime costs
+from novelty-audit overhead. No result is reused, no speculative worker runs,
+and no service/FIFO model or consumer is selected. A material preparation blocker
+must return for a design decision rather than silently expanding this scope.
+
 The latest three-thread image is `c242f0e498ceeddb9aa2532cbace46730ffebcb6a0e756274179b3297c1b40da`,
 with profile `1a81bdacaeee3ac4b949cb495f8a99f0d68c96579cca4e7b807f83a501169910`;
 the winning mode enables ordinary and Q owner-local inventory. Predecessors

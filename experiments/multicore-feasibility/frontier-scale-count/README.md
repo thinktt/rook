@@ -1,6 +1,8 @@
 # Aggregate frontier scale observation
 
-Selected implementation and one original35 replay; results pending. This isolates
+Closed first attempt: E6=7963/S6=227806/M7=319911/F7=244603; both6/7 complete.
+[Concise report](report.md), [results](results.json), [terminal bindings](closure.json).
+This isolates
 constant-storage E6/S6/M7/F7 and6/7 boundaries on exact single-owner69. No keys,
 payloads, snapshots, per-node clocks, service model or executor.
 
