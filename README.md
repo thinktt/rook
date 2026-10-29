@@ -1,14 +1,17 @@
 # Rook2
 
 **This worktree is the deterministic multicore research branch.** The latest
-[isolated three-thread candidate](experiments/multicore-feasibility/writer-regions-own-pgo/report.md)
-completed the descriptive 54-case survey in 59.317s, versus 59.910s for the prior
-three-thread candidate and 68.279s for accepted serial: 0.99% and 13.13% lower,
-respectively. It uses 2.603x serial CPU; its one-thread mode was 1.22% slower than
+[isolated three-thread candidate](experiments/multicore-feasibility/single-owner-own-pgo/report.md)
+completed the descriptive 54-case survey in58.692s, versus58.935s for the prior
+three-thread candidate and69.641s for accepted serial:0.41% and15.72% lower,
+respectively. It uses2.526x serial CPU; its one-thread mode was1.29% slower than
 serial in the same window. The coordinator prepares ordinary and eligible
-unchecked-Q move lists while its two evaluation helpers are busy; their transport
-now separates regions by writer ownership. All270 comparison replays passed,
-with48/54 cases faster than the prior candidate and54/54 faster than serial.
+unchecked-Q move lists while its two evaluation helpers are busy. Owner-local
+flight state removes normal dispatch/completion lock arbitration under a restricted
+activation API; cold lifecycle and actual reader retirement remain synchronized.
+All270 comparison replays passed, with39/54 cases faster than the prior candidate
+and54/54 faster than serial. The exact candidate is c242f0e4/profile1a81bdac;
+the previous a4ec image and all predecessors remain preserved.
 These are single observations, not confidence intervals. Broader exact-image
 behavioral qualification and adoption remain open.
 

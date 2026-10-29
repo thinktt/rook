@@ -1,6 +1,6 @@
 # Open multicore research: current assessment
 
-Updated 2026-10-28, imp2-lead. Continuing under the
+Updated 2026-10-29, imp2-lead. Continuing under the
 [mission](../deterministic-multicore-mission.md); this is a progress assessment,
 not research closure or release approval.
 
@@ -11,11 +11,18 @@ One immutable input is shared until both readers retire; each owns its output.
 The reviewed epoch protocol removed serialized reader copies and result locking.
 The numerical split alone had lost: the transport change made it useful.
 
-The latest [writer-region own-PGO survey](../../experiments/multicore-feasibility/writer-regions-own-pgo/report.md)
+The latest [single-owner own-PGO survey](../../experiments/multicore-feasibility/single-owner-own-pgo/report.md)
+records58.692377s versus retaineda4ec 58.934958s and accepted serial69.640657s,
+gains of0.41% and15.72%. Whole CPU is176.093198s,2.526x serial; new inline1
+costs1.29% versus serial and0.30% versus a4ec inline. Exactc242f0e4/profile1a81bdac
+is the provisional research leader.39/54 observations beat a4ec and all54 beat
+serial. Single observations establish no confidence interval or matched Bee result.
+
+The preceding [writer-region own-PGO survey](../../experiments/multicore-feasibility/writer-regions-own-pgo/report.md)
 records59.317384s versus retainedf8 59.909994s and accepted serial68.279043s,
 gains of0.99% and13.13%. Whole CPU is177.967157s,2.603x serial; new inline1
-costs1.22% versus accepted serial. Exact a4ecf096/profile6cb9dcaa remains the
-research leader. These are single observations per case/configuration, not
+costs1.22% versus accepted serial. Exact a4ecf096/profile6cb9dcaa remains
+preserved. These are single observations per case/configuration, not
 qualification, canonical adoption or a matched Bee/KingWCR comparison.
 
 The preceding [Q owner-local own-PGO survey](../../experiments/multicore-feasibility/q-owner-local-own-pgo/report.md)
@@ -318,15 +325,35 @@ source was unchanged by the fixture repair; no completed request was repeated.
 The lead selected one separate unchanged-source own-PGO/full54 discriminator:
 216 four-mode training lives, one actual independent remerge/use build and270+5
 comparing serial plus old/new inline and three-thread images. Existing controls
-are reused; no retune or generic repeat. a4ec remains the research leader pending
-that result. Broad qualification, adoption and external delivery remain unselected.
+are reused; no retune or generic repeat.
+
+That own-PGO lane passes216 training lives/2496 posts, actual byte-identical
+independent remerge, use-build/admission,270 comparison lives/3120 posts and five
+idle probes. All eight native stages pass without source repair or request repeat.
+A separate metadata CLI invocation used the wrong option and was rejected before
+its body; the corrected invocation passes and the initial error is preserved.
+New3 totals58.692377s versus a4ec58.934958s (-0.4116%); whole CPU falls from
+176.819294 to176.093198s. Newinline70.539314s is0.3006% above oldinline70.327902s
+and1.2904% above serial69.640657s. All five idle probes observe0ticks/250ms.
+
+New3 wins39/54 against a4ec. Its15 losses sum0.055409s against0.297989s saved in
+the other39; largest gain35 is48.170ms.43 now loses17.175ms, so the production
+gain is not simply the generic43 effect. Worst relative loss22 is1.32%. This is
+finite descriptive evidence, not isolated lock-cost attribution or qualification.
+Retain c242f0e4/profile1a81bdac provisionally, with a4ec and predecessors preserved.
+
+Next is source-only design of two writer-separated completion registration flags
+in place of the shared helper-written latch. Retain unconditional SC RMWs, one
+coordinator waiter and actual done; challenge every wake/terminal path and added
+cold/footprint cost. No flag implementation or further native lane is selected.
+Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
 
-The latest three-thread image is `a4ecf096d2144a79608b0ff4f3dc827bc8e5119730f2c43b29f46d1f7ffe62b5`,
-with profile `6cb9dcaab015c8b4c13f37040bb34cda9e4d7bc11b77ef8c4c99bd56987eae3b`;
+The latest three-thread image is `c242f0e498ceeddb9aa2532cbace46730ffebcb6a0e756274179b3297c1b40da`,
+with profile `1a81bdacaeee3ac4b949cb495f8a99f0d68c96579cca4e7b807f83a501169910`;
 the winning mode enables ordinary and Q owner-local inventory. Predecessors
-f8b829,3d914c and67d01108, with their profiles, remain preserved. These sources/artifacts
+a4ecf096,f8b829,3d914c and67d01108, with their profiles, remain preserved. These sources/artifacts
 are isolated experiment products; canonical research source
 still preserves the practical two-thread checkpoint, and accepted main/release
 bytes are unchanged. The source proof, focused controls and exact-image replay

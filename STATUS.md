@@ -1,6 +1,6 @@
 # Current implementation status
 
-**Active research, 2026-10-26:** pursue useful deterministic multicore acceleration
+**Active research, updated2026-10-29:** pursue useful deterministic multicore acceleration
 under the expanded [mission](docs/deterministic-multicore-mission.md), without making
 branch queues primary. The owner authorized a fresh goal explicitly allowing major
 redesigns, replacement subsystems and isolated greenfield implementations. Preserve
@@ -9,14 +9,15 @@ No further adoption, release or external gate has been selected.
 The [lead synthesis](docs/research/open-multicore-progress.md) connects the current
 results, architectural lessons and next decision.
 
-**Latest research performance leader:** exact `a4ecf096` with ordinary and Q
-owner-local inventory enabled, three threads and writer-separated transport.
-The [writer-region own-PGO/full54 comparison](experiments/multicore-feasibility/writer-regions-own-pgo/report.md)
-records59.317384s versus retainedf8 59.909994s and accepted serial68.279043s:
-0.99% and13.13% lower, respectively. Whole CPU is177.967157s, or2.603x serial.
-All270 comparison lives/3120 posts pass;48/54 cases improve over f8 and54/54 over
-serial. Single observations per cell are not confidence intervals. New inline1
-costs1.22% versus accepted serial, while improving0.51% over f8 inline. Prior
+**Latest provisional research performance leader:** exact `c242f0e4` with ordinary
+and Q owner-local inventory enabled, three threads and single-owner activation.
+The [single-owner own-PGO/full54 comparison](experiments/multicore-feasibility/single-owner-own-pgo/report.md)
+records58.692377s versus retaineda4ec 58.934958s and accepted serial69.640657s:
+0.41% and15.72% lower, respectively. Whole CPU is176.093198s, or2.526x serial.
+All270 comparison lives/3120 posts pass;39/54 cases improve over a4ec and54/54 over
+serial. Fifteen losses total55.409ms;43 is the largest absolute loss and22 the
+worst relative loss at1.32%. Single observations are not confidence intervals.
+New inline1 costs1.29% versus serial and0.30% versus a4ec inline. Prior
 artifacts, canonical source and accepted release remain unchanged; no adoption.
 
 The latest [wide internal-branch trial](experiments/multicore-feasibility/wide-internal/report.md)
