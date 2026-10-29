@@ -369,6 +369,15 @@ terminal RMW and Sleep notification rules. This may change which written region
 pays the strong-operation cost, but does not remove all strong operations or
 establish a gain. Normal/terminal ordering, delayed notifications and actual
 retirement must be challenged before selecting any implementation or run.
+
+That [source review](completion-epoch-publication.md), committed54d8992f, finds
+no blocker with a distinct cold SC predicate and unchanged terminal chain.
+Root independently checked the sole normal done store and ordering argument.
+One generic old/new1/3 fixed48+4 discriminator is now selected on exact
+single-owner69, with affected controls, actual original832-byte geometry and
+compiled publication/notification inspection before collection. Hot polling
+remains Acquire; the normal publisher's SC store and SC flag load must not be
+confused with the parked fence or split-flag protocols. No PGO is selected.
 Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
