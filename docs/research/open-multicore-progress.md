@@ -351,12 +351,24 @@ including delayed old-generation publishers. Cold owner signaling must evaluate
 both exchanges, never short-circuit. Terminal/partial-startup/join-error paths
 are explicitly mapped; flags never supply reader retirement.
 
-After independent root review, one isolated generic old/new1/3 fixed48+4 trial is
-selected. Rerun27 affected worker controls plus targeted interleavings and reuse43
-unaffected controls. Actual cold geometry must confirm Shared896 (+64), preserved
-hot prefixes and unchanged OwnerState before timing. Extra cold operations,
-footprint and shifted cold regions count. No arithmetic/observation changes,
-weaker ordering, padding sweep, PGO or performance claim is selected.
+The selected generic trial passes34 affected worker controls plus43 reused,
+14 CLI/two fallback checks and48 replay lives/560 posts plus four idle probes.
+Actual cold geometry confirms Shared896 (+64), preserved hot prefixes and
+unchanged OwnerState. All stages pass first attempt; no request repeat or clock
+reset occurred. Median sums old1/old3/new1/new3 are8.430636/7.352079/8.503982/
+7.388668s. New3 costs0.4977% more wall and0.5090% more whole CPU; inline costs
+0.8700% more. All three mode3 medians are worse, with35/43 ranges separated and
+08 overlapping. Inline drift cannot be subtracted to establish a flag benefit.
+Park unchanged without PGO or retuning; the no-lost-wake proof remains useful,
+but separating the completion writers has not demonstrated a performance gain.
+
+One distinct source-only review is selected: move the strong normal publication
+onto the existing done epoch, then read the original shared registration flag.
+The proposed cold done predicate must also be SC; retain the original cold
+terminal RMW and Sleep notification rules. This may change which written region
+pays the strong-operation cost, but does not remove all strong operations or
+establish a gain. Normal/terminal ordering, delayed notifications and actual
+retirement must be challenged before selecting any implementation or run.
 Broad qualification, adoption and external delivery remain unselected.
 Frontier batching remains a separate reserve. Current transport and owner-overlap
 gains create no new parallel work width.
