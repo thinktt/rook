@@ -1,5 +1,12 @@
 # Earlier frontier: a bounded observation before any consumer
 
+**Scale correction:** the32-parent/128-lifetime-job policy is only a local yield
+sample, not an economically supported retained policy or a test of the wider
+cohort. Do not implement this rich observation plan on that cap. The
+[scale assessment](earlier-frontier-scale-assessment.md) recommends only a later
+aggregate scale check if selected; execution remains unselected. The semantic
+and same-timeline design below is retained as a conditional source reference.
+
 Recommend one bounded selected-key observation, if separately selected. Start
 with a generous all-ready ceiling; stop if it cannot justify more machinery.
 Existing evidence does not price this cohort. Use exact single-owner69;
