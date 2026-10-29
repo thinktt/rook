@@ -1,0 +1,359 @@
+--- a/src/bin/rook2.rs
++++ b/src/bin/rook2.rs
+@@ -174,0 +175,3 @@
++    if let Some(path) = std::env::var_os("ROOK2_FRONTIER_SCALE_REPORT") {
++        rook2::frontier_scale::write_report(std::path::Path::new(&path))?;
++    }
+--- a/src/evaluator.rs
++++ b/src/evaluator.rs
+@@ -679,0 +680 @@
++                crate::frontier_scale::map_demand(true);
+@@ -757,0 +759 @@
++        crate::frontier_scale::full_demand(coherent);
+@@ -1205,0 +1208,3 @@
++            if QHOOK && !OBSERVE && !STAGES {
++                crate::frontier_scale::full_demand(coherent_geometry);
++            }
+@@ -1232,0 +1238,3 @@
++            if QHOOK && !OBSERVE && !STAGES {
++                crate::frontier_scale::full_demand(coherent_geometry);
++            }
+--- /dev/null
++++ b/src/frontier_scale.rs
+@@ -0,0 +1,301 @@
++//! Isolated aggregate observer. No results, keys, child work or helper access.
++use crate::timed::{Outcome, Point};
++use crate::types::{MoveKind, Piece, PieceKind};
++use std::cell::RefCell;
++use std::fmt::Write as _;
++use std::io::{self, Write as _};
++use std::path::Path;
++use std::time::Instant;
++
++#[derive(Clone, Copy, Default)]
++struct Boundary {
++    entered: bool,
++    complete: bool,
++    start_ns: Option<u128>,
++    end_ns: Option<u128>,
++}
++#[derive(Clone, Copy)]
++struct StopMeta {
++    point: &'static str,
++    depth: u8,
++    root_index: Option<usize>,
++    reason: &'static str,
++    n: u64,
++    r: u64,
++    completed_mask: u64,
++    last_iteration: u8,
++    selected_depth: Option<u8>,
++    selected_n: Option<u64>,
++}
++#[derive(Clone, Copy, Default)]
++struct Scale {
++    active: bool,
++    phase: u8,
++    search_starts: u64,
++    e6: u64,
++    s6: u64,
++    m7: u64,
++    f7: u64,
++    origin: Option<Instant>,
++    boundaries: [Boundary; 2],
++    outcome: Option<StopMeta>,
++    error: Option<&'static str>,
++}
++thread_local! {static SCALE: RefCell<Scale> = RefCell::new(Scale::default());}
++
++impl Scale {
++    fn begin_search(&mut self) {
++        let starts = self.search_starts.checked_add(1);
++        *self = Self::default();
++        self.active = true;
++        match starts {
++            Some(value) => self.search_starts = value,
++            None => self.error = Some("search_counter_overflow"),
++        }
++    }
++    fn begin(&mut self, depth: u8, now: Option<Instant>) {
++        if !self.active || self.error.is_some() { return; }
++        self.phase = depth;
++        if depth != 6 && depth != 7 { return; }
++        let index = usize::from(depth - 6);
++        if self.boundaries[index].entered {
++            self.error = Some("duplicate_iteration_entry");
++            return;
++        }
++        let Some(now) = now else { self.error = Some("missing_boundary_clock"); return; };
++        if depth == 6 { self.origin = Some(now); }
++        let Some(origin) = self.origin else { self.error = Some("missing_iteration6_entry"); return; };
++        self.boundaries[index] = Boundary {
++            entered: true, complete: false,
++            start_ns: Some(now.duration_since(origin).as_nanos()), end_ns: None,
++        };
++    }
++    fn end(&mut self, depth: u8, now: Option<Instant>) {
++        if !self.active || self.error.is_some() { return; }
++        if depth == 6 || depth == 7 {
++            let index = usize::from(depth - 6);
++            let row = &mut self.boundaries[index];
++            if self.phase != depth || !row.entered || row.complete {
++                self.error = Some("invalid_iteration_completion");
++                return;
++            }
++            let (Some(now), Some(origin)) = (now, self.origin) else {
++                self.error = Some("missing_boundary_clock"); return;
++            };
++            row.end_ns = Some(now.duration_since(origin).as_nanos());
++            row.complete = true;
++        }
++        self.phase = 0;
++    }
++    fn skip(&mut self, counted: &mut bool, iteration: i32, depth: i32,
++        fresh: u8, kind: MoveKind, coherent: bool, victim: Piece,
++    ) {
++        if !self.active || self.error.is_some() || self.phase != 6 || iteration != 6
++            || depth != 0 || fresh != 0 || kind != MoveKind::Ordinary || !coherent
++            || (!victim.is_empty() && victim.kind() == PieceKind::King) { return; }
++        let e = if *counted { Some(self.e6) } else { self.e6.checked_add(1) };
++        let s = self.s6.checked_add(1);
++        match (e, s) {
++            (Some(e), Some(s)) => { self.e6 = e; self.s6 = s; *counted = true; }
++            _ => self.error = Some("skip_counter_overflow"),
++        }
++    }
++    fn demand(&mut self, coherent: bool, full: bool) {
++        if !self.active || self.error.is_some() || self.phase != 7 || !coherent { return; }
++        let value = if full { &mut self.f7 } else { &mut self.m7 };
++        match value.checked_add(1) {
++            Some(next) => *value = next,
++            None => self.error = Some("demand_counter_overflow"),
++        }
++    }
++    fn finish(&mut self, stop: StopMeta) {
++        self.outcome = Some(stop);
++        self.active = false;
++        self.phase = 0;
++    }
++    fn pair_complete(&self) -> bool {
++        self.error.is_none() && self.boundaries.iter().all(|b| b.entered && b.complete)
++            && self.outcome.is_some_and(|s| s.completed_mask & 192 == 192)
++    }
++    fn json(&self) -> String {
++        fn number<T: std::fmt::Display>(value: Option<T>) -> String {
++            value.map_or_else(|| "null".into(), |value| value.to_string())
++        }
++        let mut out = String::new();
++        write!(out, "{{\"schema\":\"rook2-frontier-scale-v1\",\"clockBasis\":\"relative-to-iteration6-entry\",\"searchStarts\":{},\"error\":{},\"pairComplete\":{},\"E6\":{},\"S6\":{},\"M7\":{},\"F7\":{},\"stateBytes\":{},\"boundaries\":[",
++            self.search_starts, self.error.map_or_else(|| "null".into(), |s| format!("{s:?}")),
++            self.pair_complete(), self.e6, self.s6, self.m7, self.f7, std::mem::size_of::<Self>()).unwrap();
++        for (index, b) in self.boundaries.iter().enumerate() {
++            if index != 0 { out.push(','); }
++            write!(out, "{{\"iteration\":{},\"entered\":{},\"complete\":{},\"startNs\":{},\"endNs\":{}}}",
++                index + 6, b.entered, b.complete, number(b.start_ns), number(b.end_ns)).unwrap();
++        }
++        out.push_str("],\"outcome\":");
++        if let Some(s) = self.outcome {
++            write!(out, "{{\"stopPoint\":{:?},\"stopDepth\":{},\"stopRootIndex\":{},\"stopReason\":{:?},\"N\":{},\"R\":{},\"completedIterationsMask\":{},\"lastIterationDepth\":{},\"selectedDepth\":{},\"selectedSearchUnits\":{}}}",
++                s.point, s.depth, number(s.root_index), s.reason, s.n, s.r,
++                s.completed_mask, s.last_iteration, number(s.selected_depth), number(s.selected_n)).unwrap();
++        } else { out.push_str("null"); }
++        out.push('}');
++        out
++    }
++}
++
++pub(crate) fn begin_search() { SCALE.with(|s| s.borrow_mut().begin_search()); }
++pub(crate) fn begin_iteration(depth: u8) {
++    let now = if depth == 6 || depth == 7 { Some(Instant::now()) } else { None };
++    SCALE.with(|s| s.borrow_mut().begin(depth, now));
++}
++pub(crate) fn complete_iteration(depth: u8) {
++    let now = if depth == 6 || depth == 7 { Some(Instant::now()) } else { None };
++    SCALE.with(|s| s.borrow_mut().end(depth, now));
++}
++pub(crate) fn estimate_skip(counted: &mut bool, iteration: i32, depth: i32,
++    fresh: u8, kind: MoveKind, coherent: bool, victim: Piece,
++) {
++    SCALE.with(|s| s.borrow_mut().skip(counted, iteration, depth, fresh, kind, coherent, victim));
++}
++pub(crate) fn map_demand(coherent: bool) { SCALE.with(|s| s.borrow_mut().demand(coherent, false)); }
++pub(crate) fn full_demand(coherent: bool) { SCALE.with(|s| s.borrow_mut().demand(coherent, true)); }
++pub(crate) fn finish_search(outcome: &Outcome) {
++    let stop = &outcome.stop;
++    let completed_mask = outcome.iterations.iter().filter(|i| i.complete)
++        .fold(0u64, |mask, i| mask | (1u64 << i.depth));
++    let meta = StopMeta {
++        point: match stop.point { Point::Root => "root", Point::Iteration => "iteration", Point::Poll => "poll" },
++        depth: stop.depth, root_index: stop.root_index, reason: stop.reason,
++        n: stop.work.charged_search_units, r: stop.work.charged_relation_queries,
++        completed_mask, last_iteration: outcome.iterations.last().map_or(0, |i| i.depth),
++        selected_depth: outcome.result.as_ref().map(|c| c.depth),
++        selected_n: outcome.result.as_ref().map(|c| c.search_id),
++    };
++    SCALE.with(|s| s.borrow_mut().finish(meta));
++}
++/// Cold terminal report only; never called by a numerical or polling path.
++pub fn write_report(path: &Path) -> io::Result<()> {
++    let value = SCALE.with(|s| s.borrow().json());
++    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
++    writeln!(file, "{value}")
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::types::Color;
++    use std::time::Duration;
++
++    fn selected(depth: u8) -> Scale {
++        let mut s = Scale::default(); s.begin_search();
++        let t = Instant::now(); s.begin(6, Some(t));
++        if depth == 7 {s.end(6, Some(t + Duration::from_nanos(10))); s.begin(7, Some(t + Duration::from_nanos(20)));}
++        s
++    }
++    fn good_skip(s: &mut Scale, counted: &mut bool) {
++        s.skip(counted, 6, 0, 0, MoveKind::Ordinary, true, Piece::EMPTY);
++    }
++    fn meta() -> StopMeta { StopMeta {point:"poll",depth:8,root_index:Some(2),reason:"maximum",
++        n:12,r:19,completed_mask:254,last_iteration:8,selected_depth:Some(8),selected_n:Some(11)} }
++
++    #[test]
++    fn actual_skip_domain_excludes_nonordinary_extended_untrusted_and_king_victim() {
++        for (iteration, depth, fresh, kind, coherent, victim) in [
++            (5,0,0,MoveKind::Ordinary,true,Piece::EMPTY),
++            (6,-1,0,MoveKind::Ordinary,true,Piece::EMPTY),
++            (6,1,0,MoveKind::Ordinary,true,Piece::EMPTY),
++            (6,0,1,MoveKind::Ordinary,true,Piece::EMPTY),
++            (6,0,0,MoveKind::Promotion(PieceKind::Queen),true,Piece::EMPTY),
++            (6,0,0,MoveKind::EnPassant,true,Piece::EMPTY),
++            (6,0,0,MoveKind::Castle,true,Piece::EMPTY),
++            (6,0,0,MoveKind::Ordinary,false,Piece::EMPTY),
++            (6,0,0,MoveKind::Ordinary,true,Piece::new(Color::Black,PieceKind::King)),
++        ] {
++            let mut s=selected(6); let mut counted=false;
++            s.skip(&mut counted,iteration,depth,fresh,kind,coherent,victim);
++            assert_eq!((s.e6,s.s6,counted),(0,0,false));
++        }
++        let mut s=selected(6); let mut counted=false;
++        s.skip(&mut counted,6,0,0,MoveKind::Ordinary,true,Piece::new(Color::Black,PieceKind::Pawn));
++        assert_eq!((s.e6,s.s6),(1,1));
++    }
++    #[test]
++    fn activation_cookie_counts_once_and_separate_activations_remain_distinct() {
++        let mut s=selected(6); let(mut outer,mut inner)=(false,false);
++        good_skip(&mut s,&mut outer); good_skip(&mut s,&mut inner); good_skip(&mut s,&mut outer);
++        assert_eq!((s.e6,s.s6),(2,3));
++        let mut retry=false; good_skip(&mut s,&mut retry);
++        assert_eq!((s.e6,s.s6),(3,4));
++    }
++    #[test]
++    fn only_selected_iteration_and_coherent_map_full_domains_count() {
++        let mut s=Scale::default(); s.begin_search(); s.map_demand_for_test();
++        s.begin(5,None); s.demand(true,false); s.demand(true,true);
++        assert_eq!((s.m7,s.f7),(0,0));
++        let mut s=selected(7); s.demand(true,false); s.demand(true,true);
++        s.demand(false,false); s.demand(false,true);
++        let mut counted=false; good_skip(&mut s,&mut counted);
++        assert_eq!((s.e6,s.s6,s.m7,s.f7),(0,0,1,1));
++        let end=s.origin.unwrap()+Duration::from_nanos(30); s.end(7,Some(end));
++        s.demand(true,false); s.demand(true,true); s.begin(8,None); s.demand(true,true);
++        assert_eq!((s.m7,s.f7),(1,1));
++        // Exercise actual native hook routing, without another worker protocol.
++        use crate::{evaluator::{Evaluator, Node}, influence::Influence, movegen::MoveList, position::Position};
++        let position=Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
++        let mut evaluator=Evaluator::<true>::new(&position);
++        let mut node=Node::root(position,&evaluator.root);
++        SCALE.with(|slot| *slot.borrow_mut()=selected(7));
++        let mut scratch=None;
++        let map=*evaluator.ensure_influence_for_search(&position,&mut scratch,true);
++        evaluator.ensure_influence_for_search(&position,&mut scratch,true);
++        let mut custom=Some(Influence {profiles:[[0;64];2]});
++        evaluator.ensure_influence_for_search(&position,&mut custom,true);
++        let mut scalar=None; evaluator.ensure_influence_for_search(&position,&mut scalar,false);
++        evaluator.full(&mut node,&map,false);
++        evaluator.full_observed(&mut node,&map,false,|_| {});
++        evaluator.fresh_observed(&mut node,&map,false,|_| {});
++        SCALE.with(|slot| assert_eq!((slot.borrow().m7,slot.borrow().f7),(1,0)));
++        let mut list=MoveList::new();
++        evaluator.full_ordinary_inventory(&mut node,&map,false,true,&mut list);
++        evaluator.full_ordinary_inventory(&mut node,&map,false,false,&mut list);
++        evaluator.select_noncheck_q_inventory(&mut node,-1,1,true,&mut scratch,true,false,&mut list);
++        let sparse=Position::from_fen("7k/7r/8/8/8/8/R7/K7 w - - 0 1").unwrap();
++        let mut sparse_node=Node::root(sparse,&evaluator.root); let mut sparse_map=None;
++        evaluator.select_noncheck_q_inventory(&mut sparse_node,-1,1,false,&mut sparse_map,true,false,&mut list);
++        let score=evaluator.fast(&node,false).score; let mut lazy=None;
++        evaluator.select_noncheck_q_inventory(&mut node,score+250,score+251,false,&mut lazy,true,false,&mut list);
++        assert!(lazy.is_none());
++        SCALE.with(|slot| assert_eq!((slot.borrow().m7,slot.borrow().f7),(2,3)));
++        SCALE.with(|slot| *slot.borrow_mut()=Scale::default());
++    }
++    impl Scale {fn map_demand_for_test(&mut self) {self.demand(true,false);self.demand(true,true);}}
++    #[test]
++    fn boundaries_are_single_pairs_and_incomplete_or_duplicate_is_explicit() {
++        let mut s=selected(7); let t=s.origin.unwrap(); s.end(7,Some(t+Duration::from_nanos(30))); s.finish(meta());
++        assert!(s.pair_complete());
++        assert_eq!((s.boundaries[0].start_ns,s.boundaries[0].end_ns,s.boundaries[1].start_ns,s.boundaries[1].end_ns),(Some(0),Some(10),Some(20),Some(30)));
++        let mut incomplete=selected(6); incomplete.finish(meta()); assert!(!incomplete.pair_complete());
++        let mut duplicate=selected(6); duplicate.begin(6,Some(t)); assert_eq!(duplicate.error,Some("duplicate_iteration_entry"));
++        let mut duplicate_end=selected(7); let duplicate_origin=duplicate_end.origin.unwrap(); duplicate_end.end(7,Some(duplicate_origin+Duration::from_nanos(30))); duplicate_end.end(7,Some(duplicate_origin+Duration::from_nanos(40)));
++        assert_eq!(duplicate_end.error,Some("invalid_iteration_completion"));
++        let mut wrong_mask=s; let mut stop=meta(); stop.completed_mask &= !(1<<7); wrong_mask.finish(stop); assert!(!wrong_mask.pair_complete());
++        let mut missing=Scale::default(); missing.begin_search(); missing.begin(7,Some(t)); assert_eq!(missing.error,Some("missing_iteration6_entry"));
++    }
++    #[test]
++    fn counter_overflow_is_sticky_and_does_not_wrap_or_partially_admit() {
++        let mut s=selected(6); s.s6=u64::MAX; let mut counted=false; good_skip(&mut s,&mut counted);
++        assert_eq!((s.e6,s.s6,counted),(0,u64::MAX,false)); assert_eq!(s.error,Some("skip_counter_overflow"));
++        s.phase=7; s.demand(true,true); assert_eq!(s.f7,0);
++        let mut e=selected(6); e.e6=u64::MAX; let mut fresh=false; good_skip(&mut e,&mut fresh);
++        assert_eq!((e.e6,e.s6,fresh),(u64::MAX,0,false)); assert_eq!(e.error,Some("skip_counter_overflow"));
++        for full in [false,true] {let mut s=selected(7); if full {s.f7=u64::MAX;} else {s.m7=u64::MAX;}
++            s.demand(true,full); assert_eq!(s.error,Some("demand_counter_overflow"));}
++    }
++    #[test]
++    fn cold_json_preserves_counts_pair_stop_and_bounded_storage() {
++        let mut s=selected(6); let mut counted=false; good_skip(&mut s,&mut counted);
++        let t=s.origin.unwrap(); s.end(6,Some(t+Duration::from_nanos(10))); s.begin(7,Some(t+Duration::from_nanos(20)));
++        s.demand(true,false); s.demand(true,true); s.end(7,Some(t+Duration::from_nanos(30))); s.finish(meta());
++        let json=s.json();
++        for field in ["\"E6\":1","\"S6\":1","\"M7\":1","\"F7\":1","\"pairComplete\":true","\"completedIterationsMask\":254","\"N\":12","\"R\":19"] {assert!(json.contains(field),"{field}");}
++        assert!(std::mem::size_of::<Scale>()<=512);
++    }
++}
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -17,0 +18,2 @@
++/// Isolated constant-storage frontier scale observation.
++pub mod frontier_scale;
+--- a/src/ordinary.rs
++++ b/src/ordinary.rs
+@@ -987,0 +988,2 @@
++        // This cookie belongs to this actual invocation, not a Position/key.
++        let mut frontier_parent_counted = false;
+@@ -1024,0 +1027,4 @@
++                crate::frontier_scale::estimate_skip(
++                    &mut frontier_parent_counted, request.iteration, depth, fresh,
++                    movement.kind(), coherent_geometry, position.board[movement.to().0 as usize],
++                );
+--- a/src/quiescence.rs
++++ b/src/quiescence.rs
+@@ -160,0 +161 @@
++        crate::frontier_scale::full_demand(coherent_geometry);
+--- a/src/timed.rs
++++ b/src/timed.rs
+@@ -514,0 +515 @@
++        crate::frontier_scale::begin_search();
+@@ -555 +556 @@
+-        Ok(Outcome {
++        let outcome = Outcome {
+@@ -566 +567,3 @@
+-        })
++        };
++        crate::frontier_scale::finish_search(&outcome);
++        Ok(outcome)
+@@ -603,0 +607 @@
++        crate::frontier_scale::begin_iteration(depth);
+@@ -686,0 +691 @@
++        crate::frontier_scale::complete_iteration(depth);

@@ -448,6 +448,24 @@ must share one observation timeline; useful value is marginal to retained3 and
 must include displaced inventory work. No census, fourth-thread executor or
 new measurement is yet selected. The c242/1a81 leader remains unchanged.
 
+The [frontier observation design](earlier-frontier-observation-design.md) binds
+original35's complete6-to7 pair but proposes only128 lifetime jobs. Root review
+challenged that scale before implementation. The subsequent
+[assessment](earlier-frontier-scale-assessment.md),058a6b71, agrees: historical
+perfect-first-use sensitivities are only77–151 microseconds, not hard bounds,
+against a3.315s search. First32 parents are a biased local yield sample; broad
+consumer lookups could overwhelm such a small policy. Park that policy and its
+rich observer without rejecting the wider frontier idea or distinct memoization.
+
+Select one constant-storage original35 count pass on exact single-owner69:
+qualifying iteration6 parent activations/skips (E6/S6), actual iteration7 fresh
+coherent map/private FULL demands (M7/F7), and iteration entry/completion times.
+Existing branch-census epochs cover the whole go and cannot supply this partition.
+Preserve original wire/Host/stopping and mode3 with both inventory hooks. No
+snapshots, keys, payloads, per-node clocks, service model or executor is selected.
+The result establishes occurrence scale only; novelty, readiness and profitable
+width remain separate questions. No automatic follow-on is authorized.
+
 The latest three-thread image is `c242f0e498ceeddb9aa2532cbace46730ffebcb6a0e756274179b3297c1b40da`,
 with profile `1a81bdacaeee3ac4b949cb495f8a99f0d68c96579cca4e7b807f83a501169910`;
 the winning mode enables ordinary and Q owner-local inventory. Predecessors
