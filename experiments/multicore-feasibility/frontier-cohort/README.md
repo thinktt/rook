@@ -1,15 +1,17 @@
-# Full frontier cohort observation
+# Full frontier cohort observation — parked
 
-Preparation for one capture and one same-source observation of original35's
-complete iteration6→7 pair. No producer or result reuse runs. The provisional
-research leader remains c242/1a81; main and release artifacts are unchanged.
+One original35 capture and same-source observation preserve all7963 parent
+activations/227806 move occurrences. Unique map/chain keys207501/207518;
+first-new iteration7 demands25384/11431. Disjoint generous cost ceiling14.417026ms;
+actual readiness unknown. Sampled collection/query costs do not support this
+fixed full-cohort policy. No producer, service/FIFO or consumer ran.
 
-[Plan](plan.md), [policy](policy.json), [source admission](source-review.md).
-The source patch restores on the closed aggregate-count70 source with
-`git apply --unidiff-zero`; all raw files and builds belong outside Git at
-`/home/legolas/rook2-experiments/frontier-cohort-20261029-01`.
+[Concise report](report.md), [results](results.json), [closure](closure.json),
+[plan](plan.md), [source admission](source-review.md), [preparation](preparation.json).
+Six selected stages exit0; terminal coordinator RSS failure is preserved and
+same frozen checker passes in a fresh child under the original clock. No native
+request/control repeats, source/cap change, qualification or adoption. c242/1a81
+remains the research leader.
 
-Preparation and results are separate. Before execution, freeze source/tools,
-commit and announce the CPU quiet window. The future result will distinguish
-supply occurrences, unique keys, prior/new demands and available lead time;
-actual readiness is unknown. No speed, qualification or follow-on claim.
+`source.patch` restores on closed count70 with `git apply --unidiff-zero`.
+Raw/binary/builds: `/home/legolas/rook2-experiments/frontier-cohort-20261029-01`.

@@ -483,6 +483,25 @@ from novelty-audit overhead. No result is reused, no speculative worker runs,
 and no service/FIFO model or consumer is selected. A material preparation blocker
 must return for a design decision rather than silently expanding this scope.
 
+The full-cohort observation completes both original35 searches with13 exact posts
+and unchanged N/R/counters. Its227806 jobs expand to207501 map and207518 chain
+keys; iteration7 demands27104/12627 of them, with25384/11431 first-new productions.
+The disjoint generous ceiling is5.313132ms of map construction plus9.103894ms of
+FULL prefix,14.417026ms total within710.026212ms of instrumented iteration7.
+That prefix includes owner work a chain hit cannot remove;6299 new-chain calls
+also contain2.331582ms of inventory generation. Release precedes demand but no
+producer ran, so readiness remains unknown. Sampled prospective query/collection
+costs exceed this favorable ceiling; they are representation-specific observations,
+not universal lower bounds. Park this full-cohort policy without a service stage
+or consumer. Novelty exists, but useful occurrence scale alone does not pay costs.
+
+All six native stages pass first attempt. A terminal wrapper wrongly applies the
+auditor RSS limit to its coordinator's lifetime high-water; its exit1 is retained.
+The same frozen terminal auditor passes in a fresh child under the original clock,
+without engine/control repeats, source changes or cap changes. Native combined
+observer RAM/files are462404792B below512MiB; the dedicated terminal auditor uses
+about35.5MB RSS. Quiet hold is released; c242/1a81 remains the research leader.
+
 The latest three-thread image is `c242f0e498ceeddb9aa2532cbace46730ffebcb6a0e756274179b3297c1b40da`,
 with profile `1a81bdacaeee3ac4b949cb495f8a99f0d68c96579cca4e7b807f83a501169910`;
 the winning mode enables ordinary and Q owner-local inventory. Predecessors
