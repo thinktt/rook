@@ -164,3 +164,11 @@ Release reproducibility follow-up: a bounded upstream compiler attempt did not m
   controls. Chromium smoke and preset/stop-race checks pass. Diagnostic host-clock
   and wire-affinity setup repairs are recorded. No speed claim or full game gate;
   see `wasm/README.md` and `wasm/validation.json`.
+
+- **Matched WASM runtime timing (2026-11-02):** all54 cases, one warmup plus three
+  measured runs/runtime/case,648 exact replays. Go-to-move CPU median sums:
+  native PGO67.899s, Node118.947s (1.752x), Chromium renderer113.520s (1.672x).
+  Quiet-window14 measurements; browser/controller housekeeping0. Initial server-log
+  stall discarded; repaired fresh batch passes. Local comparison only, with
+  non-PGO WASM and no full-browser/PMU/final-qualification claim. See
+  `experiments/wasm-performance/README.md`.

@@ -204,3 +204,6 @@ and `wasm-wire-completion-20261102-01`. Modules/build products live under
 keep the default `dist/` and Cargo paths convenient. No binaries are committed.
 CPU overlap was subsequently reported by another agent, so these runs establish
 behavioral observations, not isolated performance measurements.
+
+The [matched native/Node/Chromium benchmark](../experiments/wasm-performance/README.md)
+records a separate54-case CPU/wall comparison with startup excluded.
