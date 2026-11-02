@@ -157,3 +157,10 @@ Static-glibc Alpine own-PGO: [completed trial](../experiments/static-glibc-pgo-a
 Static-glibc own-PGO Alpine follow-up: all54 strict training cases produced verified native profiles; use-build and reconciliation pass. Entire container on CPU14: standard54 median sum 67.192095 s CPU / 67.553958 s wall; one12-game pass 676.375347 s CPU / 680.527493 s wall, 632 searches / 5801 posts pass. CPU reductions versus the separate-window plain-static run are 13.36% / 13.48%. No artifact promotion or final qualification. [Supervised setup/results](../experiments/static-glibc-pgo-alpine/README.md).
 
 Release reproducibility follow-up: a bounded upstream compiler attempt did not match candidate68. The pinned Debian toolchain reproduces both original hashes, including after converting the original profile to checked-in LLVM text. The cleaned Docker builder produces dynamic/static glibc pairs with all debugging retained; two clean containers produce identical four-artifact results. The new static pair passes mandatory115/7673, standard54 and the focused12/632 plus continuity/seed/wire pre-gate. One before-native wire fixture-path setup repair is preserved, with no completed native request retried. Tag-only packaging verifies the committed four-hash manifest. No new performance or full-game-gate claim; [release verification](../release/README.md).
+
+- **WASM platform adapter (2026-11-02):** shared Rust core with a portable influence
+  transpose, Node protocol runners and browser worker API. Exact local modules
+  pass mandatory115/7673, standard54 and focused12/632 plus continuity/seed/wire
+  controls. Chromium smoke and preset/stop-race checks pass. Diagnostic host-clock
+  and wire-affinity setup repairs are recorded. No speed claim or full game gate;
+  see `wasm/README.md` and `wasm/validation.json`.
