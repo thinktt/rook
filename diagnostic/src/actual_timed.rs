@@ -5,7 +5,9 @@ use rook2::{host::{self, Host, Record}, engine::Search, history::SearchHistory, 
     position::Position, quiescence::{Limits, Work}, session::{self, Action, Session},
     timed::{self, Controls, Point}, types::Move};
 use serde_json::{json, Value};
-use std::{io, time::{SystemTime, UNIX_EPOCH}};
+use std::io;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // Exact released ordinary neutral vector, in native NAMES order. Request
 // controls only: not startup defaults or a fixture-derived search answer.
@@ -177,6 +179,9 @@ pub(super) fn validate_natural(out:&timed::Outcome)->Result<()> {
 struct GoHost { records:Vec<Record>, acquisitions:Vec<(u32,u32,u32)>, started:Vec<u32> }
 impl Host for GoHost {
     fn acquire_seed(&mut self,_supplied:u32,entry:u32)->io::Result<u32> {
+        #[cfg(target_arch = "wasm32")]
+        let seconds = crate::abi::seconds();
+        #[cfg(not(target_arch = "wasm32"))]
         let seconds=SystemTime::now().duration_since(UNIX_EPOCH)
             .map_err(io::Error::other)?.as_secs() as u32;
         let seed=host::seed_from_seconds(seconds,entry);

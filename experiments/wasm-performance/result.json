@@ -1,0 +1,146 @@
+{
+  "schema": "rook-wasm-performance-result-v1",
+  "status": "complete-local-comparison",
+  "startedAt": "2026-11-02T23:33:08.976Z",
+  "finishedAt": "2026-11-02T23:54:22.920Z",
+  "cpu": 14,
+  "variants": {
+    "native": {
+      "sha256": "5cf0120892065f80bbf4a22297596358bfc28c4945c86c0bf3f65d38b8bff82a",
+      "pgo": true
+    },
+    "wasm": {
+      "sha256": "91e4c4ab50a5bb5b73004e508ca8329ab4378bfb7fc7b7085618609077750c5e",
+      "pgo": false
+    },
+    "node": "v20.19.2",
+    "chromium": "145.0.7632.6"
+  },
+  "cases": 54,
+  "warmups": 162,
+  "measuredRuns": 486,
+  "totalRuns": 648,
+  "metric": "sum of per-case median go-to-selected-move process CPU / host wall seconds",
+  "totals": {
+    "native": {
+      "cpu": 67.898656838,
+      "wall": 67.93040477400021
+    },
+    "node": {
+      "cpu": 118.947100683,
+      "wall": 118.93160862999962
+    },
+    "chromium": {
+      "cpu": 113.519966908,
+      "wall": 113.63714621900087
+    }
+  },
+  "ratiosToNative": {
+    "node": {
+      "cpu": 1.7518328965887637,
+      "wall": 1.7507861027131653
+    },
+    "chromium": {
+      "cpu": 1.6719029829831287,
+      "wall": 1.6728465934667083
+    }
+  },
+  "repeatRanges": {
+    "native": {
+      "medianCaseRangeOverMedian": 0.0067899034276811075,
+      "maximumCaseRangeOverMedian": 0.017887932501253076
+    },
+    "node": {
+      "medianCaseRangeOverMedian": 0.008765486594481443,
+      "maximumCaseRangeOverMedian": 0.04352778170826157
+    },
+    "chromium": {
+      "medianCaseRangeOverMedian": 0.006043302449340211,
+      "maximumCaseRangeOverMedian": 0.023443254434995342
+    }
+  },
+  "evidence": {
+    "directory": "/home/legolas/rook2-experiments/wasm-performance-20261102/full54-final",
+    "receipts": {
+      "plan.json": {
+        "bytes": 75949,
+        "sha256": "8a861d16083afaa67af9220384352cb6c87ec34bcf48ed9e8035369a842bca4a"
+      },
+      "summary.json": {
+        "bytes": 213375,
+        "sha256": "bff0f7e7ad451fdf4780ec8de3eadfd520063a567d5a93939984b4c2b22fc2d6"
+      },
+      "independent-closure.json": {
+        "bytes": 1530,
+        "sha256": "ced109f104d4dd8ca778816128fdecd701b1a5bbff474bb363b3e39345d1276b"
+      },
+      "oracle-recheck.json": {
+        "bytes": 143,
+        "sha256": "45768205eb1b9fabff2014a966d09a14904e14fc67d2642619b6886ac527e541"
+      },
+      "clock-control.json": {
+        "bytes": 272,
+        "sha256": "2b8b2dc5e32cd1963b6f76c65da6dfa298a4c9c1d96db3a1970a272ecfe7d348"
+      },
+      "logging-control.json": {
+        "bytes": 46,
+        "sha256": "4a874b11e187f3c5bb4a31097e88d09bf0d1744f5ac99c240c3ef6001402691d"
+      },
+      "collector.mjs": {
+        "bytes": 14964,
+        "sha256": "119eafd4b4a992e12a99a4980de67d2625809ee092762543ceb1d8c8de612854"
+      }
+    },
+    "rawReceiptDigest": "6f41b8d82dfbd24574020448704cd99f2d15faeb8257bce8802bf5d49b50c8ea"
+  },
+  "notes": [
+    "All648 exact output comparisons passed and were rechecked offline.",
+    "Fresh native/Node processes and216 unique fresh Chromium renderers/workers.",
+    "High-resolution Linux process CPU clocks; worker inclusion and log draining controls passed.",
+    "Coordinated all-CPU build/native hold; engine processes/renderer threads on14, CPU15 reserved from team engine/build work, controllers/browser parents on0. Finite observations, not continuous exclusive-ownership proof.",
+    "Native PGO versus non-PGO WASM: combined build/runtime comparison, not isolated WebAssembly cost.",
+    "Chromium CPU is renderer-only, not total browser CPU. Browser quit uses worker status2, not a POSIX engine-exit claim.",
+    "Initial254-sample batch discarded after web-server logging backpressure at untimed worker startup. No partial timing reused.",
+    "Measured source collector is archived/hash-bound. Reusable tool subsequently removes candidate-specific identity guards and saves its own source.",
+    "No full12 timing, PMU data or final KingRE performance qualification.",
+    "GuestCPU15 recorded8.43s busy over the batch (about0.66%); it was not absolutely idle. No attribution or precise effect on CPU14 is inferred."
+  ],
+  "guestCpuContext": {
+    "hz": 100,
+    "scope": "Entire batch including excluded warmups/startup; finite guest accounting, not host exclusivity proof",
+    "cpus": {
+      "cpu14": {
+        "tickDeltas": [
+          122563,
+          0,
+          1249,
+          3488,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "busySeconds": 1238.12,
+        "busyFraction": 0.9726001571091909
+      },
+      "cpu15": {
+        "tickDeltas": [
+          799,
+          0,
+          44,
+          126421,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "busySeconds": 8.43,
+        "busyFraction": 0.00662386950269905
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Rook WASM</title>
+<style>body { max-width: 48rem; margin: 2rem auto; font: 16px sans-serif; } pre { white-space: pre-wrap; } button, input { margin: .3rem; }</style>
+<h1>Rook WASM</h1>
+<p>One persistent engine in a worker. Moves use coordinate notation, such as e2e4.</p>
+<button id="new">New game</button>
+<input id="move" value="e2e4" aria-label="Move"><button id="play">Play move</button>
+<button id="go">Search (one second)</button><button id="stop">Stop</button>
+<p><label>Personality JSON (a complete personality or its <code>out</code> weights): <input id="personality" type="file" accept=".json"></label></p>
+<pre id="output">Loading…</pre>
+<script type="module">
+import Rook from './rook.js';
+const log = text => { document.querySelector('#output').textContent += text + '\n'; };
+try {
+  const engine = await Rook.create({ onLine: log, onError: log });
+  window.engine = engine;
+  log('Ready');
+  document.querySelector('#new').onclick = () => engine.newGame().catch(log);
+  document.querySelector('#play').onclick = () => engine.playMove(document.querySelector('#move').value).catch(log);
+  document.querySelector('#go').onclick = () => engine.go({ moveTimeMs: 1000 }).catch(log);
+  document.querySelector('#stop').onclick = () => engine.stop().catch(log);
+  document.querySelector('#personality').onchange = async event => {
+    try { await engine.setPersonality(JSON.parse(await event.target.files[0].text())); }
+    catch (error) { log(error); }
+  };
+} catch (error) { log(error); }
+</script>
+</html>

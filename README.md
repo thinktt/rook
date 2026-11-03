@@ -27,3 +27,9 @@ Use `--bin rook2-dev` for development commands such as `inspect`, `perft` or `se
 - [Performance ideas/results](docs/performance-experiments.md): brief historical trials and untried proposals.
 - [Evidence layout](docs/evidence-layout.md) and [historical status](STATUS-history-20261020.md): preserved checkpoints and relocated raw records.
 - [Contribution and clean-room rules](AGENTS.md).
+
+## WebAssembly
+
+The [WASM adapter](wasm/README.md) provides Node protocol runners and a small
+browser worker API. It has separate build and qualification records from the
+native release.

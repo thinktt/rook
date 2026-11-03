@@ -30,8 +30,8 @@ The owner's current direction supersedes the historical last-mile working
 agreement: the implementation owner owns architecture, engineering and execution.
 `imp2-lead` is an independent reviewer/advisor, consulted selectively for
 consequential decisions or significant uncertainty, not routine approval.
-Imp3 owns the current release-builder/pipeline task. This task does not reopen
-engine optimization or expand the owner's selected qualification scope.
+Imp3 owns the current WebAssembly/Node/browser adapter task. This does not reopen
+engine optimization, native release qualification or the full external game gate.
 
 Top-level agents use Herdr native prompts to other Herdr agents with their
 centrally assigned sender identity. Follow the standard local AGENTS.md
