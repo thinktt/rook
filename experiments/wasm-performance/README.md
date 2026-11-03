@@ -95,3 +95,14 @@ GuestCPU15 recorded8.43s of busy time across the batch (about0.66%), despite the
 team reservation. This is disclosed background activity; neither its source nor
 a precise effect on CPU14 is inferred. The quiet window is not an absolute host
 isolation claim.
+
+To draw the saved case timings without running an engine:
+
+```sh
+python3 experiments/wasm-performance/chart.py --results /external/results \
+  --output /external/charts
+```
+
+This writes a standalone CPU SVG and an offline interactive HTML chart with
+CPU/wall, seconds/relative-time and sorting controls. Generated charts stay
+outside Git and are bound to the saved summary hash in `result.json`.
