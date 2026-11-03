@@ -43,5 +43,5 @@ window.benchmark = {
     return move;
   },
 };
-worker.postMessage({ queue: queue.buffer, wasm: new URL('./dist/rook.wasm', location.href).href, flags: 2 });
+worker.postMessage({ queue: queue.buffer, wasm: new URL(new URLSearchParams(location.search).get('artifact') ? '/artifact/'+encodeURIComponent(new URLSearchParams(location.search).get('artifact')) : './dist/rook.wasm', location.href).href, flags: 2 });
 </script>

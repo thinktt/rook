@@ -1,0 +1,169 @@
+{
+  "schema": "rook-wasm-tuning-v1",
+  "scope": "Local compilation/runtime experiments, no Rust changes or artifact promotion",
+  "rawDirectory": "/home/legolas/rook2-experiments/wasm-tuning-20261103",
+  "validation": {
+    "cases": 54,
+    "searches": 1296,
+    "excludedWarmups": 324,
+    "measured": 972,
+    "allExact": true,
+    "rustFilesUnchanged": 94,
+    "qualifiedModulesPreserved": true,
+    "recordedPidsAbsent": 1305,
+    "collectorJoinedExit": 0
+  },
+  "runtime": {
+    "node": "v20.19.2",
+    "chromium": "145.0.7632.6"
+  },
+  "selectedModule": {
+    "config": {
+      "lto": "fat",
+      "features": [
+        "simd128",
+        "bulk-memory"
+      ]
+    },
+    "flags": [
+      "--sysroot=/home/legolas/rook2-experiments/wasm-toolchain/sysroot",
+      "-C",
+      "linker=/usr/bin/wasm-ld-19",
+      "-C",
+      "link-arg=-zstack-size=8388608",
+      "-C",
+      "target-feature=+simd128,+bulk-memory"
+    ],
+    "command": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--manifest-path",
+      "/home/legolas/rook2/wasm/engine/Cargo.toml"
+    ],
+    "path": "/home/legolas/rook2-experiments/wasm-tuning-20261103/bulk/fat-simd-bulk/target/wasm32-unknown-unknown/release/rook_wasm.wasm",
+    "sha256": "0974bb96e645928120c8f389555a58f0ca1832b535865cb2d0864a02c091e0c4",
+    "bytes": 1945839
+  },
+  "profiles": {
+    "native": {
+      "cpuSeconds": 68.01609877700001,
+      "wallSeconds": 68.04449012100025,
+      "cpuOverNative": 1.0,
+      "preSearchCpuMedian": 0.002457165,
+      "cpuThroughMoveMedianSum": 68.149425589,
+      "ranges": {
+        "medianCaseRangeOverMedian": 0.00751666829689558,
+        "maximumCaseRangeOverMedian": 0.02050253006744955
+      }
+    },
+    "node-base": {
+      "cpuSeconds": 119.23160995500001,
+      "wallSeconds": 119.2195914339972,
+      "cpuOverNative": 1.7529910138762441,
+      "preSearchCpuMedian": 0.145399817,
+      "cpuThroughMoveMedianSum": 127.001532396,
+      "ranges": {
+        "medianCaseRangeOverMedian": 0.009696554847633463,
+        "maximumCaseRangeOverMedian": 0.07640355785834696
+      }
+    },
+    "node-fast": {
+      "cpuSeconds": 105.365624115,
+      "wallSeconds": 105.38845792400083,
+      "cpuOverNative": 1.5491277213716046,
+      "preSearchCpuMedian": 0.3523418575,
+      "cpuThroughMoveMedianSum": 124.373911854,
+      "ranges": {
+        "medianCaseRangeOverMedian": 0.009932279224409458,
+        "maximumCaseRangeOverMedian": 0.04779442578307704
+      }
+    },
+    "chrome-base": {
+      "cpuSeconds": 113.76634629300005,
+      "wallSeconds": 113.8766775750005,
+      "cpuOverNative": 1.6726385126262302,
+      "preSearchCpuMedian": 0.052587272000000004,
+      "cpuThroughMoveMedianSum": 116.603161779,
+      "ranges": {
+        "medianCaseRangeOverMedian": 0.008343446475265973,
+        "maximumCaseRangeOverMedian": 0.028139550292922554
+      }
+    },
+    "chrome-fast": {
+      "cpuSeconds": 105.271018521,
+      "wallSeconds": 105.40297599399938,
+      "cpuOverNative": 1.5477367919342933,
+      "preSearchCpuMedian": 0.050926848,
+      "cpuThroughMoveMedianSum": 108.039303421,
+      "ranges": {
+        "medianCaseRangeOverMedian": 0.007499049186038092,
+        "maximumCaseRangeOverMedian": 0.029870402385675385
+      }
+    },
+    "chrome-fast-eager": {
+      "cpuSeconds": 101.05306402999997,
+      "wallSeconds": 101.12349010499942,
+      "cpuOverNative": 1.4857227310451329,
+      "preSearchCpuMedian": 0.4066456945,
+      "cpuThroughMoveMedianSum": 122.963359675,
+      "ranges": {
+        "medianCaseRangeOverMedian": 0.005932527147697447,
+        "maximumCaseRangeOverMedian": 0.028386022262070043
+      }
+    }
+  },
+  "comparisons": {
+    "node-fast": {
+      "control": "node-base",
+      "searchCpuReductionPercent": 11.629454508945457,
+      "cpuThroughMoveReductionPercent": 2.0689675883649117,
+      "lowerCases": 54,
+      "worstCaseRatio": 0.9213197086573601
+    },
+    "chrome-fast": {
+      "control": "chrome-base",
+      "searchCpuReductionPercent": 7.467346934145813,
+      "cpuThroughMoveReductionPercent": 7.344447806853838,
+      "lowerCases": 53,
+      "worstCaseRatio": 1.008137758257393
+    },
+    "chrome-fast-eager": {
+      "control": "chrome-base",
+      "searchCpuReductionPercent": 11.17490600450295,
+      "cpuThroughMoveReductionPercent": -5.454567268128274,
+      "lowerCases": 54,
+      "worstCaseRatio": 0.9228506041063133
+    }
+  },
+  "cpu15BusySeconds": 5.26,
+  "limits": [
+    "Search-only CPU/wall, fresh native/Node and fresh Chromium renderer/worker per sample",
+    "Chromium CPU excludes browser parent/GPU/utility; CPU-through-move is not full-browser lifetime",
+    "Native PGO versus non-PGO WASM, no PMU or pure translation-cost attribution",
+    "Three measured samples per case/configuration; descriptive finite results",
+    "No new mandatory diagnostic,12-game,full3288 or release qualification for selected module"
+  ],
+  "evidence": {
+    "runtime-screen/plan.json": "7f8e9b873a083874851c75cb0b934ba0377abac3a52b39cf0aa4d3635c1f8e46",
+    "runtime-screen/summary.json": "81eec2a5cd1c83c55cc88d084bc0ec036e87cb6816d4fb03fb54e3d2d61de137",
+    "runtime-screen/oracle-check.json": "16ed07ee9650b21921f37c6d39d066a6b7bbe3c81166e3aa4c0f93abe4f9be51",
+    "builds/build.json": "c8db482b6dc32baa87cab4d6dd7e6bbb0ceeb0c4e3acd55a78efe9bcfc02f9bf",
+    "compiler-screen/summary.json": "d000f483de5fc057b8ace2d8e80eda4b46ec808e2d9efa3ded9284605bebaf44",
+    "compiler-screen/oracle-check.json": "8fa45bc6c2faf24f3cf3ab71a32a806be0d14d3b3bf42cb3f9af6a1528c1221c",
+    "bulk/build.json": "685c2261743adc05043aeda2c0ef644bbd57d8d27be0c44a6369002697df2cf4",
+    "bulk/build-completion.json": "d487bbb8ab4436fcf883f3ccf26bd0eaa3ed7d8308ef645cffe426e201ed6f01",
+    "bulk-screen/summary.json": "015a36a1e13988e94c7c55627eccbd33477b3174029bce98465164c2720ebd4c",
+    "bulk-screen/oracle-check.json": "0f2ca8a0d7ddfc7863f587210956f22682954ed6df5e74004075aa90399eb660",
+    "full54/plan.json": "ec95e36e98b53e17eb247317be57d6a2cee8afe90a60c0b663f266d347d00ae1",
+    "full54/summary.json": "b27923c0f0af9f24b25875bc3900eddb71ddc1e3da6d8c2394553929d26994fc",
+    "full54/independent-closure.json": "de7ae812077697c232f06080a3d409b9c99a751fa7f14835b313543120295ef3",
+    "full54/oracle-recheck.json": "cd247fe8b94f5311ce96d4155eb61727b39231ae0a7584857e1e64a9d987c3d0",
+    "full54/preservation-terminal.json": "7b2db0d3ba40f327572783f14493ee0b192d96c513f2fccaa4272b6e20a9c948",
+    "full54/context-after.json": "661964e8d2d8665002df5c31b034f85e835192cd1cefcec1f14b7ad7884767c9"
+  }
+}

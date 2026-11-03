@@ -20,6 +20,7 @@ mkdirSync(output);
 const spec = resolve(options.spec ?? '/home/legolas/king-spec/conformance/profiling');
 const { workloads, oracle, checkReplay } = await import(pathToFileURL(spec+'/replay-check.mjs'));
 const { chromium } = await import(pathToFileURL(resolve(options.playwright)));
+const profiles=options.profiles?JSON.parse(readFileSync(options.profiles,'utf8')):{native:{kind:'native'},node:{kind:'node'},chromium:{kind:'chromium'}};
 const cases = workloads.cases.filter(c => !options.case || c.id === options.case);
 assert(cases.length);
 const sha = path => createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -53,12 +54,14 @@ const timeout = (promise, ms) => {
   let timer;
   return Promise.race([promise, new Promise((_, reject) => { timer=setTimeout(() => reject(Error('host deadline')), ms); })]).finally(() => clearTimeout(timer));
 };
-let browser, server;
+let server;
+const browserPool=new Map();
 const summary = { startedAt: new Date().toISOString(), complete: false, cpu, repeats, caseCount: cases.length, runs: [], caseSummaries: {} };
-const globalTimer = setTimeout(() => { for (const child of owned) kill(child); browser?.close(); }, 7_200_000);
+const globalTimer = setTimeout(() => { for (const child of owned) kill(child); for(const entry of browserPool.values())entry.browser.close(); }, Number(options.seconds??7200)*1000);
 
 async function wire(variant, input) {
-  const command = variant === 'native' ? [resolve(options.native)] : [process.execPath, root+'/wasm/rook.mjs'];
+  const profile=profiles[variant];
+  const command = profile.kind === 'native' ? [resolve(options.native)] : [process.execPath,...(profile.flags??[]),root+'/wasm/rook.mjs',...(profile.wasm?['--wasm',profile.wasm]:[])];
   const child = launch('taskset', ['-c', String(cpu), ...command, ...oracle.mode]);
   let stdout='', stderr='', buffer='', stage='setup', acknowledgments=0, start, before, measured;
   const expectedReplies = input.protocol.recordsBeforeSearch.filter(x => x.startsWith('cm_parm ')).concat('cm_parm rnd=0');
@@ -103,16 +106,23 @@ async function wire(variant, input) {
   } finally { if (child.exitCode===null) kill(child); }
 }
 
-async function chrome(input) {
-  const context=await browser.newContext();
+async function chrome(variant,input) {
+  const profile=profiles[variant],key=JSON.stringify(profile.flags??[]);
+  if(!browserPool.has(key)){
+    const browser=await chromium.launch({headless:true,executablePath:resolve(options.chromium),args:profile.flags?.length?['--js-flags='+profile.flags.join(' ')]:[]});
+    browserPool.set(key,{browser,cdp:await browser.newBrowserCDPSession()});
+    summary.chromium=await browser.version();
+  }
+  const entry=browserPool.get(key);
+  const context=await entry.browser.newContext();
   const page=await context.newPage();
   const problems=[];page.on('pageerror',error=>problems.push(error.message));
   try {
-    await page.goto(summary.browserUrl+'benchmark.html');
+    await page.goto(summary.browserUrl+(options.page??'benchmark.html')+(profile.wasm?'?artifact='+encodeURIComponent(variant):''));
     await page.waitForFunction(()=>window.benchmark);
     await timeout(page.evaluate(()=>window.benchmark.ready),30_000);
     const candidates=[];
-    for (const p of (await summary.cdp.send('SystemInfo.getProcessInfo')).processInfo.filter(p=>p.type==='renderer')) {
+    for (const p of (await entry.cdp.send('SystemInfo.getProcessInfo')).processInfo.filter(p=>p.type==='renderer')) {
       const tasks=snapshots(p.id);
       if (tasks.some(t=>/DedicatedWorker/.test(t.name))) candidates.push({pid:p.id,tasks});
     }
@@ -152,30 +162,31 @@ try {
   await timeout(Promise.all([once(logger.stdout,'data'),once(logger,'close'),logFinished]),5000);
   assert.equal(statSync(output+'/logging-control.raw').size,1048576);
   save(output+'/logging-control.json',{pass:true,drainedBytes:1048576});
-  server=launch('python3',[root+'/wasm/serve.py','--port','0']);
+  server=launch('python3',[options.server??root+'/wasm/serve.py','--port','0',...(options.server&&options.profiles?['--profiles',options.profiles]:[])]);
   server.stderr.pipe(createWriteStream(output+'/server.stderr'));
   const [urlChunk]=await timeout(once(server.stdout,'data'),10_000);summary.browserUrl=String(urlChunk).match(/http:\/\/localhost:\d+\//)[0];
-  browser=await chromium.launch({headless:true,executablePath:resolve(options.chromium)});summary.chromium=await browser.version();summary.node=process.version;
-  summary.cdp=await browser.newBrowserCDPSession();
+  summary.node=process.version;
   const files=[options.native,options.clock,process.execPath,resolve(options.chromium),root+'/wasm/dist/rook.wasm',
     ...['rook.mjs','node-worker.mjs','worker.mjs','runtime.mjs','queue.mjs','benchmark.html','serve.py'].map(x=>root+'/wasm/'+x),
-    root+'/tools/benchmark_wasm.mjs',root+'/tools/process_clock.c',spec+'/workloads.json',spec+'/replay-oracle.json',spec+'/replay-check.mjs'];
+    root+'/tools/benchmark_wasm.mjs',root+'/tools/process_clock.c',...(options.profiles?[options.profiles,...Object.values(profiles).filter(p=>p.wasm).map(p=>p.wasm)]:[]),...(options.server?[options.server]:[]),spec+'/workloads.json',spec+'/replay-oracle.json',spec+'/replay-check.mjs'];
   const pins=Object.fromEntries(files.map(p=>[resolve(p),sha(p)]));
-  const base=['native','node','chromium'];
-  const schedule=cases.flatMap((c,i)=>Array.from({length:repeats+1},(_,r)=>base.map((_,v)=>({case:c.id,repeat:r,warmup:r===0,variant:base[(v+i+r)%3]}))).flat());
-  const plan={schema:'rook-wasm-search-performance-v1',cpu,repeats,schedule,pins,
+  const base=Object.keys(profiles);
+  const schedule=cases.flatMap((c,i)=>Array.from({length:repeats+1},(_,r)=>base.map((_,v)=>({case:c.id,repeat:r,warmup:r===0,variant:base[(v+i+r)%base.length]}))).flat());
+  const plan={schema:'rook-wasm-search-performance-v1',cpu,repeats,schedule,pins,profiles,
     boundary:'High-resolution live process CPU before go dispatch to selected-move receipt; monotonic host wall around same request. Startup/setup/shutdown excluded.',
     chromiumBoundary:'Owned unique renderer CPU includes worker, renderer main thread and its compilation threads; browser/GPU/utility processes and external controller remain on housekeeping and are excluded. Extra in-page wall recorded.',
     lifecycle:'Native/Node fresh processes. Chromium fresh browser context/page/worker per run; shared browser parent. No full-browser lifetime cost or hard exit equivalence claim.',
     comparison:'Current PGO native release versus non-PGO WASM; this does not isolate the cost of WASM alone.',
-    limits:{runSeconds:390,searchSeconds:330,browserReadySeconds:30,aggregateSeconds:7200,streamBytesPerRun:4194304,retainedBytes:268435456},
+    limits:{runSeconds:390,searchSeconds:330,browserReadySeconds:30,aggregateSeconds:Number(options.seconds??7200),streamBytesPerRun:4194304,retainedBytes:268435456},
     pmu:'No cycles/instructions/IPC collected',environment:{before:readFileSync('/proc/stat','utf8')}};
   save(output+'/plan.json',plan);
+  mkdirSync(output+'/frozen-inputs');
+  for(const [path,digest] of Object.entries(pins))if(/\.(mjs|py|html|json|c)$/.test(path))writeFileSync(output+'/frozen-inputs/'+digest,readFileSync(path));
   writeFileSync(output+'/collector.mjs',readFileSync(fileURLToPath(import.meta.url)));
   let retained=0;
   for(const [i,step] of schedule.entries()){
     const input=cases.find(c=>c.id===step.case);
-    const data=await timeout(step.variant==='chromium'?chrome(input):wire(step.variant,input),390_000);
+    const data=await timeout(profiles[step.variant].kind==='chromium'?chrome(step.variant,input):wire(step.variant,input),390_000);
     assert(data.cpuSeconds>0&&data.wallSeconds>0);
     const filename=`${String(i).padStart(3,'0')}-${step.case}-${step.variant}-r${step.repeat}.json`;
     const row={...step,...data};save(output+'/'+filename,row);retained+=Buffer.byteLength(JSON.stringify(row));assert(retained<268435456);
@@ -196,9 +207,10 @@ try {
 finally{
   summary.finishedAt=new Date().toISOString();
   summary.ownedPidsAtCleanup=[...owned].map(child=>child.pid);
-  try { summary.chromePidsAtCleanup=(await summary.cdp?.send('SystemInfo.getProcessInfo'))?.processInfo.map(p=>p.id)??[]; } catch {}
+  summary.chromePidsAtCleanup=[];
+  for(const entry of browserPool.values())try{summary.chromePidsAtCleanup.push(...(await entry.cdp.send('SystemInfo.getProcessInfo')).processInfo.map(p=>p.id));}catch{}
   save(output+'/context-after.json',{procStat:readFileSync('/proc/stat','utf8')});
-  clearTimeout(globalTimer);await browser?.close();
+  clearTimeout(globalTimer);for(const entry of browserPool.values())await entry.browser.close();
   for(const child of owned)kill(child);
   const {cdp,...serializable}=summary;save(output+'/summary.json',serializable);
   console.log(JSON.stringify({complete:summary.complete,failure:summary.failure,totals:summary.totals}));

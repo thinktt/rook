@@ -172,3 +172,13 @@ Release reproducibility follow-up: a bounded upstream compiler attempt did not m
   stall discarded; repaired fresh batch passes. Local comparison only, with
   non-PGO WASM and no full-browser/PMU/final-qualification claim. See
   `experiments/wasm-performance/README.md`.
+
+- **WASM compiler/runtime tuning (2026-11-03):** no Rust changes; full LTO plus
+  SIMD128/bulk-memory cuts normal Chromium full54 search CPU from113.766s to
+  105.271s (7.47%;53/54 lower). Eager V8 yields Node105.366s and Chromium101.053s,
+  but cold-start CPU gains shrink to2.07% for Node and reverse to5.45% worse for
+  Chromium. Resident-instance six-case screen improves3.28%; Binaryen O3 is
+  parked. All1,296 final streams pass replay and independent saved arithmetic;
+  original artifacts preserved,94Rust files unchanged. Selected module remains
+  experimental, without new mandatory/12/full-game qualification. See
+  `experiments/wasm-tuning/README.md` and its small hash-bound result record.

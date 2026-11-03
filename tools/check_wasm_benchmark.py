@@ -5,9 +5,14 @@ p=argparse.ArgumentParser(description=__doc__);p.add_argument('directory',type=P
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 s=json.loads((root/'summary.json').read_text());plan=json.loads((root/'plan.json').read_text())
 assert s['complete'] and not s.get('failure')
-assert len(s['runs'])==len(plan['schedule'])==648
+variants=list(plan.get('profiles',{'native':{},'node':{},'chromium':{}}))
+expected=54*4*len(variants)
+assert len(s['runs'])==len(plan['schedule'])==expected
 assert len(s['caseSummaries'])==54
-assert all(sha(root/'collector.mjs' if Path(p).name=='benchmark_wasm.mjs' else Path(p))==h for p,h in plan['pins'].items())
+def pinned_file(path,digest):
+ live=root/'collector.mjs' if Path(path).name=='benchmark_wasm.mjs' else Path(path)
+ return live if live.exists() and sha(live)==digest else root/'frozen-inputs'/digest
+assert all(sha(pinned_file(path,digest))==digest for path,digest in plan['pins'].items())
 values={};chrome_pids=set();maximum_cpu_wall=0;raw_hashes={}
 for row,step in zip(s['runs'],plan['schedule']):
  assert all(row[k]==v for k,v in step.items())
@@ -19,13 +24,13 @@ for row,step in zip(s['runs'],plan['schedule']):
  assert cpu==d['cpuSeconds']==row['cpuSeconds'] and cpu>0 and d['wallSeconds']>0
  assert all(t['cpus']=='14' for t in d['tasksBefore']+d['tasksAfter'])
  maximum_cpu_wall=max(maximum_cpu_wall,cpu/d['wallSeconds'])
- if d['variant']=='chromium':
+ if plan.get('profiles',{}).get(d['variant'],{}).get('kind')=='chromium' or d['variant']=='chromium':
   assert d['quitCommandStatus']==2 and d['workerTasks'] and d['pid'] not in chrome_pids
   chrome_pids.add(d['pid'])
  if not d['warmup']:values.setdefault(d['case'],{}).setdefault(d['variant'],[]).append(d)
  raw_hashes[row['file']]=sha(root/row['file'])
 totals={};ranges={}
-for variant in ['native','node','chromium']:
+for variant in variants:
  total={}
  for metric,key in [('cpu','cpuSeconds'),('wall','wallSeconds')]:
   medians=[]
@@ -39,7 +44,7 @@ for variant in ['native','node','chromium']:
  totals[variant]=total
  widths=[(max(d['cpuSeconds'] for d in groups[variant])-min(d['cpuSeconds'] for d in groups[variant]))/statistics.median(d['cpuSeconds'] for d in groups[variant]) for groups in values.values()]
  ranges[variant]={'medianCaseRangeOverMedian':statistics.median(widths),'maximumCaseRangeOverMedian':max(widths)}
-result=dict(pass_=True,runs=648,warmups=162,measured=486,cases=54,uniqueChromiumRenderers=len(chrome_pids),totals=totals,ranges=ranges,maximumCpuWallRatio=maximum_cpu_wall,
- ratios={v:{metric:totals[v][metric]/totals['native'][metric] for metric in ['cpu','wall']} for v in ['node','chromium']},
+result=dict(pass_=True,runs=expected,warmups=54*len(variants),measured=162*len(variants),cases=54,uniqueChromiumRenderers=len(chrome_pids),totals=totals,ranges=ranges,maximumCpuWallRatio=maximum_cpu_wall,
+ ratios={v:{metric:totals[v][metric]/totals['native'][metric] for metric in ['cpu','wall']} for v in variants if v!='native'},
  hashes={name:sha(root/name) for name in ['plan.json','summary.json','clock-control.json','logging-control.json']},rawReceiptSha256=hashlib.sha256(json.dumps(raw_hashes,sort_keys=True).encode()).hexdigest())
 (root/'independent-closure.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))

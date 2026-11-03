@@ -207,3 +207,9 @@ behavioral observations, not isolated performance measurements.
 
 The [matched native/Node/Chromium benchmark](../experiments/wasm-performance/README.md)
 records a separate54-case CPU/wall comparison with startup excluded.
+
+The [compilation/runtime study](../experiments/wasm-tuning/README.md) found
+7.47% less Chromium search CPU with full LTO, SIMD128 and bulk-memory enabled,
+without Rust changes or browser launch flags. Its recipe and experimental
+artifact are separate from the qualified default modules above. Eager V8 flags
+improve search-only timing further but add substantial startup cost.
