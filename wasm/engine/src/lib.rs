@@ -55,6 +55,20 @@ impl Engine {
 pub extern "C" fn rook_create(flags: u32) -> *mut Engine {
     Box::into_raw(Box::new(Engine { session: Session::default(), diagnostic_seed: flags & 1 != 0, fine_work: flags & 2 != 0 }))
 }
+
+// Set a fixed seed and enable the existing seed command/reporting behavior.
+// Call setters between searches, just like ordinary idle commands.
+#[no_mangle]
+pub unsafe extern "C" fn rook_set_seed(engine: *mut Engine, seed: u32) {
+    (*engine).session.seed_override = Some(seed);
+    (*engine).diagnostic_seed = true;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rook_set_work_clock_post(engine: *mut Engine, enabled: bool) {
+    (*engine).fine_work = enabled;
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn rook_destroy(engine: *mut Engine) { drop(Box::from_raw(engine)); }
 // 0=continue, 1=fatal, 2=quit. No reentrant calls on an engine handle.
