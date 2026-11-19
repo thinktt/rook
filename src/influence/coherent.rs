@@ -5,6 +5,7 @@ use crate::attacks::{influence_rays, influence_pawn_targets, influence_knight_ta
 use crate::geometry::{DIRECTIONS, KING_TARGETS, KNIGHT_SOURCES, PAWN_TARGETS};
 use crate::position::Position;
 use crate::types::{Color, PieceKind, Square};
+#[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{_mm_cvtsi64_si128, _mm_storeu_si128,
     _mm_unpacklo_epi8, _mm_unpacklo_epi16, _mm_unpackhi_epi16,
     _mm_unpacklo_epi32, _mm_unpackhi_epi32};
@@ -185,6 +186,7 @@ impl BitSums {
         // byte matrix with baseline SSE2, yielding contiguous targets0..63.
         // SAFETY: x86-64 guarantees SSE2. Four unaligned16B stores cover exactly
         // the initialized64B destination. cvtsi64 only transfers raw64 bits.
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             let a = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[0] as i64), _mm_cvtsi64_si128(self.planes[1] as i64));
             let b = _mm_unpacklo_epi8(_mm_cvtsi64_si128(self.planes[2] as i64), _mm_cvtsi64_si128(self.planes[3] as i64));
@@ -198,6 +200,15 @@ impl BitSums {
             _mm_storeu_si128(bytes.as_mut_ptr().add(16).cast(), _mm_unpackhi_epi32(ab0, cd0));
             _mm_storeu_si128(bytes.as_mut_ptr().add(32).cast(), _mm_unpacklo_epi32(ab1, cd1));
             _mm_storeu_si128(bytes.as_mut_ptr().add(48).cast(), _mm_unpackhi_epi32(ab1, cd1));
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        for (target, byte) in bytes.iter_mut().enumerate() {
+            *byte = (self.planes[target % 8] >> (8 * (target / 8))) as u8;
+        }
+        #[cfg(all(test, target_arch = "x86_64"))]
+        for (target, &byte) in bytes.iter().enumerate() {
+            assert_eq!(byte, (self.planes[target % 8] >> (8 * (target / 8))) as u8,
+                "portable transpose target {target}");
         }
     }
 }

@@ -4,15 +4,24 @@
 //! without a reader thread or work on another measurement CPU.
 use crate::host::Command;
 use crate::parameters;
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
-use std::io::{self, Read};
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::Read;
+use std::io;
+#[cfg(not(target_arch = "wasm32"))]
 use std::os::fd::{AsRawFd, FromRawFd};
 
+#[cfg(not(target_arch = "wasm32"))]
 const F_GETFL: i32 = 3;
+#[cfg(not(target_arch = "wasm32"))]
 const F_SETFL: i32 = 4;
+#[cfg(not(target_arch = "wasm32"))]
 const O_NONBLOCK: i32 = 0o4000;
+#[cfg(not(target_arch = "wasm32"))]
 const POLLIN: i16 = 1;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[repr(C)]
 struct PollFd {
     fd: i32,
@@ -20,6 +29,7 @@ struct PollFd {
     revents: i16,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 extern "C" {
     fn dup(fd: i32) -> i32;
     fn fcntl(fd: i32, command: i32, ...) -> i32;
@@ -30,6 +40,7 @@ fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub struct Input {
     file: File,
     original_flags: i32,
@@ -37,6 +48,7 @@ pub struct Input {
     consumed: usize,
     eof: bool,
 }
+#[cfg(not(target_arch = "wasm32"))]
 impl Input {
     pub fn stdin() -> io::Result<Self> {
         // dup returns a new owned descriptor. Dropping Input never closes fd 0.
@@ -131,6 +143,7 @@ impl Input {
         }
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
 impl Drop for Input {
     fn drop(&mut self) {
         // Restore the open-file flags shared with the original stdin descriptor.

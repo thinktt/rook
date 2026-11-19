@@ -5,7 +5,9 @@ use rook2::{host::{self, Command, Host, Record}, movegen::{self, MoveList},
     quiescence::{Limits, Work}, session::{self, Action, Session}, timed::{self, Point},
     types::{Color, Move}};
 use serde_json::{json, Value};
-use std::{collections::VecDeque, io, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::VecDeque, io};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const NEUTRAL_MD3: [i32;30] = [100,100,100,100,100,100,100,100,100,100,0,0,
     100,100,100,100,100,100,100,100,100,100,0,100,0,14,0,3,0,67108864];
@@ -252,6 +254,9 @@ struct Recorder { pending:VecDeque<Command>,records:Vec<Record>,fixed:bool,seeds
 impl Host for Recorder {
     fn acquire_seed(&mut self,supplied:u32,entry:u32)->io::Result<u32> {
         let seed=if self.fixed {supplied} else {
+            #[cfg(target_arch = "wasm32")]
+            let seconds = crate::abi::seconds();
+            #[cfg(not(target_arch = "wasm32"))]
             let seconds=SystemTime::now().duration_since(UNIX_EPOCH).map_err(io::Error::other)?.as_secs() as u32;
             host::seed_from_seconds(seconds,entry)
         };

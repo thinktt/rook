@@ -319,7 +319,7 @@ fn dispatch(operation: &str, input: &Value) -> Result<Value> {
     }
 }
 
-fn response(request: &Value) -> Result<Value> {
+pub(crate) fn response(request: &Value) -> Result<Value> {
     object(request, &["version", "operation", "input"])?;
     integer(&request["version"], 1, 1)?;
     Ok(json!({"version":1,"output":dispatch(text(&request["operation"])?,&request["input"])?}))

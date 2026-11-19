@@ -157,3 +157,28 @@ Static-glibc Alpine own-PGO: [completed trial](../experiments/static-glibc-pgo-a
 Static-glibc own-PGO Alpine follow-up: all54 strict training cases produced verified native profiles; use-build and reconciliation pass. Entire container on CPU14: standard54 median sum 67.192095 s CPU / 67.553958 s wall; one12-game pass 676.375347 s CPU / 680.527493 s wall, 632 searches / 5801 posts pass. CPU reductions versus the separate-window plain-static run are 13.36% / 13.48%. No artifact promotion or final qualification. [Supervised setup/results](../experiments/static-glibc-pgo-alpine/README.md).
 
 Release reproducibility follow-up: a bounded upstream compiler attempt did not match candidate68. The pinned Debian toolchain reproduces both original hashes, including after converting the original profile to checked-in LLVM text. The cleaned Docker builder produces dynamic/static glibc pairs with all debugging retained; two clean containers produce identical four-artifact results. The new static pair passes mandatory115/7673, standard54 and the focused12/632 plus continuity/seed/wire pre-gate. One before-native wire fixture-path setup repair is preserved, with no completed native request retried. Tag-only packaging verifies the committed four-hash manifest. No new performance or full-game-gate claim; [release verification](../release/README.md).
+
+- **WASM platform adapter (2026-11-02):** shared Rust core with a portable influence
+  transpose, Node protocol runners and browser worker API. Exact local modules
+  pass mandatory115/7673, standard54 and focused12/632 plus continuity/seed/wire
+  controls. Chromium smoke and preset/stop-race checks pass. Diagnostic host-clock
+  and wire-affinity setup repairs are recorded. No speed claim or full game gate;
+  see `wasm/README.md` and `wasm/validation.json`.
+
+- **Matched WASM runtime timing (2026-11-02):** all54 cases, one warmup plus three
+  measured runs/runtime/case,648 exact replays. Go-to-move CPU median sums:
+  native PGO67.899s, Node118.947s (1.752x), Chromium renderer113.520s (1.672x).
+  Quiet-window14 measurements; browser/controller housekeeping0. Initial server-log
+  stall discarded; repaired fresh batch passes. Local comparison only, with
+  non-PGO WASM and no full-browser/PMU/final-qualification claim. See
+  `experiments/wasm-performance/README.md`.
+
+- **WASM compiler/runtime tuning (2026-11-03):** no Rust changes; full LTO plus
+  SIMD128/bulk-memory cuts normal Chromium full54 search CPU from113.766s to
+  105.271s (7.47%;53/54 lower). Eager V8 yields Node105.366s and Chromium101.053s,
+  but cold-start CPU gains shrink to2.07% for Node and reverse to5.45% worse for
+  Chromium. Resident-instance six-case screen improves3.28%; Binaryen O3 is
+  parked. All1,296 final streams pass replay and independent saved arithmetic;
+  original artifacts preserved,94Rust files unchanged. Selected module remains
+  experimental, without new mandatory/12/full-game qualification. See
+  `experiments/wasm-tuning/README.md` and its small hash-bound result record.

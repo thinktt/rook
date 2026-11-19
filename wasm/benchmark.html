@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8"><title>Rook worker benchmark</title>
+<script type="module">
+import { commandQueue } from './queue.mjs';
+const queue = commandQueue();
+const worker = new Worker('./worker.mjs', { type: 'module', name: 'rook-benchmark' });
+let pending, selected;
+const state = { stdout: '', stderr: '', move: null, done: Promise.resolve() };
+window.benchmark = {
+  state,
+  ready: new Promise((resolve, reject) => {
+    worker.onerror = event => reject(Error(event.message));
+    worker.onmessage = ({ data }) => {
+      if (data.ready) resolve();
+      if (data.error) { reject(Error(data.error)); pending?.reject(Error(data.error)); selected?.reject(Error(data.error)); }
+      if (data.channel === 2) state.stderr += data.text;
+      if (data.channel === 1) {
+        state.stdout += data.text;
+        if (/^move [a-h]/.test(data.text)) {
+          state.move = data.text.trim().slice(5);
+          selected?.resolve({ move: state.move, wallMs: performance.now() - state.start });
+        }
+      }
+      if (data.done) {
+        state.lastCommandStatus = data.status;
+        if (data.status === 1) { pending?.reject(Error('engine failed')); selected?.reject(Error('engine failed')); }
+        else pending?.resolve();
+        pending = null;
+      }
+    };
+  }),
+  async send(line) {
+    await state.done;
+    state.done = new Promise((resolve, reject) => {
+      pending = { resolve, reject };
+      if (!queue.send(line)) reject(Error('queue full'));
+    });
+    await state.done;
+  },
+  async go() {
+    const move = new Promise((resolve, reject) => { selected = { resolve, reject }; });
+    state.start = performance.now();
+    this.send('go').catch(error => selected.reject(error));
+    return move;
+  },
+};
+worker.postMessage({ queue: queue.buffer, wasm: new URL(new URLSearchParams(location.search).get('artifact') ? '/artifact/'+encodeURIComponent(new URLSearchParams(location.search).get('artifact')) : './dist/rook.wasm', location.href).href, flags: 2 });
+</script>
