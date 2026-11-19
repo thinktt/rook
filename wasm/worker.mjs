@@ -1,12 +1,10 @@
 import { commandQueue } from './queue.mjs';
-import { instantiate } from './runtime.mjs';
+import { instantiate, loadModule } from './runtime.mjs';
 
 self.onmessage = async ({ data }) => {
   const queue = commandQueue(data.queue);
   try {
-    const response = await fetch(data.wasm);
-    if (!response.ok) throw Error(`WASM fetch: ${response.status}`);
-    const runtime = await instantiate(await response.arrayBuffer(), {
+    const runtime = instantiate(await loadModule(data.wasm), {
       output: (channel, text) => self.postMessage({ channel, text }),
       poll: () => queue.take(),
     });

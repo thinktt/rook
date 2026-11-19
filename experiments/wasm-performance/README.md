@@ -1,5 +1,9 @@
 # Native / Node / Chromium search performance
 
+The numbers below document the original three-runtime experiment. The current
+collector runs native and Chromium profiles. Use the archived collector and
+runners to reproduce the original Node leg.
+
 Use the unchanged released54 workload and correctness oracle. Compare the frozen
 PGO native release with the existing non-PGO WASM ordinary module; this measures
 these actual builds, rather than isolating WebAssembly overhead alone.

@@ -1,5 +1,11 @@
-// The same WASM host imports in Node and the browser. No WASI or bindings package.
-export function instantiate(bytes, { output, poll = () => null }) {
+// Load once so browser tests can instantiate fresh engines from a compiled module.
+export async function loadModule(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw Error(`WASM fetch: ${response.status}`);
+  return WebAssembly.compileStreaming(response);
+}
+
+export function instantiate(module, { output, poll = () => null }) {
   let api;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
@@ -17,7 +23,7 @@ export function instantiate(bytes, { output, poll = () => null }) {
       return data.length;
     },
   } };
-  const instance = new WebAssembly.Instance(new WebAssembly.Module(bytes), imports);
+  const instance = new WebAssembly.Instance(module, imports);
   api = instance.exports;
   api.rook_init();
   return {

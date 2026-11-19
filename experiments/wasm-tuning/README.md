@@ -58,14 +58,15 @@ WASM profiler runtime is absent from this local sysroot.
 `recheck.mjs` checks saved streams against the released replay oracle.
 `serve.py` supplies explicit named artifact routes for the shared benchmark
 page. The generic `tools/benchmark_wasm.mjs --profiles <json>` collector accepts
-named native, Node and Chromium profiles with module paths and optional V8
-flags. It records source/artifact identities and fresh process CPU boundaries.
+named native and Chromium profiles. Chromium profiles accept module paths and
+optional V8 flags. It records source/artifact identities and fresh process CPU boundaries.
 `tools/check_wasm_benchmark.py <run-directory>` independently checks its saved
 full54 arithmetic, lifecycle and CPU placements.
 
 For a new full54 collection, supply a JSON object of named profiles, for example
 `{"native":{"kind":"native"},"browser":{"kind":"chromium","wasm":"/absolute/selected.wasm"}}`.
-Node profiles use `"kind":"node"`; an optional `"flags":[...]` sets V8 flags.
+An optional `"flags":[...]` sets Chromium V8 flags. The historical Node
+profiles require the archived collector and runners.
 Use absolute module paths. The frozen six-profile configuration for this study
 is `confirmation-final.json` in the raw directory. Invoke the collector with
 `--profiles <json> --server experiments/wasm-tuning/serve.py

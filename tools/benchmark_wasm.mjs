@@ -20,7 +20,8 @@ mkdirSync(output);
 const spec = resolve(options.spec ?? '/home/legolas/king-spec/conformance/profiling');
 const { workloads, oracle, checkReplay } = await import(pathToFileURL(spec+'/replay-check.mjs'));
 const { chromium } = await import(pathToFileURL(resolve(options.playwright)));
-const profiles=options.profiles?JSON.parse(readFileSync(options.profiles,'utf8')):{native:{kind:'native'},node:{kind:'node'},chromium:{kind:'chromium'}};
+const profiles=options.profiles?JSON.parse(readFileSync(options.profiles,'utf8')):{native:{kind:'native'},chromium:{kind:'chromium'}};
+assert(Object.values(profiles).every(p => ['native', 'chromium'].includes(p.kind)), 'profiles must use native or chromium');
 const cases = workloads.cases.filter(c => !options.case || c.id === options.case);
 assert(cases.length);
 const sha = path => createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -59,10 +60,8 @@ const browserPool=new Map();
 const summary = { startedAt: new Date().toISOString(), complete: false, cpu, repeats, caseCount: cases.length, runs: [], caseSummaries: {} };
 const globalTimer = setTimeout(() => { for (const child of owned) kill(child); for(const entry of browserPool.values())entry.browser.close(); }, Number(options.seconds??7200)*1000);
 
-async function wire(variant, input) {
-  const profile=profiles[variant];
-  const command = profile.kind === 'native' ? [resolve(options.native)] : [process.execPath,...(profile.flags??[]),root+'/wasm/rook.mjs',...(profile.wasm?['--wasm',profile.wasm]:[])];
-  const child = launch('taskset', ['-c', String(cpu), ...command, ...oracle.mode]);
+async function wire(input) {
+  const child = launch('taskset', ['-c', String(cpu), resolve(options.native), ...oracle.mode]);
   let stdout='', stderr='', buffer='', stage='setup', acknowledgments=0, start, before, measured;
   const expectedReplies = input.protocol.recordsBeforeSearch.filter(x => x.startsWith('cm_parm ')).concat('cm_parm rnd=0');
   let resolveMove, rejectMove;
@@ -162,12 +161,14 @@ try {
   await timeout(Promise.all([once(logger.stdout,'data'),once(logger,'close'),logFinished]),5000);
   assert.equal(statSync(output+'/logging-control.raw').size,1048576);
   save(output+'/logging-control.json',{pass:true,drainedBytes:1048576});
-  server=launch('python3',[options.server??root+'/wasm/serve.py','--port','0',...(options.server&&options.profiles?['--profiles',options.profiles]:[])]);
+  server = options.server
+    ? launch('python3', [options.server, '--port', '0', ...(options.profiles ? ['--profiles', options.profiles] : [])])
+    : launch(process.execPath, [root+'/wasm/serve.mjs', '--port', '0']);
   server.stderr.pipe(createWriteStream(output+'/server.stderr'));
   const [urlChunk]=await timeout(once(server.stdout,'data'),10_000);summary.browserUrl=String(urlChunk).match(/http:\/\/localhost:\d+\//)[0];
   summary.node=process.version;
   const files=[options.native,options.clock,process.execPath,resolve(options.chromium),root+'/wasm/dist/rook.wasm',
-    ...['rook.mjs','node-worker.mjs','worker.mjs','runtime.mjs','queue.mjs','benchmark.html','serve.py'].map(x=>root+'/wasm/'+x),
+    ...['worker.mjs','runtime.mjs','queue.mjs','benchmark.html','serve.mjs'].map(x=>root+'/wasm/'+x),
     root+'/tools/benchmark_wasm.mjs',root+'/tools/process_clock.c',...(options.profiles?[options.profiles,...Object.values(profiles).filter(p=>p.wasm).map(p=>p.wasm)]:[]),...(options.server?[options.server]:[]),spec+'/workloads.json',spec+'/replay-oracle.json',spec+'/replay-check.mjs'];
   const pins=Object.fromEntries(files.map(p=>[resolve(p),sha(p)]));
   const base=Object.keys(profiles);
@@ -175,7 +176,7 @@ try {
   const plan={schema:'rook-wasm-search-performance-v1',cpu,repeats,schedule,pins,profiles,
     boundary:'High-resolution live process CPU before go dispatch to selected-move receipt; monotonic host wall around same request. Startup/setup/shutdown excluded.',
     chromiumBoundary:'Owned unique renderer CPU includes worker, renderer main thread and its compilation threads; browser/GPU/utility processes and external controller remain on housekeeping and are excluded. Extra in-page wall recorded.',
-    lifecycle:'Native/Node fresh processes. Chromium fresh browser context/page/worker per run; shared browser parent. No full-browser lifetime cost or hard exit equivalence claim.',
+    lifecycle:'Native fresh processes. Chromium fresh browser context/page/worker per run; shared browser parent. No full-browser lifetime cost or hard exit equivalence claim.',
     comparison:'Current PGO native release versus non-PGO WASM; this does not isolate the cost of WASM alone.',
     limits:{runSeconds:390,searchSeconds:330,browserReadySeconds:30,aggregateSeconds:Number(options.seconds??7200),streamBytesPerRun:4194304,retainedBytes:268435456},
     pmu:'No cycles/instructions/IPC collected',environment:{before:readFileSync('/proc/stat','utf8')}};
@@ -186,7 +187,7 @@ try {
   let retained=0;
   for(const [i,step] of schedule.entries()){
     const input=cases.find(c=>c.id===step.case);
-    const data=await timeout(profiles[step.variant].kind==='chromium'?chrome(step.variant,input):wire(step.variant,input),390_000);
+    const data=await timeout(profiles[step.variant].kind==='chromium'?chrome(step.variant,input):wire(input),390_000);
     assert(data.cpuSeconds>0&&data.wallSeconds>0);
     const filename=`${String(i).padStart(3,'0')}-${step.case}-${step.variant}-r${step.repeat}.json`;
     const row={...step,...data};save(output+'/'+filename,row);retained+=Buffer.byteLength(JSON.stringify(row));assert(retained<268435456);

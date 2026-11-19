@@ -1,23 +1,33 @@
 // Run with a locally installed Playwright; it is a test tool, not a runtime dependency.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { once } from 'node:events';
+import { readFileSync, readdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { parseArgs } from 'node:util';
+import { serve } from './serve.mjs';
+
+const { values: options } = parseArgs({ options: {
+  spec: { type: 'string' },
+  personalities: { type: 'string' },
+} });
+
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
-const server = spawn('python3', [new URL('./serve.py', import.meta.url).pathname, '--port', '0']);
+const server = await serve(0);
+const url = `http://localhost:${server.address().port}/`;
 let browser;
-const watchdog = setTimeout(() => { server.kill(); browser?.close(); throw Error('browser test deadline'); }, 120_000);
+const watchdog = setTimeout(() => { server.close(); browser?.close(); throw Error('browser test deadline'); },
+  options.spec ? 900_000 : 120_000);
 try {
-  const [chunk] = await once(server.stdout, 'data');
-  const url = String(chunk).match(/http:\/\/localhost:\d+\//)[0];
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(url);
   await page.waitForFunction(() => window.engine);
-  const personality = JSON.parse(readFileSync(process.argv[2] || '/home/legolas/yeoldwizard/personalities.json', 'utf8')).Stanley;
+  const personality = options.personalities
+    ? JSON.parse(readFileSync(options.personalities, 'utf8')).Stanley
+    : { out: { opp: 100, opn: 33 } };
+  assert(personality?.out, 'missing Stanley.out in personality file');
   const result = await page.evaluate(async personality => {
     const { Rook } = await import('./rook.js');
     const lines = [], moves = [], errors = [];
@@ -52,7 +62,7 @@ try {
       await engine.send('cm_parm rnd');
     }
     engine.close();
-    const result = { isolated: crossOriginIsolated, first, second, stopped, afterReset, elapsed, aborted, moves: moves.length, errors, personalityAck: lines.find(line => line.includes('opp=100 opn=33')) };
+    const result = { isolated: crossOriginIsolated, first, second, stopped, afterReset, elapsed, aborted, moves: moves.length, errors, personalityAck: lines.some(line => line.includes('opp=100 opn=33')) };
     window.engine.close();
     return result;
   }, personality);
@@ -63,10 +73,92 @@ try {
   assert(result.personalityAck, 'actual yeoldwizard out weights acknowledged');
   assert.deepEqual(result.errors, []);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ pass: true, chromium: await browser.version(), ...result }, null, 2));
+  const diagnostic = await page.evaluateHandle(async () => {
+    const { instantiate, loadModule } = await import('./runtime.mjs');
+    const module = await loadModule('./dist/rook-diag.wasm');
+    return request => {
+      const stdout = [], stderr = [];
+      const runtime = instantiate(module, {
+        output: (channel, line) => (channel === 1 ? stdout : stderr).push(line),
+      });
+      const status = runtime.call('rook_diagnostic', JSON.stringify(request));
+      return { status, stdout, stderr };
+    };
+  });
+  const assertDiagnostic = (actual, expected, id) => {
+    assert.equal(actual.status, 0, `${id}: ${actual.stderr.join('\n')}`);
+    assert.deepEqual(actual.stderr, [], id);
+    assert.equal(actual.stdout.length, 1, id);
+    assert.deepEqual(JSON.parse(actual.stdout[0]), { version: 1, output: expected }, id);
+  };
+
+  const stage = { moves: 1, baseSeconds: 1, incrementSeconds: 0 };
+  const requests = Array.from({ length: 100 }, (_, moveIndex) => ({
+    version: 1, operation: 'time.schedule', input: { stages: [stage], moveIndex },
+  }));
+  const checkSchedule = await diagnostic.evaluate((run, batch) => batch.map(run), requests);
+  checkSchedule.forEach((actual, i) => assertDiagnostic(actual, { seconds: i + 1 }, 'time.schedule'));
+
+  let conformance;
+  if (options.spec) {
+    const dir = join(options.spec, 'conformance', 'fixtures');
+    const files = readdirSync(dir).filter(name => name.endsWith('.json')).sort();
+    const optional = new Set(['output.analysisCandidateReport', 'search.analysisRootSequence']);
+    conformance = { files: 0, cases: 0 };
+    for (const file of files) {
+      const { version, cases } = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+      assert.equal(version, 1, file);
+      assert(cases.length, `${file}: empty fixture file`);
+      const mandatory = cases.filter(test => !optional.has(test.request.operation));
+      if (!mandatory.length) continue;
+      for (let i = 0; i < mandatory.length; i += 32) {
+        const batch = mandatory.slice(i, i + 32);
+        const actual = await diagnostic.evaluate((run, requests) => requests.map(run), batch.map(test => test.request));
+        batch.forEach((test, j) => assertDiagnostic(actual[j], test.expected, test.id));
+      }
+      conformance.files++;
+      conformance.cases += mandatory.length;
+    }
+    assert(conformance.cases, 'no mandatory component fixtures found');
+  }
+  const rejected = await diagnostic.evaluate(run => run({}));
+  assert.equal(rejected.status, 1);
+  assert.deepEqual(rejected.stdout, []);
+  assert.match(rejected.stderr.join('\n'), /^rook2-diag:/);
+  await diagnostic.dispose();
+
+  await page.goto(new URL('minimal.html', url).href);
+  await page.waitForFunction(() => window.worker);
+  // The minimal worker starts accepting commands after its WASM startup.
+  await page.evaluate(() => {
+    window.worker.addEventListener('message', ({ data }) => {
+      if (data.channel === 1 && data.text.startsWith('cm_parm rnd=')) {
+        window.minimalCommandAnswered = true;
+      }
+    });
+  });
+  await page.waitForFunction(() => {
+    if (window.minimalCommandAnswered) return true;
+    window.worker.postMessage('cm_parm rnd');
+    return false;
+  }, undefined, { polling: 100, timeout: 10_000 });
+
+  await page.goto(new URL('benchmark.html', url).href);
+  await page.waitForFunction(() => window.benchmark);
+  const benchmark = await page.evaluate(async () => {
+    await window.benchmark.ready;
+    await window.benchmark.send('cm_parm rnd');
+    await window.benchmark.send('quit');
+    return window.benchmark.state;
+  });
+  assert.match(benchmark.stdout, /^cm_parm rnd=/);
+  assert.equal(benchmark.stderr, '');
+  assert.equal(benchmark.lastCommandStatus, 2);
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ pass: true, chromium: await browser.version(), ...result, conformance }, null, 2));
+
 } finally {
   clearTimeout(watchdog);
   await browser?.close();
-  server.kill();
-  await once(server, 'close');
+  await new Promise(resolve => server.close(resolve));
 }

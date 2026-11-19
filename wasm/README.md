@@ -2,7 +2,7 @@
 
 Two modules share the Rust engine with the native build:
 
-- `rook.wasm`: a persistent ordinary engine, usable from Node or a browser worker.
+- `rook.wasm`: a persistent ordinary engine for a browser worker.
 - `rook-diag.wasm`: the existing JSON diagnostic dispatcher with a string boundary.
 
 There is no JavaScript engine implementation, WASI runtime, wasm-bindgen glue or
@@ -35,58 +35,12 @@ and game state remain in the shared core. WASM is a 32-bit target; fixture passe
 are evidence of observed parity, not an assumption that pointer widths cannot
 matter.
 
-## Node: use the existing harnesses
-
-Node 20 was tested. Both commands accept ordinary stdin and produce ordinary
-stdout/stderr with a meaningful exit status:
-
-```sh
-node wasm/rook.mjs --work-clock=kingwcr --diagnostic-seed-command
-node wasm/rook-diag.mjs
-```
-
-The ordinary runner accepts the native launch flags. `--wasm PATH` selects its
-module; the diagnostic runner accepts its module path as the first argument.
-Defaults are relative to these scripts, not the caller's working directory.
-The executable scripts also have Node shebangs for harnesses that accept only one
-executable path.
-
-The released harnesses remain external and unchanged:
-
-```sh
-node /path/to/king-spec/conformance/run.mjs -- node wasm/rook-diag.mjs
-node /path/to/king-spec/conformance/profiling/replay-check.mjs -- node wasm/rook.mjs
-node /path/to/king-spec/conformance/gate-replay/run.mjs \
-  --report /fresh/output/games.json -- node wasm/rook.mjs
-```
-
-The first command includes the two optional diagnostics by default. To run our
-mandatory-only and focused qualification selection, with raw reports outside Git:
-
-```sh
-python3 wasm/qualify.py --spec /path/to/king-spec --output /fresh/external/results
-```
-
-That runs standard54, the mandatory component files, 12 games, continuity,
-seed controls, seed persistence and eight interruption sessions, then verifies
-input hashes. It pins the lane to CPU14; the unchanged wire helper starts on CPU0 and applies
-its housekeeping affinity. Leave CPU15 idle. There is a three-hour aggregate
-ceiling, stage deadlines and a 2 GiB report budget. After a deliberate stop,
-`--resume /previous/results` can reuse completed standard54/component reports
-only when their module bytes, Node host and specification inputs still match.
-A changed diagnostic module requires fresh component checks; it does not
-invalidate an unchanged ordinary module's replay. Prior
-reports are copied with provenance; partial files are run afresh. No automatic retries, timing
-acceptance or full 3,288-game gate are included. Inspect `summary.json` after exit.
-Released executable-hash fields identify Node or the launcher; `inputs.json`
-additionally binds the WASM bytes and host scripts.
-
 ## Browser
 
 Serve this folder using the supplied development server:
 
 ```sh
-python3 wasm/serve.py
+node wasm/serve.mjs
 # Open http://localhost:8080/
 ```
 
@@ -163,29 +117,35 @@ the supplied server is only a local demo. See the
 [SharedArrayBuffer hosting requirements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements)
 and [Rust target limitations](https://doc.rust-lang.org/rustc/platform-support/wasm32-unknown-unknown.html).
 
-## Checks and release scope
+## Playwright checks
+
+Install Playwright and its Chromium browser in your test environment. The script
+runs the browser API and diagnostic smoke tests against the modules in `dist/`.
 
 ```sh
-node --test wasm/test-node.mjs
-# Optional real-browser test tool, outside the runtime dependencies:
-node wasm/test-browser.mjs /path/to/yeoldwizard/personalities.json
+node wasm/test-browser.mjs
+node wasm/test-browser.mjs --spec /path/to/king-spec
 ```
 
-The browser test needs Playwright/Chromium; `PLAYWRIGHT_MODULE` can point to a
-separate installation. It checks personality application, persistent moves,
-cooperative deadline/stop, live reset and repeated immediate/late-control races.
+The Node process serves the files and controls Playwright. Chromium loads and
+executes the WASM.
+If Playwright is installed elsewhere, set `PLAYWRIGHT_MODULE` to its
+`index.mjs` path. Pass `--personalities /path/to/personalities.json` to exercise
+a real Stanley personality file in place of the built-in test weights.
 
-This feature does not publish assets or modify the native qualification manifest.
-The frozen v1 native binaries and their records remain preserved. Shared-source
-edits change the native release build's source identity, so the existing
-hash-locked native workflow is not a release recipe for this feature commit.
-A future native release requires its own updated build/qualification records.
-WASM has separate artifact identities and does not inherit the native full-game
-or performance results. See `validation.json` for the local finite checks.
+`--spec` adds the released mandatory diagnostic component fixtures. The browser
+compiles the diagnostic module once, creates a fresh instance per request and
+compares each response with the released expected output. The prior gameplay,
+seed, and wire qualification lanes remain historical results in `validation.json`.
+The separate Chromium benchmark still compares the standard54 search traces
+against the released oracle.
+
+`minimal.html` is a console demo for raw commands through `window.worker`;
+`benchmark.html` drives the regular worker for performance collection.
 
 ### Recorded local result
 
-The exact pair in `validation.json` passed 115 mandatory files / 7,673 cases,
+Before the switch to Playwright, the exact pair in `validation.json` passed 115 mandatory files / 7,673 cases,
 standard54, the 12-game / 632-search pre-gate, continuity, seed/persistence
 controls and eight interruption sessions / 24 searches. Native library and
 adapter tests passed; Chromium exercised the browser API and 20 immediate-stop
