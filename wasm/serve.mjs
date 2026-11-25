@@ -32,7 +32,7 @@ export async function serve(port = 8080) {
     } catch {
       return end(400);
     }
-    const file = resolve(root, pathname === '/' ? 'index.html' : '.' + pathname);
+    const file = resolve(root, pathname === '/' ? 'rook-test.html' : '.' + pathname);
     const contentType = contentTypes.get(extname(file));
     if (!file.startsWith(root.endsWith(sep) ? root : root + sep) || !contentType) {
       return end(404);

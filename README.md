@@ -30,6 +30,6 @@ Use `--bin rook2-dev` for development commands such as `inspect`, `perft` or `se
 
 ## WebAssembly
 
-The [WASM adapter](wasm/README.md) provides a browser worker API and
-Playwright tests that execute the modules in Chromium. It has separate build and qualification records from the
+The [WASM adapter](wasm/README.md) provides a standalone browser demo and Playwright tests that execute the
+modules in Chromium. It has separate build and qualification records from the
 native release.
